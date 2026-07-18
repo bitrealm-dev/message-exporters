@@ -1,0 +1,112 @@
+# Manually cut a semantic-versioned GitHub Release with OS binaries.
+# Does not run on push/PR — only via Actions → Release → Run workflow.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semantic version without leading v (e.g. 0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.semver.outputs.version }}
+      tag: ${{ steps.semver.outputs.tag }}
+    steps:
+      - id: semver
+        env:
+          RAW: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          V="${RAW#v}"
+          if [[ ! "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid semantic version: ${RAW@Q} (expected e.g. 0.1.0)"
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=v$V" >> "$GITHUB_OUTPUT"
+          echo "Will release tag v$V"
+
+  build:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_suffix: x86_64-unknown-linux-gnu
+            ext: ""
+          - os: windows-latest
+            artifact_suffix: x86_64-pc-windows-msvc
+            ext: ".exe"
+          - os: macos-latest
+            artifact_suffix: aarch64-apple-darwin
+            ext: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binaries
+        run: cargo build --workspace --release
+
+      - name: Stage named binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          EXT='${{ matrix.ext }}'
+          SUFFIX='${{ matrix.artifact_suffix }}'
+          for bin in \
+            go-sms-pro-to-csv \
+            sms-backup-restore-to-csv \
+            sms-backup-plus-to-csv \
+            imessage-exporter
+          do
+            src="target/release/${bin}${EXT}"
+            dst="dist/${bin}-${SUFFIX}${EXT}"
+            cp "$src" "$dst"
+          done
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.artifact_suffix }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+          pattern: binaries-*
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate.outputs.tag }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          ls -la dist
+          gh release create "$TAG" dist/* \
+            --title "message-exporters ${VERSION}" \
+            --notes "Release ${VERSION} of the message-exporters converters.
+
+          Binaries for Linux (x86_64-unknown-linux-gnu), Windows (x86_64-pc-windows-msvc), and macOS Apple Silicon (aarch64-apple-darwin).
+
+          Tools: go-sms-pro-to-csv, sms-backup-restore-to-csv, sms-backup-plus-to-csv, imessage-exporter."

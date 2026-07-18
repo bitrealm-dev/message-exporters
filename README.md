@@ -80,6 +80,10 @@ No owner phone flag. Use `-c clone` so attachments are copied into the output fo
 
 After a run, open the CSV files under `--output` / `-o` and check that times, direction, and text look right. Photos and other media are under `attachments/` (or the iMessage output folder when using `-c clone`).
 
+## Releases
+
+Prebuilt Linux, Windows, and macOS binaries are on the [Releases](https://github.com/bitrealm-dev/message-exporters/releases) page when a maintainer has cut one. How to publish a new version: [docs/DEVELOPING.md](docs/DEVELOPING.md).
+
 ## License
 
 Most converters are MIT — see [LICENSE](LICENSE). `imessage-exporter` is GPL-3.0-or-later (inherited from upstream imessage-exporter).
