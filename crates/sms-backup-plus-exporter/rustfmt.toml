@@ -1,0 +1,1 @@
+# Keep defaults; CI runs `cargo fmt --check`.

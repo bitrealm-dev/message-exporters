@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<smses count="3">
+  <sms protocol="0" address="+15555550101" date="1400773261000" type="1" subject="null" body="hello" toa="null" sc_toa="null" service_center="null" read="1" status="-1" contact_name="Sam" />
+  <sms protocol="0" address="+15555550101" date="1400773321000" type="2" body="hey" contact_name="Sam" />
+  <mms date="1400773400000" msg_box="1" address="+15555550101" contact_name="Sam">
+    <parts>
+      <part seq="0" ct="text/plain" name="text_0.txt" chset="106" text="mms hi" />
+      <part seq="1" ct="image/jpeg" name="pic.jpg" cl="pic.jpg" data="/9j/eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eA==" />
+    </parts>
+    <addrs>
+      <addr address="+15555550101" type="137" charset="106" />
+      <addr address="+15555550100" type="151" charset="106" />
+    </addrs>
+  </mms>
+</smses>

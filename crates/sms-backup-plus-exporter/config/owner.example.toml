@@ -1,0 +1,8 @@
+# Default owner identity and source trees for convert / dedupe-eml.
+# Copy to owner.toml and edit. CLI flags override these when provided.
+
+phone = "+15555550100"
+emails = ["you@example.com"]
+
+# Optional default --input roots when none are passed on the CLI.
+# source_dirs = ["/path/to/eml-tree"]

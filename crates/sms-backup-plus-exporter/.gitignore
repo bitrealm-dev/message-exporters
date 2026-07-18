@@ -1,0 +1,31 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Exporter output
+/export/
+/clean-eml/
+*.eml
+!tests/fixtures/**/*.eml
+
+# IDE / editor
+.cursor/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Personal contact exports (keep examples)
+config/*.csv
+!config/*.example.csv
+config/owner.toml

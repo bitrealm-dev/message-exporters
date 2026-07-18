@@ -1,0 +1,479 @@
+//! Structured helpers for CSV nested cells (parts, edits, balloons).
+//! Kept inside `csv/` so this crate has no `exporters/json` module.
+
+use std::collections::HashSet;
+
+use serde::Serialize;
+use serde_json::{json, Value};
+
+use imessage_database::{
+    message_types::{
+        app::AppMessage,
+        edited::{EditStatus, EditedMessage},
+        expressives::Expressive,
+        text_effects::text_effect::TextEffect,
+        url::URLMessage,
+        variants::{BalloonProvider, CustomBalloon, URLOverride, Variant},
+    },
+    tables::{
+        attachment::Attachment,
+        messages::{
+            Message,
+            models::{BubbleComponent, SharedLocation},
+        },
+    },
+    util::{
+        bundle_id::parse_balloon_bundle_id,
+        dates::get_local_time,
+        plist::parse_ns_keyed_archiver,
+    },
+};
+
+use crate::{
+    app::runtime::Config,
+    exporters::shared::part::{resolve_run, AttachmentResolver},
+};
+
+/// One historical edit (or unsent marker) for a body part.
+#[derive(Serialize)]
+pub struct EditEventRecord {
+    pub part_index: usize,
+    pub status: &'static str,
+    pub text: String,
+    pub timestamp: Option<String>,
+    pub timestamp_utc: Option<String>,
+    pub guid: Option<String>,
+}
+
+/// One logical message body part.
+#[derive(Serialize)]
+pub struct PartRecord {
+    pub index: usize,
+    pub kind: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    /// Indices into the message's emitted `attachments` array.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub attachment_indices: Vec<usize>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub emoji_image: bool,
+}
+
+pub fn optional_rfc3339(
+    result: Result<chrono::DateTime<chrono::Local>, imessage_database::error::message::MessageError>,
+) -> (Option<String>, Option<String>) {
+    match result {
+        Ok(date) => (Some(date.to_rfc3339()), Some(date.to_utc().to_rfc3339())),
+        Err(_) => (None, None),
+    }
+}
+
+pub fn expressive_label(expressive: Expressive<'_>) -> Option<String> {
+    let label = expressive.to_string();
+    if label.is_empty() {
+        None
+    } else {
+        Some(label)
+    }
+}
+
+pub fn shared_location_label(kind: SharedLocation) -> &'static str {
+    match kind {
+        SharedLocation::Started => "started",
+        SharedLocation::Stopped => "stopped",
+    }
+}
+
+fn effect_label(effect: &TextEffect) -> String {
+    match effect {
+        TextEffect::Default => "default".to_string(),
+        TextEffect::Mention(id) => format!("mention:{id}"),
+        TextEffect::Link(url) => format!("link:{url}"),
+        TextEffect::OTP => "otp".to_string(),
+        TextEffect::Address(_) => "address".to_string(),
+        TextEffect::Styles(styles) => format!("styles:{styles:?}"),
+        TextEffect::Animated(anim) => format!("animated:{anim:?}"),
+        TextEffect::Conversion(_) => "conversion".to_string(),
+        TextEffect::Currency(_) => "currency".to_string(),
+        TextEffect::Tracking(_) => "tracking".to_string(),
+        TextEffect::Flight(_) => "flight".to_string(),
+    }
+}
+
+/// Build edit-history records from parsed [`EditedMessage`] metadata.
+pub fn build_edit_records(edited: &EditedMessage, offset: &i64) -> Vec<EditEventRecord> {
+    let mut out = Vec::new();
+    for (part_index, part) in edited.parts.iter().enumerate() {
+        let status = match part.status {
+            EditStatus::Edited => "edited",
+            EditStatus::Unsent => "unsent",
+            EditStatus::Original => "original",
+        };
+        if part.edit_history.is_empty() {
+            if matches!(part.status, EditStatus::Unsent | EditStatus::Edited) {
+                out.push(EditEventRecord {
+                    part_index,
+                    status,
+                    text: String::new(),
+                    timestamp: None,
+                    timestamp_utc: None,
+                    guid: None,
+                });
+            }
+            continue;
+        }
+        for event in &part.edit_history {
+            let (timestamp, timestamp_utc) = optional_rfc3339(get_local_time(event.date, *offset));
+            out.push(EditEventRecord {
+                part_index,
+                status,
+                text: event.text.clone(),
+                timestamp,
+                timestamp_utc,
+                guid: event.guid.clone(),
+            });
+        }
+    }
+    out
+}
+
+/// Build multipart `parts` from the message body components.
+pub fn build_part_records(message: &Message, attachments: &[Attachment]) -> Vec<PartRecord> {
+    if message.components.is_empty() {
+        return Vec::new();
+    }
+
+    let mut resolver = AttachmentResolver::new(attachments);
+    let mut parts = Vec::new();
+
+    for (index, component) in message.components.iter().enumerate() {
+        match component {
+            BubbleComponent::Run(ranges) => {
+                let resolved = resolve_run(ranges, &mut resolver);
+                let mut texts = Vec::new();
+                let mut attachment_indices = Vec::new();
+                let mut effects = Vec::new();
+                let mut emoji_image = false;
+
+                for (range, att_idx) in resolved {
+                    if let Some(idx) = att_idx {
+                        if idx < attachments.len() {
+                            attachment_indices.push(idx);
+                        }
+                    } else if let Some(text) = message.text.as_deref() {
+                        let start = range.start.min(text.len());
+                        let end = range.end.min(text.len());
+                        if start < end {
+                            texts.push(text[start..end].to_string());
+                        }
+                    }
+                    for effect in &range.effects {
+                        let label = effect_label(effect);
+                        if label != "default" {
+                            effects.push(label);
+                        }
+                    }
+                    if range.emoji_image {
+                        emoji_image = true;
+                    }
+                }
+
+                let joined = texts.concat();
+                parts.push(PartRecord {
+                    index,
+                    kind: "run",
+                    text: if joined.is_empty() {
+                        None
+                    } else {
+                        Some(joined)
+                    },
+                    attachment_indices,
+                    effects,
+                    emoji_image,
+                });
+            }
+            BubbleComponent::App => parts.push(PartRecord {
+                index,
+                kind: "app",
+                text: None,
+                attachment_indices: Vec::new(),
+                effects: Vec::new(),
+                emoji_image: false,
+            }),
+            BubbleComponent::Retracted => parts.push(PartRecord {
+                index,
+                kind: "retracted",
+                text: None,
+                attachment_indices: Vec::new(),
+                effects: Vec::new(),
+                emoji_image: false,
+            }),
+        }
+    }
+
+    parts
+}
+
+/// Collect transcription text from body ranges matching an attachment GUID.
+pub fn transcription_for_attachment(
+    message: &Message,
+    attachment: &Attachment,
+) -> Option<String> {
+    let guid = attachment.guid.as_deref()?;
+    for component in &message.components {
+        let BubbleComponent::Run(ranges) = component else {
+            continue;
+        };
+        for range in ranges {
+            if let Some(meta) = &range.attachment
+                && meta.guid.as_deref() == Some(guid)
+                && let Some(t) = &meta.transcription
+                && !t.is_empty()
+            {
+                return Some(t.clone());
+            }
+        }
+    }
+    None
+}
+
+fn app_message_json(bubble: &AppMessage<'_>) -> Value {
+    json!({
+        "image": bubble.image,
+        "url": bubble.url,
+        "title": bubble.title,
+        "subtitle": bubble.subtitle,
+        "caption": bubble.caption,
+        "subcaption": bubble.subcaption,
+        "trailing_caption": bubble.trailing_caption,
+        "trailing_subcaption": bubble.trailing_subcaption,
+        "app_name": bubble.app_name,
+        "ldtext": bubble.ldtext,
+    })
+}
+
+fn url_message_json(bubble: &URLMessage<'_>) -> Value {
+    json!({
+        "title": bubble.title,
+        "summary": bubble.summary,
+        "url": bubble.url,
+        "original_url": bubble.original_url,
+        "item_type": bubble.item_type,
+        "images": bubble.images,
+        "icons": bubble.icons,
+        "site_name": bubble.site_name,
+        "placeholder": bubble.placeholder,
+    })
+}
+
+/// Best-effort structured balloon/app payload for archival.
+pub fn build_balloon_value(config: &Config, message: &Message) -> Option<Value> {
+    let Variant::App(balloon) = message.variant() else {
+        return None;
+    };
+
+    let db = config.data_source.db();
+
+    if message.is_handwriting() {
+        return Some(json!({
+            "kind": "handwriting",
+            "bundle_id": message.balloon_bundle_id,
+        }));
+    }
+
+    if message.is_digital_touch() {
+        return Some(json!({
+            "kind": "digital_touch",
+            "bundle_id": message.balloon_bundle_id,
+        }));
+    }
+
+    if message.is_poll() {
+        if let Ok(Some(poll)) = message.as_poll(db) {
+            let options: Vec<Value> = poll
+                .order
+                .iter()
+                .filter_map(|id| {
+                    let opt = poll.options.get(id)?;
+                    Some(json!({
+                        "id": id,
+                        "text": opt.text,
+                        "creator": opt.creator,
+                        "votes": opt.votes.iter().map(|v| json!({
+                            "voter": v.voter,
+                            "option_id": v.option_id,
+                        })).collect::<Vec<_>>(),
+                    }))
+                })
+                .collect();
+            return Some(json!({
+                "kind": "poll",
+                "options": options,
+            }));
+        }
+        return Some(json!({ "kind": "poll", "error": "unparseable" }));
+    }
+
+    let Some(payload) = message.payload_data(db) else {
+        if message.is_url() {
+            return Some(json!({
+                "kind": "url",
+                "text": message.text,
+            }));
+        }
+        return Some(json!({
+            "kind": match balloon {
+                CustomBalloon::ApplePay => "apple_pay",
+                CustomBalloon::Fitness => "fitness",
+                CustomBalloon::Slideshow => "slideshow",
+                CustomBalloon::CheckIn => "check_in",
+                CustomBalloon::FindMy => "find_my",
+                CustomBalloon::Business => "business",
+                CustomBalloon::Application(_) => "application",
+                CustomBalloon::URL => "url",
+                CustomBalloon::Handwriting => "handwriting",
+                CustomBalloon::DigitalTouch => "digital_touch",
+                CustomBalloon::Polls => "poll",
+            },
+            "bundle_id": message.balloon_bundle_id,
+            "text": message.text,
+        }));
+    };
+
+    let parsed = parse_ns_keyed_archiver(&payload).ok()?;
+
+    if message.is_url() {
+        let override_msg = URLMessage::get_url_message_override(&parsed).ok()?;
+        return Some(match override_msg {
+            URLOverride::Normal(b) => json!({ "kind": "url", "data": url_message_json(&b) }),
+            URLOverride::AppleMusic(b) => json!({
+                "kind": "apple_music",
+                "data": {
+                    "url": b.url,
+                    "preview": b.preview,
+                    "artist": b.artist,
+                    "album": b.album,
+                    "track_name": b.track_name,
+                    "lyrics": b.lyrics,
+                }
+            }),
+            URLOverride::Collaboration(b) => json!({
+                "kind": "collaboration",
+                "data": {
+                    "url": b.url,
+                    "title": b.title,
+                    "bundle_id": b.bundle_id,
+                }
+            }),
+            URLOverride::AppStore(b) => json!({
+                "kind": "app_store",
+                "data": {
+                    "url": b.url,
+                    "original_url": b.original_url,
+                    "app_name": b.app_name,
+                    "description": b.description,
+                    "platform": b.platform,
+                    "genre": b.genre,
+                }
+            }),
+            URLOverride::SharedPlacemark(b) => json!({
+                "kind": "placemark",
+                "data": {
+                    "url": b.url,
+                    "name": b.placemark.name,
+                    "address": b.placemark.address,
+                    "city": b.placemark.city,
+                    "state": b.placemark.state,
+                    "country": b.placemark.country,
+                    "postal_code": b.placemark.postal_code,
+                    "street": b.placemark.street,
+                }
+            }),
+        });
+    }
+
+    let bubble = AppMessage::from_map(&parsed).ok()?;
+    match balloon {
+        CustomBalloon::Application(bundle_id) => Some(json!({
+            "kind": "application",
+            "bundle_id": bundle_id,
+            "parsed_bundle_id": parse_balloon_bundle_id(message.balloon_bundle_id.as_deref()),
+            "data": app_message_json(&bubble),
+        })),
+        other => {
+            let kind = match other {
+                CustomBalloon::ApplePay => "apple_pay",
+                CustomBalloon::Fitness => "fitness",
+                CustomBalloon::Slideshow => "slideshow",
+                CustomBalloon::CheckIn => "check_in",
+                CustomBalloon::FindMy => "find_my",
+                CustomBalloon::Business => "business",
+                CustomBalloon::URL
+                | CustomBalloon::Handwriting
+                | CustomBalloon::DigitalTouch
+                | CustomBalloon::Polls
+                | CustomBalloon::Application(_) => "app",
+            };
+            Some(json!({
+                "kind": kind,
+                "bundle_id": message.balloon_bundle_id,
+                "data": app_message_json(&bubble),
+            }))
+        }
+    }
+}
+
+/// Sticker presentation extras when available from the attachment row.
+pub fn sticker_extras(config: &Config, attachment: &Attachment) -> (Option<String>, Option<String>) {
+    if !attachment.is_sticker {
+        return (None, None);
+    }
+    let prompt = attachment.emoji_description.clone();
+    let effect = attachment
+        .get_sticker_effect(
+            &config.options.platform,
+            config.options.db_path.as_path(),
+            config.options.attachment_root.as_deref(),
+        )
+        .ok()
+        .flatten()
+        .map(|e| format!("{e:?}"));
+    (prompt, effect)
+}
+
+/// Indices into a message's attachment list that the body actually references.
+pub fn referenced_attachment_indices(
+    message: &Message,
+    attachments: &[Attachment],
+) -> Vec<usize> {
+    if attachments.is_empty() || message.components.is_empty() {
+        return Vec::new();
+    }
+
+    let mut resolver = AttachmentResolver::new(attachments);
+    let mut indices = HashSet::new();
+
+    for (part_idx, component) in message.components.iter().enumerate() {
+        match component {
+            BubbleComponent::Run(ranges) => {
+                if message.is_part_edited(part_idx) {
+                    continue;
+                }
+                for (_, idx) in resolve_run(ranges, &mut resolver) {
+                    if let Some(i) = idx
+                        && i < attachments.len()
+                    {
+                        indices.insert(i);
+                    }
+                }
+            }
+            BubbleComponent::App | BubbleComponent::Retracted => {}
+        }
+    }
+
+    let mut out: Vec<_> = indices.into_iter().collect();
+    out.sort_unstable();
+    out
+}

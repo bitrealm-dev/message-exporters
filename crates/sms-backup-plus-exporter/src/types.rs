@@ -1,0 +1,25 @@
+//! Shared parsed message types for SMS Backup+ EML exports.
+
+#[derive(Debug, Clone)]
+pub(crate) struct AttachmentBlob {
+    pub filename: String,
+    pub original_name: Option<String>,
+    pub mime_type: Option<String>,
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ParsedMessage {
+    pub chat_key: String,
+    pub conversation_type: String,
+    pub group_title: Option<String>,
+    pub participant_digits: Vec<(String, Option<String>)>,
+    pub timestamp_secs: f64,
+    pub is_from_me: bool,
+    pub sender_digits: Option<String>,
+    pub text: String,
+    pub attachments: Vec<AttachmentBlob>,
+    pub name_hint: Option<String>,
+    /// `X-smssync-id` when present (flat EMLs only).
+    pub smssync_id: Option<String>,
+}
