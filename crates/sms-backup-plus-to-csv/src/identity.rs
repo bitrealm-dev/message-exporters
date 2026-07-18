@@ -13,9 +13,14 @@ use crate::types::ParsedMessage;
 use chrono::{DateTime, Local, TimeZone, Utc};
 
 /// Who this chat is with, as a stable string (E.164 phone or `chat-…` for groups).
+///
+/// Name-only / unresolved peers use the stem `unknown` so they still get a CSV
+/// (`unknown.csv`) instead of being dropped.
 pub(crate) fn chat_id_for(msg: &ParsedMessage) -> String {
     if msg.conversation_type == "group" {
         format!("chat-{}", msg.chat_key)
+    } else if msg.chat_key == "Unknown" {
+        "unknown".to_string()
     } else {
         to_e164(&msg.chat_key)
     }
@@ -83,12 +88,10 @@ pub(crate) fn cover_identity_from_parts(
     )
 }
 
-/// Make a string safe for a filename (letters, digits, `-`, `_` only).
-///
-/// Strips leading underscores so E.164 `+1…` does not become `recv__1…`.
-/// Filesystem-safe chat filename stem.
+/// Filesystem-safe chat filename stem (letters, digits, `-`, `_` only).
 ///
 /// `+1555…` becomes `_1555…` (same rule as go-sms / SMS Backup & Restore).
+/// Strings that are empty or only underscores become `unknown`.
 pub(crate) fn safe_stem(value: &str) -> String {
     let raw: String = value
         .chars()
@@ -183,5 +186,12 @@ mod tests {
     fn safe_stem_maps_plus_to_leading_underscore() {
         assert_eq!(safe_stem("+14075551234"), "_14075551234");
         assert_eq!(safe_stem("___"), "unknown");
+    }
+
+    #[test]
+    fn unknown_chat_id_uses_unknown_stem() {
+        let msg = sample_msg("Unknown", 1_609_459_200.0, false, "hi");
+        assert_eq!(chat_id_for(&msg), "unknown");
+        assert_eq!(safe_stem(&chat_id_for(&msg)), "unknown");
     }
 }

@@ -22,9 +22,9 @@ Example output from a small test backup: [`samples/`](samples/).
 ## What you need
 
 1. The GO SMS Pro backup folder on disk
-2. **Your phone number** — the number that owned the messages on that phone
+2. **Your phone number** — the number that owned the messages on that phone (required; there is no demo default)
 
-The converter uses your number to tell sent messages from received ones. For example, if your number is `+1 555 555 0100`, pass that (or the same digits without spaces) as `--owner-phone`.
+For ordinary SMS in the XML backup, sent vs received comes from the backup’s own type field. Your number is still required so MMS (`.pdu`) direction and chat grouping are correct. For example, if your number is `+1 555 555 0100`, pass that (or the same digits without spaces) as `--owner-phone`.
 
 ## How to run
 

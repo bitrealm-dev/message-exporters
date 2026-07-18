@@ -290,7 +290,13 @@ fn infer_pdu_direction(
             }
         }
         if my_is_to {
-            return (true, primary_digits.to_string());
+            // Owner appears as To → incoming. Prefer a non-owner participant as sender.
+            let sender = unique_parts
+                .iter()
+                .find(|p| !is_owner_digit(p, owners))
+                .cloned()
+                .unwrap_or_else(|| unique_parts[0].clone());
+            return (false, sender);
         }
         let sender = unique_parts[0].clone();
         return (is_owner_digit(&sender, owners), sender);

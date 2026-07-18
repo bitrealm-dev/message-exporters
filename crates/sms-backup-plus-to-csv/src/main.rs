@@ -208,6 +208,12 @@ fn main() -> Result<()> {
                 if report.skipped_invalid_date > 0 {
                     println!("  skipped bad date:  {}", report.skipped_invalid_date);
                 }
+                if report.unknown_chat_messages > 0 {
+                    println!(
+                        "  unknown chat rows: {}",
+                        report.unknown_chat_messages
+                    );
+                }
                 if report.skipped_not_sms_backup_plus > 0 {
                     println!(
                         "  not SMS Backup+:   {}",

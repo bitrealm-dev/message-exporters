@@ -55,8 +55,10 @@ pub struct ExportReport {
     pub attachments_saved: u64,
     pub sent: u64,
     pub received: u64,
-    /// `.eml` files that are not SMS Backup+ shaped (or SMS with unknown chat).
+    /// `.eml` files that are not SMS Backup+ shaped (or unparseable as SMS).
     pub skipped_not_sms_backup_plus: u64,
+    /// Messages kept under the `unknown` chat stem (no usable peer phone).
+    pub unknown_chat_messages: u64,
     pub skipped_invalid_date: u64,
     pub errors: Vec<String>,
 }
@@ -570,8 +572,7 @@ pub fn convert_export<P: AsRef<Path>>(
                     }
                     for msg in msgs {
                         if msg.chat_key == "Unknown" {
-                            report.skipped_not_sms_backup_plus += 1;
-                            continue;
+                            report.unknown_chat_messages += 1;
                         }
                         match write_attachments(&msg.attachments, &attachments_dir, &mut report) {
                             Ok(atts) => add_message(&mut conversations, msg, atts, &mut report),
@@ -597,16 +598,15 @@ pub fn convert_export<P: AsRef<Path>>(
                     msg.eml_path = rel_path;
                     let _ = apply_name_mapping(&mut msg, &name_mapping);
                     let _ = fill_unknown_phone(&mut msg, &contacts);
+                    report.flat_eml += 1;
                     if msg.chat_key == "Unknown" {
-                        report.skipped_not_sms_backup_plus += 1;
-                    } else {
-                        report.flat_eml += 1;
-                        match write_attachments(&msg.attachments, &attachments_dir, &mut report) {
-                            Ok(atts) => add_message(&mut conversations, msg, atts, &mut report),
-                            Err(err) => report
-                                .errors
-                                .push(format!("{}: {err:#}", eml_path.display())),
-                        }
+                        report.unknown_chat_messages += 1;
+                    }
+                    match write_attachments(&msg.attachments, &attachments_dir, &mut report) {
+                        Ok(atts) => add_message(&mut conversations, msg, atts, &mut report),
+                        Err(err) => report
+                            .errors
+                            .push(format!("{}: {err:#}", eml_path.display())),
                     }
                 }
                 Ok(None) => report.skipped_not_sms_backup_plus += 1,
@@ -625,10 +625,11 @@ pub fn convert_export<P: AsRef<Path>>(
     vlog(
         verbose,
         format!(
-            "parsed: flat_eml={} archive_eml={} messages={} skipped_not_sms_backup_plus={} skipped_bad_date={}",
+            "parsed: flat_eml={} archive_eml={} messages={} unknown_chat={} skipped_not_sms_backup_plus={} skipped_bad_date={}",
             report.flat_eml,
             report.archive_eml,
             report.messages_before_dedupe,
+            report.unknown_chat_messages,
             report.skipped_not_sms_backup_plus,
             report.skipped_invalid_date
         ),

@@ -257,7 +257,11 @@ pub(crate) fn parse_flat_eml_mail(
         }));
     }
 
-    let conv_number = if addr != "Unknown" {
+    // Prefer the first non-owner address (groups already use this rule). An
+    // owner-first `owner~peer` list must not key the CSV to the owner's number.
+    let conv_number = if let Some(peer) = non_owner.first() {
+        peer.clone()
+    } else if addr != "Unknown" {
         addr.clone()
     } else {
         sanitize_number(&addr_raw)
@@ -340,6 +344,33 @@ Hello from Alice\r\n",
         assert_eq!(msg.text.trim(), "Hello from Alice");
         assert_eq!(msg.chat_key, "4075551234");
         assert!((msg.timestamp_secs - 1_609_459_200.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn individual_chat_uses_first_non_owner_address() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("msg.eml");
+        std::fs::write(
+            &path,
+            b"From: me@example.com\r\n\
+To: alice@unknown.email\r\n\
+Subject: SMS with Alice\r\n\
+X-smssync-type: 2\r\n\
+X-smssync-address: 5555550100~4075551234\r\n\
+X-smssync-date: 1609459200000\r\n\
+Content-Type: text/plain; charset=utf-8\r\n\
+\r\n\
+Hello\r\n",
+        )
+        .unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        let mail = mailparse::parse_mail(&bytes).unwrap();
+        let owners = HashSet::from(["5555550100".to_string()]);
+        let msg = parse_flat_eml_mail(&path, &mail, &owners, &["me@example.com".into()])
+            .unwrap()
+            .unwrap();
+        assert_eq!(msg.chat_key, "4075551234");
+        assert!(msg.is_from_me);
     }
 
     #[test]

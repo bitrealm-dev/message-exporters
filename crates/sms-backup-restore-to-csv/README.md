@@ -22,9 +22,9 @@ Example output from a small test backup: [`samples/`](samples/).
 ## What you need
 
 1. Either one `sms-….xml` file, or a folder that contains several `.xml` backups (all of them are combined into one export)
-2. **Your phone number** — the number that owned the messages on that phone
+2. **Your phone number** — the number that owned the messages on that phone (required; there is no demo default)
 
-The converter uses your number to tell sent messages from received ones. For example, if your number is `+1 555 555 0100`, pass that (or the same digits without spaces) as `--owner-phone`.
+For ordinary SMS, sent vs received comes from the backup’s own type field. Your number is still required so MMS chat keys, group membership, and senders are correct. For example, if your number is `+1 555 555 0100`, pass that (or the same digits without spaces) as `--owner-phone`.
 
 If the backup app gave you an encrypted `.zip` file, unlock and unzip it first. Point `--input` at the XML file inside the unzipped folder. This converter does not open encrypted archives.
 

@@ -32,6 +32,22 @@ fn archive_subject_re() -> &'static Regex {
     ARCHIVE_SUBJECT_RE.get_or_init(|| Regex::new(r"(?i)^SMS archive (.+)$").expect("arch subj"))
 }
 
+/// Clean contact name from an archive subject capture.
+///
+/// Subjects are often `SMS archive with Alice` or `SMS archive with Alice (2011-2013)`.
+/// Strip a leading `with` and a trailing `(year-year)` so contacts lookup can match.
+fn clean_archive_contact_name(raw: &str) -> String {
+    let mut name = raw.trim();
+    if name.len() >= 5 && name[..5].eq_ignore_ascii_case("with ") {
+        name = name[5..].trim();
+    }
+    static YEAR_RANGE: OnceLock<Regex> = OnceLock::new();
+    let re = YEAR_RANGE.get_or_init(|| {
+        Regex::new(r"\s*\(\d{4}\s*[-–—]\s*\d{4}\)\s*$").expect("year range")
+    });
+    re.replace(name, "").trim().to_string()
+}
+
 fn message_header_re() -> &'static Regex {
     MESSAGE_HEADER_RE
         .get_or_init(|| Regex::new(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) - (.+)$").expect("hdr"))
@@ -162,10 +178,10 @@ pub(crate) fn parse_archive_eml_mail(
     let caps = archive_subject_re()
         .captures(subject.trim())
         .context("archive subject")?;
-    let export_name = caps[1].trim().to_string();
+    let export_name = clean_archive_contact_name(&caps[1]);
     let from_hdr = header(mail, "From");
     let phone_raw = phone_from_from_header(&from_hdr);
-    // Unknown phones are kept (dedupe writes them under junk/); do not abort.
+    // Unknown phones are kept and written under the `unknown` chat stem.
     let conv_number = if phone_raw != "Unknown" {
         phone_raw.clone()
     } else if export_name.starts_with('+') || export_name.chars().all(|c| c.is_ascii_digit()) {
@@ -322,7 +338,7 @@ mod tests {
             &path,
             b"From: <4075551234@sms-backup-plus.local>\r\n\
 To: me@example.com\r\n\
-Subject: SMS archive Alice\r\n\
+Subject: SMS archive with Alice (2011-2013)\r\n\
 Content-Type: text/plain; charset=utf-8\r\n\
 \r\n\
 Alice\r\n\
@@ -340,6 +356,17 @@ Thanks\r\n",
         assert_eq!(msgs[0].text, "Check this");
         assert!(!msgs[1].is_from_me);
         assert_eq!(msgs[1].text, "Thanks");
+        assert_eq!(msgs[0].name_hint.as_deref(), Some("Alice"));
+    }
+
+    #[test]
+    fn clean_archive_contact_name_strips_with_and_years() {
+        assert_eq!(clean_archive_contact_name("with Alice"), "Alice");
+        assert_eq!(
+            clean_archive_contact_name("with Alice (2011-2013)"),
+            "Alice"
+        );
+        assert_eq!(clean_archive_contact_name("Alice"), "Alice");
     }
 
     #[test]

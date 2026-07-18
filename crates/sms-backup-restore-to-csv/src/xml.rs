@@ -17,6 +17,8 @@ const INSERT_ADDRESS_TOKEN: &str = "insert-address-token";
 const SMS_TYPE_RECEIVED: &str = "1";
 const SMS_TYPE_SENT: &str = "2";
 const MMS_BOX_SENT: &str = "2";
+const MMS_BOX_DRAFT: &str = "3";
+const MMS_BOX_OUTBOX: &str = "4";
 const MMS_ADDR_FROM: &str = "137";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -403,9 +405,14 @@ fn parse_mms(
         return None;
     }
 
+    let msg_box = get(attrs, "msg_box").trim().to_string();
+    // Mirror SMS: only inbox/sent are exported. Draft/outbox are not real chat rows.
+    if msg_box == MMS_BOX_DRAFT || msg_box == MMS_BOX_OUTBOX {
+        stats.skipped_unknown_type += 1;
+        return None;
+    }
     let date_ms_f = date_ms.parse::<f64>().unwrap_or(0.0);
     let (body, attachments) = mms_body_and_attachments(parts, date_ms_f, stats);
-    let msg_box = get(attrs, "msg_box").to_string();
     let hint = contact_name(attrs);
     let contact_name_raw = raw_contact_name(attrs);
     let subject = nullish_to_empty(get(attrs, "sub"));
@@ -701,15 +708,22 @@ mod tests {
     #[test]
     fn skips_draft_and_bad_date() {
         let xml = br#"<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
-<smses count="3">
+<smses count="5">
   <sms address="+15555550101" date="not-a-date" type="1" body="bad date" />
   <sms address="+15555550101" date="1400773261000" type="3" body="draft" />
   <sms address="+15555550101" date="1400773261000" type="1" body="ok" />
+  <mms date="1400773400000" msg_box="3" address="+15555550101">
+    <parts><part seq="0" ct="text/plain" text="mms draft" /></parts>
+  </mms>
+  <mms date="1400773400000" msg_box="4" address="+15555550101">
+    <parts><part seq="0" ct="text/plain" text="mms outbox" /></parts>
+  </mms>
 </smses>"#;
         let (msgs, stats) = parse_xml_reader(xml.as_slice(), &test_owners()).unwrap();
         assert_eq!(stats.sms_count, 3);
+        assert_eq!(stats.mms_count, 2);
         assert_eq!(stats.skipped_invalid_date, 1);
-        assert_eq!(stats.skipped_unknown_type, 1);
+        assert_eq!(stats.skipped_unknown_type, 3);
         assert_eq!(msgs.len(), 1);
         assert_eq!(msgs[0].text, "ok");
     }

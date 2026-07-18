@@ -17,7 +17,8 @@ struct Cli {
     output: PathBuf,
 
     /// Owner phone (E.164 or digits). Repeat for multiple owner numbers.
-    #[arg(long = "owner-phone", default_value = "+15555550100")]
+    /// Required — there is no demo default (wrong owner flips PDU direction).
+    #[arg(long = "owner-phone", required = true)]
     owner_phones: Vec<String>,
 }
 
