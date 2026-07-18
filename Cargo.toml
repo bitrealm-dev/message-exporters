@@ -4,5 +4,5 @@ members = [
     "crates/go-sms-pro-to-csv",
     "crates/sms-backup-restore-to-csv",
     "crates/sms-backup-plus-to-csv",
-    "crates/imessage-to-csv",
+    "crates/imessage-exporter",
 ]

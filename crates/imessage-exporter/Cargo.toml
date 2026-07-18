@@ -5,14 +5,14 @@ description = "Export iMessage data to CSV (upstream imessage-exporter fork + cs
 edition = "2024"
 exclude = [".github", "docs", "build.sh"]
 license = "GPL-3.0-or-later"
-name = "imessage-to-csv"
+name = "imessage-exporter"
 repository = "https://github.com/bitrealm-dev/message-vault-rs"
 version = "0.0.0"
 
 # Vendored from upstream ReagentX/imessage-exporter (imessage-exporter package only),
 # with a CSV export overlay. No JSON exporter in this crate.
 [[bin]]
-name = "imessage-to-csv"
+name = "imessage-exporter"
 path = "src/main.rs"
 
 [dependencies]

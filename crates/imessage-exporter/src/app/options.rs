@@ -49,7 +49,7 @@ pub const SUPPORTED_FILE_TYPES: &str = "txt, html, csv";
 pub const SUPPORTED_PLATFORMS: &str = "macOS, iOS";
 pub const SUPPORTED_ATTACHMENT_MANAGER_MODES: &str = "clone, basic, full, disabled";
 pub const ABOUT: &str = concat!(
-    "The `imessage-to-csv` binary exports iMessage data to\n",
+    "The `imessage-exporter` binary exports iMessage data to\n",
     "`txt`, `html`, or `csv` formats. It can also run diagnostics\n",
     "to find problems with the iMessage database."
 );
@@ -570,7 +570,7 @@ mod arg_tests {
     #[test]
     fn can_build_option_diagnostic_flag() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-d"]);
+        let args = command.get_matches_from(["imessage-exporter", "-d"]);
 
         // Build the Options
         let actual = Options::from_args(&args).unwrap();
@@ -601,42 +601,42 @@ mod arg_tests {
     #[test]
     fn cant_build_option_diagnostic_flag_with_export_type() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-d", "-f", "txt"]);
+        let args = command.get_matches_from(["imessage-exporter", "-d", "-f", "txt"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_diagnostic_flag_with_export_path() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-d", "-o", "~/test"]);
+        let args = command.get_matches_from(["imessage-exporter", "-d", "-o", "~/test"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_diagnostic_flag_with_attachment_manager() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-d", "-c", "basic"]);
+        let args = command.get_matches_from(["imessage-exporter", "-d", "-c", "basic"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_diagnostic_flag_with_start_date() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-d", "-s", "2020-01-01"]);
+        let args = command.get_matches_from(["imessage-exporter", "-d", "-s", "2020-01-01"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_diagnostic_flag_with_end() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-d", "-e", "2020-01-01"]);
+        let args = command.get_matches_from(["imessage-exporter", "-d", "-e", "2020-01-01"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_diagnostic_flag_with_caller_id() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-d", "-i"]);
+        let args = command.get_matches_from(["imessage-exporter", "-d", "-i"]);
         assert!(Options::from_args(&args).is_err());
     }
 
@@ -646,7 +646,7 @@ mod arg_tests {
         let dir_str = dir.to_string_lossy().into_owned();
 
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-f", "html", "-o", &dir_str]);
+        let args = command.get_matches_from(["imessage-exporter", "-f", "html", "-o", &dir_str]);
 
         // Build the Options
         let actual = Options::from_args(&args).unwrap();
@@ -677,7 +677,7 @@ mod arg_tests {
     #[test]
     fn can_build_option_export_txt_no_lazy() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-f", "txt", "-l"]);
+        let args = command.get_matches_from(["imessage-exporter", "-f", "txt", "-l"]);
 
         // Build the Options
         let actual = Options::from_args(&args).unwrap();
@@ -708,28 +708,28 @@ mod arg_tests {
     #[test]
     fn cant_build_option_attachment_manager_no_export_type() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-c", "clone"]);
+        let args = command.get_matches_from(["imessage-exporter", "-c", "clone"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_export_path_no_export_type() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-o", "~/test"]);
+        let args = command.get_matches_from(["imessage-exporter", "-o", "~/test"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_start_date_path_no_export_type() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-s", "2020-01-01"]);
+        let args = command.get_matches_from(["imessage-exporter", "-s", "2020-01-01"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_end_date_path_no_export_type() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-e", "2020-01-01"]);
+        let args = command.get_matches_from(["imessage-exporter", "-e", "2020-01-01"]);
         assert!(Options::from_args(&args).is_err());
     }
 
@@ -737,21 +737,21 @@ mod arg_tests {
     fn cant_build_option_invalid_date() {
         let command = get_command();
         let args =
-            command.get_matches_from(["imessage-to-csv", "-f", "html", "-e", "2020-32-32"]);
+            command.get_matches_from(["imessage-exporter", "-f", "html", "-e", "2020-32-32"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_invalid_platform() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-a", "iPad"]);
+        let args = command.get_matches_from(["imessage-exporter", "-a", "iPad"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn can_build_option_valid_platform() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-a", "ios", "-f", "txt"]);
+        let args = command.get_matches_from(["imessage-exporter", "-a", "ios", "-f", "txt"]);
 
         // Build the Options
         let actual = Options::from_args(&args).unwrap();
@@ -783,7 +783,7 @@ mod arg_tests {
     fn can_build_option_ios_password() {
         let command = get_command();
         let args = command.get_matches_from([
-            "imessage-to-csv",
+            "imessage-exporter",
             "-a",
             "ios",
             "-f",
@@ -822,7 +822,7 @@ mod arg_tests {
     fn cant_build_option_macos_password() {
         let command = get_command();
         let args = command.get_matches_from([
-            "imessage-to-csv",
+            "imessage-exporter",
             "-a",
             "macos",
             "-f",
@@ -836,14 +836,14 @@ mod arg_tests {
     #[test]
     fn cant_build_option_invalid_export_type() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-f", "pdf"]);
+        let args = command.get_matches_from(["imessage-exporter", "-f", "pdf"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn can_build_option_custom_name() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-f", "txt", "-m", "Name"]);
+        let args = command.get_matches_from(["imessage-exporter", "-f", "txt", "-m", "Name"]);
 
         // Build the Options
         let actual = Options::from_args(&args).unwrap();
@@ -874,7 +874,7 @@ mod arg_tests {
     #[test]
     fn can_build_option_caller_id() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-f", "txt", "-i"]);
+        let args = command.get_matches_from(["imessage-exporter", "-f", "txt", "-i"]);
 
         // Build the Options
         let actual = Options::from_args(&args).unwrap();
@@ -906,7 +906,7 @@ mod arg_tests {
     fn can_build_option_contact_filter() {
         let command = get_command();
         let args =
-            command.get_matches_from(["imessage-to-csv", "-t", "steve@apple.com", "-f", "txt"]);
+            command.get_matches_from(["imessage-exporter", "-t", "steve@apple.com", "-f", "txt"]);
 
         // Build the Options
         let actual = Options::from_args(&args).unwrap();
@@ -937,7 +937,7 @@ mod arg_tests {
     #[test]
     fn can_build_option_full() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-f", "txt", "-c", "full"]);
+        let args = command.get_matches_from(["imessage-exporter", "-f", "txt", "-c", "full"]);
 
         // Build the Options
         let actual = Options::from_args(&args).unwrap();
@@ -968,7 +968,7 @@ mod arg_tests {
     #[test]
     fn can_build_option_clone() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-f", "txt", "-c", "clone"]);
+        let args = command.get_matches_from(["imessage-exporter", "-f", "txt", "-c", "clone"]);
 
         // Build the Options
         let actual = Options::from_args(&args).unwrap();
@@ -999,46 +999,46 @@ mod arg_tests {
     #[test]
     fn cant_build_option_custom_name_and_caller_id() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-f", "txt", "-m", "Name", "-i"]);
+        let args = command.get_matches_from(["imessage-exporter", "-f", "txt", "-m", "Name", "-i"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_caller_id_no_export() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-i"]);
+        let args = command.get_matches_from(["imessage-exporter", "-i"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_custom_name_no_export() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-m", "Name"]);
+        let args = command.get_matches_from(["imessage-exporter", "-m", "Name"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_contact_filter_no_export() {
         let command = get_command();
-        let args = command.get_matches_from(["imessage-to-csv", "-t", "steve@apple.com"]);
+        let args = command.get_matches_from(["imessage-exporter", "-t", "steve@apple.com"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_no_lazy_without_format() {
-        let args = get_command().get_matches_from(["imessage-to-csv", "-l"]);
+        let args = get_command().get_matches_from(["imessage-exporter", "-l"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_no_lazy_with_diagnostics() {
-        let args = get_command().get_matches_from(["imessage-to-csv", "-d", "-l"]);
+        let args = get_command().get_matches_from(["imessage-exporter", "-d", "-l"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn can_build_option_ignore_disk_space_flag() {
-        let args = get_command().get_matches_from(["imessage-to-csv", "-f", "txt", "-b"]);
+        let args = get_command().get_matches_from(["imessage-exporter", "-f", "txt", "-b"]);
 
         // Build the Options
         let actual = Options::from_args(&args).unwrap();
@@ -1068,40 +1068,40 @@ mod arg_tests {
 
     #[test]
     fn cant_build_option_invalid_attachment_root() {
-        let args = get_command().get_matches_from(["imessage-to-csv", "-r", "/does/not/exist"]);
+        let args = get_command().get_matches_from(["imessage-exporter", "-r", "/does/not/exist"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_invalid_contacts_path() {
-        let args = get_command().get_matches_from(["imessage-to-csv", "-n", "/does/not/exist"]);
+        let args = get_command().get_matches_from(["imessage-exporter", "-n", "/does/not/exist"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn can_build_option_no_progress() {
         let args =
-            get_command().get_matches_from(["imessage-to-csv", "-f", "txt", "--no-progress"]);
+            get_command().get_matches_from(["imessage-exporter", "-f", "txt", "--no-progress"]);
         let actual = Options::from_args(&args).unwrap();
         assert!(!actual.show_progress);
     }
 
     #[test]
     fn show_progress_defaults_to_true() {
-        let args = get_command().get_matches_from(["imessage-to-csv", "-f", "txt"]);
+        let args = get_command().get_matches_from(["imessage-exporter", "-f", "txt"]);
         let actual = Options::from_args(&args).unwrap();
         assert!(actual.show_progress);
     }
 
     #[test]
     fn cant_build_option_no_progress_no_export_type() {
-        let args = get_command().get_matches_from(["imessage-to-csv", "--no-progress"]);
+        let args = get_command().get_matches_from(["imessage-exporter", "--no-progress"]);
         assert!(Options::from_args(&args).is_err());
     }
 
     #[test]
     fn cant_build_option_diagnostic_flag_with_no_progress() {
-        let args = get_command().get_matches_from(["imessage-to-csv", "-d", "--no-progress"]);
+        let args = get_command().get_matches_from(["imessage-exporter", "-d", "--no-progress"]);
         assert!(Options::from_args(&args).is_err());
     }
 }

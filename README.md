@@ -15,7 +15,7 @@ CSV is boring on purpose: open it in a spreadsheet, diff it, pipe it, or ingest 
 | [`go-sms-pro-to-csv`](crates/go-sms-pro-to-csv) | GO SMS Pro XML + PDU | [XML → CSV](crates/go-sms-pro-to-csv/docs/XML_CSV_MAPPING.md) |
 | [`sms-backup-restore-to-csv`](crates/sms-backup-restore-to-csv) | SMS Backup & Restore XML | [fields](crates/sms-backup-restore-to-csv/docs/FIELDS.md), [XML → CSV](crates/sms-backup-restore-to-csv/docs/XML_CSV_MAPPING.md) |
 | [`sms-backup-plus-to-csv`](crates/sms-backup-plus-to-csv) | SMS Backup+ EML | [EML format](crates/sms-backup-plus-to-csv/docs/FORMAT.md), [EML → CSV](crates/sms-backup-plus-to-csv/docs/EML_CSV_MAPPING.md) |
-| [`imessage-to-csv`](crates/imessage-to-csv) | iOS Messages DB | [crate README](crates/imessage-to-csv/README.md), [sample CSV](crates/imessage-to-csv/samples/15551212.csv) |
+| [`imessage-exporter`](crates/imessage-exporter) | iOS Messages DB | [crate README](crates/imessage-exporter/README.md), [sample CSV](crates/imessage-exporter/samples/15551212.csv) |
 
 Usage and flags live in each crate’s README.
 
@@ -29,4 +29,4 @@ Binaries land under `target/release/`.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). `imessage-to-csv` is GPL-3.0-or-later (upstream imessage-exporter).
+MIT — see [LICENSE](LICENSE). `imessage-exporter` is GPL-3.0-or-later (upstream imessage-exporter).
