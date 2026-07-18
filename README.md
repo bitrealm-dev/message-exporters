@@ -8,7 +8,7 @@ This repo exists to bridge that gap: turn those vendor-specific backups into pla
 
 A CSV file is a plain table you can open in Excel, Numbers, Google Sheets, or any text editor. Each converter reads one kind of backup and writes those tables. Pick the converter that matches the app or device that created your backup.
 
-### Why CSV?
+## Why CSV?
 
 Other formats look tempting. JSON is great for programs, but hard for a person to skim and check. HTML is great for presenting messages in a browser, but awkward as a structured store you can sort, filter, or re-import later.
 
@@ -23,17 +23,62 @@ CSV sits in the middle: human-readable enough that you can open a file and verif
 | **SMS Backup+** email exports (`.eml` files) | [`sms-backup-plus-to-csv`](crates/sms-backup-plus-to-csv) | [How the email backup is structured](crates/sms-backup-plus-to-csv/docs/FORMAT.md), [How messages become spreadsheet rows](crates/sms-backup-plus-to-csv/docs/EML_CSV_MAPPING.md) |
 | **Apple Messages** database on a Mac (`chat.db`) | [`imessage-exporter`](crates/imessage-exporter) | [Converter README](crates/imessage-exporter/README.md), [example spreadsheet](crates/imessage-exporter/sample-output/15551212.csv) |
 
-Each converter’s README explains what the backup looks like, what you need to run it, and the exact command.
+Each converter’s README explains what the backup looks like, what you need to run it, and extra options.
 
-## Build
+## Quick start
 
-These tools are written in Rust. From the repository root, build every converter with:
+You need [Rust](https://www.rust-lang.org/tools/install) (`cargo`) on the machine that will run the converter. Clone this repository, then from the repo root build once:
 
 ```bash
 cargo build --workspace --release
 ```
 
-The finished programs appear under `target/release/`.
+Binaries land under `target/release/`. Replace the example paths and identity values with your own, then run the matching command.
+
+### GO SMS Pro (Android backup folder)
+
+```bash
+cargo run --release -p go-sms-pro-to-csv -- \
+  --input /path/to/gosms_export \
+  --output ./staging/go-sms-pro \
+  --owner-phone +15555550100
+```
+
+`--input` is the backup folder (XML + `.pdu` files). `--owner-phone` is required (the number that owned the phone).
+
+### SMS Backup & Restore (SyncTech XML)
+
+```bash
+cargo run --release -p sms-backup-restore-to-csv -- \
+  --input /path/to/sms-20210328165031.xml \
+  --output ./staging/sms-backup-restore \
+  --owner-phone +15555550100
+```
+
+`--input` may be one `.xml` file or a folder of them. Unlock/unzip encrypted `.zip` backups first. `--owner-phone` is required.
+
+### SMS Backup+ (folder of `.eml` files)
+
+```bash
+cargo run --release -p sms-backup-plus-to-csv -- convert \
+  --input /path/to/eml_export \
+  --output ./staging/sms-backup-plus \
+  --owner-phone +15555550100 \
+  --owner-email you@example.com
+```
+
+Or put phone/email in [`crates/sms-backup-plus-to-csv/config/owner.toml`](crates/sms-backup-plus-to-csv/config/owner.example.toml) instead of the flags.
+
+### Apple Messages (`chat.db` on a Mac)
+
+```bash
+cargo run --release -p imessage-exporter -- \
+  -f csv -c clone -o ./staging/imessage
+```
+
+No owner phone flag. Use `-c clone` so attachments are copied into the output folder (otherwise the CSV keeps absolute paths into the Messages library). Full Disk Access may be required on macOS.
+
+After a run, open the CSV files under `--output` / `-o` and check that times, direction, and text look right. Photos and other media are under `attachments/` (or the iMessage output folder when using `-c clone`).
 
 ## License
 
