@@ -1,21 +1,34 @@
-# go-sms-pro-to-csv
+# GO SMS Pro → CSV
 
-Convert a **GO SMS Pro** (GOMO / Jiubang) local backup into per-conversation **CSV**. Reuses iMessage field names where the concept exists; unused iMessage-only columns are omitted. SMS-Pro-only fields are appended. A universal CSV shared by all exporters is a non-goal.
+Convert a **GO SMS Pro** (GOMO / Jiubang) local backup into one spreadsheet file per conversation, plus any photos or other media found in the backup.
 
-Part of the [message-exporters](../..) Cargo workspace. Field mapping: [`docs/XML_CSV_MAPPING.md`](docs/XML_CSV_MAPPING.md). Example output from the smoke fixture: [`samples/`](samples/).
+## What this is for
 
-## Input
+GO SMS Pro can save texts onto the phone as a backup folder. That folder usually contains:
 
-A directory containing:
+- XML files named like `gosms_sys….xml` — ordinary SMS text messages
+- files ending in `.pdu` — MMS messages (often with pictures or other media packed inside)
 
-- `gosms_sys*.xml` — SMS (`<GoSms><SMS>…`)
-- `I_<unix>_*.pdu` — MMS PDU blobs (attachments extracted by magic-byte heuristics)
+There is no official public description of this backup format. For a detailed walkthrough of how each message becomes a spreadsheet row, see [docs/XML_CSV_MAPPING.md](docs/XML_CSV_MAPPING.md).
 
-There is no public GO SMS Pro backup spec; XML fields mirror [Android Telephony SMS columns](https://developer.android.com/reference/android/provider/Telephony.TextBasedSmsColumns). PDU parsing uses magic-byte heuristics (see `src/pdu.rs`).
+## What you get
 
-## Standalone usage
+- One CSV file per conversation (a CSV is a plain table you can open in Excel, Numbers, or Google Sheets)
+- An `attachments/` folder next to those files for media pulled out of MMS backups
+- Each row is one message: who it was with, when it was sent or received, the text, and whether media was attached
 
-From the repo root:
+Example output from a small test backup: [`samples/`](samples/).
+
+## What you need
+
+1. The GO SMS Pro backup folder on disk
+2. **Your phone number** — the number that owned the messages on that phone
+
+The converter uses your number to tell sent messages from received ones. For example, if your number is `+1 555 555 0100`, pass that (or the same digits without spaces) as `--owner-phone`.
+
+## How to run
+
+From the [message-exporters](../..) repository root:
 
 ```bash
 cargo run --release -p go-sms-pro-to-csv -- \
@@ -24,12 +37,7 @@ cargo run --release -p go-sms-pro-to-csv -- \
   --owner-phone +15555550100
 ```
 
-Output:
-
-- one `.csv` file per conversation (header row + one row per message)
-- `attachments/` for media extracted from PDUs
-- `service` is `"SMS"`
-- SMS-Pro-only columns: `export_source` (`go-sms-pro`), `source_kind`, `android_type`, `date_ms`, `contact_name`, `pdu_filename`, `xml_fields_json`
+Replace the paths and phone number with your own. `--input` is the backup folder. `--output` is where the CSV files and `attachments/` folder are written.
 
 ## License
 

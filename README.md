@@ -1,32 +1,30 @@
 # message-exporters
 
-Turn phone and app message backups into per-conversation CSV files (plus attachments).
+Turn phone and messaging-app backups into one spreadsheet file per conversation, with photos and other media saved beside those files.
 
-Each crate reads one backup format and writes one CSV per chat. Column names overlap where the concept is shared (especially with iMessage), but there is no universal schema — source-specific fields stay on that source’s exporter.
+A CSV file is a plain table you can open in Excel, Numbers, Google Sheets, or any text editor. Each converter reads one kind of backup and writes those tables. Pick the converter that matches the app or device that created your backup.
 
-## Why CSV
+## Which converter to use
 
-CSV is boring on purpose: open it in a spreadsheet, diff it, pipe it, or ingest it later without inventing another wire format. Nested bits (tapbacks, edits, raw XML crumbs) live in JSON cells when a flat column would lie.
+| Backup you have | Converter | Format docs |
+|-----------------|-----------|-------------|
+| **GO SMS Pro** local backup folder (Android) | [`go-sms-pro-to-csv`](crates/go-sms-pro-to-csv) | [How messages become spreadsheet rows](crates/go-sms-pro-to-csv/docs/XML_CSV_MAPPING.md) |
+| **SMS Backup & Restore** XML from SyncTech (Android) | [`sms-backup-restore-to-csv`](crates/sms-backup-restore-to-csv) | [What the XML contains](crates/sms-backup-restore-to-csv/docs/FIELDS.md), [How messages become spreadsheet rows](crates/sms-backup-restore-to-csv/docs/XML_CSV_MAPPING.md) |
+| **SMS Backup+** email exports (`.eml` files) | [`sms-backup-plus-to-csv`](crates/sms-backup-plus-to-csv) | [How the email backup is structured](crates/sms-backup-plus-to-csv/docs/FORMAT.md), [How messages become spreadsheet rows](crates/sms-backup-plus-to-csv/docs/EML_CSV_MAPPING.md) |
+| **Apple Messages** database on a Mac (`chat.db`) | [`imessage-exporter`](crates/imessage-exporter) | [Converter README](crates/imessage-exporter/README.md), [example spreadsheet](crates/imessage-exporter/samples/15551212.csv) |
 
-## Crates
-
-| Crate | Input | Format docs |
-|-------|--------|-------------|
-| [`go-sms-pro-to-csv`](crates/go-sms-pro-to-csv) | GO SMS Pro XML + PDU | [XML → CSV](crates/go-sms-pro-to-csv/docs/XML_CSV_MAPPING.md) |
-| [`sms-backup-restore-to-csv`](crates/sms-backup-restore-to-csv) | SMS Backup & Restore XML | [fields](crates/sms-backup-restore-to-csv/docs/FIELDS.md), [XML → CSV](crates/sms-backup-restore-to-csv/docs/XML_CSV_MAPPING.md) |
-| [`sms-backup-plus-to-csv`](crates/sms-backup-plus-to-csv) | SMS Backup+ EML | [EML format](crates/sms-backup-plus-to-csv/docs/FORMAT.md), [EML → CSV](crates/sms-backup-plus-to-csv/docs/EML_CSV_MAPPING.md) |
-| [`imessage-exporter`](crates/imessage-exporter) | iOS Messages DB | [crate README](crates/imessage-exporter/README.md), [sample CSV](crates/imessage-exporter/samples/15551212.csv) |
-
-Usage and flags live in each crate’s README.
+Each converter’s README explains what the backup looks like, what you need to run it, and the exact command.
 
 ## Build
+
+These tools are written in Rust. From the repository root, build every converter with:
 
 ```bash
 cargo build --workspace --release
 ```
 
-Binaries land under `target/release/`.
+The finished programs appear under `target/release/`.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). `imessage-exporter` is GPL-3.0-or-later (upstream imessage-exporter).
+Most converters are MIT — see [LICENSE](LICENSE). `imessage-exporter` is GPL-3.0-or-later (inherited from upstream imessage-exporter).

@@ -1,27 +1,36 @@
-# sms-backup-restore-to-csv
+# SMS Backup & Restore → CSV
 
-Turn an Android **SMS Backup & Restore** XML file into per-conversation **CSV**. Reuses iMessage field names where the concept exists; unused iMessage-only columns are omitted. SBR-only fields (including full XML fidelity via `xml_fields_json`) are appended. A universal CSV shared by all exporters is a non-goal.
+Convert an Android **SMS Backup & Restore** backup into one spreadsheet file per conversation, plus decoded MMS photos and other media.
 
-Part of the [message-exporters](../..) Cargo workspace.
+## What this is for
 
-[SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/) (SyncTech) writes a backup like `sms-20210328165031.xml`. This tool reads that XML and writes one CSV file per conversation, plus decoded MMS media under `attachments/`.
+[SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/) (by SyncTech) writes a backup file whose name looks like `sms-20210328165031.xml`. That file holds SMS and MMS from the phone’s messaging database.
 
-Field meanings: [docs/FIELDS.md](docs/FIELDS.md). XML→CSV mapping: [docs/XML_CSV_MAPPING.md](docs/XML_CSV_MAPPING.md). Example output from the sample fixture: [`samples/`](samples/).
+This converter reads that XML and writes one CSV file per conversation. A CSV is a plain table you can open in Excel, Numbers, or Google Sheets.
 
-## Input
+- What the backup XML contains: [docs/FIELDS.md](docs/FIELDS.md)
+- How each message becomes a spreadsheet row: [docs/XML_CSV_MAPPING.md](docs/XML_CSV_MAPPING.md)
 
-Pass either:
+## What you get
 
-- one `sms-*.xml` file, or
-- a directory of `.xml` files (all of them are merged into one export)
+- One CSV file per conversation
+- An `attachments/` folder for pictures and other media that were inside MMS messages
+- Each row is one message: who it was with, when it was sent or received, the text, and whether media was attached
 
-The XML root is `<smses>` (current) or `<allsms>` (older backups). Messages live in `<sms>` and `<mms>` elements.
+Example output from a small test backup: [`samples/`](samples/).
 
-Encrypted `.zip` backups are not unlocked here. Unzip the archive first, then point `--input` at the XML inside.
+## What you need
 
-## Standalone usage
+1. Either one `sms-….xml` file, or a folder that contains several `.xml` backups (all of them are combined into one export)
+2. **Your phone number** — the number that owned the messages on that phone
 
-From the repo root:
+The converter uses your number to tell sent messages from received ones. For example, if your number is `+1 555 555 0100`, pass that (or the same digits without spaces) as `--owner-phone`.
+
+If the backup app gave you an encrypted `.zip` file, unlock and unzip it first. Point `--input` at the XML file inside the unzipped folder. This converter does not open encrypted archives.
+
+## How to run
+
+From the [message-exporters](../..) repository root:
 
 ```bash
 cargo run --release -p sms-backup-restore-to-csv -- \
@@ -30,12 +39,7 @@ cargo run --release -p sms-backup-restore-to-csv -- \
   --owner-phone +15555550100
 ```
 
-Output:
-
-- one `.csv` file per conversation
-- `attachments/` for MMS media
-- `service` is `"SMS"`
-- SBR-only columns: `export_source` (`sms-backup-restore`), `message_kind`, `date_ms`, `contact_name`, `android_type`, `xml_fields_json`
+Replace the paths and phone number with your own. `--input` may be a single XML file or a directory of XML files. `--output` is where the CSV files and `attachments/` folder are written.
 
 ## License
 
