@@ -1,8 +1,7 @@
 //! Convert SMS Backup & Restore XML → per-conversation CSV.
 
-use crate::owner_set::OwnerPhoneSet;
-use crate::phone::to_e164;
 use crate::xml::{parse_xml_file, AttachmentBlob, ConvType, ParsedMessage};
+use message_phone::{to_e164, OwnerPhoneSet};
 use anyhow::{bail, Context, Result};
 use chrono::{Local, TimeZone, Utc};
 use serde::Serialize;
@@ -42,14 +41,19 @@ const EXPORT_SOURCE: &str = "sms-backup-restore";
 #[derive(Debug, Default)]
 pub struct ExportReport {
     pub conversations: u64,
-    pub sms_count: u64,
-    pub mms_count: u64,
+    /// SMS elements seen in XML (before skip/dedupe filters).
+    pub sms_seen: u64,
+    /// MMS elements seen in XML (before skip/dedupe filters).
+    pub mms_seen: u64,
     pub attachments_saved: u64,
+    /// Rows written after dedupe (outgoing).
     pub sent: u64,
+    /// Rows written after dedupe (incoming).
     pub received: u64,
     pub skipped_invalid_date: u64,
     pub skipped_unknown_address: u64,
     pub skipped_unknown_type: u64,
+    pub skipped_draft_or_outbox: u64,
     pub skipped_empty_participants: u64,
     pub skipped_bad_attachment: u64,
     pub errors: Vec<String>,
@@ -199,7 +203,6 @@ fn add_message(
     conversations: &mut BTreeMap<String, PendingConversation>,
     msg: ParsedMessage,
     pending_atts: Vec<PendingAttachment>,
-    report: &mut ExportReport,
 ) {
     let chat_id = chat_id_for(&msg);
     let convo = ensure_convo(
@@ -208,11 +211,6 @@ fn add_message(
         msg.conversation_type,
         msg.group_title.clone(),
     );
-    if msg.is_from_me {
-        report.sent += 1;
-    } else {
-        report.received += 1;
-    }
     let att_names: Vec<_> = pending_atts.iter().map(|a| a.rel_path.clone()).collect();
     let dedupe_key = format!(
         "{}|{}|{}|{}",
@@ -281,6 +279,11 @@ fn write_conversation(
         .with_context(|| format!("write header {}", path.display()))?;
 
     for msg in &convo.messages {
+        if msg.is_from_me {
+            report.sent += 1;
+        } else {
+            report.received += 1;
+        }
         let secs = msg.sort_key as i64;
         let (ts_local, ts_utc, ts_display) =
             format_local_ts(secs).expect("timestamp validated above");
@@ -400,16 +403,17 @@ pub fn convert_export(
     for xml_path in collect_xml_paths(input)? {
         match parse_xml_file(&xml_path, &owners.all_digits) {
             Ok((msgs, stats)) => {
-                report.sms_count += stats.sms_count;
-                report.mms_count += stats.mms_count;
+                report.sms_seen += stats.sms_seen;
+                report.mms_seen += stats.mms_seen;
                 report.skipped_invalid_date += stats.skipped_invalid_date;
                 report.skipped_unknown_address += stats.skipped_unknown_address;
                 report.skipped_unknown_type += stats.skipped_unknown_type;
+                report.skipped_draft_or_outbox += stats.skipped_draft_or_outbox;
                 report.skipped_empty_participants += stats.skipped_empty_participants;
                 report.skipped_bad_attachment += stats.skipped_bad_attachment;
                 for msg in msgs {
                     match write_attachments(&msg.attachments, &attachments_dir, &mut report) {
-                        Ok(atts) => add_message(&mut conversations, msg, atts, &mut report),
+                        Ok(atts) => add_message(&mut conversations, msg, atts),
                         Err(err) => report
                             .errors
                             .push(format!("{}: {err:#}", xml_path.display())),

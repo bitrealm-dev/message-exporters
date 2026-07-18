@@ -4,8 +4,8 @@
 use crate::emoji::decode_gosms_emojis;
 use std::collections::HashSet;
 
-use crate::phone::sanitize_number;
 use anyhow::{Context, Result};
+use message_phone::sanitize_number;
 use regex::bytes::Regex as BytesRegex;
 use regex::Regex;
 use std::path::Path;
@@ -227,8 +227,14 @@ fn unique_participants(parts: &[String]) -> Vec<String> {
     unique
 }
 
+/// WAP/MMS header bytes that appear just before a From PLMN address.
+const PLMN_FROM_MARKER_A: &[u8] = b"\x89\x1a\x80\x18\xea";
+const PLMN_FROM_MARKER_B: &[u8] = b"\x8e\x89\x1a\x80\x18\xea";
+/// WAP/MMS header bytes that appear just before a To PLMN address.
+const PLMN_TO_MARKER: &[u8] = b"\x97\x18\xea";
+
 fn is_owner_digit(digits: &str, owners: &HashSet<String>) -> bool {
-    owners.contains(&sanitize_number(digits))
+    sanitize_number(digits).is_some_and(|d| owners.contains(&d))
 }
 
 fn plmn_address_roles(
@@ -242,7 +248,9 @@ fn plmn_address_roles(
 
     for caps in re.captures_iter(data) {
         let digits_raw = String::from_utf8_lossy(&caps[1]).into_owned();
-        let normalized = sanitize_number(&digits_raw);
+        let Some(normalized) = sanitize_number(&digits_raw) else {
+            continue;
+        };
         let pos = caps.get(0).map(|m| m.start()).unwrap_or(0);
         let before_start = pos.saturating_sub(8);
         let before = &data[before_start..pos];
@@ -250,9 +258,9 @@ fn plmn_address_roles(
         let before_short = &data[before_short_start..pos];
         let before4 = &data[pos.saturating_sub(4)..pos];
 
-        let has_from_marker = before_short.ends_with(b"\x89\x1a\x80\x18\xea")
-            || before_short.ends_with(b"\x8e\x89\x1a\x80\x18\xea");
-        let is_to = before_short.ends_with(b"\x97\x18\xea") || before4.ends_with(b"\x97\x18\xea");
+        let has_from_marker = before_short.ends_with(PLMN_FROM_MARKER_A)
+            || before_short.ends_with(PLMN_FROM_MARKER_B);
+        let is_to = before_short.ends_with(PLMN_TO_MARKER) || before4.ends_with(PLMN_TO_MARKER);
         let is_real_from = has_from_marker && !before.contains(&0xa5);
 
         if is_real_from {
@@ -276,7 +284,7 @@ fn infer_pdu_direction(
     primary_digits: &str,
 ) -> (bool, String) {
     if unique_parts.is_empty() {
-        return (false, "Unknown".to_string());
+        return (false, String::new());
     }
 
     if unique_parts.len() >= 3 {
@@ -307,7 +315,7 @@ fn infer_pdu_direction(
         let re = PLMN_RE.get_or_init(|| BytesRegex::new(r"\+(\d{10,15})/TYPE=PLMN").expect("plmn"));
         if let Some(m) = re.find(data) {
             let before = &data[m.start().saturating_sub(6)..m.start()];
-            if before.ends_with(b"\x8e\x89\x1a\x80\x18\xea") {
+            if before.ends_with(PLMN_FROM_MARKER_B) {
                 return (false, first);
             }
         }
@@ -351,7 +359,7 @@ pub fn parse_pdu_file(path: &Path, owners: &HashSet<String>, primary_digits: &st
 
     let normalized_parts: Vec<String> = participants_raw
         .iter()
-        .map(|p| sanitize_number(p))
+        .filter_map(|p| sanitize_number(p))
         .collect();
     let unique_parts = unique_participants(&normalized_parts);
     let is_group = unique_parts.len() >= 3;

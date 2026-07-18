@@ -93,7 +93,9 @@ pub(crate) fn extract_attachments(
     timestamp_ms: f64,
     file_key: Option<&str>,
 ) -> Vec<AttachmentBlob> {
+    // Filename prefix only — fall back to epoch rather than panic on bad stamps.
     let date_prefix = crate::identity::local_datetime_from_secs((timestamp_ms / 1000.0) as i64)
+        .unwrap_or_else(|| chrono::DateTime::UNIX_EPOCH.with_timezone(&chrono::Local))
         .format("%Y%m%d_%H%M%S")
         .to_string();
     let name_prefix = file_key.map(|k| format!("{k}_")).unwrap_or_default();

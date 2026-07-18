@@ -28,7 +28,7 @@ fn main() -> Result<()> {
 
     println!("Wrote {}", cli.output.display());
     println!("  conversations:     {}", report.conversations);
-    println!("  XML messages:      {}", report.xml_messages);
+    println!("  XML messages seen: {}", report.xml_messages_seen);
     println!("  PDU messages:      {}", report.pdu_messages);
     println!("  PDU group MMS:     {}", report.pdu_group_messages);
     println!("  attachments:       {}", report.attachments_saved);

@@ -1,11 +1,10 @@
 //! Convert GO SMS Pro export → per-conversation CSV.
 
-use crate::owner_set::OwnerPhoneSet;
 use crate::pdu::{parse_pdu_file, ParsedPdu};
-use crate::phone::to_e164;
 use crate::xml::{parse_xml_file, XmlMessage};
 use anyhow::{bail, Context, Result};
-use chrono::{DateTime, Local, TimeZone, Utc};
+use chrono::{Local, TimeZone, Utc};
+use message_phone::{to_e164, OwnerPhoneSet};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
@@ -43,11 +42,15 @@ const EXPORT_SOURCE: &str = "go-sms-pro";
 #[derive(Debug, Default)]
 pub struct ExportReport {
     pub conversations: u64,
-    pub xml_messages: u64,
+    /// XML `<SMS>` rows seen while parsing (before write / dedupe).
+    pub xml_messages_seen: u64,
+    /// PDU files that produced a pending message (before write / dedupe).
     pub pdu_messages: u64,
     pub pdu_group_messages: u64,
     pub attachments_saved: u64,
+    /// Rows written to CSV after dedupe (outgoing).
     pub sent: u64,
+    /// Rows written to CSV after dedupe (incoming).
     pub received: u64,
     pub skipped_invalid_date: u64,
     pub skipped_unknown_type: u64,
@@ -116,26 +119,22 @@ fn mime_for_ext(ext: &str) -> Option<&'static str> {
     }
 }
 
-/// Format a Unix second as local/UTC/display strings without panicking.
+/// Format a Unix second as local/UTC/display strings.
 ///
-/// Tries local interpretation, then UTC mapped to local, then Unix epoch.
-fn format_local_ts(secs: i64) -> (String, String, String) {
-    let local = Local
-        .timestamp_opt(secs, 0)
-        .single()
-        .or_else(|| {
-            Utc.timestamp_opt(secs, 0)
-                .single()
-                .map(|utc| utc.with_timezone(&Local))
-        })
-        .unwrap_or_else(|| DateTime::UNIX_EPOCH.with_timezone(&Local));
+/// Returns `None` when the timestamp cannot be represented in local or UTC.
+fn format_local_ts(secs: i64) -> Option<(String, String, String)> {
+    let local = Local.timestamp_opt(secs, 0).single().or_else(|| {
+        Utc.timestamp_opt(secs, 0)
+            .single()
+            .map(|utc| Local.from_utc_datetime(&utc.naive_utc()))
+    })?;
     let utc = local.with_timezone(&Utc);
     let display = local.format("%b %e, %Y %I:%M:%S %p").to_string();
-    (
+    Some((
         local.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
         utc.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
         display,
-    )
+    ))
 }
 
 /// Deterministic message GUID from chat + timestamp + direction + body + attachment digests.
@@ -172,7 +171,7 @@ fn chat_id_individual(digits: &str) -> String {
 fn chat_id_group(participant_digits: &[String], owners: &OwnerPhoneSet) -> (String, String) {
     let mut others: Vec<String> = participant_digits
         .iter()
-        .filter(|d| !owners.is_owner(d) && *d != "Unknown")
+        .filter(|d| !d.is_empty() && !owners.is_owner(d))
         .cloned()
         .collect();
     others.sort();
@@ -332,7 +331,7 @@ fn add_pdu_message(
         let others: Vec<_> = parsed
             .participants
             .iter()
-            .filter(|p| !owners.is_owner(p))
+            .filter(|p| !p.is_empty() && !owners.is_owner(p))
             .cloned()
             .collect();
         if others.is_empty() {
@@ -351,11 +350,6 @@ fn add_pdu_message(
     if parsed.is_group {
         report.pdu_group_messages += 1;
     }
-    if parsed.is_sent {
-        report.sent += 1;
-    } else {
-        report.received += 1;
-    }
 
     let att_names: Vec<String> = attachments.iter().map(|a| a.rel_path.clone()).collect();
     let dedupe_key = format!(
@@ -373,14 +367,18 @@ fn add_pdu_message(
         .unwrap_or("")
         .to_string();
 
+    let sender_digits = if parsed.is_sent {
+        None
+    } else if parsed.sender_number.is_empty() {
+        None
+    } else {
+        Some(parsed.sender_number.clone())
+    };
+
     let pending = PendingMessage {
         sort_key: parsed.timestamp as f64,
         is_from_me: parsed.is_sent,
-        sender_digits: if parsed.is_sent {
-            None
-        } else {
-            Some(parsed.sender_number.clone())
-        },
+        sender_digits,
         sender_display_name: None,
         text: parsed.body.clone(),
         attachments,
@@ -424,8 +422,17 @@ fn write_conversation(
     output_dir: &Path,
     chat_id: &str,
     convo: &mut PendingConversation,
+    report: &mut ExportReport,
 ) -> Result<()> {
     dedupe_messages(&mut convo.messages);
+    convo.messages.retain(|m| {
+        if format_local_ts(m.sort_key as i64).is_some() {
+            true
+        } else {
+            report.skipped_invalid_date += 1;
+            false
+        }
+    });
     if convo.messages.is_empty() {
         return Ok(());
     }
@@ -444,7 +451,8 @@ fn write_conversation(
 
     for msg in &convo.messages {
         let secs = msg.sort_key as i64;
-        let (ts_local, ts_utc, ts_display) = format_local_ts(secs);
+        let (ts_local, ts_utc, ts_display) =
+            format_local_ts(secs).expect("timestamp validated above");
         let digests: Vec<String> = msg.attachments.iter().map(|a| a.digest_hex.clone()).collect();
         let guid = stable_guid(chat_id, &ts_local, msg.is_from_me, &msg.text, &digests);
         let direction = if msg.is_from_me {
@@ -505,12 +513,19 @@ fn write_conversation(
             xml_fields_json.as_str(),
         ])
         .with_context(|| format!("write row {}", path.display()))?;
+
+        if msg.is_from_me {
+            report.sent += 1;
+        } else {
+            report.received += 1;
+        }
     }
 
     wtr.flush()?;
     drop(wtr);
     fs::rename(&tmp_path, &path)
         .with_context(|| format!("rename {} → {}", tmp_path.display(), path.display()))?;
+    report.conversations += 1;
     Ok(())
 }
 
@@ -525,7 +540,6 @@ pub fn convert_export(
     }
 
     let owners = OwnerPhoneSet::new(owner_phones)?;
-    let owner = owners.primary_digits.clone();
     let mut report = ExportReport::default();
     let mut conversations: BTreeMap<String, PendingConversation> = BTreeMap::new();
 
@@ -547,14 +561,12 @@ pub fn convert_export(
     xml_paths.sort();
 
     for xml_path in xml_paths {
-        match parse_xml_file(&xml_path, &owner) {
+        match parse_xml_file(&xml_path) {
             Ok((msgs, stats)) => {
-                report.xml_messages += stats.messages;
+                report.xml_messages_seen += stats.messages;
                 report.skipped_invalid_date += stats.skipped_invalid_date;
                 report.skipped_unknown_type += stats.skipped_unknown_type;
                 report.skipped_unknown_address += stats.skipped_unknown_address;
-                report.sent += stats.sent;
-                report.received += stats.received;
                 add_xml_messages(&mut conversations, msgs);
             }
             Err(err) => report.errors.push(format!("{}: {err:#}", xml_path.display())),
@@ -600,8 +612,7 @@ pub fn convert_export(
     }
 
     for (chat_id, mut convo) in conversations {
-        write_conversation(output_dir, &chat_id, &mut convo)?;
-        report.conversations += 1;
+        write_conversation(output_dir, &chat_id, &mut convo, &mut report)?;
     }
 
     Ok(report)

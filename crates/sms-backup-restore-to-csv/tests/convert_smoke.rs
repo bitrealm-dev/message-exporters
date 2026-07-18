@@ -83,8 +83,9 @@ fn dedupes_overlapping_xml_files() {
 
     let out = tmp.path().join("out");
     let report = convert_export(&input_dir, &out, &["+15555550100".into()]).unwrap();
-    assert_eq!(report.sms_count, 2);
+    assert_eq!(report.sms_seen, 2);
     assert_eq!(report.conversations, 1);
+    assert_eq!(report.received, 1); // one row after dedupe
 
     let chat = out.join("_15555550101.csv");
     let body = fs::read_to_string(&chat).unwrap();

@@ -1,10 +1,10 @@
 //! Parse flat EMLs: one text message per `.eml` file (not a multi-message archive).
 
 use crate::assets::extract_attachments;
-use crate::phone::{sanitize_number, to_e164};
 use crate::types::ParsedMessage;
 use anyhow::Result;
 use mailparse::{MailHeaderMap, ParsedMail};
+use message_phone::{sanitize_number, to_e164};
 use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
@@ -15,7 +15,10 @@ static SUBJECT_RE: OnceLock<Regex> = OnceLock::new();
 static ADDRESS_SPLIT_RE: OnceLock<Regex> = OnceLock::new();
 static ARCHIVE_SUBJECT_PREFIX_RE: OnceLock<Regex> = OnceLock::new();
 
+/// Android SMS/MMS type codes SMS Backup+ puts in `X-smssync-type` for sent messages
+/// (Telephony `MESSAGE_TYPE_SENT`/`OUTBOX`/… and common MMS PDU sent codes).
 const SENT_TYPES: &[&str] = &["2", "128", "4", "135", "6", "5"];
+/// Android SMS/MMS type codes for inbox / received messages.
 const RECEIVED_TYPES: &[&str] = &["1", "132", "130"];
 
 fn subject_re() -> &'static Regex {
@@ -50,8 +53,10 @@ fn smssync_participant_numbers(raw_address: &str) -> Vec<String> {
         if token.is_empty() {
             continue;
         }
-        let num = sanitize_number(token);
-        if num == "Unknown" || !seen.insert(num.clone()) {
+        let Some(num) = sanitize_number(token) else {
+            continue;
+        };
+        if !seen.insert(num.clone()) {
             continue;
         }
         numbers.push(num);
@@ -200,8 +205,9 @@ pub(crate) fn parse_flat_eml_mail(
     let addr = participant_numbers
         .first()
         .cloned()
-        .unwrap_or_else(|| sanitize_number(&addr_raw));
-    if addr == "Unknown" && addr_raw.is_empty() {
+        .or_else(|| sanitize_number(&addr_raw))
+        .unwrap_or_default();
+    if addr.is_empty() && addr_raw.is_empty() {
         return Ok(None);
     }
 
@@ -261,13 +267,13 @@ pub(crate) fn parse_flat_eml_mail(
     // owner-first `owner~peer` list must not key the CSV to the owner's number.
     let conv_number = if let Some(peer) = non_owner.first() {
         peer.clone()
-    } else if addr != "Unknown" {
+    } else if !addr.is_empty() {
         addr.clone()
     } else {
-        sanitize_number(&addr_raw)
+        sanitize_number(&addr_raw).unwrap_or_default()
     };
-    // Keep Unknown when we have a display name so contacts reverse-lookup can fill it.
-    if conv_number == "Unknown"
+    // Keep empty chat_key when we have a display name so contacts reverse-lookup can fill it.
+    if conv_number.is_empty()
         && name_hint
             .as_ref()
             .map(|s| s.trim().is_empty())
@@ -285,14 +291,14 @@ pub(crate) fn parse_flat_eml_mail(
         chat_key: conv_number.clone(),
         conversation_type: "individual".into(),
         group_title: None,
-        participant_digits: if conv_number == "Unknown" {
+        participant_digits: if conv_number.is_empty() {
             vec![]
         } else {
             vec![(conv_number.clone(), name_hint.clone())]
         },
         timestamp_secs: ts,
         is_from_me: sent,
-        sender_digits: if sent || conv_number == "Unknown" {
+        sender_digits: if sent || conv_number.is_empty() {
             None
         } else {
             Some(conv_number)

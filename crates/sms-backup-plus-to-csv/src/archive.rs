@@ -15,10 +15,10 @@
 
 use crate::assets::extract_attachments;
 use crate::flat_eml::is_archive_eml;
-use crate::phone::sanitize_number;
 use crate::types::{AttachmentBlob, ParsedMessage};
 use anyhow::{Context, Result};
 use mailparse::MailHeaderMap;
+use message_phone::sanitize_number;
 use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::path::Path;
@@ -90,12 +90,11 @@ fn phone_from_from_header(from_hdr: &str) -> String {
     {
         let addr = &from_hdr[start + 1..end];
         let local = addr.split('@').next().unwrap_or(addr);
-        let digits = sanitize_number(local);
-        if digits != "Unknown" {
+        if let Some(digits) = sanitize_number(local) {
             return digits;
         }
     }
-    sanitize_number(from_hdr)
+    sanitize_number(from_hdr).unwrap_or_default()
 }
 
 fn parse_archive_timestamp(date_str: &str) -> Option<f64> {
@@ -181,13 +180,13 @@ pub(crate) fn parse_archive_eml_mail(
     let export_name = clean_archive_contact_name(&caps[1]);
     let from_hdr = header(mail, "From");
     let phone_raw = phone_from_from_header(&from_hdr);
-    // Unknown phones are kept and written under the `unknown` chat stem.
-    let conv_number = if phone_raw != "Unknown" {
+    // Empty peer phones are kept and written under the `unknown` chat stem.
+    let conv_number = if !phone_raw.is_empty() {
         phone_raw.clone()
     } else if export_name.starts_with('+') || export_name.chars().all(|c| c.is_ascii_digit()) {
-        sanitize_number(&export_name)
+        sanitize_number(&export_name).unwrap_or_default()
     } else {
-        "Unknown".to_string()
+        String::new()
     };
 
     let file_key = hex::encode(Sha256::digest(path.to_string_lossy().as_bytes()));
@@ -239,7 +238,7 @@ pub(crate) fn parse_archive_eml_mail(
         let sender_key = sender.trim().to_ascii_lowercase();
         let (is_from_me, sender_digits) = if sender_key == "me" {
             (true, None)
-        } else if conv_number == "Unknown" {
+        } else if conv_number.is_empty() {
             (false, None)
         } else {
             (false, Some(conv_number.clone()))
@@ -249,7 +248,7 @@ pub(crate) fn parse_archive_eml_mail(
             chat_key: conv_number.clone(),
             conversation_type: "individual".into(),
             group_title: None,
-            participant_digits: if conv_number == "Unknown" {
+            participant_digits: if conv_number.is_empty() {
                 vec![]
             } else {
                 vec![(conv_number.clone(), name.clone())]
@@ -389,7 +388,8 @@ Hi there\r\n",
         let mail = mailparse::parse_mail(&bytes).unwrap();
         let (msgs, _) = parse_archive_eml_mail(&path, &mail).unwrap();
         assert_eq!(msgs.len(), 1);
-        assert_eq!(msgs[0].chat_key, "Unknown");
+        assert_eq!(msgs[0].chat_key, "");
+        assert_eq!(crate::identity::chat_id_for(&msgs[0]), "unknown");
         assert_eq!(msgs[0].text, "Hi there");
     }
 

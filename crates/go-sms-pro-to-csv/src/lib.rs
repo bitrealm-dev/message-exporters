@@ -2,7 +2,6 @@
 
 pub mod emit;
 pub mod emoji;
-pub mod owner_set;
 pub mod pdu;
 pub mod phone;
 pub mod xml;

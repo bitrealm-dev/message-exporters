@@ -1,8 +1,9 @@
 //! Parse GO SMS Pro `gosms_sys*.xml` SMS backups.
 
 use crate::emoji::decode_gosms_emojis;
-use crate::phone::{parse_google_voice_voicemail_caller, sanitize_number};
+use crate::phone::parse_google_voice_voicemail_caller;
 use anyhow::{Context, Result};
+use message_phone::sanitize_number;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -44,13 +45,13 @@ pub struct XmlParseStats {
     pub skipped_unknown_address: u64,
 }
 
-pub fn parse_xml_file(path: &Path, owner_digits: &str) -> Result<(Vec<XmlMessage>, XmlParseStats)> {
+pub fn parse_xml_file(path: &Path) -> Result<(Vec<XmlMessage>, XmlParseStats)> {
     let text = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read {}", path.display()))?;
-    parse_xml_str(&text, owner_digits)
+    parse_xml_str(&text)
 }
 
-pub fn parse_xml_str(text: &str, owner_digits: &str) -> Result<(Vec<XmlMessage>, XmlParseStats)> {
+pub fn parse_xml_str(text: &str) -> Result<(Vec<XmlMessage>, XmlParseStats)> {
     let file: GoSmsFile = quick_xml::de::from_str(text).context("failed to parse GoSms XML")?;
     let mut stats = XmlParseStats::default();
     let mut out = Vec::new();
@@ -79,9 +80,13 @@ pub fn parse_xml_str(text: &str, owner_digits: &str) -> Result<(Vec<XmlMessage>,
 
         let msg = match typ.as_str() {
             "2" => {
+                let Some(other) = addr else {
+                    stats.skipped_unknown_address += 1;
+                    continue;
+                };
                 stats.sent += 1;
                 XmlMessage {
-                    other_digits: addr.clone(),
+                    other_digits: other,
                     name_hint: non_empty(&contact),
                     timestamp_secs,
                     is_from_me: true,
@@ -94,8 +99,8 @@ pub fn parse_xml_str(text: &str, owner_digits: &str) -> Result<(Vec<XmlMessage>,
                 }
             }
             "1" => {
-                stats.received += 1;
                 if let Some(caller) = parse_google_voice_voicemail_caller(&body) {
+                    stats.received += 1;
                     XmlMessage {
                         other_digits: caller.clone(),
                         name_hint: Some(caller.clone()),
@@ -109,17 +114,22 @@ pub fn parse_xml_str(text: &str, owner_digits: &str) -> Result<(Vec<XmlMessage>,
                         xml_fields: fields,
                     }
                 } else {
+                    let Some(other) = addr else {
+                        stats.skipped_unknown_address += 1;
+                        continue;
+                    };
+                    stats.received += 1;
                     let hint = if contact.is_empty() {
                         None
                     } else {
                         Some(contact.clone())
                     };
                     XmlMessage {
-                        other_digits: addr.clone(),
+                        other_digits: other.clone(),
                         name_hint: hint,
                         timestamp_secs,
                         is_from_me: false,
-                        sender_digits: Some(addr),
+                        sender_digits: Some(other),
                         text: body,
                         android_type: typ.clone(),
                         date_ms: date_ms.clone(),
@@ -134,13 +144,6 @@ pub fn parse_xml_str(text: &str, owner_digits: &str) -> Result<(Vec<XmlMessage>,
             }
         };
 
-        // Drop threads with no usable other party.
-        if msg.other_digits == "Unknown" {
-            stats.skipped_unknown_address += 1;
-            continue;
-        }
-        // Owner digits unused beyond future checks; keep for API symmetry.
-        let _ = owner_digits;
         out.push(msg);
     }
 
@@ -180,7 +183,7 @@ mod tests {
     <body>hi back</body>
   </SMS>
 </GoSms>"#;
-        let (msgs, stats) = parse_xml_str(xml, "5555550100").unwrap();
+        let (msgs, stats) = parse_xml_str(xml).unwrap();
         assert_eq!(stats.messages, 2);
         assert_eq!(stats.received, 1);
         assert_eq!(stats.sent, 1);
@@ -205,7 +208,7 @@ mod tests {
     <status>-1</status>
   </SMS>
 </GoSms>"#;
-        let (msgs, _) = parse_xml_str(xml, "5555550100").unwrap();
+        let (msgs, _) = parse_xml_str(xml).unwrap();
         assert_eq!(msgs.len(), 1);
         assert_eq!(msgs[0].xml_fields.get("read").map(String::as_str), Some("1"));
         assert_eq!(

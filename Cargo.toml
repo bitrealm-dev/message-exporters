@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/message-phone",
     "crates/go-sms-pro-to-csv",
     "crates/sms-backup-restore-to-csv",
     "crates/sms-backup-plus-to-csv",

@@ -8,9 +8,10 @@
 //! Text normalization collapses whitespace so tiny export differences do not
 //! create two identities.
 
-use crate::phone::to_e164;
-use crate::types::ParsedMessage;
 use chrono::{DateTime, Local, TimeZone, Utc};
+use message_phone::to_e164;
+
+use crate::types::ParsedMessage;
 
 /// Who this chat is with, as a stable string (E.164 phone or `chat-…` for groups).
 ///
@@ -19,7 +20,7 @@ use chrono::{DateTime, Local, TimeZone, Utc};
 pub(crate) fn chat_id_for(msg: &ParsedMessage) -> String {
     if msg.conversation_type == "group" {
         format!("chat-{}", msg.chat_key)
-    } else if msg.chat_key == "Unknown" {
+    } else if msg.chat_key.is_empty() {
         "unknown".to_string()
     } else {
         to_e164(&msg.chat_key)
@@ -31,19 +32,17 @@ pub(crate) fn timestamp_ms(timestamp_secs: f64) -> i64 {
     (timestamp_secs * 1000.0).round() as i64
 }
 
-/// Local wall-clock time for a Unix second, never panicking on out-of-range values.
+/// Local wall-clock time for a Unix second, if representable.
 ///
-/// Tries local interpretation, then UTC mapped to local, then Unix epoch.
-pub(crate) fn local_datetime_from_secs(secs: i64) -> DateTime<Local> {
-    Local
-        .timestamp_opt(secs, 0)
-        .single()
-        .or_else(|| {
-            Utc.timestamp_opt(secs, 0)
-                .single()
-                .map(|utc| utc.with_timezone(&Local))
-        })
-        .unwrap_or_else(|| DateTime::UNIX_EPOCH.with_timezone(&Local))
+/// Tries local interpretation, then UTC mapped to local. Returns `None` when
+/// the instant is out of range for chrono (callers that need a non-panicking
+/// filename prefix may fall back to the Unix epoch themselves).
+pub(crate) fn local_datetime_from_secs(secs: i64) -> Option<DateTime<Local>> {
+    Local.timestamp_opt(secs, 0).single().or_else(|| {
+        Utc.timestamp_opt(secs, 0)
+            .single()
+            .map(|utc| utc.with_timezone(&Local))
+    })
 }
 
 /// Clean the body text before fingerprinting.
@@ -114,20 +113,19 @@ pub(crate) fn safe_stem(value: &str) -> String {
 mod tests {
     use super::*;
 
-    fn sample_msg(
-        chat_key: &str,
-        ts: f64,
-        is_from_me: bool,
-        text: &str,
-    ) -> ParsedMessage {
+    fn sample_msg(chat_key: &str, ts: f64, is_from_me: bool, text: &str) -> ParsedMessage {
         ParsedMessage {
             chat_key: chat_key.into(),
             conversation_type: "individual".into(),
             group_title: None,
-            participant_digits: vec![(chat_key.into(), None)],
+            participant_digits: if chat_key.is_empty() {
+                vec![]
+            } else {
+                vec![(chat_key.into(), None)]
+            },
             timestamp_secs: ts,
             is_from_me,
-            sender_digits: if is_from_me {
+            sender_digits: if is_from_me || chat_key.is_empty() {
                 None
             } else {
                 Some(chat_key.into())
@@ -190,7 +188,7 @@ mod tests {
 
     #[test]
     fn unknown_chat_id_uses_unknown_stem() {
-        let msg = sample_msg("Unknown", 1_609_459_200.0, false, "hi");
+        let msg = sample_msg("", 1_609_459_200.0, false, "hi");
         assert_eq!(chat_id_for(&msg), "unknown");
         assert_eq!(safe_stem(&chat_id_for(&msg)), "unknown");
     }

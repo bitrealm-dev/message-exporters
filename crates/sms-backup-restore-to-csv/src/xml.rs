@@ -1,7 +1,7 @@
 //! Parse SMS Backup & Restore / legacy allsms XML.
 
-use crate::phone::{sanitize_number, to_e164};
 use crate::smil::{ordered_smil_refs, part_content_keys, smil_xml_from_parts};
+use message_phone::{sanitize_number, to_e164};
 use anyhow::{Context, Result};
 use base64::Engine;
 use quick_xml::events::Event;
@@ -106,11 +106,12 @@ pub struct ParsedMessage {
 
 #[derive(Debug, Default)]
 pub struct XmlParseStats {
-    pub sms_count: u64,
-    pub mms_count: u64,
+    pub sms_seen: u64,
+    pub mms_seen: u64,
     pub skipped_invalid_date: u64,
     pub skipped_unknown_address: u64,
     pub skipped_unknown_type: u64,
+    pub skipped_draft_or_outbox: u64,
     pub skipped_empty_participants: u64,
     pub skipped_bad_attachment: u64,
 }
@@ -330,7 +331,7 @@ fn parse_sms(
     _owners: &HashSet<String>,
     stats: &mut XmlParseStats,
 ) -> Option<ParsedMessage> {
-    stats.sms_count += 1;
+    stats.sms_seen += 1;
     let date_ms = get(attrs, "date").to_string();
     let ts = match timestamp_secs(&date_ms) {
         Some(t) => t,
@@ -390,7 +391,7 @@ fn parse_mms(
     owners: &HashSet<String>,
     stats: &mut XmlParseStats,
 ) -> Option<ParsedMessage> {
-    stats.mms_count += 1;
+    stats.mms_seen += 1;
     let date_ms = get(attrs, "date").to_string();
     let ts = match timestamp_secs(&date_ms) {
         Some(t) => t,
@@ -408,7 +409,7 @@ fn parse_mms(
     let msg_box = get(attrs, "msg_box").trim().to_string();
     // Mirror SMS: only inbox/sent are exported. Draft/outbox are not real chat rows.
     if msg_box == MMS_BOX_DRAFT || msg_box == MMS_BOX_OUTBOX {
-        stats.skipped_unknown_type += 1;
+        stats.skipped_draft_or_outbox += 1;
         return None;
     }
     let date_ms_f = date_ms.parse::<f64>().unwrap_or(0.0);
@@ -643,7 +644,7 @@ mod tests {
   <sms protocol="0" address="+15555550101" date="1400773321000" type="2" body="hey" contact_name="Sam" />
 </smses>"#;
         let (msgs, stats) = parse_xml_reader(xml.as_slice(), &test_owners()).unwrap();
-        assert_eq!(stats.sms_count, 2);
+        assert_eq!(stats.sms_seen, 2);
         assert_eq!(msgs.len(), 2);
         assert!(!msgs[0].is_from_me);
         assert_eq!(msgs[0].text, "hello & hi");
@@ -720,10 +721,11 @@ mod tests {
   </mms>
 </smses>"#;
         let (msgs, stats) = parse_xml_reader(xml.as_slice(), &test_owners()).unwrap();
-        assert_eq!(stats.sms_count, 3);
-        assert_eq!(stats.mms_count, 2);
+        assert_eq!(stats.sms_seen, 3);
+        assert_eq!(stats.mms_seen, 2);
         assert_eq!(stats.skipped_invalid_date, 1);
-        assert_eq!(stats.skipped_unknown_type, 3);
+        assert_eq!(stats.skipped_unknown_type, 1); // SMS type=3 only
+        assert_eq!(stats.skipped_draft_or_outbox, 2); // MMS msg_box 3/4
         assert_eq!(msgs.len(), 1);
         assert_eq!(msgs[0].text, "ok");
     }
@@ -746,7 +748,7 @@ mod tests {
   </mms>
 </smses>"#;
         let (msgs, stats) = parse_xml_reader(xml.as_slice(), &test_owners()).unwrap();
-        assert_eq!(stats.mms_count, 1);
+        assert_eq!(stats.mms_seen, 1);
         assert_eq!(msgs.len(), 1);
         assert_eq!(msgs[0].conversation_type, ConvType::Group);
         assert_eq!(msgs[0].text, "group hi");

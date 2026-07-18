@@ -28,7 +28,7 @@ fn main() -> Result<()> {
 
     println!("Wrote {}", cli.output.display());
     println!("  conversations:     {}", report.conversations);
-    println!("  SMS / MMS:         {} / {}", report.sms_count, report.mms_count);
+    println!("  SMS / MMS seen:    {} / {}", report.sms_seen, report.mms_seen);
     println!("  attachments:       {}", report.attachments_saved);
     println!("  sent / received:   {} / {}", report.sent, report.received);
     if report.skipped_invalid_date > 0 {
@@ -36,6 +36,9 @@ fn main() -> Result<()> {
     }
     if report.skipped_unknown_type > 0 {
         println!("  skipped bad type:  {}", report.skipped_unknown_type);
+    }
+    if report.skipped_draft_or_outbox > 0 {
+        println!("  skipped draft/out: {}", report.skipped_draft_or_outbox);
     }
     if report.skipped_unknown_address > 0 {
         println!("  skipped bad addr:  {}", report.skipped_unknown_address);

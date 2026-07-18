@@ -1,8 +1,8 @@
 //! Contact name mapping and phone reverse-lookup from CSV files.
 
-use crate::phone::sanitize_number;
 use crate::types::ParsedMessage;
 use anyhow::{Context, Result};
+use message_phone::sanitize_number;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -83,7 +83,7 @@ impl NameMapping {
 /// Name → phone digits loaded from `phones,first_name,last_name` CSV.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct ContactsBook {
-    /// Normalized lookup key → phone digits (not Unknown).
+    /// Normalized lookup key → phone digits (non-empty sanitized).
     by_name: HashMap<String, String>,
 }
 
@@ -191,7 +191,7 @@ impl ContactsBook {
     }
 }
 
-/// Fill Unknown phone from the contacts book using current `name_hint`.
+/// Fill empty peer phone from the contacts book using current `name_hint`.
 ///
 /// Returns `Some((display_name, phone))` when a phone fill happened.
 /// Call [`apply_name_mapping`] first so aliases resolve to the contacts CSV name.
@@ -199,7 +199,7 @@ pub(crate) fn fill_unknown_phone(
     msg: &mut ParsedMessage,
     book: &ContactsBook,
 ) -> Option<(String, String)> {
-    if msg.chat_key != "Unknown" {
+    if !msg.chat_key.is_empty() {
         return None;
     }
     let display = msg
@@ -266,8 +266,7 @@ fn collapse_inner_whitespace(s: &str) -> String {
 
 fn first_valid_phone(phones_raw: &str) -> Option<String> {
     for part in phones_raw.split(';') {
-        let digits = sanitize_number(part.trim());
-        if digits != "Unknown" {
+        if let Some(digits) = sanitize_number(part.trim()) {
             return Some(digits);
         }
     }
@@ -421,7 +420,7 @@ Jordan Alias,Jordan Alias (SKIP)\n\
         assert!(mapping.correct_name("OrphanLabel").is_none());
 
         let mut msg = ParsedMessage {
-            chat_key: "Unknown".into(),
+            chat_key: String::new(),
             conversation_type: "individual".into(),
             group_title: None,
             participant_digits: vec![],
@@ -451,7 +450,7 @@ Jordan Alias,Jordan Alias (SKIP)\n\
         let mut book = ContactsBook::empty();
         book.insert_first(normalize_name_key("Sam Example"), "5555550122".into());
         let mut msg = ParsedMessage {
-            chat_key: "Unknown".into(),
+            chat_key: String::new(),
             conversation_type: "individual".into(),
             group_title: None,
             participant_digits: vec![],

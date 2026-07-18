@@ -107,7 +107,7 @@ An MMS has three layers:
 
 - `date` → `timestamp*` / `date_ms` (bad dates skipped)
 - `msg_box` `2` → outgoing; `1` → incoming (From addr `type="137"` sets the sender when present); raw `msg_box` in `android_type`
-- `msg_box` `3` (draft) and `4` (outbox) are skipped — same idea as SMS `type` values other than `1`/`2`
+- `msg_box` `3` (draft) and `4` (outbox) are skipped and counted as `skipped_draft_or_outbox` (not `skipped_unknown_type`, which is for unknown SMS `type` only)
 - `sub` → `subject`
 - `address` plus `<addr>` list → participants; one other person is a 1:1 chat, more than one is a group
 - `text/plain` parts → `text`; SMIL (`application/smil`) controls text/image order when present

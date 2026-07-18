@@ -6,10 +6,10 @@ use crate::flat_eml::{is_archive_eml, is_flat_sms_eml, parse_flat_eml_mail};
 use crate::identity::{
     chat_id_for, cover_identity, local_datetime_from_secs, safe_stem, timestamp_ms,
 };
-use crate::phone::{owner_digits, to_e164};
 use crate::types::{AttachmentBlob, ParsedMessage};
 use anyhow::{Context, Result, bail};
 use chrono::Utc;
+use message_phone::{OwnerPhoneSet, to_e164};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -53,10 +53,14 @@ pub struct ExportReport {
     pub messages_before_dedupe: u64,
     pub duplicates_dropped: u64,
     pub attachments_saved: u64,
+    /// Rows written with outgoing direction (after dedupe).
     pub sent: u64,
+    /// Rows written with incoming direction (after dedupe).
     pub received: u64,
-    /// `.eml` files that are not SMS Backup+ shaped (or unparseable as SMS).
+    /// `.eml` files that are not SMS Backup+ shaped.
     pub skipped_not_sms_backup_plus: u64,
+    /// SMS Backup+-looking files that failed to parse.
+    pub skipped_parse_error: u64,
     /// Messages kept under the `unknown` chat stem (no usable peer phone).
     pub unknown_chat_messages: u64,
     pub skipped_invalid_date: u64,
@@ -106,15 +110,15 @@ struct AttachmentCell {
     sticker_effect: Option<String>,
 }
 
-fn format_local_ts(secs: i64) -> (String, String, String) {
-    let local = local_datetime_from_secs(secs);
+fn format_local_ts(secs: i64) -> Option<(String, String, String)> {
+    let local = local_datetime_from_secs(secs)?;
     let utc = local.with_timezone(&Utc);
     let display = local.format("%b %e, %Y %I:%M:%S %p").to_string();
-    (
+    Some((
         local.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
         utc.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
         display,
-    )
+    ))
 }
 
 fn stable_guid(
@@ -287,12 +291,6 @@ fn add_message(
         return;
     }
 
-    if msg.is_from_me {
-        report.sent += 1;
-    } else {
-        report.received += 1;
-    }
-
     let idx = convo.messages.len();
     convo.by_identity.insert(dedupe_key, idx);
     convo.messages.push(pending_from_parsed(msg, pending_atts));
@@ -312,6 +310,17 @@ fn write_conversation(
             .partial_cmp(&b.sort_key)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
+    convo.messages.retain(|m| {
+        if format_local_ts(m.sort_key as i64).is_some() {
+            true
+        } else {
+            report.skipped_invalid_date += 1;
+            false
+        }
+    });
+    if convo.messages.is_empty() {
+        return Ok(());
+    }
 
     let path = output_dir.join(safe_filename(chat_id));
     let mut tmp_name = path
@@ -327,7 +336,8 @@ fn write_conversation(
 
     for msg in &convo.messages {
         let secs = msg.sort_key as i64;
-        let (ts_local, ts_utc, ts_display) = format_local_ts(secs);
+        let (ts_local, ts_utc, ts_display) =
+            format_local_ts(secs).expect("timestamp validated above");
         let digests: Vec<String> = msg.attachments.iter().map(|a| a.digest_hex.clone()).collect();
         let guid = stable_guid(chat_id, &ts_local, msg.is_from_me, &msg.text, &digests);
         let direction = if msg.is_from_me {
@@ -383,6 +393,11 @@ fn write_conversation(
             msg.eml_path.as_str(),
         ])
         .with_context(|| format!("write row {}", path.display()))?;
+        if msg.is_from_me {
+            report.sent += 1;
+        } else {
+            report.received += 1;
+        }
         report.messages += 1;
     }
 
@@ -499,25 +514,13 @@ pub fn convert_export<P: AsRef<Path>>(
     name_mapping_path: Option<&Path>,
     verbose: bool,
 ) -> Result<ExportReport> {
-    if owner_phones.is_empty() {
-        bail!("owner.phones must not be empty");
-    }
-    let mut owner_set = HashSet::new();
-    for phone in owner_phones {
-        let d = owner_digits(phone);
-        if d != "Unknown" {
-            owner_set.insert(d);
-        }
-    }
-    if owner_set.is_empty() {
-        bail!("owner.phones have no usable digits");
-    }
+    let owners = OwnerPhoneSet::new(owner_phones)?;
     let (contacts, contacts_loaded) = ContactsBook::load_optional(contacts_path)?;
     let (name_mapping, mapping_loaded) = NameMapping::load_optional(name_mapping_path)?;
     let mut report = ExportReport::default();
     let mut conversations: HashMap<String, PendingConversation> = HashMap::new();
 
-    vlog(verbose, format!("owner phones: {}", owner_set.len()));
+    vlog(verbose, format!("owner phones: {}", owners.all_digits.len()));
     vlog(verbose, format!("owner emails: {}", owner_emails.len()));
     match &contacts_loaded {
         Some(p) => vlog(verbose, format!("contacts: {}", p.display())),
@@ -552,7 +555,7 @@ pub fn convert_export<P: AsRef<Path>>(
         let mail = match mailparse::parse_mail(&bytes) {
             Ok(m) => m,
             Err(err) => {
-                report.skipped_not_sms_backup_plus += 1;
+                report.skipped_parse_error += 1;
                 report
                     .errors
                     .push(format!("{}: parse EML: {err}", eml_path.display()));
@@ -571,7 +574,7 @@ pub fn convert_export<P: AsRef<Path>>(
                         let _ = fill_unknown_phone(msg, &contacts);
                     }
                     for msg in msgs {
-                        if msg.chat_key == "Unknown" {
+                        if msg.chat_key.is_empty() {
                             report.unknown_chat_messages += 1;
                         }
                         match write_attachments(&msg.attachments, &attachments_dir, &mut report) {
@@ -583,7 +586,7 @@ pub fn convert_export<P: AsRef<Path>>(
                     }
                 }
                 Err(err) => {
-                    report.skipped_not_sms_backup_plus += 1;
+                    report.skipped_parse_error += 1;
                     report
                         .errors
                         .push(format!("{}: {err:#}", eml_path.display()));
@@ -593,13 +596,13 @@ pub fn convert_export<P: AsRef<Path>>(
         }
 
         if is_flat_sms_eml(&mail) {
-            match parse_flat_eml_mail(&eml_path, &mail, &owner_set, owner_emails) {
+            match parse_flat_eml_mail(&eml_path, &mail, &owners.all_digits, owner_emails) {
                 Ok(Some(mut msg)) => {
                     msg.eml_path = rel_path;
                     let _ = apply_name_mapping(&mut msg, &name_mapping);
                     let _ = fill_unknown_phone(&mut msg, &contacts);
                     report.flat_eml += 1;
-                    if msg.chat_key == "Unknown" {
+                    if msg.chat_key.is_empty() {
                         report.unknown_chat_messages += 1;
                     }
                     match write_attachments(&msg.attachments, &attachments_dir, &mut report) {
@@ -609,9 +612,9 @@ pub fn convert_export<P: AsRef<Path>>(
                             .push(format!("{}: {err:#}", eml_path.display())),
                     }
                 }
-                Ok(None) => report.skipped_not_sms_backup_plus += 1,
+                Ok(None) => report.skipped_parse_error += 1,
                 Err(err) => {
-                    report.skipped_not_sms_backup_plus += 1;
+                    report.skipped_parse_error += 1;
                     report
                         .errors
                         .push(format!("{}: {err:#}", eml_path.display()));
@@ -625,12 +628,13 @@ pub fn convert_export<P: AsRef<Path>>(
     vlog(
         verbose,
         format!(
-            "parsed: flat_eml={} archive_eml={} messages={} unknown_chat={} skipped_not_sms_backup_plus={} skipped_bad_date={}",
+            "parsed: flat_eml={} archive_eml={} messages={} unknown_chat={} skipped_not_sms_backup_plus={} skipped_parse_error={} skipped_bad_date={}",
             report.flat_eml,
             report.archive_eml,
             report.messages_before_dedupe,
             report.unknown_chat_messages,
             report.skipped_not_sms_backup_plus,
+            report.skipped_parse_error,
             report.skipped_invalid_date
         ),
     );

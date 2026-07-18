@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -52,7 +52,7 @@ enum Commands {
         contacts: Option<PathBuf>,
 
         /// Name mapping CSV (correct_name,incorrect_name) for EML export aliases.
-        /// Default: repo config/name-mapping.csv when that file exists.
+        /// Default: config/name-mapping.csv when that file exists.
         #[arg(long = "name-mapping")]
         name_mapping: Option<PathBuf>,
     },
@@ -70,25 +70,25 @@ struct OwnerConfig {
     source_dirs: Vec<PathBuf>,
 }
 
-fn resolve_optional_config(explicit: Option<PathBuf>, candidates: &[&str]) -> Option<PathBuf> {
+fn crate_config(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("config")
+        .join(name)
+}
+
+fn resolve_optional_config(explicit: Option<PathBuf>, default_name: &str) -> Option<PathBuf> {
     match explicit {
         Some(path) => Some(path),
-        None => candidates
-            .iter()
-            .map(PathBuf::from)
-            .find(|p| p.is_file()),
+        None => {
+            let path = crate_config(default_name);
+            path.is_file().then_some(path)
+        }
     }
 }
 
 fn find_owner_config_path() -> Option<PathBuf> {
-    const CANDIDATES: &[&str] = &[
-        "config/owner.toml",
-        "crates/sms-backup-plus-to-csv/config/owner.toml",
-    ];
-    CANDIDATES
-        .iter()
-        .map(PathBuf::from)
-        .find(|p| p.is_file())
+    let path = crate_config("owner.toml");
+    path.is_file().then_some(path)
 }
 
 fn load_owner_config() -> Result<OwnerConfig> {
@@ -156,18 +156,8 @@ fn main() -> Result<()> {
             let (owner_phones, emails, default_inputs) =
                 resolve_owner(owner_phones, owner_emails)?;
             let input = resolve_inputs(input, default_inputs)?;
-            let contacts = resolve_optional_config(
-                contacts,
-                &["config/contacts.csv", "../../config/contacts.csv"],
-            );
-            let name_mapping = resolve_optional_config(
-                name_mapping,
-                &[
-                    "config/name-mapping.csv",
-                    "../../config/name-mapping.csv",
-                    "crates/sms-backup-plus-to-csv/config/name-mapping.csv",
-                ],
-            );
+            let contacts = resolve_optional_config(contacts, "contacts.csv");
+            let name_mapping = resolve_optional_config(name_mapping, "name-mapping.csv");
             let report = convert_export(
                 &input,
                 &output,
@@ -202,6 +192,9 @@ fn main() -> Result<()> {
                         "  not SMS Backup+:   {}",
                         report.skipped_not_sms_backup_plus
                     );
+                }
+                if report.skipped_parse_error > 0 {
+                    println!("  parse errors:      {}", report.skipped_parse_error);
                 }
                 if !report.errors.is_empty() {
                     println!("  errors:            {}", report.errors.len());
