@@ -510,7 +510,6 @@ pub fn convert_export<P: AsRef<Path>>(
     if owner_set.is_empty() {
         bail!("owner.phones have no usable digits");
     }
-    let primary = owner_digits(&owner_phones[0]);
     let (contacts, contacts_loaded) = ContactsBook::load_optional(contacts_path)?;
     let (name_mapping, mapping_loaded) = NameMapping::load_optional(name_mapping_path)?;
     let mut report = ExportReport::default();
@@ -560,7 +559,7 @@ pub fn convert_export<P: AsRef<Path>>(
         };
 
         if is_archive_eml(&mail) {
-            match parse_archive_eml_mail(&eml_path, &mail, &primary) {
+            match parse_archive_eml_mail(&eml_path, &mail) {
                 Ok((mut msgs, skipped_dates)) => {
                     report.archive_eml += 1;
                     report.skipped_invalid_date += skipped_dates;

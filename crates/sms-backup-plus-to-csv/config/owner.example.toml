@@ -1,8 +1,12 @@
 # Default owner identity and source trees for convert.
 # Copy to owner.toml and edit. CLI flags override these when provided.
-# phone and at least one email are required (no silent demo defaults).
+# At least one phone and one email are required.
 
-phone = "+15555550100"
+# Prefer the list form (same as repeating --owner-phone on the CLI):
+phones = ["+15555550100"]
+# Singular `phone` still works for older configs:
+# phone = "+15555550100"
+
 emails = ["you@example.com"]
 
 # Optional default --input roots when none are passed on the CLI.

@@ -37,12 +37,12 @@ enum Commands {
         output: PathBuf,
 
         /// Owner phone (E.164 or digits). Repeat for multiple owner numbers.
-        /// Default: config/owner.toml `phone`
+        /// Default: `phones` (or singular `phone`) in config/owner.toml
         #[arg(long = "owner-phone")]
         owner_phones: Vec<String>,
 
         /// Owner email addresses used to detect sent messages when X-smssync-type is missing.
-        /// Default: config/owner.toml
+        /// Default: `emails` in config/owner.toml
         #[arg(long = "owner-email", value_name = "EMAIL")]
         owner_emails: Vec<String>,
 
@@ -60,12 +60,29 @@ enum Commands {
 
 #[derive(Debug, Default, Deserialize)]
 struct OwnerConfig {
+    /// One or more owner numbers (same meaning as repeated `--owner-phone`).
+    #[serde(default)]
+    phones: Vec<String>,
+    /// Singular form kept for older configs; merged into `phones` when set.
     #[serde(default)]
     phone: Option<String>,
     #[serde(default)]
     emails: Vec<String>,
     #[serde(default)]
     source_dirs: Vec<PathBuf>,
+}
+
+impl OwnerConfig {
+    fn owner_phones(&self) -> Vec<String> {
+        let mut out = self.phones.clone();
+        if let Some(phone) = &self.phone {
+            let trimmed = phone.trim();
+            if !trimmed.is_empty() && !out.iter().any(|p| p == trimmed) {
+                out.push(trimmed.to_string());
+            }
+        }
+        out
+    }
 }
 
 fn resolve_optional_config(explicit: Option<PathBuf>, candidates: &[&str]) -> Option<PathBuf> {
@@ -106,12 +123,14 @@ fn resolve_owner(
     let defaults = load_owner_config()?;
     let phones = if !cli_phones.is_empty() {
         cli_phones
-    } else if let Some(phone) = defaults.phone {
-        vec![phone]
     } else {
-        anyhow::bail!(
-            "owner phone required: pass --owner-phone or set phone in config/owner.toml"
-        );
+        let from_config = defaults.owner_phones();
+        if from_config.is_empty() {
+            anyhow::bail!(
+                "owner phone required: pass --owner-phone or set phones (or phone) in config/owner.toml"
+            );
+        }
+        from_config
     };
     let emails = if !cli_emails.is_empty() {
         cli_emails

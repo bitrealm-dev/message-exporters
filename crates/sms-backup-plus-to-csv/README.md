@@ -29,7 +29,7 @@ Example output from test emails: [`samples/`](samples/).
 2. **Your phone number** — so the converter can tell which messages you sent
 3. **Your email address** — the address SMS Backup+ used when it mailed the texts (needed when the email does not clearly mark sent vs received)
 
-Pass those on the command line, or put them in `config/owner.toml` next to this converter. Repeat `--owner-phone` or `--owner-email` if you used more than one number or address.
+Pass those on the command line, or put them in `config/owner.toml` next to this converter (`phones = […]` and `emails = […]`; see `config/owner.example.toml`). Repeat `--owner-phone` or `--owner-email` if you used more than one number or address.
 
 Optional:
 

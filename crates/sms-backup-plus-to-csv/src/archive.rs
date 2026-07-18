@@ -153,7 +153,6 @@ fn assign_archive_attachments(messages: &mut [ParsedMessage], mut att_queue: Vec
 pub(crate) fn parse_archive_eml_mail(
     path: &Path,
     mail: &mailparse::ParsedMail<'_>,
-    _my_digits: &str,
 ) -> Result<(Vec<ParsedMessage>, u64)> {
     if !is_archive_eml(mail) {
         return Ok((Vec::new(), 0));
@@ -335,7 +334,7 @@ Thanks\r\n",
         .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         let mail = mailparse::parse_mail(&bytes).unwrap();
-        let (msgs, _) = parse_archive_eml_mail(&path, &mail, "5555550100").unwrap();
+        let (msgs, _) = parse_archive_eml_mail(&path, &mail).unwrap();
         assert_eq!(msgs.len(), 2);
         assert!(msgs[0].is_from_me);
         assert_eq!(msgs[0].text, "Check this");
@@ -361,7 +360,7 @@ Hi there\r\n",
         .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         let mail = mailparse::parse_mail(&bytes).unwrap();
-        let (msgs, _) = parse_archive_eml_mail(&path, &mail, "5555550100").unwrap();
+        let (msgs, _) = parse_archive_eml_mail(&path, &mail).unwrap();
         assert_eq!(msgs.len(), 1);
         assert_eq!(msgs[0].chat_key, "Unknown");
         assert_eq!(msgs[0].text, "Hi there");
@@ -387,7 +386,7 @@ Thanks\r\n",
         .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         let mail = mailparse::parse_mail(&bytes).unwrap();
-        let (msgs, skipped) = parse_archive_eml_mail(&path, &mail, "5555550100").unwrap();
+        let (msgs, skipped) = parse_archive_eml_mail(&path, &mail).unwrap();
         assert_eq!(skipped, 1);
         assert_eq!(msgs.len(), 1);
         assert_eq!(msgs[0].text, "Thanks");
