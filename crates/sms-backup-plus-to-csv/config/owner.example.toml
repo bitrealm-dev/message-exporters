@@ -2,11 +2,7 @@
 # Copy to owner.toml and edit. CLI flags override these when provided.
 # At least one phone and one email are required.
 
-# Prefer the list form (same as repeating --owner-phone on the CLI):
 phones = ["+15555550100"]
-# Singular `phone` still works for older configs:
-# phone = "+15555550100"
-
 emails = ["you@example.com"]
 
 # Optional default --input roots when none are passed on the CLI.
