@@ -188,14 +188,12 @@ pub(crate) fn parse_archive_eml_mail(
     let mut current_date: Option<String> = None;
     let mut current_sender: Option<String> = None;
     let mut body_lines: Vec<String> = Vec::new();
-    let mut last_valid_ts = 0.0f64;
     let mut skipped_header = false;
     let contact_name = export_name.clone();
 
     let flush = |current_date: &mut Option<String>,
                  current_sender: &mut Option<String>,
                  body_lines: &mut Vec<String>,
-                 last_valid_ts: &mut f64,
                  skipped_invalid_date: &mut u64,
                  messages: &mut Vec<ParsedMessage>| {
         let Some(date) = current_date.take() else {
@@ -219,15 +217,9 @@ pub(crate) fn parse_archive_eml_mail(
             // May still receive an attachment in assign_archive_attachments.
             // Keep empty-text placeholders so MMS-only lines can get media.
         }
-        let ts = match parse_archive_timestamp(&date) {
-            Some(t) => {
-                *last_valid_ts = t;
-                t
-            }
-            None => {
-                *skipped_invalid_date += 1;
-                *last_valid_ts
-            }
+        let Some(ts) = parse_archive_timestamp(&date) else {
+            *skipped_invalid_date += 1;
+            return;
         };
         let sender_key = sender.trim().to_ascii_lowercase();
         let (is_from_me, sender_digits) = if sender_key == "me" {
@@ -287,7 +279,6 @@ pub(crate) fn parse_archive_eml_mail(
                 &mut current_date,
                 &mut current_sender,
                 &mut body_lines,
-                &mut last_valid_ts,
                 &mut skipped_invalid_date,
                 &mut messages,
             );
@@ -308,7 +299,6 @@ pub(crate) fn parse_archive_eml_mail(
         &mut current_date,
         &mut current_sender,
         &mut body_lines,
-        &mut last_valid_ts,
         &mut skipped_invalid_date,
         &mut messages,
     );
@@ -375,6 +365,33 @@ Hi there\r\n",
         assert_eq!(msgs.len(), 1);
         assert_eq!(msgs[0].chat_key, "Unknown");
         assert_eq!(msgs[0].text, "Hi there");
+    }
+
+    #[test]
+    fn skips_unparseable_archive_dates() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("archive.eml");
+        std::fs::write(
+            &path,
+            b"From: <4075551234@sms-backup-plus.local>\r\n\
+To: me@example.com\r\n\
+Subject: SMS archive Alice\r\n\
+Content-Type: text/plain; charset=utf-8\r\n\
+\r\n\
+Alice\r\n\
+2020-13-01 12:00:00 - Me\r\n\
+Bad stamp\r\n\
+2020-01-01 12:00:00 - Alice\r\n\
+Thanks\r\n",
+        )
+        .unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        let mail = mailparse::parse_mail(&bytes).unwrap();
+        let (msgs, skipped) = parse_archive_eml_mail(&path, &mail, "5555550100").unwrap();
+        assert_eq!(skipped, 1);
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].text, "Thanks");
+        assert!(msgs[0].timestamp_secs > 1.0);
     }
 
     #[test]

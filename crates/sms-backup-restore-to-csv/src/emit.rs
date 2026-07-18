@@ -269,7 +269,13 @@ fn write_conversation(
     }
 
     let path = output_dir.join(safe_filename(chat_id));
-    let file = File::create(&path).with_context(|| format!("create {}", path.display()))?;
+    let mut tmp_name = path
+        .file_name()
+        .map(|n| n.to_os_string())
+        .unwrap_or_else(|| "chat.csv".into());
+    tmp_name.push(".tmp");
+    let tmp_path = path.with_file_name(tmp_name);
+    let file = File::create(&tmp_path).with_context(|| format!("create {}", tmp_path.display()))?;
     let mut wtr = csv::Writer::from_writer(file);
     wtr.write_record(HEADERS)
         .with_context(|| format!("write header {}", path.display()))?;
@@ -336,6 +342,20 @@ fn write_conversation(
     }
 
     wtr.flush()?;
+    drop(wtr);
+    fs::rename(&tmp_path, &path)
+        .with_context(|| format!("rename {} → {}", tmp_path.display(), path.display()))?;
+    Ok(())
+}
+
+fn clean_previous_csv(output_dir: &Path) -> Result<()> {
+    for entry in fs::read_dir(output_dir)? {
+        let path = entry?.path();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if name.ends_with(".csv") || name.ends_with(".csv.tmp") || name.ends_with(".json") {
+            let _ = fs::remove_file(&path);
+        }
+    }
     Ok(())
 }
 
@@ -373,13 +393,7 @@ pub fn convert_export(
     let mut conversations: BTreeMap<String, PendingConversation> = BTreeMap::new();
 
     fs::create_dir_all(output_dir)?;
-    for entry in fs::read_dir(output_dir)? {
-        let path = entry?.path();
-        let ext = path.extension().and_then(|e| e.to_str());
-        if matches!(ext, Some("csv") | Some("json")) {
-            let _ = fs::remove_file(&path);
-        }
-    }
+    clean_previous_csv(output_dir)?;
     let attachments_dir = output_dir.join("attachments");
     fs::create_dir_all(&attachments_dir)?;
 

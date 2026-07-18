@@ -1,7 +1,12 @@
 //! Phone normalization helpers (US-centric).
 
+/// Minimum digit length after stripping formatting.
+///
+/// Allows 5–6 digit short codes (carrier/bank SMS). Rejects junk like `"4"`.
+const MIN_PHONE_DIGITS: usize = 5;
+
 /// Strip non-digits and a leading US country code `1`.
-/// Returns `None` when no usable digits remain.
+/// Returns `None` when fewer than [`MIN_PHONE_DIGITS`] remain.
 pub fn sanitize_number(num: &str) -> Option<String> {
     if num.is_empty() {
         return None;
@@ -10,7 +15,7 @@ pub fn sanitize_number(num: &str) -> Option<String> {
     if digits.len() == 11 && digits.starts_with('1') {
         digits = digits[1..].to_string();
     }
-    if digits.is_empty() {
+    if digits.len() < MIN_PHONE_DIGITS {
         None
     } else {
         Some(digits)
@@ -38,6 +43,14 @@ mod tests {
         assert_eq!(sanitize_number("(555) 555-0101").as_deref(), Some("5555550101"));
         assert_eq!(sanitize_number(""), None);
         assert_eq!(sanitize_number("abc"), None);
+        assert_eq!(sanitize_number("4"), None);
+        assert_eq!(sanitize_number("06"), None);
+    }
+
+    #[test]
+    fn sanitize_keeps_short_codes() {
+        assert_eq!(sanitize_number("73737").as_deref(), Some("73737"));
+        assert_eq!(to_e164("73737"), "+73737");
     }
 
     #[test]

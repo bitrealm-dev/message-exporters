@@ -86,6 +86,9 @@ pub(crate) fn cover_identity_from_parts(
 /// Make a string safe for a filename (letters, digits, `-`, `_` only).
 ///
 /// Strips leading underscores so E.164 `+1…` does not become `recv__1…`.
+/// Filesystem-safe chat filename stem.
+///
+/// `+1555…` becomes `_1555…` (same rule as go-sms / SMS Backup & Restore).
 pub(crate) fn safe_stem(value: &str) -> String {
     let raw: String = value
         .chars()
@@ -97,11 +100,10 @@ pub(crate) fn safe_stem(value: &str) -> String {
             }
         })
         .collect();
-    let trimmed = raw.trim_start_matches('_');
-    if trimmed.is_empty() {
+    if raw.is_empty() || raw.chars().all(|c| c == '_') {
         "unknown".to_string()
     } else {
-        trimmed.to_string()
+        raw
     }
 }
 
@@ -178,8 +180,8 @@ mod tests {
     }
 
     #[test]
-    fn safe_stem_strips_leading_plus_as_underscore() {
-        assert_eq!(safe_stem("+14075551234"), "14075551234");
+    fn safe_stem_maps_plus_to_leading_underscore() {
+        assert_eq!(safe_stem("+14075551234"), "_14075551234");
         assert_eq!(safe_stem("___"), "unknown");
     }
 }

@@ -153,7 +153,7 @@ Will do\r\n"
     assert_eq!(report.messages, 1);
     assert_eq!(report.duplicates_dropped, 1);
 
-    let csv = fs::read_to_string(out.join("14075551234.csv")).unwrap();
+    let csv = fs::read_to_string(out.join("_14075551234.csv")).unwrap();
     assert!(csv.contains("Will do"));
     assert!(csv.contains(",flat,"));
     assert!(csv.contains(",999,"));

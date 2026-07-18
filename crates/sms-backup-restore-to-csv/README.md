@@ -37,10 +37,6 @@ Output:
 - `service` is `"SMS"`
 - SBR-only columns: `export_source` (`sms-backup-restore`), `message_kind`, `date_ms`, `contact_name`, `android_type`, `xml_fields_json`
 
-## Vault ingest
-
-`message-vault-rs ingest sms-backup-restore` exports CSV into staging, then runs [`message-vault-rs` csv-ingest](https://github.com/bitrealm-dev/message-vault-rs) (mapping → imessage-shaped NDJSON) and continues with normal vault import.
-
 ## License
 
-MIT (or match your vault repos).
+MIT.

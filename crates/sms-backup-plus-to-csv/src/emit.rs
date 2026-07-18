@@ -12,7 +12,7 @@ use anyhow::{Context, Result, bail};
 use chrono::Utc;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
@@ -225,6 +225,16 @@ fn should_replace_kept(existing: &PendingMessage, incoming: &ParsedMessage) -> b
     incoming.timestamp_secs < existing.sort_key
 }
 
+/// Union attachment lists by content digest so flat↔archive dedupe does not drop media.
+fn merge_attachments(into: &mut Vec<PendingAttachment>, from: Vec<PendingAttachment>) {
+    let mut seen: HashSet<String> = into.iter().map(|a| a.digest_hex.clone()).collect();
+    for att in from {
+        if seen.insert(att.digest_hex.clone()) {
+            into.push(att);
+        }
+    }
+}
+
 fn pending_from_parsed(msg: ParsedMessage, pending_atts: Vec<PendingAttachment>) -> PendingMessage {
     let date_ms = timestamp_ms(msg.timestamp_secs).to_string();
     let name = msg.name_hint.clone().unwrap_or_default();
@@ -265,7 +275,12 @@ fn add_message(
     if let Some(&idx) = convo.by_identity.get(&dedupe_key) {
         report.duplicates_dropped += 1;
         if should_replace_kept(&convo.messages[idx], &msg) {
-            convo.messages[idx] = pending_from_parsed(msg, pending_atts);
+            let kept_atts = std::mem::take(&mut convo.messages[idx].attachments);
+            let mut pending = pending_from_parsed(msg, pending_atts);
+            merge_attachments(&mut pending.attachments, kept_atts);
+            convo.messages[idx] = pending;
+        } else {
+            merge_attachments(&mut convo.messages[idx].attachments, pending_atts);
         }
         return;
     }
@@ -297,7 +312,13 @@ fn write_conversation(
     });
 
     let path = output_dir.join(safe_filename(chat_id));
-    let file = File::create(&path).with_context(|| format!("create {}", path.display()))?;
+    let mut tmp_name = path
+        .file_name()
+        .map(|n| n.to_os_string())
+        .unwrap_or_else(|| "chat.csv".into());
+    tmp_name.push(".tmp");
+    let tmp_path = path.with_file_name(tmp_name);
+    let file = File::create(&tmp_path).with_context(|| format!("create {}", tmp_path.display()))?;
     let mut wtr = csv::Writer::from_writer(file);
     wtr.write_record(HEADERS)
         .with_context(|| format!("write header {}", path.display()))?;
@@ -364,6 +385,20 @@ fn write_conversation(
     }
 
     wtr.flush()?;
+    drop(wtr);
+    fs::rename(&tmp_path, &path)
+        .with_context(|| format!("rename {} → {}", tmp_path.display(), path.display()))?;
+    Ok(())
+}
+
+fn clean_previous_csv(output_dir: &Path) -> Result<()> {
+    for entry in fs::read_dir(output_dir)? {
+        let path = entry?.path();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if name.ends_with(".csv") || name.ends_with(".csv.tmp") || name.ends_with(".json") {
+            let _ = fs::remove_file(&path);
+        }
+    }
     Ok(())
 }
 
@@ -465,25 +500,24 @@ pub fn convert_export<P: AsRef<Path>>(
     if owner_phones.is_empty() {
         bail!("owner.phones must not be empty");
     }
-    let owner = owner_digits(&owner_phones[0]);
-    let owner_e164 = to_e164(&owner);
+    let mut owner_set = HashSet::new();
+    for phone in owner_phones {
+        let d = owner_digits(phone);
+        if d != "Unknown" {
+            owner_set.insert(d);
+        }
+    }
+    if owner_set.is_empty() {
+        bail!("owner.phones have no usable digits");
+    }
+    let primary = owner_digits(&owner_phones[0]);
     let (contacts, contacts_loaded) = ContactsBook::load_optional(contacts_path)?;
     let (name_mapping, mapping_loaded) = NameMapping::load_optional(name_mapping_path)?;
     let mut report = ExportReport::default();
     let mut conversations: HashMap<String, PendingConversation> = HashMap::new();
 
-    vlog(verbose, format!("owner phone: {owner_e164}"));
-    vlog(
-        verbose,
-        format!(
-            "owner emails: {}",
-            if owner_emails.is_empty() {
-                "(none)".into()
-            } else {
-                owner_emails.join(", ")
-            }
-        ),
-    );
+    vlog(verbose, format!("owner phones: {}", owner_set.len()));
+    vlog(verbose, format!("owner emails: {}", owner_emails.len()));
     match &contacts_loaded {
         Some(p) => vlog(verbose, format!("contacts: {}", p.display())),
         None => vlog(verbose, "contacts: (none)"),
@@ -495,13 +529,7 @@ pub fn convert_export<P: AsRef<Path>>(
     vlog(verbose, format!("output: {}", output_dir.display()));
 
     fs::create_dir_all(output_dir)?;
-    for entry in fs::read_dir(output_dir)? {
-        let path = entry?.path();
-        let ext = path.extension().and_then(|e| e.to_str());
-        if matches!(ext, Some("csv") | Some("json")) {
-            let _ = fs::remove_file(&path);
-        }
-    }
+    clean_previous_csv(output_dir)?;
     let attachments_dir = output_dir.join("attachments");
     fs::create_dir_all(&attachments_dir)?;
 
@@ -532,7 +560,7 @@ pub fn convert_export<P: AsRef<Path>>(
         };
 
         if is_archive_eml(&mail) {
-            match parse_archive_eml_mail(&eml_path, &mail, &owner) {
+            match parse_archive_eml_mail(&eml_path, &mail, &primary) {
                 Ok((mut msgs, skipped_dates)) => {
                     report.archive_eml += 1;
                     report.skipped_invalid_date += skipped_dates;
@@ -565,7 +593,7 @@ pub fn convert_export<P: AsRef<Path>>(
         }
 
         if is_flat_sms_eml(&mail) {
-            match parse_flat_eml_mail(&eml_path, &mail, &owner, owner_emails) {
+            match parse_flat_eml_mail(&eml_path, &mail, &owner_set, owner_emails) {
                 Ok(Some(mut msg)) => {
                     msg.eml_path = rel_path;
                     let _ = apply_name_mapping(&mut msg, &name_mapping);
@@ -646,4 +674,36 @@ pub fn convert_export<P: AsRef<Path>>(
     }
 
     Ok(report)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn merge_attachments_unions_by_digest() {
+        let mut into = vec![PendingAttachment {
+            rel_path: "attachments/a.jpg".into(),
+            original_name: Some("a.jpg".into()),
+            mime_type: Some("image/jpeg".into()),
+            digest_hex: "aaa".into(),
+        }];
+        let from = vec![
+            PendingAttachment {
+                rel_path: "attachments/a.jpg".into(),
+                original_name: Some("a.jpg".into()),
+                mime_type: Some("image/jpeg".into()),
+                digest_hex: "aaa".into(),
+            },
+            PendingAttachment {
+                rel_path: "attachments/b.jpg".into(),
+                original_name: Some("b.jpg".into()),
+                mime_type: Some("image/jpeg".into()),
+                digest_hex: "bbb".into(),
+            },
+        ];
+        merge_attachments(&mut into, from);
+        assert_eq!(into.len(), 2);
+        assert_eq!(into[1].digest_hex, "bbb");
+    }
 }

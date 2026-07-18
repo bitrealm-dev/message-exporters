@@ -16,5 +16,4 @@ Cargo.lock.bak
 .DS_Store
 
 # Test / local artifacts
-*.ndjson
 /tmp/

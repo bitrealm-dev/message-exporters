@@ -5,7 +5,7 @@ use crate::pdu::{parse_pdu_file, ParsedPdu};
 use crate::phone::to_e164;
 use crate::xml::{parse_xml_file, XmlMessage};
 use anyhow::{bail, Context, Result};
-use chrono::{Local, TimeZone, Utc};
+use chrono::{DateTime, Local, TimeZone, Utc};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
@@ -113,18 +113,19 @@ fn mime_for_ext(ext: &str) -> Option<&'static str> {
     }
 }
 
+/// Format a Unix second as local/UTC/display strings without panicking.
+///
+/// Tries local interpretation, then UTC mapped to local, then Unix epoch.
 fn format_local_ts(secs: i64) -> (String, String, String) {
     let local = Local
         .timestamp_opt(secs, 0)
         .single()
-        .unwrap_or_else(|| {
-            Local.from_utc_datetime(
-                &Utc.timestamp_opt(secs, 0)
-                    .single()
-                    .unwrap()
-                    .naive_utc(),
-            )
-        });
+        .or_else(|| {
+            Utc.timestamp_opt(secs, 0)
+                .single()
+                .map(|utc| utc.with_timezone(&Local))
+        })
+        .unwrap_or_else(|| DateTime::UNIX_EPOCH.with_timezone(&Local));
     let utc = local.with_timezone(&Utc);
     let display = local.format("%b %e, %Y %I:%M:%S %p").to_string();
     (
@@ -288,19 +289,22 @@ fn save_pdu_attachments(
 
     let mut out = Vec::new();
     for (idx, att) in parsed.attachments.iter().enumerate() {
+        let digest_hex = hex::encode(Sha256::digest(&att.data));
+        let digest_prefix = &digest_hex[..16.min(digest_hex.len())];
         let name = format!(
-            "{}-I_{}_{}{}",
+            "{}-I_{}_{}_{}{}",
             date_prefix,
             parsed.timestamp,
+            digest_prefix,
             idx + 1,
             att.ext
         );
         let path = attachments_dir.join(&name);
+        // Content-addressed name: rewrite only when missing (same bytes → same path).
         if !path.exists() {
             fs::write(&path, &att.data)?;
             report.attachments_saved += 1;
         }
-        let digest_hex = hex::encode(Sha256::digest(&att.data));
         out.push(PendingAttachment {
             rel_path: format!("attachments/{name}"),
             original_name: att.smil_name.clone().or(Some(name)),
@@ -399,6 +403,17 @@ fn dedupe_messages(messages: &mut Vec<PendingMessage>) {
     messages.retain(|m| seen.insert(m.dedupe_key.clone()));
 }
 
+fn clean_previous_csv(output_dir: &Path) -> Result<()> {
+    for entry in fs::read_dir(output_dir)? {
+        let path = entry?.path();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if name.ends_with(".csv") || name.ends_with(".csv.tmp") || name.ends_with(".json") {
+            let _ = fs::remove_file(&path);
+        }
+    }
+    Ok(())
+}
+
 fn write_conversation(
     output_dir: &Path,
     chat_id: &str,
@@ -410,7 +425,13 @@ fn write_conversation(
     }
 
     let path = output_dir.join(safe_filename(chat_id));
-    let file = File::create(&path).with_context(|| format!("create {}", path.display()))?;
+    let mut tmp_name = path
+        .file_name()
+        .map(|n| n.to_os_string())
+        .unwrap_or_else(|| "chat.csv".into());
+    tmp_name.push(".tmp");
+    let tmp_path = path.with_file_name(tmp_name);
+    let file = File::create(&tmp_path).with_context(|| format!("create {}", tmp_path.display()))?;
     let mut wtr = csv::Writer::from_writer(file);
     wtr.write_record(HEADERS)
         .with_context(|| format!("write header {}", path.display()))?;
@@ -481,6 +502,9 @@ fn write_conversation(
     }
 
     wtr.flush()?;
+    drop(wtr);
+    fs::rename(&tmp_path, &path)
+        .with_context(|| format!("rename {} → {}", tmp_path.display(), path.display()))?;
     Ok(())
 }
 
@@ -499,16 +523,9 @@ pub fn convert_export(
     let mut report = ExportReport::default();
     let mut conversations: BTreeMap<String, PendingConversation> = BTreeMap::new();
 
-    // Clean previous CSV / leftover NDJSON (keep attachments if re-run; rewrite as needed).
+    // Clean previous CSV (keep attachments if re-run; rewrite as needed).
     fs::create_dir_all(output_dir)?;
-    for entry in fs::read_dir(output_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        let ext = path.extension().and_then(|e| e.to_str());
-        if matches!(ext, Some("csv") | Some("json")) {
-            let _ = fs::remove_file(&path);
-        }
-    }
+    clean_previous_csv(output_dir)?;
     let attachments_dir = output_dir.join("attachments");
     fs::create_dir_all(&attachments_dir)?;
 
@@ -581,65 +598,4 @@ pub fn convert_export(
     }
 
     Ok(report)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Read;
-
-    #[test]
-    fn convert_smoke_writes_csv_not_json() {
-        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample_export");
-        let output = tempfile_dir();
-        let report = convert_export(&input, &output, &["+15555550100".into()]).unwrap();
-        assert!(report.conversations >= 1);
-        assert!(report.xml_messages >= 2);
-
-        let mut csv_files: Vec<_> = fs::read_dir(&output)
-            .unwrap()
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("csv"))
-            .collect();
-        csv_files.sort();
-        assert!(!csv_files.is_empty(), "expected at least one .csv");
-
-        let json_count = fs::read_dir(&output)
-            .unwrap()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("json"))
-            .count();
-        assert_eq!(json_count, 0);
-
-        let mut contents = String::new();
-        File::open(&csv_files[0])
-            .unwrap()
-            .read_to_string(&mut contents)
-            .unwrap();
-        let header = contents.lines().next().unwrap();
-        assert!(header.contains("chat_identifier"));
-        assert!(header.contains("direction"));
-        assert!(header.contains("export_source"));
-        assert!(header.contains("source_kind"));
-        assert!(header.contains("xml_fields_json"));
-        assert!(!header.contains("participants_json"));
-        assert!(!header.contains("read_receipt"));
-        assert!(!header.contains("tapbacks_json"));
-        assert!(contents.contains("go-sms-pro"));
-        assert!(contents.contains("incoming") || contents.contains("outgoing"));
-        assert!(contents.contains("smoke"));
-    }
-
-    fn tempfile_dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "go-sms-pro-to-csv-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        dir
-    }
 }

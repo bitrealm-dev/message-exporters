@@ -1,4 +1,4 @@
-//! All configured vault-owner phone numbers (normalized digits).
+//! All configured owner phone numbers (normalized digits).
 
 use std::collections::HashSet;
 

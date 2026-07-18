@@ -2,8 +2,6 @@
 
 Input messages come from [SMS Backup+](https://github.com/jberkel/sms-backup-plus) syncing Android SMS/MMS to Gmail/IMAP, then archived as `.eml` (this project does **not** talk to IMAP).
 
-Reference parsing: message-vault `sms_eml_master` (`flat_eml/eml_parse.py`, `archive_parse.py`).
-
 ## Flat single-message EML
 
 Typical headers:

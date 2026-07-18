@@ -36,9 +36,10 @@ enum Commands {
         #[arg(long)]
         output: PathBuf,
 
-        /// Owner phone (E.164 or digits). Default: config/owner.toml
-        #[arg(long)]
-        owner_phone: Option<String>,
+        /// Owner phone (E.164 or digits). Repeat for multiple owner numbers.
+        /// Default: config/owner.toml `phone`
+        #[arg(long = "owner-phone")]
+        owner_phones: Vec<String>,
 
         /// Owner email addresses used to detect sent messages when X-smssync-type is missing.
         /// Default: config/owner.toml
@@ -46,7 +47,7 @@ enum Commands {
         owner_emails: Vec<String>,
 
         /// Contacts CSV (phones,first_name,last_name,…) for name→phone lookup.
-        /// Default: vault config/contacts.csv when that file exists.
+        /// Default: config/contacts.csv when that file exists.
         #[arg(long)]
         contacts: Option<PathBuf>,
 
@@ -99,21 +100,29 @@ fn load_owner_config() -> Result<OwnerConfig> {
 }
 
 fn resolve_owner(
-    cli_phone: Option<String>,
+    cli_phones: Vec<String>,
     cli_emails: Vec<String>,
-) -> Result<(String, Vec<String>, Vec<PathBuf>)> {
+) -> Result<(Vec<String>, Vec<String>, Vec<PathBuf>)> {
     let defaults = load_owner_config()?;
-    let phone = cli_phone
-        .or(defaults.phone)
-        .unwrap_or_else(|| "+15555550100".to_string());
+    let phones = if !cli_phones.is_empty() {
+        cli_phones
+    } else if let Some(phone) = defaults.phone {
+        vec![phone]
+    } else {
+        anyhow::bail!(
+            "owner phone required: pass --owner-phone or set phone in config/owner.toml"
+        );
+    };
     let emails = if !cli_emails.is_empty() {
         cli_emails
     } else if !defaults.emails.is_empty() {
         defaults.emails
     } else {
-        vec!["owner@example.com".to_string()]
+        anyhow::bail!(
+            "owner email required: pass --owner-email or set emails in config/owner.toml"
+        );
     };
-    Ok((phone, emails, defaults.source_dirs))
+    Ok((phones, emails, defaults.source_dirs))
 }
 
 fn resolve_inputs(cli_inputs: Vec<PathBuf>, defaults: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
@@ -137,13 +146,13 @@ fn main() -> Result<()> {
         Commands::Convert {
             input,
             output,
-            owner_phone,
+            owner_phones,
             owner_emails,
             contacts,
             name_mapping,
         } => {
-            let (owner_phone, emails, default_inputs) =
-                resolve_owner(owner_phone, owner_emails)?;
+            let (owner_phones, emails, default_inputs) =
+                resolve_owner(owner_phones, owner_emails)?;
             let input = resolve_inputs(input, default_inputs)?;
             let contacts = resolve_optional_config(
                 contacts,
@@ -160,7 +169,7 @@ fn main() -> Result<()> {
             let report = convert_export(
                 &input,
                 &output,
-                &[owner_phone],
+                &owner_phones,
                 &emails,
                 contacts.as_deref(),
                 name_mapping.as_deref(),

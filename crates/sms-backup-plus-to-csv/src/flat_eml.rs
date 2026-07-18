@@ -175,7 +175,7 @@ fn group_chat_id(others: &[String]) -> (String, String) {
 pub(crate) fn parse_flat_eml_mail(
     path: &Path,
     mail: &ParsedMail<'_>,
-    my_digits: &str,
+    owner_digits: &HashSet<String>,
     owner_emails: &[String],
 ) -> Result<Option<ParsedMessage>> {
     if !is_single_sms_eml(mail) {
@@ -213,7 +213,7 @@ pub(crate) fn parse_flat_eml_mail(
 
     let non_owner: Vec<String> = participant_numbers
         .iter()
-        .filter(|n| *n != my_digits)
+        .filter(|n| !owner_digits.contains(*n))
         .cloned()
         .collect();
 
@@ -226,7 +226,7 @@ pub(crate) fn parse_flat_eml_mail(
             let from_nums = smssync_participant_numbers(&from_hdr);
             let sender = from_nums
                 .into_iter()
-                .find(|n| n != my_digits && non_owner.contains(n))
+                .find(|n| !owner_digits.contains(n) && non_owner.contains(n))
                 .or_else(|| non_owner.first().cloned());
             (false, sender)
         };
@@ -330,7 +330,8 @@ Hello from Alice\r\n",
         .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         let mail = mailparse::parse_mail(&bytes).unwrap();
-        let msg = parse_flat_eml_mail(&path, &mail, "5555550100", &[])
+        let owners = HashSet::from(["5555550100".to_string()]);
+        let msg = parse_flat_eml_mail(&path, &mail, &owners, &[])
             .unwrap()
             .unwrap();
         assert!(!msg.is_from_me);

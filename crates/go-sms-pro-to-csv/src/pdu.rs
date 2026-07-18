@@ -1,5 +1,5 @@
 //! Parse GO SMS Pro MMS PDU backup files (`I_<timestamp>_*.pdu`).
-//! Heuristics ported from message-vault `gosms/pdu.py`.
+//! PDU attachment / text extraction heuristics.
 
 use crate::emoji::decode_gosms_emojis;
 use std::collections::HashSet;

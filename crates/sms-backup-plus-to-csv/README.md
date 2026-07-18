@@ -16,7 +16,7 @@ cargo run --release -p sms-backup-plus-to-csv -- convert \
   --owner-email you@example.com
 ```
 
-Optional: `--contacts`, `--name-mapping`. Defaults can come from `config/owner.toml`.
+Repeat `--owner-phone` / `--owner-email` for multiple identities (required via CLI or `config/owner.toml` — no silent demo defaults). Optional: `--contacts`, `--name-mapping`.
 
 Progress logging: pass `-v` / `--verbose` for owner/contacts paths, scan progress (every 5000 EMLs), parse summary, write progress, and end-of-run dedupe counts (stderr).
 
@@ -29,4 +29,4 @@ Output:
 
 ## License
 
-MIT (or match your vault repos).
+MIT.
