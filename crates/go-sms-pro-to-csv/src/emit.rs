@@ -3,9 +3,11 @@
 use crate::pdu::{parse_pdu_file, ParsedPdu};
 use crate::xml::{parse_xml_file, XmlMessage};
 use anyhow::{bail, Context, Result};
-use chrono::{Local, TimeZone, Utc};
+use chrono::{Local, TimeZone};
+use message_csv::{
+    format_local_ts, json_cell, safe_filename, stable_guid, AttachmentCell,
+};
 use message_phone::{to_e164, OwnerPhoneSet};
-use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
 use std::fs::{self, File};
@@ -96,16 +98,6 @@ struct PendingConversation {
     messages: Vec<PendingMessage>,
 }
 
-#[derive(Debug, Serialize)]
-struct AttachmentCell {
-    path: Option<String>,
-    original_name: Option<String>,
-    mime_type: Option<String>,
-    is_sticker: bool,
-    transcription: Option<String>,
-    sticker_effect: Option<String>,
-}
-
 fn mime_for_ext(ext: &str) -> Option<&'static str> {
     match ext {
         ".jpg" | ".jpeg" => Some("image/jpeg"),
@@ -117,51 +109,6 @@ fn mime_for_ext(ext: &str) -> Option<&'static str> {
         ".wav" => Some("audio/wav"),
         _ => None,
     }
-}
-
-/// Format a Unix second as local/UTC/display strings.
-///
-/// Returns `None` when the timestamp cannot be represented in local or UTC.
-fn format_local_ts(secs: i64) -> Option<(String, String, String)> {
-    let local = Local.timestamp_opt(secs, 0).single().or_else(|| {
-        Utc.timestamp_opt(secs, 0)
-            .single()
-            .map(|utc| Local.from_utc_datetime(&utc.naive_utc()))
-    })?;
-    let utc = local.with_timezone(&Utc);
-    let display = local.format("%b %e, %Y %I:%M:%S %p").to_string();
-    Some((
-        local.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-        utc.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-        display,
-    ))
-}
-
-/// Deterministic message GUID from chat + timestamp + direction + body + attachment digests.
-fn stable_guid(
-    chat_id: &str,
-    timestamp: &str,
-    is_from_me: bool,
-    text: &str,
-    att_digests: &[String],
-) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(chat_id.as_bytes());
-    hasher.update(b"|");
-    hasher.update(timestamp.as_bytes());
-    hasher.update(b"|");
-    hasher.update(if is_from_me { b"1" } else { b"0" });
-    hasher.update(b"|");
-    hasher.update(text.as_bytes());
-    for d in att_digests {
-        hasher.update(b"|");
-        hasher.update(d.as_bytes());
-    }
-    hex::encode(hasher.finalize())
-}
-
-fn json_cell(value: &impl Serialize) -> String {
-    serde_json::to_string(value).unwrap_or_else(|_| "null".to_string())
 }
 
 fn chat_id_individual(digits: &str) -> String {
@@ -216,20 +163,6 @@ fn chat_id_group(participant_digits: &[String], owners: &OwnerPhoneSet) -> (Stri
         id
     };
     (id, title)
-}
-
-fn safe_filename(chat_id: &str) -> String {
-    chat_id
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>()
-        + ".csv"
 }
 
 fn ensure_convo<'a>(

@@ -17,7 +17,7 @@ This converter reads that XML and writes one CSV file per conversation. A CSV is
 - An `attachments/` folder for pictures and other media that were inside MMS messages
 - Each row is one message: who it was with, when it was sent or received, the text, and whether media was attached
 
-Example output from a small test backup: [`samples/`](samples/).
+Example output from a small test backup: [`sample-output/`](sample-output/).
 
 ## What you need
 

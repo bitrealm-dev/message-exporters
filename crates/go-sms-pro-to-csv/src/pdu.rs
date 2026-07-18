@@ -66,7 +66,7 @@ fn timestamp_from_filename(name: &str) -> Option<i64> {
         .and_then(|m| m.as_str().parse().ok())
 }
 
-pub fn extract_plmn_numbers(data: &[u8]) -> Vec<String> {
+fn extract_plmn_numbers(data: &[u8]) -> Vec<String> {
     let re = PLMN_RE.get_or_init(|| BytesRegex::new(r"\+(\d{10,15})/TYPE=PLMN").expect("plmn"));
     let mut seen = std::collections::HashSet::new();
     let mut numbers = Vec::new();
@@ -153,7 +153,7 @@ fn find_bytes(haystack: &[u8], needle: &[u8], start: usize) -> Option<usize> {
         .map(|p| start + p)
 }
 
-pub fn extract_wap_text_body(data: &[u8]) -> String {
+fn extract_wap_text_body(data: &[u8]) -> String {
     let re =
         TEXT_CONTENT_RE.get_or_init(|| BytesRegex::new(r"(?-u)\x8etext(?:_\d+)?\.txt\x00").expect("txt"));
     let mut texts = Vec::new();
@@ -182,7 +182,7 @@ pub fn extract_wap_text_body(data: &[u8]) -> String {
     String::new()
 }
 
-pub fn detect_attachment_blobs(data: &[u8]) -> Vec<(String, usize, usize)> {
+fn detect_attachment_blobs(data: &[u8]) -> Vec<(String, usize, usize)> {
     if data.len() < 32 {
         return Vec::new();
     }

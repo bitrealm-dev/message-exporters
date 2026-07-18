@@ -4,7 +4,6 @@
 
 # Exporter output
 /export/
-/clean-eml/
 *.eml
 !tests/fixtures/**/*.eml
 

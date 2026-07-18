@@ -17,7 +17,7 @@ There is no official public description of this backup format. For a detailed wa
 - An `attachments/` folder next to those files for media pulled out of MMS backups
 - Each row is one message: who it was with, when it was sent or received, the text, and whether media was attached
 
-Example output from a small test backup: [`samples/`](samples/).
+Example output from a small test backup: [`sample-output/`](sample-output/).
 
 ## What you need
 

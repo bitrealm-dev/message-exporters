@@ -52,7 +52,7 @@ Field values are generally copied as-is from the Android SMS/MMS databases. The 
 - `contact_name` → `contact_name` / display name hints
 - **Every** `<sms>` attribute → `xml_fields_json.attrs`
 
-Example: `<sms address="+15555550101" date="1400773261000" type="1" body="hello &amp; hi" contact_name="Sam" />` becomes an incoming CSV row in chat `+15555550101` with text `hello & hi`.
+Example: `<sms address="+15555550101" date="1400773261000" type="1" body="hello &amp; hi" contact_name="Sam" />` becomes an incoming CSV row with `chat_identifier=+15555550101` (file `_15555550101.csv`) and text `hello & hi`.
 
 ---
 

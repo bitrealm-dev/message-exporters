@@ -25,7 +25,7 @@ PDU (`I_*.pdu`) rows use the same CSV columns; see [PDU notes](#pdu-rows) at the
 </GoSms>
 ```
 
-Each `<SMS>` becomes one CSV data row. Conversation files are keyed by the other party’s E.164 handle (`chat_identifier`).
+Each `<SMS>` becomes one CSV data row. The `chat_identifier` column holds the peer’s E.164 handle. On disk, conversation files use a sanitized stem (`+` → `_`), for example `+14075551234` → `_14075551234.csv`.
 
 ## Known XML children → CSV
 

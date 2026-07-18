@@ -1,8 +1,8 @@
 //! SMS Backup & Restore → per-conversation CSV exporter.
 
-pub mod assets;
-pub mod emit;
-pub mod smil;
-pub mod xml;
+pub(crate) mod assets;
+pub(crate) mod emit;
+pub(crate) mod smil;
+pub(crate) mod xml;
 
 pub use emit::{convert_export, ExportReport};

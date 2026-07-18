@@ -3,10 +3,9 @@ authors = ["Christopher Sardegna <imessage@reagentx.net>"]
 categories = ["command-line-utilities"]
 description = "Export iMessage data to CSV (upstream imessage-exporter fork + csv format)"
 edition = "2024"
-exclude = [".github", "docs", "build.sh"]
 license = "GPL-3.0-or-later"
 name = "imessage-exporter"
-repository = "https://github.com/bitrealm-dev/message-vault-rs"
+repository = "https://github.com/bitrealm-dev/message-exporters"
 version = "0.0.0"
 
 # Vendored from upstream ReagentX/imessage-exporter (imessage-exporter package only),

@@ -14,7 +14,7 @@ It can also write plain text or HTML if those formats are preferred. CSV is the 
 - Attachment files copied into the output folder when copy mode is used
 - Each row is one message: who sent it, when, the text, and related details such as reactions or edits when they exist in the database
 
-Example spreadsheet shape: [`samples/15551212.csv`](samples/15551212.csv).
+Example spreadsheet shape: [`sample-output/15551212.csv`](sample-output/15551212.csv).
 
 ## What you need
 

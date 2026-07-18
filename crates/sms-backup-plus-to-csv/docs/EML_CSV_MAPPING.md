@@ -11,7 +11,7 @@ Deeper EML format notes: [`FORMAT.md`](FORMAT.md).
 
 ## Output
 
-One `{chat_id}.csv` per conversation (header + one row per message after dedupe), plus MIME attachments under `attachments/`.
+One CSV file per conversation (header + one row per message after dedupe), plus MIME attachments under `attachments/`. Filenames use a sanitized stem of the chat id (`+` → `_`), for example `+14075551234` → `_14075551234.csv`. Peers with no usable phone number are written to `unknown.csv`.
 
 ## EML shapes
 

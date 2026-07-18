@@ -7,7 +7,7 @@ use anyhow::{bail, Context, Result};
 /// Minimum digit length after stripping formatting.
 ///
 /// Allows 5–6 digit short codes (carrier/bank SMS). Rejects junk like `"4"`.
-pub const MIN_PHONE_DIGITS: usize = 5;
+const MIN_PHONE_DIGITS: usize = 5;
 
 /// Strip non-digits and a leading US country code `1`.
 /// Returns `None` when fewer than [`MIN_PHONE_DIGITS`] remain.
@@ -67,10 +67,6 @@ impl OwnerPhoneSet {
 
     pub fn is_owner(&self, digits: &str) -> bool {
         sanitize_number(digits).is_some_and(|d| self.all_digits.contains(&d))
-    }
-
-    pub fn contains_digits(&self, digits: &str) -> bool {
-        self.all_digits.contains(digits)
     }
 }
 

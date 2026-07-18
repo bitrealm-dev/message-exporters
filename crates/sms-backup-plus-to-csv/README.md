@@ -21,7 +21,7 @@ How those emails are structured: [docs/FORMAT.md](docs/FORMAT.md). How each mess
 
 If the same message appears more than once (for example in both a one-message file and an archive), the converter keeps a single copy. Details are in the [mapping doc](docs/EML_CSV_MAPPING.md).
 
-Example output from test emails: [`samples/`](samples/).
+Example output from test emails: [`sample-output/`](sample-output/).
 
 ## What you need
 
