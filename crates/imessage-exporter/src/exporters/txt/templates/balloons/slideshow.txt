@@ -1,1 +1,0 @@
-{% if let Some(ldtext) = ldtext.get() %}Photo album: {{ ldtext }}{% if let Some(url) = url.get() %} {{ url }}{% endif %}{% else if let Some(url) = url.get() %}{{ url }}{% endif %}

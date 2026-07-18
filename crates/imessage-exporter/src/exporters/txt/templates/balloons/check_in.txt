@@ -1,2 +1,0 @@
-{{ caption }}{% if let Some(footer) = footer %}
-{{ footer }}{% endif %}

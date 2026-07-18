@@ -1,2 +1,0 @@
-{% if let Some(title) = title.get() %}{{ title }}
-{% endif %}{% if let Some(subtitle) = subtitle.get() %}{{ subtitle }}{% endif %}

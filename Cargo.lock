@@ -561,7 +561,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
-name = "go-sms-pro-exporter-csv"
+name = "go-sms-pro-to-csv"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -678,24 +678,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "imessage-exporter"
-version = "0.0.0"
-dependencies = [
- "askama",
- "chrono",
- "clap",
- "crabapple",
- "fdlimit",
- "fs2",
- "imessage-database",
- "rpassword",
- "rusqlite",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "imessage-exporter-csv"
+name = "imessage-to-csv"
 version = "0.0.0"
 dependencies = [
  "askama",
@@ -816,16 +799,6 @@ name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
-
-[[package]]
-name = "message_json"
-version = "0.1.0"
-dependencies = [
- "hex",
- "serde",
- "serde_json",
- "sha2",
-]
 
 [[package]]
 name = "num-conv"
@@ -1169,26 +1142,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 
 [[package]]
-name = "sms-backup-plus-exporter"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64",
- "chrono",
- "clap",
- "hex",
- "mailparse",
- "message_json",
- "regex",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "toml",
-]
-
-[[package]]
-name = "sms-backup-plus-exporter-csv"
+name = "sms-backup-plus-to-csv"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1206,7 +1160,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sms-backup-restore-exporter-csv"
+name = "sms-backup-restore-to-csv"
 version = "0.1.0"
 dependencies = [
  "anyhow",

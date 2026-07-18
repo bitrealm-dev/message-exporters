@@ -1,25 +1,23 @@
 # message-exporters
 
-Convert phone / app **message backups** into portable files (CSV, NDJSON, attachments).
+Turn phone and app message backups into per-conversation CSV files (plus attachments).
 
-This repo does **not** include the vault UI, SQLite import, or CSV→vault JSON ingest. Those live in [`message-vault-rs`](https://github.com/bitrealm-dev/message-vault-rs).
+Each crate reads one backup format and writes one CSV per chat. Column names overlap where the concept is shared (especially with iMessage), but there is no universal schema — source-specific fields stay on that source’s exporter.
 
-```text
-message-exporters   backup / app export  →  CSV or SMS/iMessage NDJSON
-message-vault-rs    CSV / vault NDJSON   →  SQLite + web UI
-```
+## Why CSV
+
+CSV is boring on purpose: open it in a spreadsheet, diff it, pipe it, or ingest it later without inventing another wire format. Nested bits (tapbacks, edits, raw XML crumbs) live in JSON cells when a flat column would lie.
 
 ## Crates
 
-| Crate | Input | Output |
-|-------|--------|--------|
-| `go-sms-pro-exporter-csv` | GO SMS Pro XML + PDU | per-chat CSV |
-| `sms-backup-restore-exporter-csv` | SMS Backup & Restore XML | per-chat CSV |
-| `sms-backup-plus-exporter-csv` | SMS Backup+ EML | per-chat CSV |
-| `sms-backup-plus-exporter` | SMS Backup+ EML | SMS NDJSON (`message_json::sms`) |
-| `imessage-exporter-csv` | iOS Messages DB | per-chat CSV |
-| `imessage-exporter` | iOS Messages DB | JSON NDJSON (`imessage-exporter-json`) |
-| `message-json` | — | shared NDJSON types for SMS/iMessage wire formats |
+| Crate | Input | Format docs |
+|-------|--------|-------------|
+| [`go-sms-pro-to-csv`](crates/go-sms-pro-to-csv) | GO SMS Pro XML + PDU | [XML → CSV](crates/go-sms-pro-to-csv/docs/XML_CSV_MAPPING.md) |
+| [`sms-backup-restore-to-csv`](crates/sms-backup-restore-to-csv) | SMS Backup & Restore XML | [fields](crates/sms-backup-restore-to-csv/docs/FIELDS.md), [XML → CSV](crates/sms-backup-restore-to-csv/docs/XML_CSV_MAPPING.md) |
+| [`sms-backup-plus-to-csv`](crates/sms-backup-plus-to-csv) | SMS Backup+ EML | [EML format](crates/sms-backup-plus-to-csv/docs/FORMAT.md), [EML → CSV](crates/sms-backup-plus-to-csv/docs/EML_CSV_MAPPING.md) |
+| [`imessage-to-csv`](crates/imessage-to-csv) | iOS Messages DB | [crate README](crates/imessage-to-csv/README.md), [sample CSV](crates/imessage-to-csv/samples/15551212.csv) |
+
+Usage and flags live in each crate’s README.
 
 ## Build
 
@@ -27,8 +25,8 @@ message-vault-rs    CSV / vault NDJSON   →  SQLite + web UI
 cargo build --workspace --release
 ```
 
-Binaries land under `target/release/`. Point `message-vault-rs` ingest at them via `PATH` or `MESSAGE_EXPORTERS_BIN` (directory containing the release binaries).
+Binaries land under `target/release/`.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). `imessage-to-csv` is GPL-3.0-or-later (upstream imessage-exporter).

@@ -1,14 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/message-json",
-    "crates/go-sms-pro-exporter-csv",
-    "crates/sms-backup-restore-exporter-csv",
-    "crates/sms-backup-plus-exporter",
-    "crates/sms-backup-plus-exporter-csv",
-    "crates/imessage-exporter",
-    "crates/imessage-exporter-csv",
+    "crates/go-sms-pro-to-csv",
+    "crates/sms-backup-restore-to-csv",
+    "crates/sms-backup-plus-to-csv",
+    "crates/imessage-to-csv",
 ]
-
-[workspace.dependencies]
-message_json = { path = "crates/message-json" }
