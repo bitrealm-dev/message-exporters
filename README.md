@@ -1,8 +1,18 @@
 # message-exporters
 
-Turn phone and messaging-app backups into one spreadsheet file per conversation, with photos and other media saved beside those files.
+Backing up texts is easy. Getting the messages *out* in a form you can read is not.
+
+Every backup app invents its own format—Android XML dumps, email archives, opaque PDU blobs, Apple’s Messages database. Those formats are built for restoring onto another phone, not for browsing history, searching, or keeping a durable archive. The tools rarely agree on timestamps, chat identity, or how media is stored, so the same conversation can look completely different depending on which app wrote the backup.
+
+This repo exists to bridge that gap: turn those vendor-specific backups into plain CSV—one spreadsheet file per conversation, with photos and other media saved beside those files.
 
 A CSV file is a plain table you can open in Excel, Numbers, Google Sheets, or any text editor. Each converter reads one kind of backup and writes those tables. Pick the converter that matches the app or device that created your backup.
+
+### Why CSV?
+
+Other formats look tempting. JSON is great for programs, but hard for a person to skim and check. HTML is great for presenting messages in a browser, but awkward as a structured store you can sort, filter, or re-import later.
+
+CSV sits in the middle: human-readable enough that you can open a file and verify that the message text, times, and directions look right, yet still structured enough for spreadsheets and downstream tools. That makes it a practical archive format—and an easy place to catch export mistakes before you trust the data.
 
 ## Which converter to use
 
