@@ -201,6 +201,8 @@ pub fn extract_mms_attachments(
         return all_parts(&by_key, &order);
     }
 
+    // Prefer SMIL order for matches, then keep any media parts the SMIL refs missed
+    // (partial match) or all parts when nothing matched (total mismatch).
     let mut seen = HashSet::new();
     let mut out = Vec::new();
     for r in img_refs {
@@ -210,9 +212,17 @@ pub fn extract_mms_attachments(
             }
         }
     }
-    // Odd SMIL `src` names that don't key-match parts: fall back to every media part.
-    if out.is_empty() && !by_key.is_empty() {
-        return all_parts(&by_key, &order);
+    for key in &order {
+        if let Some(blob) = by_key.get(key) {
+            if seen.insert(blob.filename.clone()) {
+                out.push(blob.clone());
+            }
+        }
+    }
+    for blob in by_key.values() {
+        if seen.insert(blob.filename.clone()) {
+            out.push(blob.clone());
+        }
     }
     out
 }
@@ -291,6 +301,39 @@ mod tests {
                 .original_name
                 .as_deref()
                 .is_some_and(|n| n.contains("IMG_001"))
+        );
+    }
+
+    #[test]
+    fn smil_partial_match_keeps_unmatched_media() {
+        let jpeg = base64::engine::general_purpose::STANDARD.encode(b"\xff\xd8\xffjpeg-bytes");
+        let video = base64::engine::general_purpose::STANDARD.encode(b"fake-3gp-video-bytes!!");
+        let parts = vec![
+            MmsPart {
+                ct: "image/jpeg".into(),
+                name: "IMG_001.jpg".into(),
+                data: jpeg,
+                ..Default::default()
+            },
+            MmsPart {
+                ct: "video/3gpp".into(),
+                name: "VID_002.3gp".into(),
+                data: video,
+                ..Default::default()
+            },
+        ];
+        let mut stats = XmlParseStats::default();
+        let out = extract_mms_attachments(
+            &parts,
+            1_609_459_200_000.0,
+            &["IMG_001.jpg".into()],
+            &mut stats,
+        );
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].original_name.as_deref(), Some("IMG_001.jpg"));
+        assert!(
+            out.iter()
+                .any(|b| b.original_name.as_deref() == Some("VID_002.3gp"))
         );
     }
 }
