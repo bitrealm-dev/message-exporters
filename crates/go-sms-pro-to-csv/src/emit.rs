@@ -51,7 +51,10 @@ pub struct ExportReport {
     pub received: u64,
     pub skipped_invalid_date: u64,
     pub skipped_unknown_type: u64,
+    pub skipped_unknown_address: u64,
     pub skipped_unparseable_pdu: u64,
+    /// PDU parsed but no non-owner participant (self-only / empty PLMN set).
+    pub skipped_no_other_party: u64,
     pub errors: Vec<String>,
 }
 
@@ -322,15 +325,7 @@ fn add_pdu_message(
     owners: &OwnerPhoneSet,
     report: &mut ExportReport,
 ) {
-    report.pdu_messages += 1;
-    if parsed.is_sent {
-        report.sent += 1;
-    } else {
-        report.received += 1;
-    }
-
     let targets: Vec<(String, String, Option<String>)> = if parsed.is_group {
-        report.pdu_group_messages += 1;
         let (id, title) = chat_id_group(&parsed.participants, owners);
         vec![(id, "group".to_string(), Some(title))]
     } else {
@@ -341,6 +336,7 @@ fn add_pdu_message(
             .cloned()
             .collect();
         if others.is_empty() {
+            report.skipped_no_other_party += 1;
             return;
         }
         let other = &others[0];
@@ -350,6 +346,16 @@ fn add_pdu_message(
             None,
         )]
     };
+
+    report.pdu_messages += 1;
+    if parsed.is_group {
+        report.pdu_group_messages += 1;
+    }
+    if parsed.is_sent {
+        report.sent += 1;
+    } else {
+        report.received += 1;
+    }
 
     let att_names: Vec<String> = attachments.iter().map(|a| a.rel_path.clone()).collect();
     let dedupe_key = format!(
@@ -546,6 +552,7 @@ pub fn convert_export(
                 report.xml_messages += stats.messages;
                 report.skipped_invalid_date += stats.skipped_invalid_date;
                 report.skipped_unknown_type += stats.skipped_unknown_type;
+                report.skipped_unknown_address += stats.skipped_unknown_address;
                 report.sent += stats.sent;
                 report.received += stats.received;
                 add_xml_messages(&mut conversations, msgs);

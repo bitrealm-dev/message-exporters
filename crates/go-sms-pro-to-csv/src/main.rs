@@ -38,6 +38,12 @@ fn main() -> Result<()> {
     if report.skipped_unknown_type > 0 {
         println!("  skipped bad type:  {}", report.skipped_unknown_type);
     }
+    if report.skipped_unknown_address > 0 {
+        println!("  skipped bad addr:  {}", report.skipped_unknown_address);
+    }
+    if report.skipped_no_other_party > 0 {
+        println!("  skipped no party:  {}", report.skipped_no_other_party);
+    }
     if report.skipped_unparseable_pdu > 0 {
         println!("  skipped bad PDU:   {}", report.skipped_unparseable_pdu);
     }

@@ -176,22 +176,14 @@ pub fn extract_mms_attachments(
         }
     }
 
-    if !img_refs.is_empty() {
-        let mut seen = HashSet::new();
-        let mut out = Vec::new();
-        for r in img_refs {
-            if let Some(blob) = by_key.get(r) {
-                if seen.insert(blob.filename.clone()) {
-                    out.push(blob.clone());
-                }
-            }
-        }
-        out
-    } else {
+    fn all_parts(
+        by_key: &HashMap<String, AttachmentBlob>,
+        order: &[String],
+    ) -> Vec<AttachmentBlob> {
         let mut seen = HashSet::new();
         let mut out = Vec::new();
         for key in order {
-            if let Some(blob) = by_key.get(&key) {
+            if let Some(blob) = by_key.get(key) {
                 if seen.insert(blob.filename.clone()) {
                     out.push(blob.clone());
                 }
@@ -204,6 +196,25 @@ pub fn extract_mms_attachments(
         }
         out
     }
+
+    if img_refs.is_empty() {
+        return all_parts(&by_key, &order);
+    }
+
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for r in img_refs {
+        if let Some(blob) = by_key.get(r) {
+            if seen.insert(blob.filename.clone()) {
+                out.push(blob.clone());
+            }
+        }
+    }
+    // Odd SMIL `src` names that don't key-match parts: fall back to every media part.
+    if out.is_empty() && !by_key.is_empty() {
+        return all_parts(&by_key, &order);
+    }
+    out
 }
 
 #[cfg(test)]
@@ -256,5 +267,30 @@ mod tests {
         assert_eq!(prefix_a, prefix_b);
         assert!(out[0].filename.contains(&prefix_a));
         assert!(out[1].filename.contains(&prefix_b));
+    }
+
+    #[test]
+    fn smil_mismatch_falls_back_to_all_parts() {
+        let data = base64::engine::general_purpose::STANDARD.encode(b"\xff\xd8\xffjpeg");
+        let parts = vec![MmsPart {
+            ct: "image/jpeg".into(),
+            name: "IMG_001.jpg".into(),
+            data,
+            ..Default::default()
+        }];
+        let mut stats = XmlParseStats::default();
+        let out = extract_mms_attachments(
+            &parts,
+            1_609_459_200_000.0,
+            &["cid:totally-unrelated@smil".into()],
+            &mut stats,
+        );
+        assert_eq!(out.len(), 1);
+        assert!(
+            out[0]
+                .original_name
+                .as_deref()
+                .is_some_and(|n| n.contains("IMG_001"))
+        );
     }
 }

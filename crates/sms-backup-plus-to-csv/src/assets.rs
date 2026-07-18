@@ -3,6 +3,7 @@
 use crate::types::AttachmentBlob;
 use mailparse::{MailHeaderMap, ParsedMail};
 use regex::Regex;
+use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -95,7 +96,6 @@ pub(crate) fn extract_attachments(
     let date_prefix = crate::identity::local_datetime_from_secs((timestamp_ms / 1000.0) as i64)
         .format("%Y%m%d_%H%M%S")
         .to_string();
-    let ts_int = timestamp_ms as i64;
     let name_prefix = file_key.map(|k| format!("{k}_")).unwrap_or_default();
 
     let mut parts = Vec::new();
@@ -127,13 +127,17 @@ pub(crate) fn extract_attachments(
                 .and_then(|n| valid_filename(Some(n)))
         });
         let ext = extension_for(&ctype, original.as_deref());
+        // Content-addressed prefix: re-exports with different bytes get a new path
+        // instead of leaving stale attachment files under the old name.
+        let digest_hex = hex::encode(Sha256::digest(&payload));
+        let digest_prefix = &digest_hex[..16.min(digest_hex.len())];
         let out_name = if let Some(ref orig) = original {
             format!(
-                "{name_prefix}{date_prefix}_{ts_int}_{seq}_{}",
+                "{name_prefix}{date_prefix}_{digest_prefix}_{}",
                 safe_basename(orig)
             )
         } else {
-            format!("{name_prefix}{date_prefix}_{ts_int}_{seq}{ext}")
+            format!("{name_prefix}{date_prefix}_{digest_prefix}_{seq}{ext}")
         };
         out.push(AttachmentBlob {
             filename: out_name,

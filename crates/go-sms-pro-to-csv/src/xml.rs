@@ -41,6 +41,7 @@ pub struct XmlParseStats {
     pub received: u64,
     pub skipped_invalid_date: u64,
     pub skipped_unknown_type: u64,
+    pub skipped_unknown_address: u64,
 }
 
 pub fn parse_xml_file(path: &Path, owner_digits: &str) -> Result<(Vec<XmlMessage>, XmlParseStats)> {
@@ -135,6 +136,7 @@ pub fn parse_xml_str(text: &str, owner_digits: &str) -> Result<(Vec<XmlMessage>,
 
         // Drop threads with no usable other party.
         if msg.other_digits == "Unknown" {
+            stats.skipped_unknown_address += 1;
             continue;
         }
         // Owner digits unused beyond future checks; keep for API symmetry.

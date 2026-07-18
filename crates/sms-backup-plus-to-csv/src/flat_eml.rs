@@ -72,7 +72,9 @@ fn timestamp_seconds(mail: &ParsedMail<'_>) -> Option<f64> {
     let raw = header(mail, "X-smssync-date");
     if !raw.is_empty() && raw.chars().all(|c| c.is_ascii_digit()) {
         let value: i64 = raw.parse().ok()?;
-        return Some(if value > 10_i64.pow(12) {
+        // Android uses epoch ms (~1e12 today). Seconds stay ~1e9 until year 5138.
+        // Threshold 1e11 catches pre-2001 ms timestamps that the old 1e12 cutoff missed.
+        return Some(if value >= 100_000_000_000 {
             value as f64 / 1000.0
         } else {
             value as f64
@@ -337,5 +339,37 @@ Hello from Alice\r\n",
         assert!(!msg.is_from_me);
         assert_eq!(msg.text.trim(), "Hello from Alice");
         assert_eq!(msg.chat_key, "4075551234");
+        assert!((msg.timestamp_secs - 1_609_459_200.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn early_2000s_ms_dates_are_not_treated_as_seconds() {
+        // 2001-01-01T00:00:00Z as epoch ms is < 1e12; the old >1e12 cutoff
+        // would have treated this as seconds (~year 32995).
+        let ms = 978_307_200_000_i64;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("msg.eml");
+        std::fs::write(
+            &path,
+            format!(
+                "From: alice@unknown.email\r\n\
+To: me@example.com\r\n\
+Subject: SMS with Alice\r\n\
+X-smssync-type: 1\r\n\
+X-smssync-address: 4075551234\r\n\
+X-smssync-date: {ms}\r\n\
+Content-Type: text/plain; charset=utf-8\r\n\
+\r\n\
+old message\r\n"
+            ),
+        )
+        .unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        let mail = mailparse::parse_mail(&bytes).unwrap();
+        let owners = HashSet::from(["5555550100".to_string()]);
+        let msg = parse_flat_eml_mail(&path, &mail, &owners, &[])
+            .unwrap()
+            .unwrap();
+        assert!((msg.timestamp_secs - 978_307_200.0).abs() < 0.001);
     }
 }
