@@ -66,11 +66,11 @@ jobs:
           EXT='${{ matrix.ext }}'
           SUFFIX='${{ matrix.artifact_suffix }}'
           for bin in \
-            go-sms-pro-to-csv \
-            sms-backup-restore-to-csv \
-            sms-backup-plus-to-csv \
-            openextract-to-csv \
-            imazing-to-csv \
+            go-sms-pro-out \
+            sms-backup-restore-out \
+            sms-backup-plus-out \
+            openextract-out \
+            imazing-out \
             imessage-exporter
           do
             src="target/release/${bin}${EXT}"
@@ -111,4 +111,4 @@ jobs:
 
           Binaries for Linux (x86_64-unknown-linux-gnu), Windows (x86_64-pc-windows-msvc), and macOS Apple Silicon (aarch64-apple-darwin).
 
-          Tools: go-sms-pro-to-csv, sms-backup-restore-to-csv, sms-backup-plus-to-csv, openextract-to-csv, imazing-to-csv, imessage-exporter."
+          Tools: go-sms-pro-out, sms-backup-restore-out, sms-backup-plus-out, openextract-out, imazing-out, imessage-exporter."

@@ -22,11 +22,11 @@ You need write access to the repository (to run workflows that create releases a
 
 For each platform, these binaries are attached to the release:
 
-- `go-sms-pro-to-csv`
-- `sms-backup-restore-to-csv`
-- `sms-backup-plus-to-csv`
-- `openextract-to-csv`
-- `imazing-to-csv`
+- `go-sms-pro-out`
+- `sms-backup-restore-out`
+- `sms-backup-plus-out`
+- `openextract-out`
+- `imazing-out`
 - `imessage-exporter`
 
 | Platform | Runner | Asset name suffix |
@@ -35,7 +35,7 @@ For each platform, these binaries are attached to the release:
 | Windows | `windows-latest` | `x86_64-pc-windows-msvc` (`.exe`) |
 | macOS | `macos-latest` | `aarch64-apple-darwin` (Apple Silicon) |
 
-Example asset: `go-sms-pro-to-csv-x86_64-unknown-linux-gnu`.
+Example asset: `go-sms-pro-out-x86_64-unknown-linux-gnu`.
 
 Re-running the workflow with a version that already has a tag/release will fail at `gh release create`. Bump the version or delete the old release/tag first if you intentionally want to replace it.
 

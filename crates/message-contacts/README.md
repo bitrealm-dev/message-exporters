@@ -15,7 +15,7 @@ Name resolution belongs in **message-exporters** (backup → CSV), not in vault 
 use message_contacts::resolve_contacts_cli;
 
 let (book, path) = resolve_contacts_cli(contacts_opt, vcf_opt)?;
-// Exactly one of --contacts or --vcf is required.
+// At most one of --contacts or --vcf. Neither → empty book + stderr warning.
 ```
 
 ## License

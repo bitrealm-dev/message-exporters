@@ -264,28 +264,31 @@ impl ContactsBook {
     }
 }
 
-/// Require exactly one of `--contacts` or `--vcf` and load the book.
+/// Load contacts from at most one of `--contacts` or `--vcf`.
+///
+/// When neither is passed, returns an empty book and prints a stderr warning.
 pub fn resolve_contacts_cli(
     contacts: Option<PathBuf>,
     vcf: Option<PathBuf>,
-) -> Result<(ContactsBook, PathBuf)> {
+) -> Result<(ContactsBook, Option<PathBuf>)> {
     match (contacts, vcf) {
         (Some(path), None) => {
             let book = ContactsBook::load_csv(&path)?;
-            Ok((book, path))
+            Ok((book, Some(path)))
         }
         (None, Some(path)) => {
             let book = ContactsBook::load_vcf(&path)?;
-            Ok((book, path))
+            Ok((book, Some(path)))
         }
         (Some(_), Some(_)) => {
             bail!("pass only one of --contacts PATH.csv or --vcf PATH.vcf")
         }
         (None, None) => {
-            bail!(
-                "contacts required: pass --contacts PATH.csv (vault-shaped phones,first_name,last_name) \
-                 or --vcf PATH.vcf — name/phone resolution happens at export, not in vault csv-ingest"
-            )
+            eprintln!(
+                "warning: no contacts file provided (--contacts or --vcf); \
+                 phone numbers will not be resolved to names"
+            );
+            Ok((ContactsBook::empty(), None))
         }
     }
 }
@@ -440,8 +443,10 @@ TEL;TYPE=CELL:+1-555-555-0100\nEND:VCARD\n",
     }
 
     #[test]
-    fn resolve_cli_requires_one() {
-        assert!(resolve_contacts_cli(None, None).is_err());
+    fn resolve_cli_allows_none_and_rejects_both() {
+        let (book, path) = resolve_contacts_cli(None, None).unwrap();
+        assert!(book.is_empty());
+        assert!(path.is_none());
         let dir = tempfile::tempdir().unwrap();
         let csv = write_file(
             &dir,
@@ -454,7 +459,9 @@ TEL;TYPE=CELL:+1-555-555-0100\nEND:VCARD\n",
             "BEGIN:VCARD\nN:B;A;;;\nTEL:+15555550100\nEND:VCARD\n",
         );
         assert!(resolve_contacts_cli(Some(csv.clone()), Some(vcf)).is_err());
-        assert!(resolve_contacts_cli(Some(csv), None).is_ok());
+        let (book, path) = resolve_contacts_cli(Some(csv), None).unwrap();
+        assert!(!book.is_empty());
+        assert!(path.is_some());
     }
 
     #[test]

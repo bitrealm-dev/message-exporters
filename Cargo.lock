@@ -632,7 +632,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
-name = "go-sms-pro-to-csv"
+name = "go-sms-pro-out"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -746,7 +746,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "imazing-to-csv"
+name = "imazing-out"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -973,7 +973,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
-name = "openextract-to-csv"
+name = "openextract-out"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1381,7 +1381,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 
 [[package]]
-name = "sms-backup-plus-to-csv"
+name = "sms-backup-plus-out"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1403,7 +1403,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sms-backup-restore-to-csv"
+name = "sms-backup-restore-out"
 version = "0.1.0"
 dependencies = [
  "anyhow",
