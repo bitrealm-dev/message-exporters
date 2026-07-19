@@ -37,6 +37,8 @@ cargo run --release -p openextract-to-csv -- \
 
 `--input` may be a single `conversation_*.csv`, an `all_conversations.csv`, or a directory of those files. `*_attachments.csv` files are skipped automatically.
 
+Add `--anonymize` (optional `--anonymize-seed <64-hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-anonymize`](../message-anonymize).
+
 ## License
 
 MIT.

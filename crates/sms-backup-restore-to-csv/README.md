@@ -43,6 +43,8 @@ cargo run --release -p sms-backup-restore-to-csv -- \
   --contacts /path/to/contacts.csv
 ```
 
+Add `--anonymize` (optional `--anonymize-seed <64-hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-anonymize`](../message-anonymize).
+
 Replace the paths and phone number with your own. `--input` may be a single XML file or a directory of XML files. `--output` is where the CSV files and `attachments/` folder are written. Use `--vcf` instead of `--contacts` if you have a VCF.
 
 ## License

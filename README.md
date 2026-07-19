@@ -35,9 +35,13 @@ Pass exactly one. Shared logic: [`crates/message-contacts`](crates/message-conta
 
 Each converter writes `export_source`, `export_tool`, and `export_tool_version` on every CSV row so downstream vault import knows which upstream tool/version the export targets.
 
-**iMazing** Messages CSV (vendor export, not produced here) is ingested by [message-vault-rs](https://github.com/bitrealm-dev/message-vault-rs) `csv-ingest` targeting **iMazing 3.5.5**.
+**iMazing** Messages CSV (vendor export) is ingested by [message-vault-rs](https://github.com/bitrealm-dev/message-vault-rs) `csv-ingest` targeting **iMazing 3.5.5**. To share structure without PII, rewrite it with [`imazing-anonymize`](crates/message-anonymize) (does not convert to near-vault CSV).
 
 Each converter’s README explains what the backup looks like, what you need to run it, and extra options.
+
+## Anonymize (share structure, not PII)
+
+Add `--anonymize` (optional `--anonymize-seed <64-hex>`) to any converter to rewrite names, numbers, message text (same length), and attachments after export. Remaps are stable for a given seed and not reversible from the CSV alone; the seed is printed to stderr when generated. Details: [`crates/message-anonymize`](crates/message-anonymize).
 
 ## Quick start
 
@@ -107,6 +111,18 @@ cargo run --release -p imessage-exporter -- \
 No owner phone flag. Use `-c clone` so attachments are copied into the output folder (otherwise the CSV keeps absolute paths into the Messages library). Full Disk Access may be required on macOS.
 
 After a run, open the CSV files under `--output` / `-o` and check that times, direction, and text look right. Photos and other media are under `attachments/` (or the iMessage output folder when using `-c clone`).
+
+### Anonymized share copy
+
+```bash
+# any converter — add after the usual flags:
+  --anonymize
+
+# iMazing vendor CSV (rewrite only):
+cargo run --release -p message-anonymize --bin imazing-anonymize -- \
+  --input /path/to/imazing.csv \
+  --output ./staging/imazing-anon
+```
 
 ## Releases
 

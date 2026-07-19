@@ -39,6 +39,8 @@ Then export (default format is CSV; `-c clone` copies attachments into the outpu
 ./target/release/imessage-exporter -f csv -c clone -o ./staging/imessage
 ```
 
+Add `--anonymize` (optional `--anonymize-seed <64-hex>`) after a CSV export to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-anonymize`](../message-anonymize).
+
 Or run without installing the binary first:
 
 ```bash

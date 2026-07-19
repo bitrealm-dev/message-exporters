@@ -589,7 +589,27 @@ impl Config {
                 }
                 ExportType::Csv => {
                     run_export(&mut CSV::new(self)?)?;
+                    if self.options.anonymize || self.options.anonymize_seed.is_some() {
+                        let mut anon = message_anonymize::resolve_anonymizer(
+                            self.options.anonymize_seed.as_deref(),
+                        )
+                        .map_err(|e| RuntimeError::InvalidOptions(format!("{e:#}")))?;
+                        let n = message_anonymize::anonymize_near_vault_dir(
+                            &self.options.export_path,
+                            &mut anon,
+                        )
+                        .map_err(|e| RuntimeError::InvalidOptions(format!("{e:#}")))?;
+                        eprintln!(
+                            "Anonymized {n} CSV file(s) under {}",
+                            self.options.export_path.display()
+                        );
+                    }
                 }
+            }
+            if !matches!(export_type, ExportType::Csv)
+                && (self.options.anonymize || self.options.anonymize_seed.is_some())
+            {
+                eprintln!("Warning: --anonymize only applies to CSV exports; skipped.");
             }
         }
         println!("Done!");

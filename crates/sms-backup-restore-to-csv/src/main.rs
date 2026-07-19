@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
+use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
 use message_contacts::resolve_contacts_cli;
 use sms_backup_restore_to_csv::convert_export;
 
@@ -30,12 +31,26 @@ struct Cli {
     /// Contacts VCF (alternate to `--contacts`).
     #[arg(long)]
     vcf: Option<PathBuf>,
+
+    /// Rewrite output with stable, non-reversible fake names/numbers/text and placeholder media
+    #[arg(long)]
+    anonymize: bool,
+
+    /// Optional 64-char hex seed for reproducible anonymization (implies --anonymize)
+    #[arg(long = "anonymize-seed")]
+    anonymize_seed: Option<String>,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let (contacts, _) = resolve_contacts_cli(cli.contacts, cli.vcf)?;
     let report = convert_export(&cli.input, &cli.output, &cli.owner_phones, &contacts)?;
+
+    if cli.anonymize || cli.anonymize_seed.is_some() {
+        let mut anon = resolve_anonymizer(cli.anonymize_seed.as_deref())?;
+        let n = anonymize_near_vault_dir(&cli.output, &mut anon)?;
+        eprintln!("Anonymized {n} CSV file(s) under {}", cli.output.display());
+    }
 
     println!("Wrote {}", cli.output.display());
     println!("  conversations:     {}", report.conversations);

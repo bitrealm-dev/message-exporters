@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
 use message_contacts::{resolve_contacts_cli, NameMapping};
 use serde::Deserialize;
 use sms_backup_plus_to_csv::convert_export;
@@ -60,6 +61,14 @@ enum Commands {
         /// Default: config/name-mapping.csv when that file exists.
         #[arg(long = "name-mapping")]
         name_mapping: Option<PathBuf>,
+
+        /// Rewrite output with stable, non-reversible fake names/numbers/text and placeholder media
+        #[arg(long)]
+        anonymize: bool,
+
+        /// Optional 64-char hex seed for reproducible anonymization (implies --anonymize)
+        #[arg(long = "anonymize-seed")]
+        anonymize_seed: Option<String>,
     },
 }
 
@@ -158,6 +167,8 @@ fn main() -> Result<()> {
             contacts,
             vcf,
             name_mapping,
+            anonymize,
+            anonymize_seed,
         } => {
             let (owner_phones, emails, default_inputs) =
                 resolve_owner(owner_phones, owner_emails)?;
@@ -177,6 +188,12 @@ fn main() -> Result<()> {
                 &name_mapping,
                 cli.verbose,
             )?;
+
+            if anonymize || anonymize_seed.is_some() {
+                let mut anon = resolve_anonymizer(anonymize_seed.as_deref())?;
+                let n = anonymize_near_vault_dir(&output, &mut anon)?;
+                eprintln!("Anonymized {n} CSV file(s) under {}", output.display());
+            }
 
             if !cli.no_summary {
                 println!("Wrote {}", output.display());
