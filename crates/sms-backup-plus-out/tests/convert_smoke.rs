@@ -1,4 +1,5 @@
 use message_contacts::{ContactsBook, NameMapping};
+use message_csv::DateRange;
 use sms_backup_plus_out::convert_export;
 use std::fs::{self, File};
 use std::io::Read;
@@ -27,7 +28,9 @@ fn convert_smoke_writes_csv_not_json() {
         &["owner@example.com".into()],
         &empty_book(),
         &empty_mapping(),
+        &DateRange::default(),
         false,
+        true,
     )
     .unwrap();
 
@@ -91,7 +94,9 @@ fn end_dedupe_collapses_duplicate_flats() {
         &["owner@example.com".into()],
         &empty_book(),
         &empty_mapping(),
+        &DateRange::default(),
         false,
+        true,
     )
     .unwrap();
 
@@ -156,7 +161,9 @@ Will do\r\n"
         &["owner@example.com".into()],
         &empty_book(),
         &empty_mapping(),
+        &DateRange::default(),
         false,
+        true,
     )
     .unwrap();
 

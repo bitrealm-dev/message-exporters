@@ -38,6 +38,7 @@ Also useful:
 
 - `--name-mapping` — maps nicknames in the backup to the names you want in the export
 - `-v` / `--verbose` — progress messages while large folders are scanned
+- `--start-date` / `--end-date` — `YYYY-MM-DD` window `[start, end)` at host local midnight (end exclusive)
 
 Contacts resolve **name → phone** when the EML has a name but no peer number, and **phone → name** when the display name is blank. Vault csv-ingest does not look up contacts.
 
@@ -57,6 +58,8 @@ cargo run --release -p sms-backup-plus-out -- convert \
 Replace the paths, phone number, and email with your own. `--input` is the folder of `.eml` files. `--output` is where the CSV files and `attachments/` folder are written. Use `--vcf` instead of `--contacts` if you have a VCF.
 
 Add `--anonymize` (optional `--anonymize-seed <64-hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-anonymize`](../message-anonymize).
+
+Attachment media: `--media-mode disabled|clone|convert|compress` (default `clone`). Convert/compress need `ffmpeg`/`ffprobe`. Compress options: `--media-max-resolution`, `--media-max-fps`, `--media-min-size`, `--media-skip-efficient`. See [`message-media`](../message-media).
 
 ## License
 

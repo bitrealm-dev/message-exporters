@@ -6,7 +6,7 @@ use anyhow::{bail, Context, Result};
 use chrono::{Local, TimeZone};
 use message_contacts::ContactsBook;
 use message_csv::{
-    format_local_ts, json_cell, safe_filename, stable_guid, AttachmentCell,
+    format_local_ts, json_cell, safe_filename, stable_guid, AttachmentCell, DateRange,
 };
 use message_phone::{to_e164, OwnerPhoneSet};
 use sha2::{Digest, Sha256};
@@ -61,6 +61,7 @@ pub struct ExportReport {
     /// Rows written to CSV after dedupe (incoming).
     pub received: u64,
     pub skipped_invalid_date: u64,
+    pub skipped_out_of_range: u64,
     pub skipped_unknown_type: u64,
     pub skipped_unknown_address: u64,
     pub skipped_unparseable_pdu: u64,
@@ -220,7 +221,11 @@ fn save_pdu_attachments(
     parsed: &ParsedPdu,
     attachments_dir: &Path,
     report: &mut ExportReport,
+    copy_attachments: bool,
 ) -> Result<Vec<PendingAttachment>> {
+    if !copy_attachments {
+        return Ok(Vec::new());
+    }
     fs::create_dir_all(attachments_dir)?;
     let date_prefix = Local
         .timestamp_opt(parsed.timestamp, 0)
@@ -494,6 +499,8 @@ pub fn convert_export(
     output_dir: &Path,
     owner_phones: &[String],
     contacts: &ContactsBook,
+    date_range: &DateRange,
+    copy_attachments: bool,
 ) -> Result<ExportReport> {
     if !input_dir.is_dir() {
         bail!("input is not a directory: {}", input_dir.display());
@@ -507,7 +514,9 @@ pub fn convert_export(
     fs::create_dir_all(output_dir)?;
     clean_previous_csv(output_dir)?;
     let attachments_dir = output_dir.join("attachments");
-    fs::create_dir_all(&attachments_dir)?;
+    if copy_attachments {
+        fs::create_dir_all(&attachments_dir)?;
+    }
 
     let mut xml_paths: Vec<PathBuf> = fs::read_dir(input_dir)?
         .filter_map(|e| e.ok())
@@ -527,6 +536,17 @@ pub fn convert_export(
                 report.skipped_invalid_date += stats.skipped_invalid_date;
                 report.skipped_unknown_type += stats.skipped_unknown_type;
                 report.skipped_unknown_address += stats.skipped_unknown_address;
+                let msgs: Vec<_> = msgs
+                    .into_iter()
+                    .filter(|msg| {
+                        if date_range.contains_secs_f64(msg.timestamp_secs) {
+                            true
+                        } else {
+                            report.skipped_out_of_range += 1;
+                            false
+                        }
+                    })
+                    .collect();
                 add_xml_messages(&mut conversations, msgs);
             }
             Err(err) => report.errors.push(format!("{}: {err:#}", xml_path.display())),
@@ -554,19 +574,29 @@ pub fn convert_export(
                         .push(format!("{}: unparseable PDU", pdu_path.display()));
                 }
             }
-            Ok(Some(parsed)) => match save_pdu_attachments(&parsed, &attachments_dir, &mut report)
-            {
-                Ok(atts) => add_pdu_message(
-                    &mut conversations,
-                    parsed,
-                    atts,
-                    &owners,
+            Ok(Some(parsed)) => {
+                if !date_range.contains_secs(parsed.timestamp) {
+                    report.skipped_out_of_range += 1;
+                    continue;
+                }
+                match save_pdu_attachments(
+                    &parsed,
+                    &attachments_dir,
                     &mut report,
-                ),
-                Err(err) => report
-                    .errors
-                    .push(format!("{}: {err:#}", pdu_path.display())),
-            },
+                    copy_attachments,
+                ) {
+                    Ok(atts) => add_pdu_message(
+                        &mut conversations,
+                        parsed,
+                        atts,
+                        &owners,
+                        &mut report,
+                    ),
+                    Err(err) => report
+                        .errors
+                        .push(format!("{}: {err:#}", pdu_path.display())),
+                }
+            }
             Err(err) => report.errors.push(format!("{}: {err:#}", pdu_path.display())),
         }
     }

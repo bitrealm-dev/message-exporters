@@ -4,7 +4,7 @@ use crate::xml::{parse_xml_file, AttachmentBlob, ConvType, ParsedMessage};
 use anyhow::{bail, Context, Result};
 use message_contacts::ContactsBook;
 use message_csv::{
-    format_local_ts, json_cell, safe_filename, stable_guid, AttachmentCell,
+    format_local_ts, json_cell, safe_filename, stable_guid, AttachmentCell, DateRange,
 };
 use message_phone::{to_e164, OwnerPhoneSet};
 use std::collections::{BTreeMap, HashSet};
@@ -56,6 +56,7 @@ pub struct ExportReport {
     /// Rows written after dedupe (incoming).
     pub received: u64,
     pub skipped_invalid_date: u64,
+    pub skipped_out_of_range: u64,
     pub skipped_unknown_address: u64,
     pub skipped_unknown_type: u64,
     pub skipped_draft_or_outbox: u64,
@@ -107,7 +108,11 @@ fn write_attachments(
     blobs: &[AttachmentBlob],
     attachments_dir: &Path,
     report: &mut ExportReport,
+    copy_attachments: bool,
 ) -> Result<Vec<PendingAttachment>> {
+    if !copy_attachments {
+        return Ok(Vec::new());
+    }
     let mut out = Vec::with_capacity(blobs.len());
     for blob in blobs {
         let path = attachments_dir.join(&blob.filename);
@@ -351,6 +356,8 @@ pub fn convert_export(
     output_dir: &Path,
     owner_phones: &[String],
     contacts: &ContactsBook,
+    date_range: &DateRange,
+    copy_attachments: bool,
 ) -> Result<ExportReport> {
     let owners = OwnerPhoneSet::new(owner_phones)?;
     let mut report = ExportReport::default();
@@ -359,7 +366,9 @@ pub fn convert_export(
     fs::create_dir_all(output_dir)?;
     clean_previous_csv(output_dir)?;
     let attachments_dir = output_dir.join("attachments");
-    fs::create_dir_all(&attachments_dir)?;
+    if copy_attachments {
+        fs::create_dir_all(&attachments_dir)?;
+    }
 
     for xml_path in collect_xml_paths(input)? {
         match parse_xml_file(&xml_path, &owners.all_digits) {
@@ -373,7 +382,16 @@ pub fn convert_export(
                 report.skipped_empty_participants += stats.skipped_empty_participants;
                 report.skipped_bad_attachment += stats.skipped_bad_attachment;
                 for msg in msgs {
-                    match write_attachments(&msg.attachments, &attachments_dir, &mut report) {
+                    if !date_range.contains_secs_f64(msg.timestamp_secs) {
+                        report.skipped_out_of_range += 1;
+                        continue;
+                    }
+                    match write_attachments(
+                        &msg.attachments,
+                        &attachments_dir,
+                        &mut report,
+                        copy_attachments,
+                    ) {
                         Ok(atts) => add_message(&mut conversations, msg, atts),
                         Err(err) => report
                             .errors

@@ -2,9 +2,11 @@ mod exporters;
 mod process;
 
 use exporters::{
-    APPLE_PLATFORMS, ApplePlatform, CONTACT_KINDS, COPY_METHODS, ContactsKind, CopyMethod,
-    EXPORTERS, Exporter, Form, default_output_dir,
+    APPLE_PLATFORMS, ATTACHMENT_MEDIA, ApplePlatform, CONTACT_KINDS, ContactsKind,
+    EXPORTERS, Exporter, Form, MAX_RESOLUTIONS, AttachmentMedia, default_output_dir,
 };
+use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
+use message_media::{process_near_vault_media, MaxResolution};
 use iced::widget::{
     button, checkbox, column, container, pick_list, rich_text, row, rule, scrollable, space, span,
     text, text_input,
@@ -91,6 +93,8 @@ enum Field {
     ConversationFilter,
     AppleContacts,
     BackupPassword,
+    MediaMaxFps,
+    MediaMinSize,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -104,7 +108,9 @@ enum Message {
     ExporterSelected(Exporter),
     FieldChanged(Field, String),
     ContactsKindChanged(ContactsKind),
-    CopyMethodChanged(CopyMethod),
+    AttachmentMediaChanged(AttachmentMedia),
+    MediaMaxResolutionChanged(MaxResolution),
+    ToggleMediaSkipEfficient(bool),
     ApplePlatformChanged(ApplePlatform),
     ToggleAnonymize(bool),
     ToggleAdvanced,
@@ -162,7 +168,9 @@ impl App {
             }
             Message::FieldChanged(field, value) => self.set_field(field, value),
             Message::ContactsKindChanged(kind) => self.form.contacts_kind = kind,
-            Message::CopyMethodChanged(method) => self.form.copy_method = method,
+            Message::AttachmentMediaChanged(method) => self.form.attachment_media = method,
+            Message::MediaMaxResolutionChanged(res) => self.form.media_max_resolution = res,
+            Message::ToggleMediaSkipEfficient(value) => self.form.media_skip_efficient = value,
             Message::ApplePlatformChanged(platform) => self.form.apple_platform = platform,
             Message::ToggleAnonymize(value) => self.form.anonymize = value,
             Message::ToggleAdvanced => self.form.advanced = !self.form.advanced,
@@ -191,6 +199,9 @@ impl App {
                 ProcessEvent::Log(line) => self.logs.push(line),
                 ProcessEvent::Finished(summary) => {
                     self.logs.push(summary);
+                    if self.exporter == Exporter::Imessage {
+                        self.run_imessage_media_post();
+                    }
                     self.running = false;
                 }
                 ProcessEvent::Error(error) => {
@@ -219,7 +230,9 @@ impl App {
             Field::EndDate => self.form.end_date = value,
             Field::ConversationFilter => self.form.conversation_filter = value,
             Field::AppleContacts => self.form.apple_contacts = value,
-            Field::BackupPassword => self.form.backup_password = value,
+                    Field::BackupPassword => self.form.backup_password = value,
+            Field::MediaMaxFps => self.form.media_max_fps = value,
+            Field::MediaMinSize => self.form.media_min_size = value,
         }
         self.errors.clear();
     }
@@ -251,6 +264,69 @@ impl App {
         )
     }
 
+    fn run_imessage_media_post(&mut self) {
+        let mode = self.form.attachment_media.media_mode();
+        if matches!(mode, message_media::MediaMode::Disabled) {
+            return;
+        }
+        let output = std::path::PathBuf::from(self.form.output.trim());
+        if mode.needs_tools() {
+            self.logs
+                .push(format!("Processing attachment media ({mode})…"));
+            let compress = match self.form.compress_options() {
+                Ok(opts) => opts,
+                Err(error) => {
+                    self.errors = vec![error.clone()];
+                    self.logs.push(format!("Error: {error}"));
+                    return;
+                }
+            };
+            match process_near_vault_media(&output, mode, &compress) {
+                Ok(report) => {
+                    if report.processed > 0 || report.skipped > 0 || !report.errors.is_empty() {
+                        self.logs.push(format!(
+                            "Media: processed {} file(s), skipped {}, updated {} CSV(s)",
+                            report.processed, report.skipped, report.csv_files_updated
+                        ));
+                    }
+                    for err in report.errors.iter().take(10) {
+                        self.logs.push(format!("media warning: {err}"));
+                    }
+                }
+                Err(error) => {
+                    let msg = format!("Media processing failed: {error}");
+                    self.errors = vec![msg.clone()];
+                    self.logs.push(msg);
+                    return;
+                }
+            }
+        }
+        if mode.needs_tools()
+            && (self.form.anonymize || !self.form.anonymize_seed.trim().is_empty())
+        {
+            let seed = {
+                let s = self.form.anonymize_seed.trim();
+                if s.is_empty() {
+                    None
+                } else {
+                    Some(s.to_string())
+                }
+            };
+            match resolve_anonymizer(seed.as_deref())
+                .and_then(|mut anon| anonymize_near_vault_dir(&output, &mut anon).map(|n| (n, anon)))
+            {
+                Ok((n, _)) => self
+                    .logs
+                    .push(format!("Anonymized {n} CSV file(s) under {}", output.display())),
+                Err(error) => {
+                    let msg = format!("Anonymize failed: {error}");
+                    self.errors = vec![msg.clone()];
+                    self.logs.push(msg);
+                }
+            }
+        }
+    }
+
     fn view(&self) -> Element<'_, Message> {
         let header = row![
             column![
@@ -272,12 +348,16 @@ impl App {
         ]
         .align_y(iced::Alignment::Center);
 
+        let global = container(self.global_options_view())
+            .padding(18)
+            .width(Fill)
+            .style(panel_style);
         let form = container(self.form_view())
             .padding(18)
             .width(Fill)
             .style(panel_style);
         let logs = self.log_view();
-        let content = column![header, form, logs]
+        let content = column![header, global, form, logs]
             .spacing(16)
             .padding(20)
             .width(Fill);
@@ -285,6 +365,17 @@ impl App {
             .width(Fill)
             .height(Fill)
             .into()
+    }
+
+    fn global_options_view(&self) -> Element<'_, Message> {
+        column![
+            text("Global options").size(18),
+            text("Applied to every backup source").size(13),
+            self.anonymize_view(),
+            self.date_range_view(),
+        ]
+        .spacing(12)
+        .into()
     }
 
     fn form_view(&self) -> Element<'_, Message> {
@@ -326,20 +417,7 @@ impl App {
                 false,
                 true,
             ));
-            fields = fields.push(
-                row![
-                    text("Attachment copy").width(200),
-                    pick_list(
-                        COPY_METHODS,
-                        Some(self.form.copy_method),
-                        Message::CopyMethodChanged
-                    )
-                    .width(Fill)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
-            );
-            fields = fields.push(self.anonymize_view());
+            fields = fields.push(self.attachment_media_view());
             fields = fields.push(self.advanced_toggle());
             if self.form.advanced {
                 fields = fields.push(self.imessage_advanced());
@@ -383,6 +461,7 @@ impl App {
                     &self.form.owner_phones,
                     Field::OwnerPhones,
                 ));
+                fields = fields.push(self.attachment_media_view());
             }
             if self.exporter == Exporter::SmsBackupPlus {
                 fields = fields.push(input_row(
@@ -401,10 +480,6 @@ impl App {
                     &self.form.timezone,
                     Field::Timezone,
                 ));
-                fields = fields
-                    .push(text("Anonymization is not yet supported for iMazing.").size(13));
-            } else {
-                fields = fields.push(self.anonymize_view());
             }
 
             if self.exporter == Exporter::SmsBackupPlus {
@@ -455,6 +530,73 @@ impl App {
         fields
             .push(row![run_button, cancel_button].spacing(10))
             .into()
+    }
+
+    fn attachment_media_view(&self) -> Element<'_, Message> {
+        let mut content = column![
+            row![
+                text("Attachments").width(200),
+                pick_list(
+                    ATTACHMENT_MEDIA,
+                    Some(self.form.attachment_media),
+                    Message::AttachmentMediaChanged
+                )
+                .width(Fill),
+            ]
+            .spacing(10)
+            .align_y(iced::Alignment::Center),
+        ]
+        .spacing(8);
+
+        if self.form.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available() {
+            content = content.push(
+                text("Convert/Compress need ffmpeg and ffprobe on PATH.")
+                    .size(13)
+                    .style(|theme: &Theme| text::Style {
+                        color: Some(theme.extended_palette().danger.base.color),
+                    }),
+            );
+        }
+
+        if self.form.attachment_media == AttachmentMedia::Compress {
+            content = content.push(
+                row![
+                    text("Max resolution").width(200),
+                    pick_list(
+                        MAX_RESOLUTIONS,
+                        Some(self.form.media_max_resolution),
+                        Message::MediaMaxResolutionChanged
+                    )
+                    .width(Fill),
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+            );
+            content = content.push(input_row(
+                "Max fps",
+                "e.g. 30",
+                &self.form.media_max_fps,
+                Field::MediaMaxFps,
+            ));
+            content = content.push(input_row(
+                "Min size",
+                "e.g. 20M",
+                &self.form.media_min_size,
+                Field::MediaMinSize,
+            ));
+            content = content.push(
+                row![
+                    text("Skip efficient").width(200),
+                    checkbox(self.form.media_skip_efficient)
+                        .label("Skip already-efficient HEVC")
+                        .on_toggle(Message::ToggleMediaSkipEfficient),
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+            );
+        }
+
+        content.into()
     }
 
     fn advanced_toggle(&self) -> Element<'_, Message> {
@@ -523,6 +665,25 @@ impl App {
         content.into()
     }
 
+    fn date_range_view(&self) -> Element<'_, Message> {
+        column![
+            input_row(
+                "Start date",
+                "YYYY-MM-DD (inclusive, blank = no limit)",
+                &self.form.start_date,
+                Field::StartDate
+            ),
+            input_row(
+                "End date",
+                "YYYY-MM-DD (exclusive, blank = no limit)",
+                &self.form.end_date,
+                Field::EndDate
+            ),
+        ]
+        .spacing(12)
+        .into()
+    }
+
     fn imessage_advanced(&self) -> Element<'_, Message> {
         column![
             path_row(
@@ -531,18 +692,6 @@ impl App {
                 Field::AttachmentRoot,
                 false,
                 true,
-            ),
-            input_row(
-                "Start date",
-                "YYYY-MM-DD",
-                &self.form.start_date,
-                Field::StartDate
-            ),
-            input_row(
-                "End date",
-                "YYYY-MM-DD (exclusive)",
-                &self.form.end_date,
-                Field::EndDate
             ),
             input_row(
                 "Conversation filter",
@@ -654,7 +803,7 @@ fn path_row<'a>(
 
 fn seed_row(value: &str) -> Element<'_, Message> {
     input_row(
-        "Anonymize seed",
+        "Seed",
         "Optional 64-character hex seed",
         value,
         Field::Seed,

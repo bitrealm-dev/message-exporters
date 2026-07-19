@@ -1,9 +1,11 @@
 use std::path::PathBuf;
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use imazing_out::convert_export;
+use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
 use message_contacts::ContactsBook;
+use message_csv::DateRange;
 
 #[derive(Parser, Debug)]
 #[command(name = "imazing-out")]
@@ -25,10 +27,33 @@ struct Cli {
     /// IANA timezone for naive Message Date values (default: host local)
     #[arg(long)]
     timezone: Option<String>,
+
+    /// Only messages on or after this date (YYYY-MM-DD, timezone midnight, inclusive)
+    #[arg(long = "start-date", value_name = "YYYY-MM-DD")]
+    start_date: Option<String>,
+
+    /// Only messages before this date (YYYY-MM-DD, timezone midnight, exclusive)
+    #[arg(long = "end-date", value_name = "YYYY-MM-DD")]
+    end_date: Option<String>,
+
+    /// Rewrite output with stable, non-reversible fake names/numbers/text and placeholder media
+    #[arg(long)]
+    anonymize: bool,
+
+    /// Optional 64-char hex seed for reproducible anonymization (implies --anonymize)
+    #[arg(long = "anonymize-seed")]
+    anonymize_seed: Option<String>,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    let date_range = DateRange::parse_optional_tz(
+        cli.start_date.as_deref(),
+        cli.end_date.as_deref(),
+        cli.timezone.as_deref(),
+    )
+    .map_err(anyhow::Error::msg)
+    .context("invalid date range")?;
     let book = match cli.contacts.as_ref() {
         Some(path) => {
             if !path.is_file() {
@@ -49,7 +74,14 @@ fn main() -> Result<()> {
         &cli.output,
         &book,
         cli.timezone.as_deref(),
+        &date_range,
     )?;
+
+    if cli.anonymize || cli.anonymize_seed.is_some() {
+        let mut anon = resolve_anonymizer(cli.anonymize_seed.as_deref())?;
+        let n = anonymize_near_vault_dir(&cli.output, &mut anon)?;
+        eprintln!("Anonymized {n} CSV file(s) under {}", cli.output.display());
+    }
 
     println!("Wrote {}", cli.output.display());
     match cli.contacts.as_ref() {
@@ -69,6 +101,9 @@ fn main() -> Result<()> {
     }
     if report.skipped_invalid_date > 0 {
         println!("  skipped bad date:    {}", report.skipped_invalid_date);
+    }
+    if report.skipped_out_of_range > 0 {
+        println!("  skipped date range:  {}", report.skipped_out_of_range);
     }
     if report.unresolved_chat_phone > 0 {
         println!(

@@ -13,6 +13,7 @@ mailparse = "0.16.1"
 message-anonymize = { path = "../message-anonymize" }
 message-contacts = { path = "../message-contacts" }
 message-csv = { path = "../message-csv" }
+message-media = { path = "../message-media" }
 message-phone = { path = "../message-phone" }
 regex = "1.13.0"
 serde = { version = "1.0.228", features = ["derive"] }

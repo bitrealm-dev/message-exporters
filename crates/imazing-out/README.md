@@ -63,6 +63,10 @@ cargo run --release -p imazing-out -- \
 
 `Message Date` values have no timezone. Pass `--timezone` (IANA name) if the phone lived in a different zone than this machine; otherwise the host local zone is used.
 
+Optional `--start-date` / `--end-date` (`YYYY-MM-DD`) keep messages in `[start, end)` using midnight in that same timezone (end exclusive).
+
+Add `--anonymize` (optional `--anonymize-seed <64-hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-anonymize`](../message-anonymize).
+
 Attachments are recorded in `attachments_json` by filename only in this version (no media copy).
 
 ## Important limitations

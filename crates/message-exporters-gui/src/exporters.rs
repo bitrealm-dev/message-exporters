@@ -2,6 +2,8 @@ use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use message_media::{MaxResolution, MediaMode};
+
 /// Alphabetically sorted by display name.
 pub const EXPORTERS: [Exporter; 6] = [
     Exporter::GoSmsPro,
@@ -115,42 +117,53 @@ impl fmt::Display for ContactsKind {
 pub const CONTACT_KINDS: [ContactsKind; 3] =
     [ContactsKind::None, ContactsKind::Csv, ContactsKind::Vcf];
 
+/// Attachment media handling for every exporter that can emit media files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum CopyMethod {
+pub enum AttachmentMedia {
     #[default]
     Clone,
-    Basic,
-    Full,
+    Convert,
+    Compress,
     Disabled,
 }
 
-impl fmt::Display for CopyMethod {
+impl fmt::Display for AttachmentMedia {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Self::Clone => "Clone (recommended)",
-            Self::Basic => "Basic conversion",
-            Self::Full => "Full conversion",
+            Self::Convert => "Convert (.jpg / .mp4 / .mp3)",
+            Self::Compress => "Compress",
             Self::Disabled => "Do not copy",
         })
     }
 }
 
-impl CopyMethod {
-    fn cli(self) -> &'static str {
+impl AttachmentMedia {
+    pub fn media_mode(self) -> MediaMode {
         match self {
-            Self::Clone => "clone",
-            Self::Basic => "basic",
-            Self::Full => "full",
-            Self::Disabled => "disabled",
+            Self::Clone => MediaMode::Clone,
+            Self::Convert => MediaMode::Convert,
+            Self::Compress => MediaMode::Compress,
+            Self::Disabled => MediaMode::Disabled,
         }
+    }
+
+    pub fn needs_ffmpeg(self) -> bool {
+        matches!(self, Self::Convert | Self::Compress)
     }
 }
 
-pub const COPY_METHODS: [CopyMethod; 4] = [
-    CopyMethod::Clone,
-    CopyMethod::Basic,
-    CopyMethod::Full,
-    CopyMethod::Disabled,
+pub const ATTACHMENT_MEDIA: [AttachmentMedia; 4] = [
+    AttachmentMedia::Clone,
+    AttachmentMedia::Convert,
+    AttachmentMedia::Compress,
+    AttachmentMedia::Disabled,
+];
+
+pub const MAX_RESOLUTIONS: [MaxResolution; 3] = [
+    MaxResolution::P720,
+    MaxResolution::P1080,
+    MaxResolution::P4k,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -197,7 +210,11 @@ pub struct Form {
     pub conversation_filter: String,
     pub apple_contacts: String,
     pub backup_password: String,
-    pub copy_method: CopyMethod,
+    pub attachment_media: AttachmentMedia,
+    pub media_max_resolution: MaxResolution,
+    pub media_max_fps: String,
+    pub media_min_size: String,
+    pub media_skip_efficient: bool,
     pub apple_platform: ApplePlatform,
 }
 
@@ -222,7 +239,11 @@ impl Default for Form {
             conversation_filter: String::new(),
             apple_contacts: String::new(),
             backup_password: String::new(),
-            copy_method: CopyMethod::default(),
+            attachment_media: AttachmentMedia::default(),
+            media_max_resolution: MaxResolution::default(),
+            media_max_fps: "30".into(),
+            media_min_size: "20M".into(),
+            media_skip_efficient: true,
             apple_platform: ApplePlatform::default(),
         }
     }
@@ -244,6 +265,8 @@ impl Form {
 
                 push_pair(&mut args, "--input", &self.input);
                 push_pair(&mut args, "--output", &self.output);
+                push_optional_pair(&mut args, "--start-date", &self.start_date);
+                push_optional_pair(&mut args, "--end-date", &self.end_date);
 
                 if matches!(
                     exporter,
@@ -293,12 +316,17 @@ impl Form {
                     },
                 }
 
-                if exporter != Exporter::Imazing {
-                    if self.anonymize {
-                        args.push("--anonymize".into());
-                    }
-                    push_seed(&mut args, &self.anonymize_seed, &mut errors);
+                if matches!(
+                    exporter,
+                    Exporter::GoSmsPro | Exporter::SmsBackupRestore | Exporter::SmsBackupPlus
+                ) {
+                    self.push_media_args(&mut args, &mut errors);
                 }
+
+                if self.anonymize {
+                    args.push("--anonymize".into());
+                }
+                push_seed(&mut args, &self.anonymize_seed, &mut errors);
             }
         }
 
@@ -309,10 +337,66 @@ impl Form {
         }
     }
 
+    fn push_media_args(&self, args: &mut Vec<OsString>, errors: &mut Vec<String>) {
+        let mode = self.attachment_media.media_mode();
+        if mode.needs_tools() && !message_media::ffmpeg_available() {
+            errors.push(
+                "Convert/Compress require ffmpeg and ffprobe on PATH.".into(),
+            );
+        }
+        push_pair(args, "--media-mode", mode.as_str());
+        if matches!(mode, MediaMode::Compress) {
+            push_pair(
+                args,
+                "--media-max-resolution",
+                self.media_max_resolution.as_str(),
+            );
+            let fps = self.media_max_fps.trim();
+            if fps.is_empty() {
+                errors.push("Max fps is required for Compress.".into());
+            } else if fps.parse::<f32>().is_err() {
+                errors.push("Max fps must be a number.".into());
+            } else {
+                push_pair(args, "--media-max-fps", fps);
+            }
+            let min_size = self.media_min_size.trim();
+            if min_size.is_empty() {
+                errors.push("Min size is required for Compress.".into());
+            } else if message_media::parse_size(min_size).is_err() {
+                errors.push("Min size must look like 20M or 512k.".into());
+            } else {
+                push_pair(args, "--media-min-size", min_size);
+            }
+            args.push("--media-skip-efficient".into());
+            args.push(if self.media_skip_efficient {
+                "true".into()
+            } else {
+                "false".into()
+            });
+        }
+    }
+
     fn build_imessage(&self, args: &mut Vec<OsString>, errors: &mut Vec<String>) {
         required_text(&self.output, "Output directory", errors);
         args.extend(["--format".into(), "csv".into()]);
-        args.extend(["--copy-method".into(), self.copy_method.cli().into()]);
+        let copy = match self.attachment_media {
+            AttachmentMedia::Disabled => "disabled",
+            _ => "clone",
+        };
+        args.extend(["--copy-method".into(), copy.into()]);
+        if self.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available() {
+            errors.push(
+                "Convert/Compress require ffmpeg and ffprobe on PATH.".into(),
+            );
+        }
+        if matches!(self.attachment_media, AttachmentMedia::Compress) {
+            if self.media_max_fps.trim().parse::<f32>().is_err() {
+                errors.push("Max fps must be a number.".into());
+            }
+            if message_media::parse_size(self.media_min_size.trim()).is_err() {
+                errors.push("Min size must look like 20M or 512k.".into());
+            }
+        }
         push_pair(args, "--export-path", &self.output);
         push_optional_pair(args, "--db-path", &self.db_path);
         push_optional_pair(args, "--attachment-root", &self.attachment_root);
@@ -327,10 +411,25 @@ impl Form {
             ApplePlatform::Ios => args.extend(["--platform".into(), "iOS".into()]),
         }
         args.push("--use-caller-id".into());
-        if self.anonymize {
+        // When convert/compress, GUI anonymizes after media post-process.
+        if self.anonymize && !self.attachment_media.needs_ffmpeg() {
             args.push("--anonymize".into());
         }
         push_seed(args, &self.anonymize_seed, errors);
+    }
+
+    /// Compress options for GUI iMessage post-process (after exporter exits).
+    pub fn compress_options(&self) -> Result<message_media::CompressOptions, String> {
+        message_media::compress_options_from_cli(
+            self.media_max_resolution,
+            self.media_max_fps
+                .trim()
+                .parse()
+                .map_err(|_| "Max fps must be a number.".to_string())?,
+            self.media_min_size.trim(),
+            self.media_skip_efficient,
+        )
+        .map_err(|e| e.to_string())
     }
 }
 
@@ -400,7 +499,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn imazing_omits_unsupported_anonymize() {
+    fn imazing_passes_anonymize() {
         let form = Form {
             input: std::env::current_dir().unwrap().display().to_string(),
             output: "out".into(),
@@ -408,7 +507,7 @@ mod tests {
             ..Form::default()
         };
         let args = form.build_args(Exporter::Imazing).unwrap();
-        assert!(!args.iter().any(|arg| arg == "--anonymize"));
+        assert!(args.iter().any(|arg| arg == "--anonymize"));
     }
 
     #[test]
@@ -477,9 +576,47 @@ mod tests {
         let args = form.build_args(Exporter::Imessage).unwrap();
         assert!(args.iter().any(|arg| arg == "--export-path"));
         assert!(args.iter().any(|arg| arg == "--use-caller-id"));
+        assert!(args.windows(2).any(|w| w[0] == "--copy-method" && w[1] == "clone"));
         assert!(!args.iter().any(|arg| arg == "--custom-name"));
         assert!(!args.iter().any(|arg| arg == "--ignore-disk-warning"));
         assert!(!args.iter().any(|arg| arg == "--diagnostics"));
+    }
+
+    #[test]
+    fn android_passes_media_mode() {
+        let form = Form {
+            input: std::env::current_dir().unwrap().display().to_string(),
+            output: "out".into(),
+            owner_phones: "+15555550100".into(),
+            attachment_media: AttachmentMedia::Clone,
+            ..Form::default()
+        };
+        let args = form.build_args(Exporter::GoSmsPro).unwrap();
+        assert!(args.windows(2).any(|w| w[0] == "--media-mode" && w[1] == "clone"));
+
+        let form = Form {
+            input: std::env::current_dir().unwrap().display().to_string(),
+            output: "out".into(),
+            owner_phones: "+15555550100".into(),
+            attachment_media: AttachmentMedia::Disabled,
+            ..Form::default()
+        };
+        let args = form.build_args(Exporter::GoSmsPro).unwrap();
+        assert!(args.windows(2).any(|w| w[0] == "--media-mode" && w[1] == "disabled"));
+    }
+
+    #[test]
+    fn openextract_passes_date_range() {
+        let form = Form {
+            input: std::env::current_dir().unwrap().display().to_string(),
+            output: "out".into(),
+            start_date: "2020-01-01".into(),
+            end_date: "2020-02-01".into(),
+            ..Form::default()
+        };
+        let args = form.build_args(Exporter::OpenExtract).unwrap();
+        assert!(args.windows(2).any(|w| w[0] == "--start-date" && w[1] == "2020-01-01"));
+        assert!(args.windows(2).any(|w| w[0] == "--end-date" && w[1] == "2020-02-01"));
     }
 
     #[test]

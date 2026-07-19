@@ -1568,6 +1568,7 @@ dependencies = [
  "message-anonymize",
  "message-contacts",
  "message-csv",
+ "message-media",
  "message-phone",
  "quick-xml 0.41.0",
  "regex",
@@ -1971,6 +1972,7 @@ dependencies = [
  "clap",
  "csv",
  "hex",
+ "message-anonymize",
  "message-contacts",
  "message-csv",
  "message-phone",
@@ -2361,6 +2363,7 @@ name = "message-csv"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "chrono-tz",
  "hex",
  "serde",
  "serde_json",
@@ -2373,8 +2376,20 @@ version = "0.1.0"
 dependencies = [
  "dirs",
  "iced",
+ "message-anonymize",
+ "message-media",
  "open",
  "rfd",
+]
+
+[[package]]
+name = "message-media"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "csv",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -3827,6 +3842,7 @@ dependencies = [
  "message-anonymize",
  "message-contacts",
  "message-csv",
+ "message-media",
  "message-phone",
  "regex",
  "serde",
@@ -3850,6 +3866,7 @@ dependencies = [
  "message-anonymize",
  "message-contacts",
  "message-csv",
+ "message-media",
  "message-phone",
  "quick-xml 0.41.0",
  "regex",

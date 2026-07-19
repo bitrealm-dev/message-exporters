@@ -1,5 +1,6 @@
 use imazing_out::convert_export;
 use message_contacts::ContactsBook;
+use message_csv::DateRange;
 use std::fs;
 use std::path::PathBuf;
 
@@ -13,7 +14,13 @@ fn convert_messages_with_imazing_contacts() {
 
     let book = ContactsBook::load_imazing_contacts_csv(&contacts).expect("load contacts");
     let tmp = tempfile::tempdir().expect("tempdir");
-    let report = convert_export(&messages, tmp.path(), &book, Some("UTC")).expect("convert");
+    let report = convert_export(
+        &messages,
+        tmp.path(),
+        &book,
+        Some("UTC"),
+        &DateRange::default(),
+    ).expect("convert");
 
     assert_eq!(report.conversations, 1);
     assert_eq!(report.messages, 3);
@@ -39,7 +46,13 @@ fn convert_whatsapp_csv_direct() {
     let contacts = fixture.join("contacts.csv");
     let book = ContactsBook::load_imazing_contacts_csv(&contacts).expect("load contacts");
     let tmp = tempfile::tempdir().expect("tempdir");
-    let report = convert_export(&whatsapp, tmp.path(), &book, Some("UTC")).expect("convert");
+    let report = convert_export(
+        &whatsapp,
+        tmp.path(),
+        &book,
+        Some("UTC"),
+        &DateRange::default(),
+    ).expect("convert");
 
     assert_eq!(report.conversations, 1);
     assert_eq!(report.messages, 3);
@@ -58,7 +71,13 @@ fn convert_export_root_recursively_keeps_services_separate() {
     let contacts = root.join("Contacts/All contacts/All/Contacts - synthetic.csv");
     let book = ContactsBook::load_imazing_contacts_csv(&contacts).expect("load contacts");
     let tmp = tempfile::tempdir().expect("tempdir");
-    let report = convert_export(&root, tmp.path(), &book, Some("UTC")).expect("convert");
+    let report = convert_export(
+        &root,
+        tmp.path(),
+        &book,
+        Some("UTC"),
+        &DateRange::default(),
+    ).expect("convert");
 
     assert_eq!(report.messages_files, 2);
     assert_eq!(report.whatsapp_files, 1);

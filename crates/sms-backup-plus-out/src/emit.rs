@@ -9,7 +9,7 @@ use crate::flat_eml::{is_archive_eml, is_flat_sms_eml, parse_flat_eml_mail};
 use crate::identity::{chat_id_for, cover_identity, safe_stem, timestamp_ms};
 use crate::types::{AttachmentBlob, ParsedMessage};
 use anyhow::{Context, Result, bail};
-use message_csv::{format_local_ts, json_cell, stable_guid, AttachmentCell};
+use message_csv::{format_local_ts, json_cell, stable_guid, AttachmentCell, DateRange};
 use message_phone::{OwnerPhoneSet, to_e164};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -62,6 +62,7 @@ pub struct ExportReport {
     /// Rows written with incoming direction (after dedupe).
     pub received: u64,
     /// `.eml` files that are not SMS Backup+ shaped.
+    pub skipped_out_of_range: u64,
     pub skipped_not_sms_backup_plus: u64,
     /// SMS Backup+-looking files that failed to parse.
     pub skipped_parse_error: u64,
@@ -130,7 +131,11 @@ fn write_attachments(
     blobs: &[AttachmentBlob],
     attachments_dir: &Path,
     report: &mut ExportReport,
+    copy_attachments: bool,
 ) -> Result<Vec<PendingAttachment>> {
+    if !copy_attachments {
+        return Ok(Vec::new());
+    }
     let mut out = Vec::with_capacity(blobs.len());
     for blob in blobs {
         let path = attachments_dir.join(&blob.filename);
@@ -472,7 +477,9 @@ pub fn convert_export<P: AsRef<Path>>(
     owner_emails: &[String],
     contacts: &ContactsBook,
     name_mapping: &NameMapping,
+    date_range: &DateRange,
     verbose: bool,
+    copy_attachments: bool,
 ) -> Result<ExportReport> {
     let owners = OwnerPhoneSet::new(owner_phones)?;
     let mut report = ExportReport::default();
@@ -489,7 +496,9 @@ pub fn convert_export<P: AsRef<Path>>(
     fs::create_dir_all(output_dir)?;
     clean_previous_csv(output_dir)?;
     let attachments_dir = output_dir.join("attachments");
-    fs::create_dir_all(&attachments_dir)?;
+    if copy_attachments {
+        fs::create_dir_all(&attachments_dir)?;
+    }
 
     let eml_paths = collect_eml_paths(inputs)?;
     let total = eml_paths.len() as u64;
@@ -529,10 +538,19 @@ pub fn convert_export<P: AsRef<Path>>(
                         enrich_display_names(msg, contacts);
                     }
                     for msg in msgs {
+                        if !date_range.contains_secs_f64(msg.timestamp_secs) {
+                            report.skipped_out_of_range += 1;
+                            continue;
+                        }
                         if msg.chat_key.is_empty() {
                             report.unknown_chat_messages += 1;
                         }
-                        match write_attachments(&msg.attachments, &attachments_dir, &mut report) {
+                        match write_attachments(
+                            &msg.attachments,
+                            &attachments_dir,
+                            &mut report,
+                            copy_attachments,
+                        ) {
                             Ok(atts) => add_message(&mut conversations, msg, atts, &mut report),
                             Err(err) => report
                                 .errors
@@ -558,10 +576,19 @@ pub fn convert_export<P: AsRef<Path>>(
                     let _ = fill_unknown_phone(&mut msg, contacts);
                     enrich_display_names(&mut msg, contacts);
                     report.flat_eml += 1;
+                    if !date_range.contains_secs_f64(msg.timestamp_secs) {
+                        report.skipped_out_of_range += 1;
+                        continue;
+                    }
                     if msg.chat_key.is_empty() {
                         report.unknown_chat_messages += 1;
                     }
-                    match write_attachments(&msg.attachments, &attachments_dir, &mut report) {
+                    match write_attachments(
+                        &msg.attachments,
+                        &attachments_dir,
+                        &mut report,
+                        copy_attachments,
+                    ) {
                         Ok(atts) => add_message(&mut conversations, msg, atts, &mut report),
                         Err(err) => report
                             .errors

@@ -1,5 +1,6 @@
 use go_sms_pro_out::convert_export;
 use message_contacts::ContactsBook;
+use message_csv::DateRange;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -23,6 +24,8 @@ fn convert_smoke_writes_csv_not_json() {
         tmp.path(),
         &["+15555550100".into()],
         &contacts,
+        &DateRange::default(),
+        true,
     )
     .expect("convert_export should succeed");
     assert!(report.conversations >= 1);

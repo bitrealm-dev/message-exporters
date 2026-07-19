@@ -38,10 +38,12 @@ Raw **iMazing** vendor Messages CSV can also be ingested by [message-vault-rs](h
 
 Each converter’s README explains what the backup looks like, what you need to run it, and extra options.
 
+Converters that write `attachments/` also support `--media-mode disabled|clone|convert|compress` (see [`message-media`](crates/message-media)): `disabled` skips media files; convert standardizes to `.jpg` / `.mp4` / `.mp3`; compress re-encodes with optional max resolution / fps / min size. Convert and compress need **ffmpeg** and **ffprobe** on `PATH`.
+
 ## Desktop GUI
 
 The [Iced desktop GUI](crates/message-exporters-gui) provides native file/folder pickers,
-exporter-specific forms, validation, live logs, and cancel support on Linux, macOS, and Windows.
+exporter-specific forms (including Attachments clone/convert/compress), validation, live logs, and cancel support on Linux, macOS, and Windows.
 
 ```bash
 cargo build --workspace

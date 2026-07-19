@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
 use message_contacts::resolve_contacts_cli;
+use message_csv::DateRange;
 use openextract_out::convert_export;
 
 #[derive(Parser, Debug)]
@@ -33,12 +34,23 @@ struct Cli {
     /// Optional 64-char hex seed for reproducible anonymization (implies --anonymize)
     #[arg(long = "anonymize-seed")]
     anonymize_seed: Option<String>,
+
+    /// Only messages on or after this date (YYYY-MM-DD, local midnight, inclusive)
+    #[arg(long = "start-date", value_name = "YYYY-MM-DD")]
+    start_date: Option<String>,
+
+    /// Only messages before this date (YYYY-MM-DD, local midnight, exclusive)
+    #[arg(long = "end-date", value_name = "YYYY-MM-DD")]
+    end_date: Option<String>,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    let date_range = DateRange::parse(cli.start_date.as_deref(), cli.end_date.as_deref())
+        .map_err(anyhow::Error::msg)
+        .context("invalid date range")?;
     let (book, book_path) = resolve_contacts_cli(cli.contacts, cli.vcf)?;
-    let report = convert_export(&cli.input, &cli.output, &book)?;
+    let report = convert_export(&cli.input, &cli.output, &book, &date_range)?;
 
     if cli.anonymize || cli.anonymize_seed.is_some() {
         let mut anon = resolve_anonymizer(cli.anonymize_seed.as_deref())?;
@@ -56,6 +68,9 @@ fn main() -> Result<()> {
     println!("  sent / received:     {} / {}", report.sent, report.received);
     if report.skipped_invalid_date > 0 {
         println!("  skipped bad date:    {}", report.skipped_invalid_date);
+    }
+    if report.skipped_out_of_range > 0 {
+        println!("  skipped date range:  {}", report.skipped_out_of_range);
     }
     if report.unresolved_chat_phone > 0 {
         println!(

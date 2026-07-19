@@ -4,7 +4,9 @@ use crate::parse::{discover_csv_files, parse_csv_file, RawRow, SourceKind};
 use anyhow::{Context, Result};
 use chrono::DateTime;
 use message_contacts::ContactsBook;
-use message_csv::{format_local_ts, json_cell, safe_filename, stable_guid, AttachmentCell};
+use message_csv::{
+    format_local_ts, json_cell, safe_filename, stable_guid, AttachmentCell, DateRange,
+};
 use message_phone::{sanitize_number, to_e164};
 use std::collections::BTreeMap;
 use std::fs::{self, File};
@@ -44,6 +46,7 @@ pub struct ExportReport {
     pub sent: u64,
     pub received: u64,
     pub skipped_invalid_date: u64,
+    pub skipped_out_of_range: u64,
     /// Rows/chats where peer was a name with no VCF phone (name-only chat id).
     pub unresolved_chat_phone: u64,
     pub errors: Vec<String>,
@@ -72,6 +75,7 @@ pub fn convert_export(
     input: &Path,
     output: &Path,
     book: &ContactsBook,
+    date_range: &DateRange,
 ) -> Result<ExportReport> {
     fs::create_dir_all(output).with_context(|| format!("create {}", output.display()))?;
     clean_previous_csv(output)?;
@@ -123,6 +127,10 @@ pub fn convert_export(
                 report.skipped_invalid_date += 1;
                 continue;
             };
+            if !date_range.contains_secs(secs) {
+                report.skipped_out_of_range += 1;
+                continue;
+            }
 
             let is_from_me = resolve_is_from_me(&row);
             let (sender_handle, sender_display_name) =
@@ -421,7 +429,7 @@ TEL;TYPE=CELL:+1-555-555-0122\nEND:VCARD\n",
         );
         let book = ContactsBook::load_vcf(&vcf).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book).unwrap();
+        let report = convert_export(dir.path(), &out, &book, &DateRange::default()).unwrap();
         assert_eq!(report.conversations, 1);
         assert_eq!(report.unresolved_chat_phone, 0);
         let csv_path = out.join("_15555550122.csv");
@@ -448,10 +456,35 @@ TEL:+15555550999\nEND:VCARD\n",
         );
         let book = ContactsBook::load_vcf(&vcf).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book).unwrap();
+        let report = convert_export(dir.path(), &out, &book, &DateRange::default()).unwrap();
         assert!(report.unresolved_chat_phone >= 1);
         assert_eq!(report.conversations, 1);
         let csv_path = out.join("Cathy_Arp.csv");
         assert!(csv_path.is_file(), "missing {}", csv_path.display());
+    }
+
+    #[test]
+    fn date_range_skips_messages_outside_window() {
+        let dir = tempfile::tempdir().unwrap();
+        write(
+            &dir,
+            "conversation_1.csv",
+            "Date,Sender,Text,Is From Me,Has Attachments\n\
+2019-12-31T23:00:00+00:00,+15555550122,Old,False,False\n\
+2020-01-01T12:00:00+00:00,+15555550122,Keep,False,False\n\
+2020-01-02T00:00:00+00:00,+15555550122,New,False,False\n",
+        );
+        let book = ContactsBook::empty();
+        let out = dir.path().join("out");
+        let range =
+            DateRange::parse_optional_tz(Some("2020-01-01"), Some("2020-01-02"), Some("UTC"))
+                .unwrap();
+        let report = convert_export(dir.path(), &out, &book, &range).unwrap();
+        assert_eq!(report.skipped_out_of_range, 2);
+        assert_eq!(report.messages, 1);
+        let body = fs::read_to_string(out.join("_15555550122.csv")).unwrap();
+        assert!(body.contains("Keep"));
+        assert!(!body.contains("Old"));
+        assert!(!body.contains("New"));
     }
 }

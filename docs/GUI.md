@@ -22,6 +22,7 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 - Live tagged stdout/stderr log and process cancellation.
 - Exporter-specific validation before launch.
 - Backup-source titles link to the upstream product site.
+- **Global options** panel (Anonymize + Start/End date) above the per-source form.
 
 Build all sibling executables, then run:
 
@@ -33,43 +34,51 @@ cargo run -p message-exporters-gui
 ## Non-goals
 
 - Packaging / installers.
-- Changing exporter CLIs (except noting gaps for later).
-- Exposing `imazing-anonymize` in the GUI (CLI-only for now).
 
-## Shared controls
+## Layout
 
-Every converter screen exposes:
+1. Header (title + Backup source picker)
+2. **Global options** card — Anonymize (+ seed), Start date, End date (all sources)
+3. Per-source form card — product link + exporter-specific fields
+4. Run log
+
+## Shared / global controls
 
 | Control | Widget | CLI mapping | Notes |
 |---------|--------|-------------|-------|
 | Backup source | labeled selector | which binary | Sorted alphabetically by display name |
-| Product title | hyperlink | — | Opens the upstream product site |
+| Anonymize | checkbox (global) | `--anonymize` | When enabled, show seed field |
+| Seed | text (64-hex, global) | `--anonymize-seed` | Optional; blank = generate at run time |
+| Start date | text (global) | `--start-date` | Optional `YYYY-MM-DD`, inclusive |
+| End date | text (global) | `--end-date` | Optional `YYYY-MM-DD`, exclusive |
+| Product title | hyperlink | — | Opens the upstream product/tool site |
 | Input | path picker (file and/or folder) | `--input` / `-p` / etc. | Single path only |
 | Output | folder picker | `--output` / `-o` | Required; defaults to Documents/`message-exporters`/<source> |
 | Contacts | path picker | `--contacts` / `--vcf` / `-n` | Format depends on exporter; optional with warning |
-| Anonymize | checkbox | `--anonymize` | When enabled, show seed field |
-| Anonymize seed | text (64-hex) | `--anonymize-seed` | Optional; blank = generate at run time |
 | Run / Cancel | actions | spawn process | Stream logs; kill on cancel |
 
 ## Show / hide by backup source
 
 | Section | GO SMS Pro | Backup & Restore | SMS Backup+ | OpenExtract | iMazing | iPhone backup |
 |---------|:----------:|:----------------:|:-----------:|:-----------:|:-------:|:-------------:|
+| Global anon + dates | yes | yes | yes | yes | yes | yes |
 | Input / Output | yes | yes | yes | yes | yes | yes |
 | DB path / Platform | — | — | — | — | — | primary |
-| Anonymize | yes | yes | yes | yes | gap\* | yes (CSV) |
-| Your phone number(s) | required | required | required\*\* | — | — | — |
-| Your email address(es) | — | — | required\*\* | — | — | — |
+| Your phone number(s) | required | required | required\* | — | — | — |
+| Your email address(es) | — | — | required\* | — | — | — |
 | Contacts vault CSV / VCF | yes | yes | yes | yes | — | — |
 | Contacts iMazing CSV | — | — | — | — | yes | — |
 | Contacts Apple AddressBook | — | — | — | — | — | advanced |
 | Timezone | — | — | — | — | yes | — |
 | Name mapping | — | — | advanced | — | — | — |
 | Verbose logging | — | — | always on | — | — | — |
-| Copy method / advanced | — | — | — | — | — | yes |
+| Attachments (clone/convert/compress/do not copy) | yes | yes | yes | — | — | yes |
+| Compress options (resolution/fps/…) | when Compress | when Compress | when Compress | — | — | when Compress |
+| Advanced (attachment root, …) | — | — | name mapping | — | — | yes |
 
-\* `imazing-out` currently has **no** `--anonymize` flag — hide until parity is added.  
-\*\* Required unless filled from Plus `config/owner.toml` (source-relative today); GUI collects fields explicitly.
+Convert/Compress need `ffmpeg`/`ffprobe` on PATH. **Do not copy** skips writing attachment files (`--media-mode disabled` / iPhone `--copy-method disabled`).
+
+\* Required unless filled from Plus `config/owner.toml` (source-relative today); GUI collects fields explicitly.
 
 ## Per-exporter options
 
@@ -84,9 +93,10 @@ Product: [GO SMS Pro](https://play.google.com/store/apps/details?id=com.jb.gosms
 | Your phone numbers | multi-value text | yes | `--owner-phone` (repeat) |
 | Contacts CSV | file | no† | `--contacts` |
 | Contacts VCF | file | no† | `--vcf` |
-| Anonymize / seed | bool / text | no | `--anonymize`, `--anonymize-seed` |
+| Attachments | enum | no | `--media-mode` (`clone` / `convert` / `compress` / `disabled`) |
+| Max resolution / fps / min size / skip efficient | when Compress | no | `--media-max-resolution`, `--media-max-fps`, `--media-min-size`, `--media-skip-efficient` |
 
-† At most one of `--contacts` / `--vcf`.
+† At most one of `--contacts` / `--vcf`. Global Anonymize and Start/End date apply (see Shared / global controls). Convert → `.jpg`/`.mp4`/`.mp3`; Compress re-encodes (needs ffmpeg).
 
 ### SMS Backup & Restore — `sms-backup-restore-out`
 
@@ -98,9 +108,9 @@ Product: [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/)
 | Output | folder | yes | `--output` |
 | Your phone numbers | multi-value text | yes | `--owner-phone` |
 | Contacts CSV / VCF | file | no† | `--contacts` / `--vcf` |
-| Anonymize / seed | bool / text | no | `--anonymize`, `--anonymize-seed` |
+| Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro) |
 
-Encrypted ZIP backups must be unlocked/extracted before selecting input.
+Encrypted ZIP backups must be unlocked/extracted before selecting input. Global Anonymize and Start/End date apply.
 
 ### SMS Backup+ — `sms-backup-plus-out convert`
 
@@ -117,9 +127,9 @@ GUI always runs the `convert` subcommand and always passes `--verbose`.
 | Contacts CSV / VCF | file | no† | `--contacts` / `--vcf` |
 | Name mapping CSV | file | no | `--name-mapping` (advanced) |
 | Verbose | — | always | `--verbose` |
-| Anonymize / seed | bool / text | no | `--anonymize`, `--anonymize-seed` |
+| Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro) |
 
-\* Or from crate-relative `config/owner.toml` — GUI does not rely on that; collect explicitly.
+\* Or from crate-relative `config/owner.toml` — GUI does not rely on that; collect explicitly. Global Anonymize and Start/End date apply.
 
 ### OpenExtract — `openextract-out`
 
@@ -130,7 +140,8 @@ Product: [OpenExtract](https://www.openextract.app/)
 | Input | CSV file or folder | yes | `--input` |
 | Output | folder | yes | `--output` |
 | Contacts VCF / vault CSV | file | no† | `--vcf` / `--contacts` |
-| Anonymize / seed | bool / text | no | `--anonymize`, `--anonymize-seed` |
+
+Global Anonymize and Start/End date apply.
 
 ### iMazing — `imazing-out`
 
@@ -142,15 +153,14 @@ Product: [iMazing](https://imazing.com/)
 | Output | folder | yes | `--output` |
 | Contacts | iMazing Contacts CSV only | no | `--contacts` |
 | Timezone | IANA text | no | `--timezone` (default: host local) |
-| Anonymize | — | — | **not implemented** (gap) |
 
-WhatsApp chats write as separate `…__whatsapp.csv` files. See [`crates/imazing-out/docs/DESIGN.md`](../crates/imazing-out/docs/DESIGN.md).
+Global Anonymize and Start/End date apply. WhatsApp chats write as separate `…__whatsapp.csv` files. See [`crates/imazing-out/docs/DESIGN.md`](../crates/imazing-out/docs/DESIGN.md).
 
 ### iPhone backup — `imessage-exporter`
 
 Form link label: **iPhone backup - imessage-exporter** → [imessage-exporter](https://github.com/ReagentX/imessage-exporter). Dropdown stays **iPhone backup**.
 
-GUI defaults: `-f csv`, `-c clone`, always `--use-caller-id`.
+GUI defaults: `-f csv`, `--copy-method clone` (or `disabled`), always `--use-caller-id`. Convert/Compress run as a GUI post-step via `message-media` (not imessage `basic`/`full`).
 
 | Control | Type | Required | CLI |
 |---------|------|:--------:|-----|
@@ -158,14 +168,13 @@ GUI defaults: `-f csv`, `-c clone`, always `--use-caller-id`.
 | Backup password | password | no | `-x` / `--cleartext-password` |
 | Platform | macOS / iOS / auto | no | `-a` / `--platform` |
 | Output / export path | folder | yes | `-o` / `--export-path` |
-| Copy method | enum | no | `-c` (`clone` recommended) |
-| Anonymize / seed | bool / text | no | `--anonymize`, `--anonymize-seed` |
+| Attachments | enum | no | copy `clone`/`disabled`; convert/compress post-process |
+| Max resolution / fps / min size / skip efficient | when Compress | no | GUI → `message-media` compress options |
 | Attachment root | folder | no | `-r` / `--attachment-root` (advanced) |
-| Start / end date | date | no | `-s` / `-e` (advanced) |
 | Conversation filter | text | no | `-t` (advanced) |
 | Contacts (AddressBook DB) | file | no | `-n` / `--contacts-path` (advanced) |
 
-Not exposed in the GUI: `--custom-name`, `--ignore-disk-warning` (CLI-only). Caller ID is always on.
+Global Anonymize and Start/End date apply. With Convert/Compress, anonymize runs in the GUI after media. Not exposed: `--custom-name`, `--ignore-disk-warning`. Caller ID is always on.
 
 Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox.
 
@@ -179,14 +188,17 @@ Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox
 6. **Timezone (iMazing):** if set, must be a valid IANA name (or defer to converter error).
 7. **iPhone backup:** output directory is required; always passes `--use-caller-id`; anonymize only applies to CSV.
 8. **SMS Backup+:** exactly one input path; GUI always prefixes `convert` and always passes `--verbose`.
-9. **Warn (non-blocking):** missing contacts → same warning language as CLIs (“phones will not be resolved to names”).
+9. **Date range:** optional start/end `YYYY-MM-DD`; end is exclusive; blank means unbounded (CLI validates).
+10. **Media convert/compress:** require `ffmpeg` and `ffprobe` on PATH; Compress options validated (fps number, min size like `20M`).
+11. **Warn (non-blocking):** missing contacts → same warning language as CLIs (“phones will not be resolved to names”).
 
 ## Form flow
 
 ```text
 Pick backup source
+  → global: Anonymize, Start/End date
   → linked product title
-  → common: Input, Output, Contacts (typed), Anonymize
+  → per-source: Input, Output, Contacts (typed), …
   → conditional: phone / email | Timezone | advanced options
   → Run / Cancel
   → always-on run log
@@ -196,7 +208,6 @@ Pick backup source
 
 | Gap | Detail | Suggested fix |
 |-----|--------|---------------|
-| iMazing anonymize | Root README says any converter; `imazing-out` has no flags | Add `--anonymize` / `--anonymize-seed` like peers |
 | Plus `owner.toml` | Resolved via `CARGO_MANIFEST_DIR`, not user cwd | GUI collects phone/email/input explicitly |
 | iMessage flag style | Short flags (`-f`, `-c`, `-o`) vs long `--input` family | GUI abstracts; map to correct argv |
 | iMazing attachments | Filename-only; no media copy | Document in UI; optional future media join |
@@ -204,7 +215,6 @@ Pick backup source
 
 ## Next steps
 
-- Add iMazing anonymize CLI parity before showing the checkbox for that exporter.
 - Add application icons and native installers/packages.
 - Persist recently used paths and non-secret preferences.
 - Add platform CI builds and GUI smoke tests.

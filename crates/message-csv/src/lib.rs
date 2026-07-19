@@ -1,5 +1,9 @@
 //! Shared CSV emit helpers for message exporters.
 
+mod date_range;
+
+pub use date_range::DateRange;
+
 use chrono::{Local, TimeZone, Utc};
 use serde::Serialize;
 use sha2::{Digest, Sha256};

@@ -45,6 +45,17 @@ Replace the paths and phone number with your own. `--input` is the backup folder
 
 Add `--anonymize` (optional `--anonymize-seed <64-hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-anonymize`](../message-anonymize).
 
+Optional `--start-date` / `--end-date` (`YYYY-MM-DD`) keep messages in `[start, end)` using host local midnight (end exclusive).
+
+Attachment media (after export; needs `ffmpeg` / `ffprobe` for convert/compress):
+
+- `--media-mode disabled` — do not write attachment files
+- `--media-mode clone` (default) — leave files as extracted
+- `--media-mode convert` — standardize to `.jpg` / `.mp4` / `.mp3`
+- `--media-mode compress` — re-encode; options `--media-max-resolution 720p|1080p|4k`, `--media-max-fps`, `--media-min-size`, `--media-skip-efficient true|false`
+
+See [`message-media`](../message-media).
+
 ## License
 
 MIT.

@@ -5,6 +5,7 @@ members = [
     "crates/message-csv",
     "crates/message-contacts",
     "crates/message-anonymize",
+    "crates/message-media",
     "crates/go-sms-pro-out",
     "crates/sms-backup-restore-out",
     "crates/sms-backup-plus-out",

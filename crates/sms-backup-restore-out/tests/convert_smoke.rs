@@ -1,4 +1,5 @@
 use message_contacts::ContactsBook;
+use message_csv::DateRange;
 use sms_backup_restore_out::convert_export;
 use std::fs::{self, File};
 use std::io::{Read, Write};
@@ -18,8 +19,15 @@ fn convert_export_smoke_on_sample_fixture() {
 
     let tmp = tempfile::tempdir().expect("tempdir");
     let contacts = empty_contacts(&tmp);
-    let report = convert_export(&fixture, tmp.path(), &["+15555550100".into()], &contacts)
-        .expect("convert_export should succeed");
+    let report = convert_export(
+        &fixture,
+        tmp.path(),
+        &["+15555550100".into()],
+        &contacts,
+        &DateRange::default(),
+        true,
+    )
+    .expect("convert_export should succeed");
 
     assert!(
         report.conversations >= 1,
@@ -94,7 +102,15 @@ fn dedupes_overlapping_xml_files() {
 
     let out = tmp.path().join("out");
     let contacts = empty_contacts(&tmp);
-    let report = convert_export(&input_dir, &out, &["+15555550100".into()], &contacts).unwrap();
+    let report = convert_export(
+        &input_dir,
+        &out,
+        &["+15555550100".into()],
+        &contacts,
+        &DateRange::default(),
+        true,
+    )
+    .unwrap();
     assert_eq!(report.sms_seen, 2);
     assert_eq!(report.conversations, 1);
     assert_eq!(report.received, 1); // one row after dedupe
@@ -111,8 +127,15 @@ fn rejects_owner_phone_without_digits() {
     let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample.xml");
     let tmp = tempfile::tempdir().expect("tempdir");
     let contacts = empty_contacts(&tmp);
-    let err =
-        convert_export(&fixture, tmp.path(), &["not-a-phone".into()], &contacts).unwrap_err();
+    let err = convert_export(
+        &fixture,
+        tmp.path(),
+        &["not-a-phone".into()],
+        &contacts,
+        &DateRange::default(),
+        true,
+    )
+    .unwrap_err();
     assert!(
         err.to_string().contains("owner phone"),
         "unexpected error: {err:#}"

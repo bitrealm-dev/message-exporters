@@ -12,6 +12,7 @@ hex = "0.4.3"
 message-anonymize = { path = "../message-anonymize" }
 message-contacts = { path = "../message-contacts" }
 message-csv = { path = "../message-csv" }
+message-media = { path = "../message-media" }
 message-phone = { path = "../message-phone" }
 quick-xml = { version = "0.41.0", features = ["serialize"] }
 regex = "1.13.0"
