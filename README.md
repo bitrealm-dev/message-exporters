@@ -25,13 +25,17 @@ Pass exactly one. Shared logic: [`crates/message-contacts`](crates/message-conta
 
 ## Which converter to use
 
-| Backup you have | Converter | Format docs |
-|-----------------|-----------|-------------|
-| **GO SMS Pro** local backup folder (Android) | [`go-sms-pro-to-csv`](crates/go-sms-pro-to-csv) | [How messages become spreadsheet rows](crates/go-sms-pro-to-csv/docs/XML_CSV_MAPPING.md) |
-| **SMS Backup & Restore** XML from SyncTech (Android) | [`sms-backup-restore-to-csv`](crates/sms-backup-restore-to-csv) | [What the XML contains](crates/sms-backup-restore-to-csv/docs/FIELDS.md), [How messages become spreadsheet rows](crates/sms-backup-restore-to-csv/docs/XML_CSV_MAPPING.md) |
-| **SMS Backup+** email exports (`.eml` files) | [`sms-backup-plus-to-csv`](crates/sms-backup-plus-to-csv) | [How the email backup is structured](crates/sms-backup-plus-to-csv/docs/FORMAT.md), [How messages become spreadsheet rows](crates/sms-backup-plus-to-csv/docs/EML_CSV_MAPPING.md) |
-| **OpenExtract** conversation CSV + contacts `.vcf` | [`openextract-to-csv`](crates/openextract-to-csv) | [Converter README](crates/openextract-to-csv/README.md), [example spreadsheet](crates/openextract-to-csv/sample-output/_15555550122.csv) |
-| **Apple Messages** database on a Mac (`chat.db`) | [`imessage-exporter`](crates/imessage-exporter) | [Converter README](crates/imessage-exporter/README.md), [example spreadsheet](crates/imessage-exporter/sample-output/15551212.csv) |
+| Backup you have | Converter | Targeted upstream | Format docs |
+|-----------------|-----------|-------------------|-------------|
+| **GO SMS Pro** local backup folder (Android) | [`go-sms-pro-to-csv`](crates/go-sms-pro-to-csv) | GO SMS Pro *(version TBD)* | [How messages become spreadsheet rows](crates/go-sms-pro-to-csv/docs/XML_CSV_MAPPING.md) |
+| **SMS Backup & Restore** XML from SyncTech (Android) | [`sms-backup-restore-to-csv`](crates/sms-backup-restore-to-csv) | SMS Backup & Restore **10.26.003** | [What the XML contains](crates/sms-backup-restore-to-csv/docs/FIELDS.md), [How messages become spreadsheet rows](crates/sms-backup-restore-to-csv/docs/XML_CSV_MAPPING.md) |
+| **SMS Backup+** email exports (`.eml` files) | [`sms-backup-plus-to-csv`](crates/sms-backup-plus-to-csv) | SMS Backup+ **1.5.11** | [How the email backup is structured](crates/sms-backup-plus-to-csv/docs/FORMAT.md), [How messages become spreadsheet rows](crates/sms-backup-plus-to-csv/docs/EML_CSV_MAPPING.md) |
+| **OpenExtract** conversation CSV + contacts `.vcf` | [`openextract-to-csv`](crates/openextract-to-csv) | OpenExtract **0.5.1** | [Converter README](crates/openextract-to-csv/README.md), [example spreadsheet](crates/openextract-to-csv/sample-output/_15555550122.csv) |
+| **Apple Messages** database on a Mac (`chat.db`) | [`imessage-exporter`](crates/imessage-exporter) | iMessage Exporter **4.2.0** | [Converter README](crates/imessage-exporter/README.md), [example spreadsheet](crates/imessage-exporter/sample-output/15551212.csv) |
+
+Each converter writes `export_source`, `export_tool`, and `export_tool_version` on every CSV row so downstream vault import knows which upstream tool/version the export targets.
+
+**iMazing** Messages CSV (vendor export, not produced here) is ingested by [message-vault-rs](https://github.com/bitrealm-dev/message-vault-rs) `csv-ingest` targeting **iMazing 3.5.5**.
 
 Each converter’s README explains what the backup looks like, what you need to run it, and extra options.
 

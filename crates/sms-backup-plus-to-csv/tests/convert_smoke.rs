@@ -59,6 +59,8 @@ fn convert_smoke_writes_csv_not_json() {
     assert!(header.contains("chat_identifier"));
     assert!(header.contains("attachments_json"));
     assert!(header.contains("export_source"));
+    assert!(header.contains("export_tool"));
+    assert!(header.contains("export_tool_version"));
     assert!(header.contains("source_kind"));
     assert!(header.contains("smssync_id"));
     assert!(header.contains("eml_path"));

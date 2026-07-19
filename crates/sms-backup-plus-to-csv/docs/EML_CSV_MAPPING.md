@@ -43,6 +43,8 @@ Typical headers: `X-smssync-type`, `X-smssync-address`, `X-smssync-date`, `X-sms
 | CSV column | Source |
 |------------|--------|
 | `export_source` | Always `sms-backup-plus` |
+| `export_tool` | Always `SMS Backup+` |
+| `export_tool_version` | Always `1.5.11` (targeted Android app version) |
 | `source_kind` | `flat` or `archive` |
 | `smssync_id` | `X-smssync-id` (flat only) |
 | `date_ms` | Timestamp as milliseconds string |

@@ -54,6 +54,8 @@ Each `<SMS>` becomes one CSV data row. The `chat_identifier` column holds the pe
 | CSV column | Meaning |
 |------------|---------|
 | `export_source` | Always `go-sms-pro` |
+| `export_tool` | Always `GO SMS Pro` |
+| `export_tool_version` | Empty until a target app version is pinned |
 | `source_kind` | `xml` or `pdu` |
 | `android_type` | Raw `<type>` (`1`/`2`); empty for PDU |
 | `date_ms` | Raw `<date>` ms; empty for PDU |

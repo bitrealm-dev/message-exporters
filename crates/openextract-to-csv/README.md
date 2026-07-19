@@ -2,6 +2,8 @@
 
 Convert OpenExtract conversation CSV exports into one vault-shaped spreadsheet file per conversation, enriching phone numbers and names from the contacts `.vcf` that ships with the export.
 
+**Targeted upstream:** OpenExtract **0.5.1** (`export_tool` / `export_tool_version` on every output row).
+
 ## What this is for
 
 OpenExtract writes thin CSV files such as:

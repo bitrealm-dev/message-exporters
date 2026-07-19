@@ -2,6 +2,8 @@
 
 Convert [SMS Backup+](https://github.com/jberkel/sms-backup-plus) email exports into one spreadsheet file per conversation, plus any photos or other media stored in those emails.
 
+**Targeted upstream:** SMS Backup+ **1.5.11** (`export_tool` / `export_tool_version` on every output row).
+
 ## What this is for
 
 SMS Backup+ can copy Android SMS and MMS into email (for example Gmail). People often download or archive those emails as `.eml` files — ordinary email files on disk. This converter reads a folder of those files. It does **not** sign in to email or talk to IMAP.

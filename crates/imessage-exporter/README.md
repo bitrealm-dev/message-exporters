@@ -2,6 +2,8 @@
 
 Export conversations from Apple Messages into one spreadsheet file per chat, and copy message attachments into a folder next to those files.
 
+**Targeted upstream:** iMessage Exporter **4.2.0** (`export_tool` / `export_tool_version` on every CSV row; matches `imessage-database` 4.2.0).
+
 ## What this is for
 
 On a Mac, Messages stores history in a database file commonly called `chat.db`. This converter reads that database and writes CSV files — plain tables you can open in Excel, Numbers, or Google Sheets.

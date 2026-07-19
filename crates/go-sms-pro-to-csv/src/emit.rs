@@ -32,6 +32,8 @@ const HEADERS: &[&str] = &[
     "attachments_json",
     // SMS-Pro-only
     "export_source",
+    "export_tool",
+    "export_tool_version",
     "source_kind",
     "android_type",
     "date_ms",
@@ -41,6 +43,9 @@ const HEADERS: &[&str] = &[
 ];
 
 const EXPORT_SOURCE: &str = "go-sms-pro";
+const EXPORT_TOOL: &str = "GO SMS Pro";
+/// Upstream app version not pinned yet (empty in CSV).
+const EXPORT_TOOL_VERSION: &str = "";
 
 #[derive(Debug, Default)]
 pub struct ExportReport {
@@ -439,6 +444,8 @@ fn write_conversation(
             msg.text.as_str(),
             attachments_json.as_str(),
             EXPORT_SOURCE,
+            EXPORT_TOOL,
+            EXPORT_TOOL_VERSION,
             msg.source_kind,
             msg.android_type.as_str(),
             msg.date_ms.as_str(),

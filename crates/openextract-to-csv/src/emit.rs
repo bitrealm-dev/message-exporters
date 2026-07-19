@@ -25,6 +25,8 @@ const HEADERS: &[&str] = &[
     "text",
     "attachments_json",
     "export_source",
+    "export_tool",
+    "export_tool_version",
     "source_kind",
     "contact_name",
     "date_ms",
@@ -32,6 +34,8 @@ const HEADERS: &[&str] = &[
 ];
 
 const EXPORT_SOURCE: &str = "openextract";
+const EXPORT_TOOL: &str = "OpenExtract";
+const EXPORT_TOOL_VERSION: &str = "0.5.1";
 
 #[derive(Debug, Default)]
 pub struct ExportReport {
@@ -361,6 +365,8 @@ fn write_conversation(
             msg.text.as_str(),
             attachments_json.as_str(),
             EXPORT_SOURCE,
+            EXPORT_TOOL,
+            EXPORT_TOOL_VERSION,
             msg.source_kind.as_str(),
             msg.contact_name.as_str(),
             msg.date_ms.as_str(),

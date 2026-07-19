@@ -51,6 +51,8 @@ fn convert_export_smoke_on_sample_fixture() {
     let header = contents.lines().next().unwrap();
     assert!(header.contains("chat_identifier"));
     assert!(header.contains("export_source"));
+    assert!(header.contains("export_tool"));
+    assert!(header.contains("export_tool_version"));
     assert!(header.contains("message_kind"));
     assert!(header.contains("xml_fields_json"));
     assert!(header.contains("subject"));

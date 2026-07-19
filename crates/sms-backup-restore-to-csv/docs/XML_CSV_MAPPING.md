@@ -34,6 +34,8 @@ One CSV file per conversation (header + one row per message), plus decoded MMS m
 | CSV column | Meaning |
 |------------|---------|
 | `export_source` | Always `sms-backup-restore` |
+| `export_tool` | Always `SMS Backup & Restore` |
+| `export_tool_version` | Always `10.26.003` (targeted Android app version) |
 | `message_kind` | `sms` or `mms` |
 | `date_ms` | Raw `date` attribute |
 | `contact_name` | Raw `contact_name` / `name` |

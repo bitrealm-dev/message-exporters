@@ -2,6 +2,8 @@
 
 Convert a **GO SMS Pro** (GOMO / Jiubang) local backup into one spreadsheet file per conversation, plus any photos or other media found in the backup.
 
+**Targeted upstream:** GO SMS Pro *(app version not pinned yet)* (`export_tool` on every output row; `export_tool_version` empty).
+
 ## What this is for
 
 GO SMS Pro can save texts onto the phone as a backup folder. That folder usually contains:

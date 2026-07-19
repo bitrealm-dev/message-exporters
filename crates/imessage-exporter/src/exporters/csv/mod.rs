@@ -83,9 +83,13 @@ const HEADERS: &[&str] = &[
     "tapbacks_json",
     "app_json",
     "export_source",
+    "export_tool",
+    "export_tool_version",
 ];
 
 const EXPORT_SOURCE: &str = "imessage";
+const EXPORT_TOOL: &str = "iMessage Exporter";
+const EXPORT_TOOL_VERSION: &str = "4.2.0";
 
 fn parse_thread_part(part: &str) -> Option<usize> {
     part.split(':').next().and_then(|p| p.parse::<usize>().ok())
@@ -128,6 +132,8 @@ struct CsvRow {
     tapbacks_json: String,
     app_json: String,
     export_source: String,
+    export_tool: String,
+    export_tool_version: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -460,6 +466,8 @@ impl<'a> CSV<'a> {
             tapbacks_json: json_cell(&tapbacks),
             app_json: app.map(|v| json_cell(&v)).unwrap_or_else(|| "null".into()),
             export_source: EXPORT_SOURCE.to_string(),
+            export_tool: EXPORT_TOOL.to_string(),
+            export_tool_version: EXPORT_TOOL_VERSION.to_string(),
         })
     }
 
@@ -599,10 +607,10 @@ mod tests {
 
     #[test]
     fn csv_header_matches_row_fields() {
-        assert_eq!(HEADERS.len(), 30);
+        assert_eq!(HEADERS.len(), 32);
         assert_eq!(HEADERS[0], "chat_identifier");
         assert_eq!(HEADERS[9], "direction");
-        assert_eq!(HEADERS[HEADERS.len() - 1], "export_source");
+        assert_eq!(HEADERS[HEADERS.len() - 1], "export_tool_version");
     }
 
     #[test]
@@ -638,6 +646,8 @@ mod tests {
             tapbacks_json: "[]".into(),
             app_json: "null".into(),
             export_source: "imessage".into(),
+            export_tool: "iMessage Exporter".into(),
+            export_tool_version: "4.2.0".into(),
         };
 
         let mut wtr = csv::WriterBuilder::new()

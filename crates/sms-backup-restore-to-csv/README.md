@@ -2,6 +2,8 @@
 
 Convert an Android **SMS Backup & Restore** backup into one spreadsheet file per conversation, plus decoded MMS photos and other media.
 
+**Targeted upstream:** SMS Backup & Restore **10.26.003** (`export_tool` / `export_tool_version` on every output row).
+
 ## What this is for
 
 [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/) (by SyncTech) writes a backup file whose name looks like `sms-20210328165031.xml`. That file holds SMS and MMS from the phone’s messaging database.

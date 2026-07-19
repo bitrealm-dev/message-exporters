@@ -30,6 +30,8 @@ const HEADERS: &[&str] = &[
     "attachments_json",
     // SBR-only
     "export_source",
+    "export_tool",
+    "export_tool_version",
     "message_kind",
     "date_ms",
     "contact_name",
@@ -38,6 +40,8 @@ const HEADERS: &[&str] = &[
 ];
 
 const EXPORT_SOURCE: &str = "sms-backup-restore";
+const EXPORT_TOOL: &str = "SMS Backup & Restore";
+const EXPORT_TOOL_VERSION: &str = "10.26.003";
 
 #[derive(Debug, Default)]
 pub struct ExportReport {
@@ -271,6 +275,8 @@ fn write_conversation(
             msg.text.as_str(),
             attachments_json.as_str(),
             EXPORT_SOURCE,
+            EXPORT_TOOL,
+            EXPORT_TOOL_VERSION,
             msg.message_kind,
             msg.date_ms.as_str(),
             msg.contact_name.as_str(),
