@@ -1,87 +1,144 @@
-//! Parse iMazing Messages CSV exports.
+//! Parse iMazing Messages and WhatsApp CSV exports.
 
 use anyhow::{bail, Context, Result};
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+/// Which iMazing export tree a CSV came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SourceKind {
+    Messages,
+    WhatsApp,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct DiscoveredCsv {
+    pub path: PathBuf,
+    pub kind: SourceKind,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct RawRow {
     pub chat_session: String,
     pub message_date: String,
+    pub delivered_date: String,
+    pub read_date: String,
+    pub edited_date: String,
+    pub deleted_date: String,
+    pub sent_date: String,
     pub service: String,
     pub msg_type: String,
     pub sender_id: String,
     pub sender_name: String,
+    pub status: String,
+    pub forwarded: String,
+    pub replying_to: String,
     pub subject: String,
     pub text: String,
     pub reactions: String,
-    pub status: String,
     pub attachment: String,
     pub attachment_type: String,
+    pub attachment_info: String,
 }
 
-/// Discover iMazing Messages CSV files under `input` (file or directory).
-pub(crate) fn discover_csv_files(input: &Path) -> Result<Vec<PathBuf>> {
+/// Discover iMazing Messages or WhatsApp CSV files under `input` (file or directory tree).
+pub(crate) fn discover_csv_files(input: &Path) -> Result<Vec<DiscoveredCsv>> {
     if input.is_file() {
-        if looks_like_imazing_messages(input)? {
-            return Ok(vec![input.to_path_buf()]);
-        }
-        bail!(
-            "{} is not an iMazing Messages CSV (need Chat Session + Message Date + Sender ID)",
-            input.display()
-        );
+        return match classify_imazing_csv(input)? {
+            Some(kind) => Ok(vec![DiscoveredCsv {
+                path: input.to_path_buf(),
+                kind,
+            }]),
+            None => bail!(
+                "{} is not an iMazing Messages or WhatsApp CSV \
+                 (need Chat Session + Message Date + Sender ID)",
+                input.display()
+            ),
+        };
     }
     if !input.is_dir() {
         bail!("input path not found: {}", input.display());
     }
+
     let mut files = Vec::new();
-    for entry in std::fs::read_dir(input)
-        .with_context(|| format!("read_dir {}", input.display()))?
-    {
-        let entry = entry?;
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        if !name.to_ascii_lowercase().ends_with(".csv") {
-            continue;
-        }
-        // Skip Contacts exports and attachment sidecars by name.
-        let lower = name.to_ascii_lowercase();
-        if lower.starts_with("contacts") || lower.contains("attachment") {
-            continue;
-        }
-        if looks_like_imazing_messages(&path)? {
-            files.push(path);
-        }
-    }
-    files.sort();
+    walk_dir(input, &mut files)?;
+    files.sort_by(|a, b| a.path.cmp(&b.path));
     if files.is_empty() {
         bail!(
-            "no iMazing Messages CSV files found under {}",
+            "no iMazing Messages or WhatsApp CSV files found under {}",
             input.display()
         );
     }
     Ok(files)
 }
 
-fn looks_like_imazing_messages(path: &Path) -> Result<bool> {
-    let mut file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-    let mut buf = vec![0u8; 4096];
-    let n = file.read(&mut buf)?;
-    let text = String::from_utf8_lossy(&buf[..n]);
-    let header = text.lines().next().unwrap_or("").trim_start_matches('\u{feff}');
-    let lower = header.to_ascii_lowercase();
-    Ok(lower.contains("chat session")
-        && lower.contains("message date")
-        && lower.contains("sender id"))
+fn walk_dir(dir: &Path, out: &mut Vec<DiscoveredCsv>) -> Result<()> {
+    for entry in std::fs::read_dir(dir).with_context(|| format!("read_dir {}", dir.display()))? {
+        let entry = entry?;
+        let path = entry.path();
+        let file_type = entry.file_type()?;
+        if file_type.is_symlink() {
+            continue;
+        }
+        if file_type.is_dir() {
+            walk_dir(&path, out)?;
+            continue;
+        }
+        if !file_type.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        let lower = name.to_ascii_lowercase();
+        if !lower.ends_with(".csv") {
+            continue;
+        }
+        // Skip Contacts exports and attachment sidecars by name.
+        if lower.starts_with("contacts") || lower.contains("attachment") {
+            continue;
+        }
+        if let Some(kind) = classify_imazing_csv(&path)? {
+            out.push(DiscoveredCsv { path, kind });
+        }
+    }
+    Ok(())
 }
 
-pub(crate) fn parse_csv_file(path: &Path) -> Result<Vec<RawRow>> {
+fn classify_imazing_csv(path: &Path) -> Result<Option<SourceKind>> {
+    let mut file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let mut buf = vec![0u8; 8192];
+    let n = file.read(&mut buf)?;
+    let text = String::from_utf8_lossy(&buf[..n]);
+    let header = text
+        .lines()
+        .next()
+        .unwrap_or("")
+        .trim_start_matches('\u{feff}');
+    let lower = header.to_ascii_lowercase();
+    if !(lower.contains("chat session")
+        && lower.contains("message date")
+        && lower.contains("sender id"))
+    {
+        return Ok(None);
+    }
+    // WhatsApp exports omit Service and include Forwarded / Attachment info / Sent Date.
+    // Messages exports include Service (SMS/iMessage) and Apple date columns.
+    if lower.contains("service") {
+        return Ok(Some(SourceKind::Messages));
+    }
+    if lower.contains("forwarded")
+        || lower.contains("attachment info")
+        || lower.contains("sent date")
+    {
+        return Ok(Some(SourceKind::WhatsApp));
+    }
+    // Fallback: treat as Messages if it has the shared core columns.
+    Ok(Some(SourceKind::Messages))
+}
+
+pub(crate) fn parse_csv_file(path: &Path, kind: SourceKind) -> Result<Vec<RawRow>> {
     let mut file = File::open(path).with_context(|| format!("open {}", path.display()))?;
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes)
@@ -111,6 +168,14 @@ pub(crate) fn parse_csv_file(path: &Path) -> Result<Vec<RawRow>> {
     let status_i = headers.iter().position(|h| h == "status");
     let att_i = headers.iter().position(|h| h == "attachment");
     let att_type_i = headers.iter().position(|h| h == "attachment type");
+    let att_info_i = headers.iter().position(|h| h == "attachment info");
+    let forwarded_i = headers.iter().position(|h| h == "forwarded");
+    let replying_i = headers.iter().position(|h| h == "replying to");
+    let delivered_i = headers.iter().position(|h| h == "delivered date");
+    let read_i = headers.iter().position(|h| h == "read date");
+    let edited_i = headers.iter().position(|h| h == "edited date");
+    let deleted_i = headers.iter().position(|h| h == "deleted date");
+    let sent_i = headers.iter().position(|h| h == "sent date");
 
     let mut rows = Vec::new();
     for (idx, rec) in rdr.records().enumerate() {
@@ -126,19 +191,31 @@ pub(crate) fn parse_csv_file(path: &Path) -> Result<Vec<RawRow>> {
         {
             continue;
         }
+        let service = match kind {
+            SourceKind::WhatsApp => "WhatsApp".to_string(),
+            SourceKind::Messages => service_i.map(|i| field(&rec, i)).unwrap_or_default(),
+        };
         rows.push(RawRow {
             chat_session,
             message_date,
-            service: service_i.map(|i| field(&rec, i)).unwrap_or_default(),
+            delivered_date: delivered_i.map(|i| field(&rec, i)).unwrap_or_default(),
+            read_date: read_i.map(|i| field(&rec, i)).unwrap_or_default(),
+            edited_date: edited_i.map(|i| field(&rec, i)).unwrap_or_default(),
+            deleted_date: deleted_i.map(|i| field(&rec, i)).unwrap_or_default(),
+            sent_date: sent_i.map(|i| field(&rec, i)).unwrap_or_default(),
+            service,
             msg_type: field(&rec, type_i),
             sender_id: field(&rec, sender_id_i),
             sender_name: field(&rec, sender_name_i),
+            status: status_i.map(|i| field(&rec, i)).unwrap_or_default(),
+            forwarded: forwarded_i.map(|i| field(&rec, i)).unwrap_or_default(),
+            replying_to: replying_i.map(|i| field(&rec, i)).unwrap_or_default(),
             subject: subject_i.map(|i| field(&rec, i)).unwrap_or_default(),
             text,
             reactions: reactions_i.map(|i| field(&rec, i)).unwrap_or_default(),
-            status: status_i.map(|i| field(&rec, i)).unwrap_or_default(),
             attachment,
             attachment_type: att_type_i.map(|i| field(&rec, i)).unwrap_or_default(),
+            attachment_info: att_info_i.map(|i| field(&rec, i)).unwrap_or_default(),
         });
     }
     Ok(rows)
@@ -153,4 +230,69 @@ fn col(headers: &[String], name: &str) -> Result<usize> {
 
 fn field(rec: &csv::StringRecord, idx: usize) -> String {
     rec.get(idx).unwrap_or("").trim().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    fn write(dir: &tempfile::TempDir, rel: &str, body: &str) -> PathBuf {
+        let path = dir.path().join(rel);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        let mut f = File::create(&path).unwrap();
+        write!(f, "{body}").unwrap();
+        path
+    }
+
+    #[test]
+    fn classifies_messages_and_whatsapp_headers() {
+        let dir = tempfile::tempdir().unwrap();
+        let messages = write(
+            &dir,
+            "m.csv",
+            "Chat Session,Message Date,Service,Type,Sender ID,Sender Name,Text\n",
+        );
+        let whatsapp = write(
+            &dir,
+            "w.csv",
+            "Chat Session,Message Date,Sent Date,Type,Sender ID,Sender Name,Status,Forwarded,Text,Attachment info\n",
+        );
+        assert_eq!(
+            classify_imazing_csv(&messages).unwrap(),
+            Some(SourceKind::Messages)
+        );
+        assert_eq!(
+            classify_imazing_csv(&whatsapp).unwrap(),
+            Some(SourceKind::WhatsApp)
+        );
+    }
+
+    #[test]
+    fn discovers_nested_messages_and_whatsapp() {
+        let dir = tempfile::tempdir().unwrap();
+        write(
+            &dir,
+            "Contacts/All/Contacts - x.csv",
+            "First Name,Mobile Phone\nAda,+15555550100\n",
+        );
+        write(
+            &dir,
+            "Messages/2020-01-01 12 00 00 - Bob/Messages - Bob.csv",
+            "Chat Session,Message Date,Service,Type,Sender ID,Sender Name,Text\n\
+Bob,2020-01-01 12:00:00,SMS,Incoming,+15555550111,Bob,Hi\n",
+        );
+        write(
+            &dir,
+            "WhatsApp/2020-01-01 12 00 00 - Bob/WhatsApp - Bob.csv",
+            "Chat Session,Message Date,Sent Date,Type,Sender ID,Sender Name,Status,Forwarded,Text,Attachment info\n\
+Bob,2020-01-01 12:00:00,,Incoming,+15555550111,Bob,Read,,Hi,\n",
+        );
+        let found = discover_csv_files(dir.path()).unwrap();
+        assert_eq!(found.len(), 2);
+        assert!(found.iter().any(|f| f.kind == SourceKind::Messages));
+        assert!(found.iter().any(|f| f.kind == SourceKind::WhatsApp));
+    }
 }

@@ -2,14 +2,14 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Result};
 use clap::Parser;
-use message_contacts::ContactsBook;
 use imazing_out::convert_export;
+use message_contacts::ContactsBook;
 
 #[derive(Parser, Debug)]
 #[command(name = "imazing-out")]
-#[command(about = "Convert iMazing Messages CSV (+ Contacts CSV) to per-conversation CSV")]
+#[command(about = "Convert iMazing Messages / WhatsApp CSV exports to per-conversation CSV")]
 struct Cli {
-    /// iMazing Messages CSV file or directory of Messages CSVs
+    /// One Messages/WhatsApp CSV, a chat folder, Messages/, WhatsApp/, or a full device export root
     #[arg(long)]
     input: PathBuf,
 
@@ -56,9 +56,14 @@ fn main() -> Result<()> {
         Some(path) => println!("  contacts from:       {}", path.display()),
         None => println!("  contacts from:       (none)"),
     }
+    println!("  messages CSVs:       {}", report.messages_files);
+    println!("  whatsapp CSVs:       {}", report.whatsapp_files);
     println!("  conversations:       {}", report.conversations);
     println!("  messages:            {}", report.messages);
     println!("  sent / received:     {} / {}", report.sent, report.received);
+    if report.notifications > 0 {
+        println!("  notifications:       {}", report.notifications);
+    }
     if report.duplicates_dropped > 0 {
         println!("  duplicates dropped:  {}", report.duplicates_dropped);
     }
@@ -69,6 +74,12 @@ fn main() -> Result<()> {
         println!(
             "  unresolved phone:    {} (name-only chat ids; vault import may struggle)",
             report.unresolved_chat_phone
+        );
+    }
+    if report.unresolved_group_participants > 0 {
+        println!(
+            "  unresolved members:  {} (group roster names with no phone in contacts)",
+            report.unresolved_group_participants
         );
     }
     if !report.errors.is_empty() {

@@ -17,6 +17,8 @@ fn convert_messages_with_imazing_contacts() {
 
     assert_eq!(report.conversations, 1);
     assert_eq!(report.messages, 3);
+    assert_eq!(report.messages_files, 1);
+    assert_eq!(report.whatsapp_files, 0);
     assert_eq!(report.unresolved_chat_phone, 0);
 
     let out = tmp.path().join("_13212462167.csv");
@@ -27,4 +29,51 @@ fn convert_messages_with_imazing_contacts() {
     assert!(body.contains("3.5.5"));
     assert!(body.contains("Bob McRoy"));
     assert!(body.contains("image000000.jpg"));
+    assert!(body.contains("imazing_type"));
+}
+
+#[test]
+fn convert_whatsapp_csv_direct() {
+    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let whatsapp = fixture.join("whatsapp.csv");
+    let contacts = fixture.join("contacts.csv");
+    let book = ContactsBook::load_imazing_contacts_csv(&contacts).expect("load contacts");
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let report = convert_export(&whatsapp, tmp.path(), &book, Some("UTC")).expect("convert");
+
+    assert_eq!(report.conversations, 1);
+    assert_eq!(report.messages, 3);
+    assert_eq!(report.whatsapp_files, 1);
+    let out = tmp.path().join("_13212462167__whatsapp.csv");
+    let body = fs::read_to_string(&out).expect("read csv");
+    assert!(body.contains("WhatsApp"));
+    assert!(body.contains("forwarded"));
+    assert!(body.contains("Yes"));
+    assert!(body.contains("12.34 KB"));
+}
+
+#[test]
+fn convert_export_root_recursively_keeps_services_separate() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/export_root");
+    let contacts = root.join("Contacts/All contacts/All/Contacts - synthetic.csv");
+    let book = ContactsBook::load_imazing_contacts_csv(&contacts).expect("load contacts");
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let report = convert_export(&root, tmp.path(), &book, Some("UTC")).expect("convert");
+
+    assert_eq!(report.messages_files, 2);
+    assert_eq!(report.whatsapp_files, 1);
+    assert!(report.conversations >= 3);
+    assert!(tmp.path().join("_13212462167.csv").is_file());
+    assert!(tmp.path().join("_13212462167__whatsapp.csv").is_file());
+    // Silent Carol should be resolved into the group chat id via contacts.
+    let group = fs::read_dir(tmp.path())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .find(|n| n.contains("15555550133") && !n.contains("whatsapp"))
+        .expect("group csv with silent Carol");
+    let body = fs::read_to_string(tmp.path().join(group)).unwrap();
+    assert!(body.contains("group"));
+    assert!(body.contains("Notification") || body.contains("notification"));
+    assert_eq!(report.unresolved_group_participants, 0);
 }

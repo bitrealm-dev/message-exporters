@@ -754,9 +754,11 @@ dependencies = [
  "chrono-tz",
  "clap",
  "csv",
+ "hex",
  "message-contacts",
  "message-csv",
  "message-phone",
+ "sha2 0.11.0",
  "tempfile",
 ]
 

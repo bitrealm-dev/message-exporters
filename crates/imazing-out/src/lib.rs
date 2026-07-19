@@ -1,4 +1,4 @@
-//! iMazing Messages CSV (+ Contacts CSV) → per-conversation vault-shaped CSV.
+//! iMazing Messages / WhatsApp CSV (+ Contacts CSV) → per-conversation vault-shaped CSV.
 
 mod emit;
 mod parse;
