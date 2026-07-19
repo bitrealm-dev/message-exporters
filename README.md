@@ -38,6 +38,18 @@ Raw **iMazing** vendor Messages CSV can also be ingested by [message-vault-rs](h
 
 Each converter’s README explains what the backup looks like, what you need to run it, and extra options.
 
+## Desktop GUI
+
+The [Iced desktop GUI](crates/message-exporters-gui) provides native file/folder pickers,
+exporter-specific forms, validation, live logs, and cancel support on Linux, macOS, and Windows.
+
+```bash
+cargo build --workspace
+cargo run -p message-exporters-gui
+```
+
+Options and architecture: [`docs/GUI.md`](docs/GUI.md).
+
 ## Anonymize (share structure, not PII)
 
 Add `--anonymize` (optional `--anonymize-seed <64-hex>`) to any converter to rewrite names, numbers, message text (same length), and attachments after export. Remaps are stable for a given seed and not reversible from the CSV alone; the seed is printed to stderr when generated. Details: [`crates/message-anonymize`](crates/message-anonymize).
