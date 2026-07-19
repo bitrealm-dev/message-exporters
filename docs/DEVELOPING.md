@@ -26,6 +26,7 @@ For each platform, these binaries are attached to the release:
 - `sms-backup-restore-to-csv`
 - `sms-backup-plus-to-csv`
 - `openextract-to-csv`
+- `imazing-to-csv`
 - `imessage-exporter`
 
 | Platform | Runner | Asset name suffix |

@@ -126,6 +126,89 @@ impl ContactsBook {
         Ok(book)
     }
 
+    /// Load an iMazing Contacts CSV export (wide address-book columns).
+    ///
+    /// Phones come from Mobile/Home/Work/Other (and fax) columns, plus `+E.164`
+    /// tokens scraped from `Notes` (including `PROP-ID: +…`).
+    pub fn load_imazing_contacts_csv(path: &Path) -> Result<Self> {
+        let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+        let mut rdr = csv::ReaderBuilder::new()
+            .flexible(true)
+            .from_reader(file);
+        let headers = rdr
+            .headers()
+            .with_context(|| format!("headers {}", path.display()))?
+            .iter()
+            .map(|h| h.trim().to_ascii_lowercase())
+            .collect::<Vec<_>>();
+
+        let first_i = headers.iter().position(|h| h == "first name");
+        let middle_i = headers.iter().position(|h| h == "middle name");
+        let last_i = headers.iter().position(|h| h == "last name");
+        let notes_i = headers.iter().position(|h| h == "notes");
+        let phone_cols: Vec<usize> = [
+            "mobile phone",
+            "home phone",
+            "work phone",
+            "other phone",
+            "home fax",
+            "work fax",
+            "other fax",
+        ]
+        .iter()
+        .filter_map(|name| headers.iter().position(|h| h == *name))
+        .collect();
+
+        if first_i.is_none() && phone_cols.is_empty() {
+            bail!(
+                "contacts CSV {} does not look like an iMazing Contacts export \
+                 (expected First Name and/or phone columns)",
+                path.display()
+            );
+        }
+
+        let mut book = Self::empty();
+        for (idx, rec) in rdr.records().enumerate() {
+            let rec = rec.with_context(|| format!("row {} in {}", idx + 2, path.display()))?;
+            let first = first_i
+                .map(|i| rec.get(i).unwrap_or("").trim())
+                .unwrap_or("");
+            let middle = middle_i
+                .map(|i| rec.get(i).unwrap_or("").trim())
+                .unwrap_or("");
+            let last = last_i
+                .map(|i| rec.get(i).unwrap_or("").trim())
+                .unwrap_or("");
+            let mut name_parts = Vec::new();
+            if !first.is_empty() {
+                name_parts.push(first);
+            }
+            if !middle.is_empty() {
+                name_parts.push(middle);
+            }
+            if !last.is_empty() {
+                name_parts.push(last);
+            }
+            let display = collapse_inner_whitespace(&name_parts.join(" "));
+
+            let mut phones = Vec::new();
+            for &i in &phone_cols {
+                push_phones_from_raw(rec.get(i).unwrap_or(""), &mut phones);
+            }
+            if let Some(ni) = notes_i {
+                push_phones_from_raw(rec.get(ni).unwrap_or(""), &mut phones);
+            }
+            if phones.is_empty() {
+                continue;
+            }
+            if display.is_empty() {
+                continue;
+            }
+            book.insert_entry(&display, &phones);
+        }
+        Ok(book)
+    }
+
     fn insert_entry(&mut self, display: &str, phones: &[String]) {
         let display = collapse_inner_whitespace(display);
         if display.is_empty() || phones.is_empty() {
@@ -234,14 +317,40 @@ pub(crate) fn split_csv_line(line: &str) -> Vec<String> {
 
 fn all_valid_phones(phones_raw: &str) -> Vec<String> {
     let mut out = Vec::new();
-    for part in phones_raw.split(';') {
+    push_phones_from_raw(phones_raw, &mut out);
+    out
+}
+
+/// Collect sanitized digit strings from semicolon-separated fields and `+E.164` tokens in free text.
+fn push_phones_from_raw(raw: &str, out: &mut Vec<String>) {
+    for part in raw.split([';', ',', '|']) {
         if let Some(digits) = sanitize_number(part.trim()) {
             if !out.contains(&digits) {
                 out.push(digits);
             }
         }
     }
-    out
+    // Scrape bare +digits runs (PROP-ID notes, trailing phones in Notes blobs).
+    let bytes = raw.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'+' {
+            let start = i;
+            i += 1;
+            while i < bytes.len() && bytes[i].is_ascii_digit() {
+                i += 1;
+            }
+            if i > start + 1 {
+                if let Some(digits) = sanitize_number(&raw[start..i]) {
+                    if !out.contains(&digits) {
+                        out.push(digits);
+                    }
+                }
+            }
+        } else {
+            i += 1;
+        }
+    }
 }
 
 fn parse_exclude(raw: &str) -> bool {
@@ -360,5 +469,32 @@ TEL;TYPE=CELL:+1-555-555-0100\nEND:VCARD\n",
             book.enrich_display_name("5555550122", "Already Set"),
             None
         );
+    }
+
+    #[test]
+    fn loads_imazing_contacts_phone_cols_and_notes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_file(
+            &dir,
+            "Contacts.csv",
+            "First Name,Middle Name,Last Name,Mobile Phone,Home Phone,Notes\n\
+Bob,,McRoy,+13212462167,,mcroyr@gmail.com\n\
+Kyle,,,,,PROP-ID: +17276875182; \n\
+NoPhone,,Person,,,,\n",
+        );
+        let book = ContactsBook::load_imazing_contacts_csv(&path).unwrap();
+        assert_eq!(
+            book.lookup_phone_by_name("Bob McRoy").as_deref(),
+            Some("3212462167")
+        );
+        assert_eq!(
+            book.lookup_name_by_phone("+13212462167"),
+            Some("Bob McRoy")
+        );
+        assert_eq!(
+            book.lookup_phone_by_name("Kyle").as_deref(),
+            Some("7276875182")
+        );
+        assert!(book.lookup_phone_by_name("NoPhone Person").is_none());
     }
 }

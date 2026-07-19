@@ -9,5 +9,6 @@ members = [
     "crates/sms-backup-restore-to-csv",
     "crates/sms-backup-plus-to-csv",
     "crates/openextract-to-csv",
+    "crates/imazing-to-csv",
     "crates/imessage-exporter",
 ]

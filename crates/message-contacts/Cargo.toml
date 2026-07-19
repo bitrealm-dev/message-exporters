@@ -6,6 +6,7 @@ description = "VCF / contacts CSV name↔phone resolution for message exporters"
 
 [dependencies]
 anyhow = "1.0.103"
+csv = "1.4.0"
 message-phone = { path = "../message-phone" }
 
 [dev-dependencies]

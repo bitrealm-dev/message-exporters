@@ -31,11 +31,12 @@ Pass exactly one. Shared logic: [`crates/message-contacts`](crates/message-conta
 | **SMS Backup & Restore** XML from SyncTech (Android) | [`sms-backup-restore-to-csv`](crates/sms-backup-restore-to-csv) | SMS Backup & Restore **10.26.003** | [What the XML contains](crates/sms-backup-restore-to-csv/docs/FIELDS.md), [How messages become spreadsheet rows](crates/sms-backup-restore-to-csv/docs/XML_CSV_MAPPING.md) |
 | **SMS Backup+** email exports (`.eml` files) | [`sms-backup-plus-to-csv`](crates/sms-backup-plus-to-csv) | SMS Backup+ **1.5.11** | [How the email backup is structured](crates/sms-backup-plus-to-csv/docs/FORMAT.md), [How messages become spreadsheet rows](crates/sms-backup-plus-to-csv/docs/EML_CSV_MAPPING.md) |
 | **OpenExtract** conversation CSV + contacts `.vcf` | [`openextract-to-csv`](crates/openextract-to-csv) | OpenExtract **0.5.1** | [Converter README](crates/openextract-to-csv/README.md), [example spreadsheet](crates/openextract-to-csv/sample-output/_15555550122.csv) |
+| **iMazing** Messages CSV + Contacts CSV | [`imazing-to-csv`](crates/imazing-to-csv) | iMazing **3.5.5** | [Converter README](crates/imazing-to-csv/README.md), [example spreadsheet](crates/imazing-to-csv/sample-output/_13212462167.csv) |
 | **Apple Messages** database on a Mac (`chat.db`) | [`imessage-exporter`](crates/imessage-exporter) | iMessage Exporter **4.2.0** | [Converter README](crates/imessage-exporter/README.md), [example spreadsheet](crates/imessage-exporter/sample-output/15551212.csv) |
 
 Each converter writes `export_source`, `export_tool`, and `export_tool_version` on every CSV row so downstream vault import knows which upstream tool/version the export targets.
 
-**iMazing** Messages CSV (vendor export) is ingested by [message-vault-rs](https://github.com/bitrealm-dev/message-vault-rs) `csv-ingest` targeting **iMazing 3.5.5**. To share structure without PII, rewrite it with [`imazing-anonymize`](crates/message-anonymize) (does not convert to near-vault CSV).
+Raw **iMazing** vendor Messages CSV can also be ingested by [message-vault-rs](https://github.com/bitrealm-dev/message-vault-rs) `csv-ingest` (no contact enrichment). Prefer [`imazing-to-csv`](crates/imazing-to-csv) when you have the Contacts export. To share structure without PII, rewrite vendor CSV with [`imazing-anonymize`](crates/message-anonymize).
 
 Each converter’s README explains what the backup looks like, what you need to run it, and extra options.
 
@@ -100,6 +101,18 @@ cargo run --release -p openextract-to-csv -- \
 ```
 
 `--input` is a conversation CSV or a folder of them (`all_conversations.csv` or `conversation_*.csv`). `--vcf` is the contacts file from the same export (phone ↔ name). Name-only chats still write; vault import may need a fuller VCF later.
+
+### iMazing (Messages CSV + Contacts CSV)
+
+```bash
+cargo run --release -p imazing-to-csv -- \
+  --input "/path/to/Messages - Someone.csv" \
+  --output ./staging/imazing \
+  --contacts "/path/to/Contacts - ….csv" \
+  --timezone America/New_York
+```
+
+Export Messages from the **All backup** view when you want attachment filenames. `--contacts` is the iMazing Contacts CSV from the same backup. Distinct from `imessage-exporter` (which reads `chat.db`).
 
 ### Apple Messages (`chat.db` on a Mac)
 
