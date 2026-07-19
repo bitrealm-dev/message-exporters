@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 use go_sms_pro_to_csv::convert_export;
+use message_contacts::resolve_contacts_cli;
 
 #[derive(Parser, Debug)]
 #[command(name = "go-sms-pro-to-csv")]
@@ -20,11 +21,21 @@ struct Cli {
     /// Required — there is no demo default (wrong owner flips PDU direction).
     #[arg(long = "owner-phone", required = true)]
     owner_phones: Vec<String>,
+
+    /// Vault-shaped contacts CSV (phones,first_name,last_name,…) for phone→name fill.
+    /// Required unless `--vcf` is set.
+    #[arg(long)]
+    contacts: Option<PathBuf>,
+
+    /// Contacts VCF (alternate to `--contacts`).
+    #[arg(long)]
+    vcf: Option<PathBuf>,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let report = convert_export(&cli.input, &cli.output, &cli.owner_phones)?;
+    let (contacts, _) = resolve_contacts_cli(cli.contacts, cli.vcf)?;
+    let report = convert_export(&cli.input, &cli.output, &cli.owner_phones, &contacts)?;
 
     println!("Wrote {}", cli.output.display());
     println!("  conversations:     {}", report.conversations);

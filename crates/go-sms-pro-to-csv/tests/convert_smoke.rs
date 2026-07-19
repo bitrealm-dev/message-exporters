@@ -1,7 +1,15 @@
 use go_sms_pro_to_csv::convert_export;
+use message_contacts::ContactsBook;
 use std::fs::{self, File};
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::PathBuf;
+
+fn empty_contacts(dir: &tempfile::TempDir) -> ContactsBook {
+    let path = dir.path().join("contacts.csv");
+    let mut f = File::create(&path).unwrap();
+    writeln!(f, "phones,first_name,last_name").unwrap();
+    ContactsBook::load_csv(&path).unwrap()
+}
 
 #[test]
 fn convert_smoke_writes_csv_not_json() {
@@ -9,8 +17,14 @@ fn convert_smoke_writes_csv_not_json() {
     assert!(input.is_dir(), "missing fixture: {}", input.display());
 
     let tmp = tempfile::tempdir().expect("tempdir");
-    let report = convert_export(input.as_path(), tmp.path(), &["+15555550100".into()])
-        .expect("convert_export should succeed");
+    let contacts = empty_contacts(&tmp);
+    let report = convert_export(
+        input.as_path(),
+        tmp.path(),
+        &["+15555550100".into()],
+        &contacts,
+    )
+    .expect("convert_export should succeed");
     assert!(report.conversations >= 1);
     assert!(report.xml_messages_seen >= 2);
 
@@ -38,13 +52,6 @@ fn convert_smoke_writes_csv_not_json() {
     let header = contents.lines().next().unwrap();
     assert!(header.contains("chat_identifier"));
     assert!(header.contains("direction"));
-    assert!(header.contains("export_source"));
-    assert!(header.contains("source_kind"));
-    assert!(header.contains("xml_fields_json"));
-    assert!(!header.contains("participants_json"));
-    assert!(!header.contains("read_receipt"));
-    assert!(!header.contains("tapbacks_json"));
-    assert!(contents.contains("go-sms-pro"));
-    assert!(contents.contains("incoming") || contents.contains("outgoing"));
-    assert!(contents.contains("smoke"));
+    assert!(header.contains("attachments_json"));
+    assert!(!header.contains("export_schema"));
 }

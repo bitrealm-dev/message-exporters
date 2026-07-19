@@ -28,14 +28,16 @@ Example output from test emails: [`sample-output/`](sample-output/).
 1. A folder of `.eml` files from SMS Backup+
 2. **Your phone number** — so the converter can tell which messages you sent
 3. **Your email address** — the address SMS Backup+ used when it mailed the texts (needed when the email does not clearly mark sent vs received)
+4. **Contacts** — `--contacts` (vault-shaped CSV) or `--vcf` for name↔phone resolution (required)
 
-Pass those on the command line, or put them in `config/owner.toml` next to this converter (`phones = […]` and `emails = […]`; see `config/owner.example.toml`). Default config paths (`owner.toml`, `contacts.csv`, `name-mapping.csv`) are resolved relative to this crate, not the process working directory. Repeat `--owner-phone` or `--owner-email` if you used more than one number or address.
+Pass owner phone/email on the command line, or put them in `config/owner.toml` next to this converter (`phones = […]` and `emails = […]`; see `config/owner.example.toml`). Optional `--name-mapping` still defaults to `config/name-mapping.csv` when that file exists (crate-relative). Repeat `--owner-phone` or `--owner-email` if you used more than one number or address.
 
-Optional:
+Also useful:
 
-- `--contacts` — a contacts spreadsheet so names can be filled in from phone numbers
-- `--name-mapping` — a small spreadsheet that maps nicknames in the backup to the names you want in the export
+- `--name-mapping` — maps nicknames in the backup to the names you want in the export
 - `-v` / `--verbose` — progress messages while large folders are scanned
+
+Contacts resolve **name → phone** when the EML has a name but no peer number, and **phone → name** when the display name is blank. Vault csv-ingest does not look up contacts.
 
 ## How to run
 
@@ -46,10 +48,11 @@ cargo run --release -p sms-backup-plus-to-csv -- convert \
   --input /path/to/eml_export \
   --output ./staging/sms-backup-plus \
   --owner-phone +15555550100 \
-  --owner-email you@example.com
+  --owner-email you@example.com \
+  --contacts /path/to/contacts.csv
 ```
 
-Replace the paths, phone number, and email with your own. `--input` is the folder of `.eml` files. `--output` is where the CSV files and `attachments/` folder are written.
+Replace the paths, phone number, and email with your own. `--input` is the folder of `.eml` files. `--output` is where the CSV files and `attachments/` folder are written. Use `--vcf` instead of `--contacts` if you have a VCF.
 
 ## License
 

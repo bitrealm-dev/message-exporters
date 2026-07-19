@@ -1,3 +1,4 @@
+use message_contacts::{ContactsBook, NameMapping};
 use sms_backup_plus_to_csv::convert_export;
 use std::fs::{self, File};
 use std::io::Read;
@@ -5,6 +6,14 @@ use std::path::PathBuf;
 
 fn fixtures() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
+}
+
+fn empty_book() -> ContactsBook {
+    ContactsBook::empty()
+}
+
+fn empty_mapping() -> NameMapping {
+    NameMapping::empty()
 }
 
 #[test]
@@ -16,8 +25,8 @@ fn convert_smoke_writes_csv_not_json() {
         tmp.path(),
         &["+15555550100".into()],
         &["owner@example.com".into()],
-        None,
-        None,
+        &empty_book(),
+        &empty_mapping(),
         false,
     )
     .unwrap();
@@ -78,8 +87,8 @@ fn end_dedupe_collapses_duplicate_flats() {
         &out,
         &["+15555550100".into()],
         &["owner@example.com".into()],
-        None,
-        None,
+        &empty_book(),
+        &empty_mapping(),
         false,
     )
     .unwrap();
@@ -143,8 +152,8 @@ Will do\r\n"
         &out,
         &["+15555550100".into()],
         &["owner@example.com".into()],
-        None,
-        None,
+        &empty_book(),
+        &empty_mapping(),
         false,
     )
     .unwrap();

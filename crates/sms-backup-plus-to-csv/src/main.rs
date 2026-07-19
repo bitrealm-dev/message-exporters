@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use message_contacts::{resolve_contacts_cli, NameMapping};
 use serde::Deserialize;
 use sms_backup_plus_to_csv::convert_export;
 
@@ -46,10 +47,14 @@ enum Commands {
         #[arg(long = "owner-email", value_name = "EMAIL")]
         owner_emails: Vec<String>,
 
-        /// Contacts CSV (phones,first_name,last_name,…) for name→phone lookup.
-        /// Default: config/contacts.csv when that file exists.
+        /// Vault-shaped contacts CSV (phones,first_name,last_name,…) for name↔phone lookup.
+        /// Required unless `--vcf` is set.
         #[arg(long)]
         contacts: Option<PathBuf>,
+
+        /// Contacts VCF (alternate to `--contacts`).
+        #[arg(long)]
+        vcf: Option<PathBuf>,
 
         /// Name mapping CSV (correct_name,incorrect_name) for EML export aliases.
         /// Default: config/name-mapping.csv when that file exists.
@@ -151,20 +156,25 @@ fn main() -> Result<()> {
             owner_phones,
             owner_emails,
             contacts,
+            vcf,
             name_mapping,
         } => {
             let (owner_phones, emails, default_inputs) =
                 resolve_owner(owner_phones, owner_emails)?;
             let input = resolve_inputs(input, default_inputs)?;
-            let contacts = resolve_optional_config(contacts, "contacts.csv");
-            let name_mapping = resolve_optional_config(name_mapping, "name-mapping.csv");
+            let (contacts_book, contacts_path) = resolve_contacts_cli(contacts, vcf)?;
+            let name_mapping_path = resolve_optional_config(name_mapping, "name-mapping.csv");
+            let (name_mapping, _) = NameMapping::load_optional(name_mapping_path.as_deref())?;
+            if cli.verbose {
+                eprintln!("contacts: {}", contacts_path.display());
+            }
             let report = convert_export(
                 &input,
                 &output,
                 &owner_phones,
                 &emails,
-                contacts.as_deref(),
-                name_mapping.as_deref(),
+                &contacts_book,
+                &name_mapping,
                 cli.verbose,
             )?;
 

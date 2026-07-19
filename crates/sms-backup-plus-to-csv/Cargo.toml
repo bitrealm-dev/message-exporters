@@ -10,6 +10,7 @@ clap = { version = "4.6.1", features = ["derive"] }
 csv = "1.4.0"
 hex = "0.4.3"
 mailparse = "0.16.1"
+message-contacts = { path = "../message-contacts" }
 message-csv = { path = "../message-csv" }
 message-phone = { path = "../message-phone" }
 regex = "1.13.0"

@@ -1,7 +1,10 @@
 //! Convert SMS Backup+ `.eml` trees into per-conversation CSV.
 
 use crate::archive::parse_archive_eml_mail;
-use crate::contacts::{ContactsBook, NameMapping, apply_name_mapping, fill_unknown_phone};
+use crate::contacts::{
+    apply_name_mapping, enrich_display_names, fill_unknown_phone,
+};
+use message_contacts::{ContactsBook, NameMapping};
 use crate::flat_eml::{is_archive_eml, is_flat_sms_eml, parse_flat_eml_mail};
 use crate::identity::{chat_id_for, cover_identity, safe_stem, timestamp_ms};
 use crate::types::{AttachmentBlob, ParsedMessage};
@@ -461,26 +464,20 @@ pub fn convert_export<P: AsRef<Path>>(
     output_dir: &Path,
     owner_phones: &[String],
     owner_emails: &[String],
-    contacts_path: Option<&Path>,
-    name_mapping_path: Option<&Path>,
+    contacts: &ContactsBook,
+    name_mapping: &NameMapping,
     verbose: bool,
 ) -> Result<ExportReport> {
     let owners = OwnerPhoneSet::new(owner_phones)?;
-    let (contacts, contacts_loaded) = ContactsBook::load_optional(contacts_path)?;
-    let (name_mapping, mapping_loaded) = NameMapping::load_optional(name_mapping_path)?;
     let mut report = ExportReport::default();
     let mut conversations: HashMap<String, PendingConversation> = HashMap::new();
 
     vlog(verbose, format!("owner phones: {}", owners.all_digits.len()));
     vlog(verbose, format!("owner emails: {}", owner_emails.len()));
-    match &contacts_loaded {
-        Some(p) => vlog(verbose, format!("contacts: {}", p.display())),
-        None => vlog(verbose, "contacts: (none)"),
-    }
-    match &mapping_loaded {
-        Some(p) => vlog(verbose, format!("name-mapping: {}", p.display())),
-        None => vlog(verbose, "name-mapping: (none)"),
-    }
+    vlog(
+        verbose,
+        format!("contacts entries (by phone): {}", contacts.len()),
+    );
     vlog(verbose, format!("output: {}", output_dir.display()));
 
     fs::create_dir_all(output_dir)?;
@@ -521,8 +518,9 @@ pub fn convert_export<P: AsRef<Path>>(
                     report.skipped_invalid_date += skipped_dates;
                     for msg in &mut msgs {
                         msg.eml_path = rel_path.clone();
-                        let _ = apply_name_mapping(msg, &name_mapping);
-                        let _ = fill_unknown_phone(msg, &contacts);
+                        let _ = apply_name_mapping(msg, name_mapping);
+                        let _ = fill_unknown_phone(msg, contacts);
+                        enrich_display_names(msg, contacts);
                     }
                     for msg in msgs {
                         if msg.chat_key.is_empty() {
@@ -550,8 +548,9 @@ pub fn convert_export<P: AsRef<Path>>(
             match parse_flat_eml_mail(&eml_path, &mail, &owners.all_digits, owner_emails) {
                 Ok(Some(mut msg)) => {
                     msg.eml_path = rel_path;
-                    let _ = apply_name_mapping(&mut msg, &name_mapping);
-                    let _ = fill_unknown_phone(&mut msg, &contacts);
+                    let _ = apply_name_mapping(&mut msg, name_mapping);
+                    let _ = fill_unknown_phone(&mut msg, contacts);
+                    enrich_display_names(&mut msg, contacts);
                     report.flat_eml += 1;
                     if msg.chat_key.is_empty() {
                         report.unknown_chat_messages += 1;

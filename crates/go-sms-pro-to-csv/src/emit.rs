@@ -4,6 +4,7 @@ use crate::pdu::{parse_pdu_file, ParsedPdu};
 use crate::xml::{parse_xml_file, XmlMessage};
 use anyhow::{bail, Context, Result};
 use chrono::{Local, TimeZone};
+use message_contacts::ContactsBook;
 use message_csv::{
     format_local_ts, json_cell, safe_filename, stable_guid, AttachmentCell,
 };
@@ -462,11 +463,30 @@ fn write_conversation(
     Ok(())
 }
 
+fn enrich_pending_names(book: &ContactsBook, chat_id: &str, msg: &mut PendingMessage) {
+    let phones: Vec<&str> = msg
+        .sender_digits
+        .as_deref()
+        .into_iter()
+        .chain(std::iter::once(chat_id))
+        .collect();
+    for phone in phones {
+        if let Some(name) = book.enrich_display_name(phone, &msg.contact_name) {
+            msg.contact_name = name;
+        }
+        let cur = msg.sender_display_name.as_deref().unwrap_or("");
+        if let Some(name) = book.enrich_display_name(phone, cur) {
+            msg.sender_display_name = Some(name);
+        }
+    }
+}
+
 /// Convert a GO SMS Pro export directory into per-conversation CSV.
 pub fn convert_export(
     input_dir: &Path,
     output_dir: &Path,
     owner_phones: &[String],
+    contacts: &ContactsBook,
 ) -> Result<ExportReport> {
     if !input_dir.is_dir() {
         bail!("input is not a directory: {}", input_dir.display());
@@ -545,6 +565,9 @@ pub fn convert_export(
     }
 
     for (chat_id, mut convo) in conversations {
+        for msg in &mut convo.messages {
+            enrich_pending_names(contacts, &chat_id, msg);
+        }
         write_conversation(output_dir, &chat_id, &mut convo, &mut report)?;
     }
 

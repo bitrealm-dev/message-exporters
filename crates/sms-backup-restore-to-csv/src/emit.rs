@@ -2,6 +2,7 @@
 
 use crate::xml::{parse_xml_file, AttachmentBlob, ConvType, ParsedMessage};
 use anyhow::{bail, Context, Result};
+use message_contacts::ContactsBook;
 use message_csv::{
     format_local_ts, json_cell, safe_filename, stable_guid, AttachmentCell,
 };
@@ -320,11 +321,30 @@ fn collect_xml_paths(input: &Path) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
+fn enrich_pending_names(book: &ContactsBook, chat_id: &str, msg: &mut PendingMessage) {
+    let phones: Vec<&str> = msg
+        .sender_digits
+        .as_deref()
+        .into_iter()
+        .chain(std::iter::once(chat_id))
+        .collect();
+    for phone in phones {
+        if let Some(name) = book.enrich_display_name(phone, &msg.contact_name) {
+            msg.contact_name = name;
+        }
+        let cur = msg.sender_display_name.as_deref().unwrap_or("");
+        if let Some(name) = book.enrich_display_name(phone, cur) {
+            msg.sender_display_name = Some(name);
+        }
+    }
+}
+
 /// Convert SMS Backup & Restore XML into per-conversation CSV.
 pub fn convert_export(
     input: &Path,
     output_dir: &Path,
     owner_phones: &[String],
+    contacts: &ContactsBook,
 ) -> Result<ExportReport> {
     let owners = OwnerPhoneSet::new(owner_phones)?;
     let mut report = ExportReport::default();
@@ -360,6 +380,9 @@ pub fn convert_export(
     }
 
     for (chat_id, mut convo) in conversations {
+        for msg in &mut convo.messages {
+            enrich_pending_names(contacts, &chat_id, msg);
+        }
         write_conversation(output_dir, &chat_id, &mut convo, &mut report)?;
         if !convo.messages.is_empty() {
             report.conversations += 1;

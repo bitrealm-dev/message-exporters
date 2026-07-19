@@ -1,7 +1,15 @@
+use message_contacts::ContactsBook;
 use sms_backup_restore_to_csv::convert_export;
 use std::fs::{self, File};
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::PathBuf;
+
+fn empty_contacts(dir: &tempfile::TempDir) -> ContactsBook {
+    let path = dir.path().join("contacts.csv");
+    let mut f = File::create(&path).unwrap();
+    writeln!(f, "phones,first_name,last_name").unwrap();
+    ContactsBook::load_csv(&path).unwrap()
+}
 
 #[test]
 fn convert_export_smoke_on_sample_fixture() {
@@ -9,7 +17,8 @@ fn convert_export_smoke_on_sample_fixture() {
     assert!(fixture.is_file(), "missing fixture: {}", fixture.display());
 
     let tmp = tempfile::tempdir().expect("tempdir");
-    let report = convert_export(&fixture, tmp.path(), &["+15555550100".into()])
+    let contacts = empty_contacts(&tmp);
+    let report = convert_export(&fixture, tmp.path(), &["+15555550100".into()], &contacts)
         .expect("convert_export should succeed");
 
     assert!(
@@ -82,7 +91,8 @@ fn dedupes_overlapping_xml_files() {
     fs::write(input_dir.join("b.xml"), xml).unwrap();
 
     let out = tmp.path().join("out");
-    let report = convert_export(&input_dir, &out, &["+15555550100".into()]).unwrap();
+    let contacts = empty_contacts(&tmp);
+    let report = convert_export(&input_dir, &out, &["+15555550100".into()], &contacts).unwrap();
     assert_eq!(report.sms_seen, 2);
     assert_eq!(report.conversations, 1);
     assert_eq!(report.received, 1); // one row after dedupe
@@ -98,7 +108,9 @@ fn dedupes_overlapping_xml_files() {
 fn rejects_owner_phone_without_digits() {
     let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample.xml");
     let tmp = tempfile::tempdir().expect("tempdir");
-    let err = convert_export(&fixture, tmp.path(), &["not-a-phone".into()]).unwrap_err();
+    let contacts = empty_contacts(&tmp);
+    let err =
+        convert_export(&fixture, tmp.path(), &["not-a-phone".into()], &contacts).unwrap_err();
     assert!(
         err.to_string().contains("owner phone"),
         "unexpected error: {err:#}"

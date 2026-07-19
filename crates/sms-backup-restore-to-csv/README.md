@@ -23,6 +23,7 @@ Example output from a small test backup: [`sample-output/`](sample-output/).
 
 1. Either one `sms-….xml` file, or a folder that contains several `.xml` backups (all of them are combined into one export)
 2. **Your phone number** — the number that owned the messages on that phone (required; there is no demo default)
+3. **Contacts** — `--contacts` (vault-shaped CSV) or `--vcf` so blank display names can be filled from phone numbers
 
 For ordinary SMS, sent vs received comes from the backup’s own type field. Your number is still required so MMS chat keys, group membership, and senders are correct. For example, if your number is `+1 555 555 0100`, pass that (or the same digits without spaces) as `--owner-phone`.
 
@@ -36,10 +37,11 @@ From the [message-exporters](../..) repository root:
 cargo run --release -p sms-backup-restore-to-csv -- \
   --input /path/to/sms-20210328165031.xml \
   --output ./staging/sms-backup-restore \
-  --owner-phone +15555550100
+  --owner-phone +15555550100 \
+  --contacts /path/to/contacts.csv
 ```
 
-Replace the paths and phone number with your own. `--input` may be a single XML file or a directory of XML files. `--output` is where the CSV files and `attachments/` folder are written.
+Replace the paths and phone number with your own. `--input` may be a single XML file or a directory of XML files. `--output` is where the CSV files and `attachments/` folder are written. Use `--vcf` instead of `--contacts` if you have a VCF.
 
 ## License
 

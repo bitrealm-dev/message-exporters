@@ -14,6 +14,15 @@ Other formats look tempting. JSON is great for programs, but hard for a person t
 
 CSV sits in the middle: human-readable enough that you can open a file and verify that the message text, times, and directions look right, yet still structured enough for spreadsheets and downstream tools. That makes it a practical archive format—and an easy place to catch export mistakes before you trust the data.
 
+## Contacts (Android exporters)
+
+Android converters **require** a contacts file so names and phone numbers are resolved when the CSV is written (not later in the vault):
+
+- `--contacts path/to/contacts.csv` — vault-shaped `phones,first_name,last_name[,exclude,…]` (phones `;`-separated), or
+- `--vcf path/to/contacts.vcf` — same index from a VCF
+
+Pass exactly one. Shared logic: [`crates/message-contacts`](crates/message-contacts). Open the CSV afterward and fix anything still wrong before vault import.
+
 ## Which converter to use
 
 | Backup you have | Converter | Format docs |
@@ -42,10 +51,11 @@ Binaries land under `target/release/`. Replace the example paths and identity va
 cargo run --release -p go-sms-pro-to-csv -- \
   --input /path/to/gosms_export \
   --output ./staging/go-sms-pro \
-  --owner-phone +15555550100
+  --owner-phone +15555550100 \
+  --contacts /path/to/contacts.csv
 ```
 
-`--input` is the backup folder (XML + `.pdu` files). `--owner-phone` is required (the number that owned the phone).
+`--input` is the backup folder (XML + `.pdu` files). `--owner-phone` and `--contacts` (or `--vcf`) are required.
 
 ### SMS Backup & Restore (SyncTech XML)
 
@@ -53,10 +63,11 @@ cargo run --release -p go-sms-pro-to-csv -- \
 cargo run --release -p sms-backup-restore-to-csv -- \
   --input /path/to/sms-20210328165031.xml \
   --output ./staging/sms-backup-restore \
-  --owner-phone +15555550100
+  --owner-phone +15555550100 \
+  --contacts /path/to/contacts.csv
 ```
 
-`--input` may be one `.xml` file or a folder of them. Unlock/unzip encrypted `.zip` backups first. `--owner-phone` is required.
+`--input` may be one `.xml` file or a folder of them. Unlock/unzip encrypted `.zip` backups first. `--owner-phone` and `--contacts` (or `--vcf`) are required.
 
 ### SMS Backup+ (folder of `.eml` files)
 
@@ -65,10 +76,11 @@ cargo run --release -p sms-backup-plus-to-csv -- convert \
   --input /path/to/eml_export \
   --output ./staging/sms-backup-plus \
   --owner-phone +15555550100 \
-  --owner-email you@example.com
+  --owner-email you@example.com \
+  --contacts /path/to/contacts.csv
 ```
 
-Or put phone/email in [`crates/sms-backup-plus-to-csv/config/owner.toml`](crates/sms-backup-plus-to-csv/config/owner.example.toml) instead of the flags.
+Or put phone/email in [`crates/sms-backup-plus-to-csv/config/owner.toml`](crates/sms-backup-plus-to-csv/config/owner.example.toml) instead of the flags. Contacts still require `--contacts` or `--vcf` on the CLI.
 
 ### OpenExtract (conversation CSV + VCF)
 
