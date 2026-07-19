@@ -804,6 +804,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "message-contacts"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "message-phone",
+ "tempfile",
+]
+
+[[package]]
 name = "message-csv"
 version = "0.1.0"
 dependencies = [
@@ -847,6 +856,20 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
+
+[[package]]
+name = "openextract-to-csv"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "csv",
+ "message-contacts",
+ "message-csv",
+ "message-phone",
+ "tempfile",
+]
 
 [[package]]
 name = "pbkdf2"

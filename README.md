@@ -21,6 +21,7 @@ CSV sits in the middle: human-readable enough that you can open a file and verif
 | **GO SMS Pro** local backup folder (Android) | [`go-sms-pro-to-csv`](crates/go-sms-pro-to-csv) | [How messages become spreadsheet rows](crates/go-sms-pro-to-csv/docs/XML_CSV_MAPPING.md) |
 | **SMS Backup & Restore** XML from SyncTech (Android) | [`sms-backup-restore-to-csv`](crates/sms-backup-restore-to-csv) | [What the XML contains](crates/sms-backup-restore-to-csv/docs/FIELDS.md), [How messages become spreadsheet rows](crates/sms-backup-restore-to-csv/docs/XML_CSV_MAPPING.md) |
 | **SMS Backup+** email exports (`.eml` files) | [`sms-backup-plus-to-csv`](crates/sms-backup-plus-to-csv) | [How the email backup is structured](crates/sms-backup-plus-to-csv/docs/FORMAT.md), [How messages become spreadsheet rows](crates/sms-backup-plus-to-csv/docs/EML_CSV_MAPPING.md) |
+| **OpenExtract** conversation CSV + contacts `.vcf` | [`openextract-to-csv`](crates/openextract-to-csv) | [Converter README](crates/openextract-to-csv/README.md), [example spreadsheet](crates/openextract-to-csv/sample-output/_15555550122.csv) |
 | **Apple Messages** database on a Mac (`chat.db`) | [`imessage-exporter`](crates/imessage-exporter) | [Converter README](crates/imessage-exporter/README.md), [example spreadsheet](crates/imessage-exporter/sample-output/15551212.csv) |
 
 Each converter’s README explains what the backup looks like, what you need to run it, and extra options.
@@ -68,6 +69,17 @@ cargo run --release -p sms-backup-plus-to-csv -- convert \
 ```
 
 Or put phone/email in [`crates/sms-backup-plus-to-csv/config/owner.toml`](crates/sms-backup-plus-to-csv/config/owner.example.toml) instead of the flags.
+
+### OpenExtract (conversation CSV + VCF)
+
+```bash
+cargo run --release -p openextract-to-csv -- \
+  --input /path/to/openextract_csv_dir \
+  --output ./staging/openextract \
+  --vcf /path/to/contacts.vcf
+```
+
+`--input` is a conversation CSV or a folder of them (`all_conversations.csv` or `conversation_*.csv`). `--vcf` is the contacts file from the same export (phone ↔ name). Name-only chats still write; vault import may need a fuller VCF later.
 
 ### Apple Messages (`chat.db` on a Mac)
 

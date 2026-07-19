@@ -1,0 +1,12 @@
+[package]
+name = "message-contacts"
+version = "0.1.0"
+edition = "2024"
+description = "VCF / contacts CSV name↔phone resolution for message exporters"
+
+[dependencies]
+anyhow = "1.0.103"
+message-phone = { path = "../message-phone" }
+
+[dev-dependencies]
+tempfile = "3.27.0"

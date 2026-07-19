@@ -3,8 +3,10 @@ resolver = "2"
 members = [
     "crates/message-phone",
     "crates/message-csv",
+    "crates/message-contacts",
     "crates/go-sms-pro-to-csv",
     "crates/sms-backup-restore-to-csv",
     "crates/sms-backup-plus-to-csv",
+    "crates/openextract-to-csv",
     "crates/imessage-exporter",
 ]
