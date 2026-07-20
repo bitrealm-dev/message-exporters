@@ -559,7 +559,7 @@ impl App {
         }
 
         if self.form.attachment_media == AttachmentMedia::Compress {
-            content = content.push(
+            let nested = column![
                 row![
                     text("Max resolution").width(200),
                     pick_list(
@@ -571,20 +571,18 @@ impl App {
                 ]
                 .spacing(10)
                 .align_y(iced::Alignment::Center),
-            );
-            content = content.push(input_row(
-                "Max fps",
-                "e.g. 30",
-                &self.form.media_max_fps,
-                Field::MediaMaxFps,
-            ));
-            content = content.push(input_row(
-                "Min size",
-                "e.g. 20M",
-                &self.form.media_min_size,
-                Field::MediaMinSize,
-            ));
-            content = content.push(
+                input_row(
+                    "Max fps",
+                    "e.g. 30",
+                    &self.form.media_max_fps,
+                    Field::MediaMaxFps,
+                ),
+                input_row(
+                    "Min size",
+                    "e.g. 20M",
+                    &self.form.media_min_size,
+                    Field::MediaMinSize,
+                ),
                 row![
                     text("Skip efficient").width(200),
                     checkbox(self.form.media_skip_efficient)
@@ -593,7 +591,14 @@ impl App {
                 ]
                 .spacing(10)
                 .align_y(iced::Alignment::Center),
-            );
+            ]
+            .spacing(8);
+            content = content.push(container(nested).padding(iced::Padding {
+                top: 0.0,
+                right: 0.0,
+                bottom: 0.0,
+                left: 24.0,
+            }));
         }
 
         content.into()
