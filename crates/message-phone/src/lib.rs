@@ -1,6 +1,7 @@
 //! Shared US-centric phone normalization for message exporters.
 
 use std::collections::HashSet;
+use std::fmt;
 
 use anyhow::{bail, Context, Result};
 
@@ -8,6 +9,34 @@ use anyhow::{bail, Context, Result};
 ///
 /// Allows 5–6 digit short codes (carrier/bank SMS). Rejects junk like `"4"`.
 const MIN_PHONE_DIGITS: usize = 5;
+
+/// Region rules for [`normalize_certain`] (contacts validation only).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PhoneRegion {
+    /// US NANP: certain only for 10 digits or 11 digits starting with `1`.
+    Usa,
+    /// International: certain only when the raw value has a leading `+`.
+    International,
+}
+
+impl fmt::Display for PhoneRegion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PhoneRegion::Usa => write!(f, "usa"),
+            PhoneRegion::International => write!(f, "international"),
+        }
+    }
+}
+
+impl PhoneRegion {
+    pub fn parse_cli(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "usa" | "us" => Some(Self::Usa),
+            "international" | "intl" => Some(Self::International),
+            _ => None,
+        }
+    }
+}
 
 /// Strip non-digits and a leading US country code `1`.
 /// Returns `None` when fewer than [`MIN_PHONE_DIGITS`] remain.
@@ -36,6 +65,75 @@ pub fn to_e164(digits: &str) -> String {
         digits.to_string()
     } else {
         format!("+{digits}")
+    }
+}
+
+/// Canonical E.164 only when the parse is unambiguous for `region`.
+///
+/// Unlike [`sanitize_number`], this does **not** accept short codes or
+/// ambiguous lengths — used by contacts validation before rewriting files.
+pub fn normalize_certain(raw: &str, region: PhoneRegion) -> Option<String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let digits: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
+    match region {
+        PhoneRegion::Usa => {
+            if digits.len() == 10 {
+                Some(format!("+1{digits}"))
+            } else if digits.len() == 11 && digits.starts_with('1') {
+                Some(format!("+{digits}"))
+            } else {
+                None
+            }
+        }
+        PhoneRegion::International => {
+            if !raw.contains('+') {
+                return None;
+            }
+            if (8..=15).contains(&digits.len()) {
+                Some(format!("+{digits}"))
+            } else {
+                None
+            }
+        }
+    }
+}
+
+/// Human-readable reason when [`normalize_certain`] returns `None`.
+pub fn normalize_uncertain_reason(raw: &str, region: PhoneRegion) -> String {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return "empty phone".into();
+    }
+    let digits: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
+    match region {
+        PhoneRegion::Usa => {
+            if digits.len() == 10 || (digits.len() == 11 && digits.starts_with('1')) {
+                "unexpected: looked certain".into()
+            } else if digits.is_empty() {
+                "no digits".into()
+            } else {
+                format!(
+                    "USA needs 10 digits or 11 starting with 1 (got {} digit{})",
+                    digits.len(),
+                    if digits.len() == 1 { "" } else { "s" }
+                )
+            }
+        }
+        PhoneRegion::International => {
+            if !raw.contains('+') {
+                "international mode requires a leading +".into()
+            } else if !(8..=15).contains(&digits.len()) {
+                format!(
+                    "international needs 8–15 digits after + (got {})",
+                    digits.len()
+                )
+            } else {
+                "unexpected: looked certain".into()
+            }
+        }
     }
 }
 
@@ -98,6 +196,41 @@ mod tests {
     #[test]
     fn e164_us() {
         assert_eq!(to_e164("5555550100"), "+15555550100");
+    }
+
+    #[test]
+    fn certain_usa() {
+        assert_eq!(
+            normalize_certain("(542).341-2398", PhoneRegion::Usa).as_deref(),
+            Some("+15423412398")
+        );
+        assert_eq!(
+            normalize_certain("1-555-456-7890", PhoneRegion::Usa).as_deref(),
+            Some("+15554567890")
+        );
+        assert_eq!(
+            normalize_certain("1555-4567", PhoneRegion::Usa),
+            None,
+            "too short for USA certainty"
+        );
+        assert_eq!(normalize_certain("+442071838750", PhoneRegion::Usa), None);
+    }
+
+    #[test]
+    fn certain_international() {
+        assert_eq!(
+            normalize_certain("+44 20 7183 8750", PhoneRegion::International).as_deref(),
+            Some("+442071838750")
+        );
+        assert_eq!(
+            normalize_certain("(542).341-2398", PhoneRegion::International),
+            None,
+            "no leading +"
+        );
+        assert_eq!(
+            normalize_certain("+1-542-341-2398", PhoneRegion::International).as_deref(),
+            Some("+15423412398")
+        );
     }
 
     #[test]

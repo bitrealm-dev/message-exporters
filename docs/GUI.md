@@ -2,7 +2,7 @@
 
 Living design notes for the cross-platform desktop GUI that drives the existing exporter binaries.
 
-**Framework:** [Iced](https://iced.rs/) 0.14, implemented in
+**Framework:** [egui](https://github.com/emilk/egui) / [eframe](https://github.com/emilk/egui/tree/master/crates/eframe) 0.31, implemented in
 [`crates/message-exporters-gui`](../crates/message-exporters-gui).
 
 ## Goals
@@ -15,14 +15,15 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 
 ## Current implementation
 
-- Pure Rust Iced desktop app for Linux, macOS, and Windows.
-- Typed forms and CLI argument builders for every backup source converter.
+- Pure Rust egui/eframe desktop app for Linux, macOS, and Windows.
+- Top tab panel: **Validate contacts** (default, first) | **Export**.
+- Typed forms and CLI argument builders for every backup source converter (`exporters.rs`).
 - Native file/folder dialogs through `rfd`.
-- Exporter discovery beside the GUI executable, in `MESSAGE_EXPORTERS_BIN`, then on `PATH`.
-- Live tagged stdout/stderr log and process cancellation.
+- Exporter / tool discovery beside the GUI executable, in `MESSAGE_EXPORTERS_BIN`, then on `PATH`.
+- Live tagged stdout/stderr log and process cancellation (mpsc poll in `update`).
 - Exporter-specific validation before launch.
 - Backup-source titles link to the upstream product site.
-- **Global options** panel (Anonymize + Start/End date) above the per-source form.
+- **Global options** (Anonymize + Start/End date) above the per-source form (Export tab).
 
 Build all sibling executables, then run:
 
@@ -37,10 +38,18 @@ cargo run -p message-exporters-gui
 
 ## Layout
 
-1. Header (title + Backup source picker)
-2. **Global options** card — Anonymize (+ seed), Start date, End date (all sources)
-3. Per-source form card — product link + exporter-specific fields
-4. Run log
+1. Top tabs — **Validate contacts** | **Export**
+2. **Validate contacts:** contacts file, USA numbers checkbox, Check / Update / Cancel
+3. **Export:** backup source picker + global options + per-source form
+4. Shared run log (bottom panel)
+
+### Validate contacts
+
+Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules as exporters).
+
+- **Check** (`--check`): dry run — no files written; the run log shows the same UNCERTAIN / DUPLICATE / summary content as a validate log.
+- **Update**: write `<stem>-corrected-<YYMMDD-hhmmss>.<ext>` (+ `.log`; CSV also `.vcf`). Only unambiguous phones are rewritten; uncertain values stay as-is.
+- **Cancel**: stop the running job.
 
 ## Shared / global controls
 
@@ -195,13 +204,9 @@ Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox
 ## Form flow
 
 ```text
-Pick backup source
-  → global: Anonymize, Start/End date
-  → linked product title
-  → per-source: Input, Output, Contacts (typed), …
-  → conditional: phone / email | Timezone | advanced options
-  → Run / Cancel
-  → always-on run log
+Tabs: Validate contacts | Export
+  Validate → contacts file, USA checkbox → Check / Update / Cancel → shared log
+  Export → pick backup source → global Anonymize/dates → per-source form → Run / Cancel → shared log
 ```
 
 ## Known gaps

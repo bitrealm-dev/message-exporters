@@ -1,10 +1,11 @@
-use iced::futures::{SinkExt, Stream};
+//! Spawn exporter / contacts-validate CLIs and stream output via mpsc.
+
 use std::ffi::OsString;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Mutex, mpsc};
-use std::time::Duration;
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread;
 
 #[derive(Debug, Clone)]
 pub enum ProcessEvent {
@@ -23,11 +24,11 @@ impl ProcessControl {
     pub fn cancel(&self) -> Result<(), String> {
         let mut guard = self.child.lock().map_err(|_| "process lock poisoned")?;
         let Some(child) = guard.as_mut() else {
-            return Err("No exporter is running.".into());
+            return Err("No process is running.".into());
         };
         child
             .kill()
-            .map_err(|error| format!("Could not cancel exporter: {error}"))
+            .map_err(|error| format!("Could not cancel process: {error}"))
     }
 
     fn clear(&self) {
@@ -69,7 +70,7 @@ pub fn resolve_binary(name: &str) -> Result<PathBuf, String> {
     }
 
     Err(format!(
-        "Could not find {executable}. Build the exporter in the same profile as the GUI, \
+        "Could not find {executable}. Build the tool in the same profile as the GUI, \
          add it to PATH, or set MESSAGE_EXPORTERS_BIN. Tried: {}",
         tried
             .iter()
@@ -79,12 +80,14 @@ pub fn resolve_binary(name: &str) -> Result<PathBuf, String> {
     ))
 }
 
-pub fn run(
+/// Spawn `program` with `args` on a background thread; send events on `tx`.
+pub fn spawn(
     program: PathBuf,
     args: Vec<OsString>,
     control: ProcessControl,
-) -> impl Stream<Item = ProcessEvent> {
-    iced::stream::channel(100, async move |mut output| {
+    tx: mpsc::Sender<ProcessEvent>,
+) {
+    thread::spawn(move || {
         let command_display = format_command(&program, &args);
         let mut command = Command::new(&program);
         command
@@ -103,12 +106,10 @@ pub fn run(
         let mut child = match command.spawn() {
             Ok(child) => child,
             Err(error) => {
-                let _ = output
-                    .send(ProcessEvent::Error(format!(
-                        "Could not start {}: {error}",
-                        program.display()
-                    )))
-                    .await;
+                let _ = tx.send(ProcessEvent::Error(format!(
+                    "Could not start {}: {error}",
+                    program.display()
+                )));
                 return;
             }
         };
@@ -117,88 +118,80 @@ pub fn run(
         if let Ok(mut slot) = control.child.lock() {
             *slot = Some(child);
         } else {
-            let _ = output
-                .send(ProcessEvent::Error("Process lock poisoned.".into()))
-                .await;
+            let _ = tx.send(ProcessEvent::Error("Process lock poisoned.".into()));
             return;
         }
 
-        let _ = output.send(ProcessEvent::Started(command_display)).await;
-        let (tx, rx) = mpsc::channel::<String>();
-        if let Some(stdout) = stdout {
-            spawn_reader(stdout, "[stdout]", tx.clone());
-        }
-        if let Some(stderr) = stderr {
-            spawn_reader(stderr, "[stderr]", tx.clone());
-        }
-        drop(tx);
+        let _ = tx.send(ProcessEvent::Started(command_display));
 
-        loop {
-            match rx.recv_timeout(Duration::from_millis(50)) {
-                Ok(line) => {
-                    if output.send(ProcessEvent::Log(line)).await.is_err() {
-                        let _ = control.cancel();
-                        control.clear();
-                        return;
+        let tx_out = tx.clone();
+        let t_out = thread::spawn(move || {
+            if let Some(out) = stdout {
+                for line in BufReader::new(out).lines() {
+                    match line {
+                        Ok(line) => {
+                            let _ = tx_out.send(ProcessEvent::Log(format!("[stdout] {line}")));
+                        }
+                        Err(error) => {
+                            let _ = tx_out.send(ProcessEvent::Log(format!(
+                                "[stdout] read error: {error}"
+                            )));
+                            break;
+                        }
                     }
                 }
-                Err(mpsc::RecvTimeoutError::Timeout) => {}
-                Err(mpsc::RecvTimeoutError::Disconnected) => {}
             }
+        });
+        let tx_err = tx.clone();
+        let t_err = thread::spawn(move || {
+            if let Some(err) = stderr {
+                for line in BufReader::new(err).lines() {
+                    match line {
+                        Ok(line) => {
+                            let _ = tx_err.send(ProcessEvent::Log(format!("[stderr] {line}")));
+                        }
+                        Err(error) => {
+                            let _ = tx_err.send(ProcessEvent::Log(format!(
+                                "[stderr] read error: {error}"
+                            )));
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+        let _ = t_out.join();
+        let _ = t_err.join();
 
-            let status = match process_status(&control) {
-                Ok(status) => status,
-                Err(error) => {
-                    let _ = output.send(ProcessEvent::Error(error)).await;
+        let status = {
+            let mut guard = match control.child.lock() {
+                Ok(g) => g,
+                Err(_) => {
+                    let _ = tx.send(ProcessEvent::Error("Process lock poisoned.".into()));
                     return;
                 }
             };
-
-            if let Some(status) = status {
-                let remaining = rx.try_iter().collect::<Vec<_>>();
-                for line in remaining {
-                    let _ = output.send(ProcessEvent::Log(line)).await;
+            match guard.as_mut() {
+                Some(child) => child.wait(),
+                None => {
+                    let _ = tx.send(ProcessEvent::Error("Process handle missing.".into()));
+                    return;
                 }
-                control.clear();
-                let summary = match status.code() {
-                    Some(0) => "Exporter completed successfully.".to_string(),
-                    Some(code) => format!("Exporter exited with code {code}."),
-                    None => "Exporter was terminated.".to_string(),
-                };
-                let _ = output.send(ProcessEvent::Finished(summary)).await;
-                return;
             }
-        }
-    })
-}
+        };
+        control.clear();
 
-fn process_status(control: &ProcessControl) -> Result<Option<std::process::ExitStatus>, String> {
-    let mut guard = control
-        .child
-        .lock()
-        .map_err(|_| "Process lock poisoned.".to_string())?;
-    let Some(child) = guard.as_mut() else {
-        return Ok(None);
-    };
-    child
-        .try_wait()
-        .map_err(|error| format!("Could not query exporter status: {error}"))
-}
-
-fn spawn_reader<R>(reader: R, prefix: &'static str, sender: mpsc::Sender<String>)
-where
-    R: std::io::Read + Send + 'static,
-{
-    std::thread::spawn(move || {
-        for line in BufReader::new(reader).lines() {
-            match line {
-                Ok(line) => {
-                    let _ = sender.send(format!("{prefix} {line}"));
-                }
-                Err(error) => {
-                    let _ = sender.send(format!("{prefix} read error: {error}"));
-                    break;
-                }
+        match status {
+            Ok(status) => {
+                let summary = match status.code() {
+                    Some(0) => "Completed successfully.".to_string(),
+                    Some(code) => format!("Exited with code {code}."),
+                    None => "Process was terminated.".to_string(),
+                };
+                let _ = tx.send(ProcessEvent::Finished(summary));
+            }
+            Err(error) => {
+                let _ = tx.send(ProcessEvent::Error(format!("Could not wait: {error}")));
             }
         }
     });

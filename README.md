@@ -21,6 +21,23 @@ Android converters **recommend** a contacts file so names and phone numbers are 
 
 Pass at most one. Shared logic: [`crates/message-contacts`](crates/message-contacts). Open the CSV afterward and fix anything still wrong before vault import.
 
+### Contacts tools
+
+**`contacts-validate`** rewrites only phones that are unambiguous for the chosen region (`usa` or `international`). **`--check`** prints the validate report without writing files. Without `--check`, it writes `<stem>-corrected-<YYMMDD-hhmmss>.<ext>` (+ `.log`; CSV also `.vcf`). Uncertain values stay as-is. The GUI **Validate contacts** tab runs this binary (Check / Update).
+
+```bash
+# Dry run (no files written)
+cargo run -p message-contacts --bin contacts-validate -- \
+  --input /path/to/contacts.vcf \
+  --region usa \
+  --check
+
+# Write corrected copy beside the input
+cargo run -p message-contacts --bin contacts-validate -- \
+  --input /path/to/contacts.vcf \
+  --region usa
+```
+
 ## Which converter to use
 
 | Backup you have | Converter | Targeted upstream | Format docs |
@@ -42,8 +59,7 @@ Converters that write `attachments/` also support `--media-mode disabled|clone|c
 
 ## Desktop GUI
 
-The [Iced desktop GUI](crates/message-exporters-gui) provides native file/folder pickers,
-exporter-specific forms (including Attachments clone/convert/compress), validation, live logs, and cancel support on Linux, macOS, and Windows.
+The [egui desktop GUI](crates/message-exporters-gui) has tabs for **Validate contacts** and **Export**, with native file/folder pickers, exporter-specific forms (including Attachments clone/convert/compress), validation, live logs, and cancel support on Linux, macOS, and Windows.
 
 ```bash
 cargo build --workspace

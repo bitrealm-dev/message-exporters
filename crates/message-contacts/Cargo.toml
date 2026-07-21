@@ -4,8 +4,14 @@ version = "0.1.0"
 edition = "2024"
 description = "VCF / contacts CSV name↔phone resolution for message exporters"
 
+[[bin]]
+name = "contacts-validate"
+path = "src/bin/contacts_validate.rs"
+
 [dependencies]
 anyhow = "1.0.103"
+chrono = "0.4.44"
+clap = { version = "4.6.1", features = ["derive"] }
 csv = "1.4.0"
 message-phone = { path = "../message-phone" }
 

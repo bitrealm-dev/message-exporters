@@ -2,12 +2,13 @@
 name = "message-exporters-gui"
 version = "0.1.0"
 edition = "2024"
-description = "Cross-platform Iced GUI for message-exporters"
+description = "Cross-platform egui GUI for message-exporters"
 
 [dependencies]
 dirs = "6"
-iced = "0.14.0"
+eframe = "0.31"
+egui = "0.31"
 message-anonymize = { path = "../message-anonymize" }
 message-media = { path = "../message-media" }
 open = "5"
-rfd = "0.17.2"
+rfd = "0.15"

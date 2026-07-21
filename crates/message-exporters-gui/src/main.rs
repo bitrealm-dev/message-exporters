@@ -1,267 +1,185 @@
+//! egui front-end for message-exporters (Validate contacts + Export).
+
 mod exporters;
 mod process;
 
+use std::sync::mpsc::{self, Receiver};
+use std::time::Duration;
+
+use eframe::egui;
 use exporters::{
-    APPLE_PLATFORMS, ATTACHMENT_MEDIA, ApplePlatform, CONTACT_KINDS, ContactsKind,
-    EXPORTERS, Exporter, Form, MAX_RESOLUTIONS, AttachmentMedia, default_output_dir,
+    default_output_dir, AttachmentMedia, ContactsKind, Exporter, Form, APPLE_PLATFORMS,
+    ATTACHMENT_MEDIA, CONTACT_KINDS, EXPORTERS, MAX_RESOLUTIONS,
 };
 use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
-use message_media::{process_near_vault_media, MaxResolution};
-use iced::widget::{
-    button, checkbox, column, container, pick_list, rich_text, row, rule, scrollable, space, span,
-    text, text_input,
-};
-use iced::{Background, Border, Color, Element, Fill, Shadow, Theme, color};
-use iced::{Task, theme};
+use message_media::process_near_vault_media;
 use process::{ProcessControl, ProcessEvent};
 
-pub fn main() -> iced::Result {
-    iced::application(App::default, App::update, App::view)
-        .title("Message Exporters")
-        .theme(App::theme)
-        .run()
-}
-
-fn flat_theme() -> Theme {
-    Theme::custom(
-        "Flat",
-        theme::Palette {
-            background: color!(0xF2F2F2),
-            text: color!(0x1E1F22),
-            primary: color!(0x3574F0),
-            success: color!(0x369A3F),
-            danger: color!(0xDB5860),
-            warning: color!(0xE2A203),
-        },
+fn main() -> eframe::Result<()> {
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([960.0, 780.0])
+            .with_title("Message Exporters"),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "Message Exporters",
+        options,
+        Box::new(|_cc| Ok(Box::new(App::default()))),
     )
 }
 
-fn panel_style(theme: &Theme) -> container::Style {
-    let palette = theme.extended_palette();
-    container::Style {
-        background: Some(Background::Color(palette.background.base.color)),
-        text_color: Some(palette.background.base.text),
-        border: Border {
-            color: palette.background.strong.color,
-            width: 1.0,
-            radius: 8.0.into(),
-        },
-        shadow: Shadow {
-            color: Color::from_rgba(0.0, 0.0, 0.0, 0.06),
-            offset: iced::Vector::new(0.0, 1.0),
-            blur_radius: 4.0,
-        },
-        snap: true,
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum AppMode {
+    #[default]
+    ValidateContacts,
+    Export,
 }
 
-fn log_panel_style(theme: &Theme) -> container::Style {
-    let mut style = panel_style(theme);
-    style.background = Some(Background::Color(color!(0xFAFAFA)));
-    style
-}
-
-fn error_panel_style(theme: &Theme) -> container::Style {
-    let palette = theme.extended_palette();
-    container::Style {
-        background: Some(Background::Color(palette.danger.weak.color)),
-        text_color: Some(palette.danger.strong.color),
-        border: Border {
-            color: palette.danger.base.color,
-            width: 1.0,
-            radius: 6.0.into(),
-        },
-        shadow: Shadow::default(),
-        snap: true,
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Field {
-    Input,
-    Output,
-    Contacts,
-    OwnerPhones,
-    OwnerEmails,
-    NameMapping,
-    Timezone,
-    Seed,
-    DbPath,
-    AttachmentRoot,
-    StartDate,
-    EndDate,
-    ConversationFilter,
-    AppleContacts,
-    BackupPassword,
-    MediaMaxFps,
-    MediaMinSize,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum PickerKind {
-    File,
-    Folder,
-}
-
-#[derive(Debug, Clone)]
-enum Message {
-    ExporterSelected(Exporter),
-    FieldChanged(Field, String),
-    ContactsKindChanged(ContactsKind),
-    AttachmentMediaChanged(AttachmentMedia),
-    MediaMaxResolutionChanged(MaxResolution),
-    ToggleMediaSkipEfficient(bool),
-    ApplePlatformChanged(ApplePlatform),
-    ToggleAnonymize(bool),
-    ToggleAdvanced,
-    OpenProductUrl(&'static str),
-    Browse(Field, PickerKind),
-    Picked(Field, Option<String>),
-    Run,
-    Cancel,
-    ClearLog,
-    Process(ProcessEvent),
-}
-
-#[derive(Debug)]
 struct App {
+    mode: AppMode,
     exporter: Exporter,
     form: Form,
+    validate_input: String,
+    validate_usa: bool,
     running: bool,
     control: ProcessControl,
     logs: Vec<String>,
     errors: Vec<String>,
+    rx: Option<Receiver<ProcessEvent>>,
 }
 
 impl Default for App {
     fn default() -> Self {
         let exporter = Exporter::default();
         Self {
+            mode: AppMode::ValidateContacts,
             exporter,
             form: Form {
                 output: default_output_dir(exporter),
                 ..Form::default()
             },
+            validate_input: String::new(),
+            validate_usa: true,
             running: false,
             control: ProcessControl::default(),
             logs: Vec::new(),
             errors: Vec::new(),
+            rx: None,
         }
     }
 }
 
 impl App {
-    fn theme(&self) -> Theme {
-        flat_theme()
-    }
-
-    fn update(&mut self, message: Message) -> Task<Message> {
-        match message {
-            Message::ExporterSelected(exporter) => {
-                let previous_default = default_output_dir(self.exporter);
-                if self.form.output.trim().is_empty() || self.form.output == previous_default {
-                    self.form.output = default_output_dir(exporter);
-                }
-                self.exporter = exporter;
-                self.form.advanced = false;
-                self.errors.clear();
-            }
-            Message::FieldChanged(field, value) => self.set_field(field, value),
-            Message::ContactsKindChanged(kind) => self.form.contacts_kind = kind,
-            Message::AttachmentMediaChanged(method) => self.form.attachment_media = method,
-            Message::MediaMaxResolutionChanged(res) => self.form.media_max_resolution = res,
-            Message::ToggleMediaSkipEfficient(value) => self.form.media_skip_efficient = value,
-            Message::ApplePlatformChanged(platform) => self.form.apple_platform = platform,
-            Message::ToggleAnonymize(value) => self.form.anonymize = value,
-            Message::ToggleAdvanced => self.form.advanced = !self.form.advanced,
-            Message::OpenProductUrl(url) => {
-                if let Err(error) = open::that(url) {
-                    self.errors = vec![format!("Could not open link: {error}")];
-                }
-            }
-            Message::Browse(field, kind) => {
-                return Task::perform(pick_path(kind), move |path| Message::Picked(field, path));
-            }
-            Message::Picked(field, Some(path)) => {
-                self.set_field(field, path);
-            }
-            Message::Picked(_, None) => {}
-            Message::Run => return self.start_run(),
-            Message::Cancel => match self.control.cancel() {
-                Ok(()) => self.logs.push("Cancellation requested…".into()),
-                Err(error) => self.errors = vec![error],
-            },
-            Message::ClearLog => self.logs.clear(),
-            Message::Process(event) => match event {
+    fn poll_events(&mut self, ctx: &egui::Context) {
+        let Some(rx) = &self.rx else {
+            return;
+        };
+        while let Ok(event) = rx.try_recv() {
+            match event {
                 ProcessEvent::Started(command) => {
                     self.logs.push(format!("Running: {command}"));
                 }
                 ProcessEvent::Log(line) => self.logs.push(line),
                 ProcessEvent::Finished(summary) => {
                     self.logs.push(summary);
-                    if self.exporter == Exporter::Imessage {
+                    if self.mode == AppMode::Export && self.exporter == Exporter::Imessage {
                         self.run_imessage_media_post();
                     }
                     self.running = false;
+                    self.rx = None;
+                    break;
                 }
                 ProcessEvent::Error(error) => {
                     self.errors = vec![error.clone()];
                     self.logs.push(format!("Error: {error}"));
                     self.running = false;
+                    self.rx = None;
+                    break;
                 }
-            },
+            }
         }
-        Task::none()
-    }
-
-    fn set_field(&mut self, field: Field, value: String) {
-        match field {
-            Field::Input => self.form.input = value,
-            Field::Output => self.form.output = value,
-            Field::Contacts => self.form.contacts = value,
-            Field::OwnerPhones => self.form.owner_phones = value,
-            Field::OwnerEmails => self.form.owner_emails = value,
-            Field::NameMapping => self.form.name_mapping = value,
-            Field::Timezone => self.form.timezone = value,
-            Field::Seed => self.form.anonymize_seed = value,
-            Field::DbPath => self.form.db_path = value,
-            Field::AttachmentRoot => self.form.attachment_root = value,
-            Field::StartDate => self.form.start_date = value,
-            Field::EndDate => self.form.end_date = value,
-            Field::ConversationFilter => self.form.conversation_filter = value,
-            Field::AppleContacts => self.form.apple_contacts = value,
-                    Field::BackupPassword => self.form.backup_password = value,
-            Field::MediaMaxFps => self.form.media_max_fps = value,
-            Field::MediaMinSize => self.form.media_min_size = value,
-        }
-        self.errors.clear();
-    }
-
-    fn start_run(&mut self) -> Task<Message> {
         if self.running {
-            return Task::none();
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
+    }
+
+    fn start_export(&mut self) {
+        if self.running {
+            return;
         }
         let args = match self.form.build_args(self.exporter) {
             Ok(args) => args,
             Err(errors) => {
                 self.errors = errors;
-                return Task::none();
+                return;
             }
         };
         let program = match process::resolve_binary(self.exporter.binary()) {
             Ok(program) => program,
             Err(error) => {
                 self.errors = vec![error];
-                return Task::none();
+                return;
             }
         };
         self.errors.clear();
         self.running = true;
         self.logs.clear();
-        Task::run(
-            process::run(program, args, self.control.clone()),
-            Message::Process,
-        )
+        let (tx, rx) = mpsc::channel();
+        self.rx = Some(rx);
+        process::spawn(program, args, self.control.clone(), tx);
+    }
+
+    fn start_validate(&mut self, check_only: bool) {
+        if self.running {
+            return;
+        }
+        let mut errors = Vec::new();
+        let input = self.validate_input.trim();
+        if input.is_empty() {
+            errors.push("Choose a contacts CSV or VCF file.".into());
+        } else if !std::path::Path::new(input).is_file() {
+            errors.push(format!("Contacts file not found: {input}"));
+        }
+        if !errors.is_empty() {
+            self.errors = errors;
+            return;
+        }
+
+        let program = match process::resolve_binary("contacts-validate") {
+            Ok(program) => program,
+            Err(error) => {
+                self.errors = vec![error];
+                return;
+            }
+        };
+        let region = if self.validate_usa {
+            "usa"
+        } else {
+            "international"
+        };
+        let mut args = vec![
+            "--input".into(),
+            input.into(),
+            "--region".into(),
+            region.into(),
+        ];
+        if check_only {
+            args.push("--check".into());
+        }
+        self.errors.clear();
+        self.running = true;
+        self.logs.clear();
+        let (tx, rx) = mpsc::channel();
+        self.rx = Some(rx);
+        process::spawn(program, args, self.control.clone(), tx);
+    }
+
+    fn cancel(&mut self) {
+        match self.control.cancel() {
+            Ok(()) => self.logs.push("Cancellation requested…".into()),
+            Err(error) => self.errors = vec![error],
+        }
     }
 
     fn run_imessage_media_post(&mut self) {
@@ -327,100 +245,225 @@ impl App {
         }
     }
 
-    fn view(&self) -> Element<'_, Message> {
-        let header = row![
-            column![
-                text("Message Exporters").size(26),
-                text("Convert phone backups into readable conversation CSV")
-                    .size(14)
-                    .style(|theme: &Theme| text::Style {
-                        color: Some(theme.extended_palette().background.weak.text),
-                    }),
-            ]
-            .spacing(4),
-            space::horizontal(),
-            row![
-                text("Backup source").size(14),
-                pick_list(EXPORTERS, Some(self.exporter), Message::ExporterSelected).width(220),
-            ]
-            .spacing(10)
-            .align_y(iced::Alignment::Center),
-        ]
-        .align_y(iced::Alignment::Center);
-
-        let global = container(self.global_options_view())
-            .padding(18)
-            .width(Fill)
-            .style(panel_style);
-        let form = container(self.form_view())
-            .padding(18)
-            .width(Fill)
-            .style(panel_style);
-        let logs = self.log_view();
-        let content = column![header, global, form, logs]
-            .spacing(16)
-            .padding(20)
-            .width(Fill);
-        container(scrollable(content))
-            .width(Fill)
-            .height(Fill)
-            .into()
+    fn ui_tabs(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.add_enabled_ui(!self.running, |ui| {
+                ui.selectable_value(
+                    &mut self.mode,
+                    AppMode::ValidateContacts,
+                    "Validate contacts",
+                );
+                ui.selectable_value(&mut self.mode, AppMode::Export, "Export");
+            });
+        });
     }
 
-    fn global_options_view(&self) -> Element<'_, Message> {
-        column![
-            text("Global options").size(18),
-            text("Applied to every backup source").size(13),
-            self.anonymize_view(),
-            self.date_range_view(),
-        ]
-        .spacing(12)
-        .into()
+    fn ui_validate(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Validate contacts");
+        ui.label(
+            egui::RichText::new(
+                "Check analyzes phones without writing files. Update writes \
+                 <name>-corrected-<YYMMDD-hhmmss>.<ext> beside the original \
+                 (plus .log; CSV also writes .vcf). Uncertain values stay as-is.",
+            )
+            .weak(),
+        );
+        ui.add_space(10.0);
+
+        ui.horizontal(|ui| {
+            ui.label("Contacts file");
+            ui.add(
+                egui::TextEdit::singleline(&mut self.validate_input)
+                    .desired_width(420.0)
+                    .hint_text("contacts.vcf or contacts.csv"),
+            );
+            if ui.button("Browse…").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("Contacts", &["csv", "vcf", "vcard"])
+                    .pick_file()
+                {
+                    self.validate_input = path.display().to_string();
+                    self.errors.clear();
+                }
+            }
+        });
+
+        ui.add_space(6.0);
+        ui.checkbox(&mut self.validate_usa, "USA numbers");
+        ui.label(
+            egui::RichText::new(if self.validate_usa {
+                "Certain: 10-digit or 11-digit (leading 1) US numbers → +1…"
+            } else {
+                "International: only numbers that already start with + are rewritten."
+            })
+            .small()
+            .weak(),
+        );
+
+        self.ui_errors(ui);
+
+        ui.add_space(10.0);
+        ui.horizontal(|ui| {
+            let check = ui.add_enabled(!self.running, egui::Button::new("Check"));
+            if check.clicked() {
+                self.start_validate(true);
+            }
+            let update = ui.add_enabled(!self.running, egui::Button::new("Update"));
+            if update.clicked() {
+                self.start_validate(false);
+            }
+            let cancel = ui.add_enabled(self.running, egui::Button::new("Cancel"));
+            if cancel.clicked() {
+                self.cancel();
+            }
+        });
     }
 
-    fn form_view(&self) -> Element<'_, Message> {
-        let title = rich_text([span(self.exporter.link_label())
-            .link(self.exporter.product_url())
-            .color(color!(0x3574F0))
-            .underline(true)])
-        .size(20)
-        .on_link_click(Message::OpenProductUrl);
+    fn ui_export(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.heading("Export");
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let previous = self.exporter;
+                egui::ComboBox::from_id_salt("exporter")
+                    .selected_text(self.exporter.display_name())
+                    .width(220.0)
+                    .show_ui(ui, |ui| {
+                        for exporter in EXPORTERS {
+                            ui.selectable_value(
+                                &mut self.exporter,
+                                exporter,
+                                exporter.display_name(),
+                            );
+                        }
+                    });
+                if self.exporter != previous {
+                    let previous_default = default_output_dir(previous);
+                    if self.form.output.trim().is_empty() || self.form.output == previous_default {
+                        self.form.output = default_output_dir(self.exporter);
+                    }
+                    self.form.advanced = false;
+                    self.errors.clear();
+                }
+                ui.label("Backup source");
+            });
+        });
+        ui.label(
+            egui::RichText::new("Convert phone backups into readable conversation CSV").weak(),
+        );
+        ui.add_space(8.0);
 
-        let mut fields = column![title].spacing(14);
+        ui.heading(egui::RichText::new("Global options").size(16.0));
+        ui.checkbox(&mut self.form.anonymize, "Anonymize");
+        if self.form.anonymize || !self.form.anonymize_seed.is_empty() {
+            path_or_text(
+                ui,
+                "Seed",
+                &mut self.form.anonymize_seed,
+                "Optional 64-character hex seed",
+                false,
+                false,
+            );
+        }
+        path_or_text(
+            ui,
+            "Start date",
+            &mut self.form.start_date,
+            "YYYY-MM-DD (inclusive)",
+            false,
+            false,
+        );
+        path_or_text(
+            ui,
+            "End date",
+            &mut self.form.end_date,
+            "YYYY-MM-DD (exclusive)",
+            false,
+            false,
+        );
+
+        ui.add_space(10.0);
+        ui.separator();
+        ui.add_space(6.0);
+
+        if ui
+            .link(self.exporter.link_label())
+            .on_hover_text(self.exporter.product_url())
+            .clicked()
+        {
+            if let Err(error) = open::that(self.exporter.product_url()) {
+                self.errors = vec![format!("Could not open link: {error}")];
+            }
+        }
+        ui.add_space(8.0);
 
         if self.exporter == Exporter::Imessage {
-            fields = fields.push(path_row(
+            path_or_text(
+                ui,
                 "Database / iOS backup path",
-                &self.form.db_path,
-                Field::DbPath,
+                &mut self.form.db_path,
+                "Path",
                 true,
                 true,
-            ));
-            fields = fields.push(password_row(&self.form.backup_password));
-            fields = fields.push(
-                row![
-                    text("Platform").width(200),
-                    pick_list(
-                        APPLE_PLATFORMS,
-                        Some(self.form.apple_platform),
-                        Message::ApplePlatformChanged
-                    )
-                    .width(Fill)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
             );
-            fields = fields.push(path_row(
+            ui.horizontal(|ui| {
+                ui.label("Backup password");
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.form.backup_password)
+                        .password(true)
+                        .desired_width(420.0)
+                        .hint_text("Encrypted iOS backup password"),
+                );
+            });
+            combo_enum(
+                ui,
+                "Platform",
+                &mut self.form.apple_platform,
+                &APPLE_PLATFORMS,
+            );
+            path_or_text(
+                ui,
                 "Output directory",
-                &self.form.output,
-                Field::Output,
+                &mut self.form.output,
+                "Path",
                 false,
                 true,
-            ));
-            fields = fields.push(self.attachment_media_view());
-            fields = fields.push(self.advanced_toggle());
+            );
+            self.ui_attachment_media(ui);
+            if ui
+                .button(if self.form.advanced {
+                    "▾ Hide advanced options"
+                } else {
+                    "▸ Show advanced options"
+                })
+                .clicked()
+            {
+                self.form.advanced = !self.form.advanced;
+            }
             if self.form.advanced {
-                fields = fields.push(self.imessage_advanced());
+                path_or_text(
+                    ui,
+                    "Attachment root",
+                    &mut self.form.attachment_root,
+                    "Path",
+                    false,
+                    true,
+                );
+                path_or_text(
+                    ui,
+                    "Conversation filter",
+                    &mut self.form.conversation_filter,
+                    "Names, numbers, or emails",
+                    false,
+                    false,
+                );
+                path_or_text(
+                    ui,
+                    "Apple AddressBook DB",
+                    &mut self.form.apple_contacts,
+                    "Path",
+                    true,
+                    false,
+                );
             }
         } else {
             let (file, folder) = match self.exporter {
@@ -436,408 +479,288 @@ impl App {
             } else {
                 "Input source"
             };
-            fields = fields.push(path_row(
-                input_label,
-                &self.form.input,
-                Field::Input,
-                file,
-                folder,
-            ));
-            fields = fields.push(path_row(
+            path_or_text(ui, input_label, &mut self.form.input, "Path", file, folder);
+            path_or_text(
+                ui,
                 "Output directory",
-                &self.form.output,
-                Field::Output,
+                &mut self.form.output,
+                "Path",
                 false,
                 true,
-            ));
+            );
 
             if matches!(
                 self.exporter,
                 Exporter::GoSmsPro | Exporter::SmsBackupRestore | Exporter::SmsBackupPlus
             ) {
-                fields = fields.push(input_row(
+                path_or_text(
+                    ui,
                     "Your phone number(s)",
+                    &mut self.form.owner_phones,
                     "Comma-separated phone numbers",
-                    &self.form.owner_phones,
-                    Field::OwnerPhones,
-                ));
-                fields = fields.push(self.attachment_media_view());
+                    false,
+                    false,
+                );
+                self.ui_attachment_media(ui);
             }
             if self.exporter == Exporter::SmsBackupPlus {
-                fields = fields.push(input_row(
+                path_or_text(
+                    ui,
                     "Your email address(es)",
+                    &mut self.form.owner_emails,
                     "Comma-separated email addresses",
-                    &self.form.owner_emails,
-                    Field::OwnerEmails,
-                ));
+                    false,
+                    false,
+                );
             }
 
-            fields = fields.push(self.contacts_view());
+            self.ui_contacts(ui);
+
             if self.exporter == Exporter::Imazing {
-                fields = fields.push(input_row(
+                path_or_text(
+                    ui,
                     "Timezone",
-                    "IANA name, e.g. America/New_York (blank = local)",
-                    &self.form.timezone,
-                    Field::Timezone,
-                ));
+                    &mut self.form.timezone,
+                    "IANA name, e.g. America/New_York",
+                    false,
+                    false,
+                );
             }
 
             if self.exporter == Exporter::SmsBackupPlus {
-                fields = fields.push(self.advanced_toggle());
+                if ui
+                    .button(if self.form.advanced {
+                        "▾ Hide advanced options"
+                    } else {
+                        "▸ Show advanced options"
+                    })
+                    .clicked()
+                {
+                    self.form.advanced = !self.form.advanced;
+                }
                 if self.form.advanced {
-                    fields = fields.push(path_row(
+                    path_or_text(
+                        ui,
                         "Name mapping CSV",
-                        &self.form.name_mapping,
-                        Field::NameMapping,
+                        &mut self.form.name_mapping,
+                        "Path",
                         true,
                         false,
-                    ));
+                    );
                 }
             }
         }
 
-        if !self.errors.is_empty() {
-            fields = fields.push(
-                container(
-                    column(
-                        self.errors
-                            .iter()
-                            .map(|error| text(format!("• {error}")).into())
-                            .collect::<Vec<Element<'_, Message>>>(),
-                    )
-                    .spacing(4),
-                )
-                .padding(12)
-                .width(Fill)
-                .style(error_panel_style),
-            );
-        }
+        self.ui_errors(ui);
 
-        let run_button = if self.running {
-            button("Running…").style(button::primary)
-        } else {
-            button("Run exporter")
-                .style(button::primary)
-                .on_press(Message::Run)
-        };
-        let cancel_button = if self.running {
-            button("Cancel")
-                .style(button::secondary)
-                .on_press(Message::Cancel)
-        } else {
-            button("Cancel").style(button::secondary)
-        };
-        fields
-            .push(row![run_button, cancel_button].spacing(10))
-            .into()
-    }
-
-    fn attachment_media_view(&self) -> Element<'_, Message> {
-        let mut content = column![
-            row![
-                text("Attachments").width(200),
-                pick_list(
-                    ATTACHMENT_MEDIA,
-                    Some(self.form.attachment_media),
-                    Message::AttachmentMediaChanged
-                )
-                .width(Fill),
-            ]
-            .spacing(10)
-            .align_y(iced::Alignment::Center),
-        ]
-        .spacing(8);
-
-        if self.form.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available() {
-            content = content.push(
-                text("Convert/Compress need ffmpeg and ffprobe on PATH.")
-                    .size(13)
-                    .style(|theme: &Theme| text::Style {
-                        color: Some(theme.extended_palette().danger.base.color),
-                    }),
-            );
-        }
-
-        if self.form.attachment_media == AttachmentMedia::Compress {
-            let nested = column![
-                row![
-                    text("Max resolution").width(200),
-                    pick_list(
-                        MAX_RESOLUTIONS,
-                        Some(self.form.media_max_resolution),
-                        Message::MediaMaxResolutionChanged
-                    )
-                    .width(Fill),
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
-                input_row(
-                    "Max fps",
-                    "e.g. 30",
-                    &self.form.media_max_fps,
-                    Field::MediaMaxFps,
-                ),
-                input_row(
-                    "Min size",
-                    "e.g. 20M",
-                    &self.form.media_min_size,
-                    Field::MediaMinSize,
-                ),
-                row![
-                    text("Skip efficient").width(200),
-                    checkbox(self.form.media_skip_efficient)
-                        .label("Skip already-efficient HEVC")
-                        .on_toggle(Message::ToggleMediaSkipEfficient),
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
-            ]
-            .spacing(8);
-            content = content.push(container(nested).padding(iced::Padding {
-                top: 0.0,
-                right: 0.0,
-                bottom: 0.0,
-                left: 24.0,
-            }));
-        }
-
-        content.into()
-    }
-
-    fn advanced_toggle(&self) -> Element<'_, Message> {
-        let chevron = if self.form.advanced { "▾" } else { "▸" };
-        button(text(format!("{chevron}  Show advanced options")).size(14))
-            .style(button::text)
-            .padding([4, 0])
-            .on_press(Message::ToggleAdvanced)
-            .into()
-    }
-
-    fn contacts_view(&self) -> Element<'_, Message> {
-        if self.exporter == Exporter::Imazing {
-            return path_row(
-                "iMazing Contacts CSV (recommended)",
-                &self.form.contacts,
-                Field::Contacts,
-                true,
-                false,
-            );
-        }
-        column![
-            row![
-                text("Contacts").width(200),
-                pick_list(
-                    CONTACT_KINDS,
-                    Some(self.form.contacts_kind),
-                    Message::ContactsKindChanged
-                )
-                .width(Fill),
-            ]
-            .spacing(10)
-            .align_y(iced::Alignment::Center),
-            if self.form.contacts_kind == ContactsKind::None {
-                text("No contacts: phone numbers may not resolve to names.")
-                    .size(13)
-                    .into()
-            } else {
-                path_row(
-                    match self.form.contacts_kind {
-                        ContactsKind::Csv => "Contacts CSV",
-                        ContactsKind::Vcf => "Contacts VCF",
-                        ContactsKind::None => "",
-                    },
-                    &self.form.contacts,
-                    Field::Contacts,
-                    true,
-                    false,
-                )
+        ui.add_space(10.0);
+        ui.horizontal(|ui| {
+            let run = ui.add_enabled(!self.running, egui::Button::new("Run exporter"));
+            if run.clicked() {
+                self.start_export();
             }
-        ]
-        .spacing(8)
-        .into()
+            let cancel = ui.add_enabled(self.running, egui::Button::new("Cancel"));
+            if cancel.clicked() {
+                self.cancel();
+            }
+        });
     }
 
-    fn anonymize_view(&self) -> Element<'_, Message> {
-        let mut content = column![
-            checkbox(self.form.anonymize)
-                .label("Anonymize")
-                .on_toggle(Message::ToggleAnonymize)
-        ]
-        .spacing(8);
-        if self.form.anonymize || !self.form.anonymize_seed.is_empty() {
-            content = content.push(seed_row(&self.form.anonymize_seed));
+    fn ui_contacts(&mut self, ui: &mut egui::Ui) {
+        if self.exporter == Exporter::Imazing {
+            path_or_text(
+                ui,
+                "iMazing Contacts CSV (recommended)",
+                &mut self.form.contacts,
+                "Path",
+                true,
+                false,
+            );
+            return;
         }
-        content.into()
-    }
-
-    fn date_range_view(&self) -> Element<'_, Message> {
-        column![
-            input_row(
-                "Start date",
-                "YYYY-MM-DD (inclusive, blank = no limit)",
-                &self.form.start_date,
-                Field::StartDate
-            ),
-            input_row(
-                "End date",
-                "YYYY-MM-DD (exclusive, blank = no limit)",
-                &self.form.end_date,
-                Field::EndDate
-            ),
-        ]
-        .spacing(12)
-        .into()
-    }
-
-    fn imessage_advanced(&self) -> Element<'_, Message> {
-        column![
-            path_row(
-                "Attachment root",
-                &self.form.attachment_root,
-                Field::AttachmentRoot,
-                false,
-                true,
-            ),
-            input_row(
-                "Conversation filter",
-                "Names, numbers, or emails",
-                &self.form.conversation_filter,
-                Field::ConversationFilter
-            ),
-            path_row(
-                "Apple AddressBook DB",
-                &self.form.apple_contacts,
-                Field::AppleContacts,
-                true,
-                false,
-            ),
-        ]
-        .spacing(12)
-        .padding(iced::Padding {
-            top: 0.0,
-            right: 0.0,
-            bottom: 0.0,
-            left: 8.0,
-        })
-        .into()
-    }
-
-    fn log_view(&self) -> Element<'_, Message> {
-        let actions = row![
-            text("Run log").size(16),
-            space::horizontal(),
-            button("Clear")
-                .style(button::text)
-                .on_press(Message::ClearLog)
-        ]
-        .align_y(iced::Alignment::Center);
-        let body = if self.logs.is_empty() {
-            column![text("Exporter output will appear here.").size(13)]
+        combo_enum(
+            ui,
+            "Contacts",
+            &mut self.form.contacts_kind,
+            &CONTACT_KINDS,
+        );
+        if self.form.contacts_kind == ContactsKind::None {
+            ui.label(
+                egui::RichText::new("No contacts: phone numbers may not resolve to names.")
+                    .small()
+                    .weak(),
+            );
         } else {
-            column(
-                self.logs
-                    .iter()
-                    .map(|line| text(line).size(13).into())
-                    .collect::<Vec<Element<'_, Message>>>(),
-            )
-            .spacing(3)
+            let label = match self.form.contacts_kind {
+                ContactsKind::Csv => "Contacts CSV",
+                ContactsKind::Vcf => "Contacts VCF",
+                ContactsKind::None => "",
+            };
+            path_or_text(ui, label, &mut self.form.contacts, "Path", true, false);
+        }
+    }
+
+    fn ui_attachment_media(&mut self, ui: &mut egui::Ui) {
+        combo_enum(
+            ui,
+            "Attachments",
+            &mut self.form.attachment_media,
+            &ATTACHMENT_MEDIA,
+        );
+        if self.form.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available() {
+            ui.colored_label(
+                egui::Color32::from_rgb(180, 50, 50),
+                "Convert/Compress need ffmpeg and ffprobe on PATH.",
+            );
+        }
+        if self.form.attachment_media == AttachmentMedia::Compress {
+            combo_enum(
+                ui,
+                "Max resolution",
+                &mut self.form.media_max_resolution,
+                &MAX_RESOLUTIONS,
+            );
+            path_or_text(
+                ui,
+                "Max fps",
+                &mut self.form.media_max_fps,
+                "e.g. 30",
+                false,
+                false,
+            );
+            path_or_text(
+                ui,
+                "Min size",
+                &mut self.form.media_min_size,
+                "e.g. 20M",
+                false,
+                false,
+            );
+            ui.checkbox(
+                &mut self.form.media_skip_efficient,
+                "Skip already-efficient HEVC",
+            );
+        }
+    }
+
+    fn ui_errors(&self, ui: &mut egui::Ui) {
+        if self.errors.is_empty() {
+            return;
+        }
+        ui.add_space(8.0);
+        egui::Frame::NONE
+            .fill(egui::Color32::from_rgb(255, 235, 235))
+            .stroke(egui::Stroke::new(
+                1.0_f32,
+                egui::Color32::from_rgb(200, 80, 80),
+            ))
+            .inner_margin(10.0)
+            .corner_radius(6.0)
+            .show(ui, |ui| {
+                for error in &self.errors {
+                    ui.colored_label(
+                        egui::Color32::from_rgb(140, 40, 40),
+                        format!("• {error}"),
+                    );
+                }
+            });
+    }
+
+    fn ui_log(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.heading(egui::RichText::new("Run log").size(16.0));
+            if ui.button("Clear").clicked() {
+                self.logs.clear();
+            }
+        });
+        let empty = match self.mode {
+            AppMode::Export => "Exporter output will appear here.",
+            AppMode::ValidateContacts => "Validation output will appear here.",
         };
-        container(
-            column![
-                actions,
-                rule::horizontal(1),
-                scrollable(body).height(220)
-            ]
-            .spacing(10),
-        )
-        .padding(14)
-        .width(Fill)
-        .style(log_panel_style)
-        .into()
+        egui::ScrollArea::vertical()
+            .stick_to_bottom(true)
+            .max_height(220.0)
+            .show(ui, |ui| {
+                if self.logs.is_empty() {
+                    ui.label(egui::RichText::new(empty).weak().monospace());
+                } else {
+                    ui.label(egui::RichText::new(self.logs.join("\n")).monospace());
+                }
+            });
     }
 }
 
-fn input_row<'a>(
-    label: &'a str,
-    placeholder: &'a str,
-    value: &'a str,
-    field: Field,
-) -> Element<'a, Message> {
-    row![
-        text(label).width(200),
-        text_input(placeholder, value)
-            .on_input(move |value| Message::FieldChanged(field, value))
-            .width(Fill)
-    ]
-    .spacing(10)
-    .align_y(iced::Alignment::Center)
-    .into()
+impl eframe::App for App {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_events(ctx);
+
+        egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
+            ui.add_space(4.0);
+            self.ui_tabs(ui);
+            ui.add_space(2.0);
+        });
+
+        egui::TopBottomPanel::bottom("log")
+            .resizable(true)
+            .default_height(240.0)
+            .show(ctx, |ui| {
+                self.ui_log(ui);
+            });
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                match self.mode {
+                    AppMode::ValidateContacts => self.ui_validate(ui),
+                    AppMode::Export => self.ui_export(ui),
+                }
+            });
+        });
+    }
 }
 
-fn path_row<'a>(
-    label: &'a str,
-    value: &'a str,
-    field: Field,
+fn path_or_text(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut String,
+    hint: &str,
     allow_file: bool,
     allow_folder: bool,
-) -> Element<'a, Message> {
-    let mut controls = row![
-        text(label).width(200),
-        text_input("Path", value)
-            .on_input(move |value| Message::FieldChanged(field, value))
-            .width(Fill)
-    ]
-    .spacing(8)
-    .align_y(iced::Alignment::Center);
-    if allow_file {
-        controls = controls.push(
-            button("File…")
-                .style(button::secondary)
-                .on_press(Message::Browse(field, PickerKind::File)),
+) {
+    ui.horizontal(|ui| {
+        ui.label(label);
+        ui.add(
+            egui::TextEdit::singleline(value)
+                .desired_width(420.0)
+                .hint_text(hint),
         );
-    }
-    if allow_folder {
-        controls = controls.push(
-            button("Folder…")
-                .style(button::secondary)
-                .on_press(Message::Browse(field, PickerKind::Folder)),
-        );
-    }
-    controls.into()
+        if allow_file && ui.button("File…").clicked() {
+            if let Some(path) = rfd::FileDialog::new().pick_file() {
+                *value = path.display().to_string();
+            }
+        }
+        if allow_folder && ui.button("Folder…").clicked() {
+            if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                *value = path.display().to_string();
+            }
+        }
+    });
 }
 
-fn seed_row(value: &str) -> Element<'_, Message> {
-    input_row(
-        "Seed",
-        "Optional 64-character hex seed",
-        value,
-        Field::Seed,
-    )
-}
-
-fn password_row(value: &str) -> Element<'_, Message> {
-    row![
-        text("Backup password").width(200),
-        text_input("Encrypted iOS backup password", value)
-            .on_input(|value| Message::FieldChanged(Field::BackupPassword, value))
-            .secure(true)
-            .width(Fill)
-    ]
-    .spacing(10)
-    .align_y(iced::Alignment::Center)
-    .into()
-}
-
-async fn pick_path(kind: PickerKind) -> Option<String> {
-    let dialog = rfd::AsyncFileDialog::new().set_title("Choose path");
-    match kind {
-        PickerKind::File => dialog
-            .pick_file()
-            .await
-            .map(|file| file.path().display().to_string()),
-        PickerKind::Folder => dialog
-            .pick_folder()
-            .await
-            .map(|folder| folder.path().display().to_string()),
-    }
+fn combo_enum<T: Copy + PartialEq + std::fmt::Display>(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut T,
+    options: &[T],
+) {
+    ui.horizontal(|ui| {
+        ui.label(label);
+        egui::ComboBox::from_id_salt(label)
+            .selected_text(value.to_string())
+            .width(420.0)
+            .show_ui(ui, |ui| {
+                for opt in options {
+                    ui.selectable_value(value, *opt, opt.to_string());
+                }
+            });
+    });
 }
