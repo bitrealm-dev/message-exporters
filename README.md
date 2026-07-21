@@ -59,7 +59,7 @@ Converters that write `attachments/` also support `--media-mode disabled|clone|c
 
 ## Desktop GUI
 
-The [egui desktop GUI](crates/message-exporters-gui) has tabs for **Validate contacts** and **Export**, with native file/folder pickers, exporter-specific forms (including Attachments clone/convert/compress), validation, live logs, and cancel support on Linux, macOS, and Windows.
+The [egui desktop GUI](crates/message-exporters-gui) has tabs for **Validate contacts** and **Export**, with native file/folder pickers, exporter-specific forms (including Attachments copy/convert/compress), validation, live logs, and cancel support on Linux, macOS, and Windows.
 
 ```bash
 cargo build --workspace

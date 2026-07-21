@@ -130,7 +130,7 @@ pub enum AttachmentMedia {
 impl fmt::Display for AttachmentMedia {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Self::Clone => "Clone (recommended)",
+            Self::Clone => "Copy (recommended)",
             Self::Convert => "Convert (.jpg / .mp4 / .mp3)",
             Self::Compress => "Compress",
             Self::Disabled => "Do not copy",

@@ -81,7 +81,7 @@ Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules a
 | Timezone | — | — | — | — | yes | — |
 | Name mapping | — | — | advanced | — | — | — |
 | Verbose logging | — | — | always on | — | — | — |
-| Attachments (clone/convert/compress/do not copy) | yes | yes | yes | — | — | yes |
+| Attachments (copy/convert/compress/do not copy) | yes | yes | yes | — | — | yes |
 | Compress options (resolution/fps/…) | when Compress | when Compress | when Compress | — | — | when Compress |
 | Advanced (attachment root, …) | — | — | name mapping | — | — | yes |
 

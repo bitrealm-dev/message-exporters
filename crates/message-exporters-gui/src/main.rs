@@ -15,10 +15,16 @@ use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
 use message_media::process_near_vault_media;
 use process::{ProcessControl, ProcessEvent};
 
+const LABEL_W: f32 = 130.0;
+const PATH_W: f32 = 280.0;
+const COMBO_W: f32 = 200.0;
+const SHORT_W: f32 = 140.0;
+
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([960.0, 780.0])
+            .with_inner_size([720.0, 700.0])
+            .with_min_inner_size([560.0, 480.0])
             .with_title("Message Exporters"),
         ..Default::default()
     };
@@ -270,23 +276,14 @@ impl App {
         );
         ui.add_space(10.0);
 
-        ui.horizontal(|ui| {
-            ui.label("Contacts file");
-            ui.add(
-                egui::TextEdit::singleline(&mut self.validate_input)
-                    .desired_width(420.0)
-                    .hint_text("contacts.vcf or contacts.csv"),
-            );
-            if ui.button("Browse…").clicked() {
-                if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("Contacts", &["csv", "vcf", "vcard"])
-                    .pick_file()
-                {
-                    self.validate_input = path.display().to_string();
-                    self.errors.clear();
-                }
-            }
-        });
+        path_or_text(
+            ui,
+            "Contacts file",
+            &mut self.validate_input,
+            "contacts.vcf or contacts.csv",
+            true,
+            false,
+        );
 
         ui.add_space(6.0);
         ui.checkbox(&mut self.validate_usa, "USA numbers");
@@ -320,33 +317,7 @@ impl App {
     }
 
     fn ui_export(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.heading("Export");
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let previous = self.exporter;
-                egui::ComboBox::from_id_salt("exporter")
-                    .selected_text(self.exporter.display_name())
-                    .width(220.0)
-                    .show_ui(ui, |ui| {
-                        for exporter in EXPORTERS {
-                            ui.selectable_value(
-                                &mut self.exporter,
-                                exporter,
-                                exporter.display_name(),
-                            );
-                        }
-                    });
-                if self.exporter != previous {
-                    let previous_default = default_output_dir(previous);
-                    if self.form.output.trim().is_empty() || self.form.output == previous_default {
-                        self.form.output = default_output_dir(self.exporter);
-                    }
-                    self.form.advanced = false;
-                    self.errors.clear();
-                }
-                ui.label("Backup source");
-            });
-        });
+        ui.heading("Export");
         ui.label(
             egui::RichText::new("Convert phone backups into readable conversation CSV").weak(),
         );
@@ -355,36 +326,35 @@ impl App {
         ui.heading(egui::RichText::new("Global options").size(16.0));
         ui.checkbox(&mut self.form.anonymize, "Anonymize");
         if self.form.anonymize || !self.form.anonymize_seed.is_empty() {
-            path_or_text(
+            labeled_text(
                 ui,
                 "Seed",
                 &mut self.form.anonymize_seed,
-                "Optional 64-character hex seed",
-                false,
-                false,
+                "Optional 64-hex seed",
+                PATH_W,
             );
         }
-        path_or_text(
+        labeled_text(
             ui,
             "Start date",
             &mut self.form.start_date,
-            "YYYY-MM-DD (inclusive)",
-            false,
-            false,
+            "YYYY-MM-DD",
+            SHORT_W,
         );
-        path_or_text(
+        labeled_text(
             ui,
             "End date",
             &mut self.form.end_date,
-            "YYYY-MM-DD (exclusive)",
-            false,
-            false,
+            "YYYY-MM-DD",
+            SHORT_W,
         );
 
         ui.add_space(10.0);
         ui.separator();
         ui.add_space(6.0);
 
+        self.ui_backup_source(ui);
+        ui.add_space(6.0);
         if ui
             .link(self.exporter.link_label())
             .on_hover_text(self.exporter.product_url())
@@ -406,11 +376,12 @@ impl App {
                 true,
             );
             ui.horizontal(|ui| {
-                ui.label("Backup password");
+                form_label(ui, "Backup password");
                 ui.add(
                     egui::TextEdit::singleline(&mut self.form.backup_password)
                         .password(true)
-                        .desired_width(420.0)
+                        .desired_width(PATH_W)
+                        .clip_text(true)
                         .hint_text("Encrypted iOS backup password"),
                 );
             });
@@ -566,6 +537,33 @@ impl App {
         });
     }
 
+    fn ui_backup_source(&mut self, ui: &mut egui::Ui) {
+        let previous = self.exporter;
+        ui.horizontal(|ui| {
+            form_label(ui, "Backup source");
+            egui::ComboBox::from_id_salt("exporter")
+                .selected_text(self.exporter.display_name())
+                .width(COMBO_W)
+                .show_ui(ui, |ui| {
+                    for exporter in EXPORTERS {
+                        ui.selectable_value(
+                            &mut self.exporter,
+                            exporter,
+                            exporter.display_name(),
+                        );
+                    }
+                });
+        });
+        if self.exporter != previous {
+            let previous_default = default_output_dir(previous);
+            if self.form.output.trim().is_empty() || self.form.output == previous_default {
+                self.form.output = default_output_dir(self.exporter);
+            }
+            self.form.advanced = false;
+            self.errors.clear();
+        }
+    }
+
     fn ui_contacts(&mut self, ui: &mut egui::Ui) {
         if self.exporter == Exporter::Imazing {
             path_or_text(
@@ -620,21 +618,13 @@ impl App {
                 &mut self.form.media_max_resolution,
                 &MAX_RESOLUTIONS,
             );
-            path_or_text(
-                ui,
-                "Max fps",
-                &mut self.form.media_max_fps,
-                "e.g. 30",
-                false,
-                false,
-            );
-            path_or_text(
+            labeled_text(ui, "Max fps", &mut self.form.media_max_fps, "e.g. 30", SHORT_W);
+            labeled_text(
                 ui,
                 "Min size",
                 &mut self.form.media_min_size,
                 "e.g. 20M",
-                false,
-                false,
+                SHORT_W,
             );
             ui.checkbox(
                 &mut self.form.media_skip_efficient,
@@ -681,10 +671,18 @@ impl App {
             .stick_to_bottom(true)
             .max_height(220.0)
             .show(ui, |ui| {
+                ui.set_max_width(ui.available_width());
                 if self.logs.is_empty() {
                     ui.label(egui::RichText::new(empty).weak().monospace());
                 } else {
-                    ui.label(egui::RichText::new(self.logs.join("\n")).monospace());
+                    for line in &self.logs {
+                        ui.add(
+                            egui::Label::new(egui::RichText::new(line).monospace())
+                                .wrap()
+                                .truncate(),
+                        )
+                        .on_hover_text(line);
+                    }
                 }
             });
     }
@@ -718,6 +716,31 @@ impl eframe::App for App {
     }
 }
 
+fn form_label(ui: &mut egui::Ui, label: &str) {
+    ui.allocate_ui_with_layout(
+        egui::vec2(LABEL_W, ui.spacing().interact_size.y),
+        egui::Layout::right_to_left(egui::Align::Center),
+        |ui| {
+            ui.label(label);
+        },
+    );
+}
+
+fn labeled_text(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &str, width: f32) {
+    ui.horizontal(|ui| {
+        form_label(ui, label);
+        let response = ui.add(
+            egui::TextEdit::singleline(value)
+                .desired_width(width)
+                .clip_text(true)
+                .hint_text(hint),
+        );
+        if !value.is_empty() {
+            response.on_hover_text(value.as_str());
+        }
+    });
+}
+
 fn path_or_text(
     ui: &mut egui::Ui,
     label: &str,
@@ -727,14 +750,23 @@ fn path_or_text(
     allow_folder: bool,
 ) {
     ui.horizontal(|ui| {
-        ui.label(label);
-        ui.add(
+        form_label(ui, label);
+        let response = ui.add(
             egui::TextEdit::singleline(value)
-                .desired_width(420.0)
+                .id_salt(label)
+                .desired_width(PATH_W)
+                .clip_text(true)
                 .hint_text(hint),
         );
+        if !value.is_empty() {
+            response.on_hover_text(value.as_str());
+        }
         if allow_file && ui.button("File…").clicked() {
-            if let Some(path) = rfd::FileDialog::new().pick_file() {
+            let mut dialog = rfd::FileDialog::new();
+            if label.to_ascii_lowercase().contains("contact") {
+                dialog = dialog.add_filter("Contacts", &["csv", "vcf", "vcard"]);
+            }
+            if let Some(path) = dialog.pick_file() {
                 *value = path.display().to_string();
             }
         }
@@ -753,10 +785,10 @@ fn combo_enum<T: Copy + PartialEq + std::fmt::Display>(
     options: &[T],
 ) {
     ui.horizontal(|ui| {
-        ui.label(label);
+        form_label(ui, label);
         egui::ComboBox::from_id_salt(label)
             .selected_text(value.to_string())
-            .width(420.0)
+            .width(COMBO_W)
             .show_ui(ui, |ui| {
                 for opt in options {
                     ui.selectable_value(value, *opt, opt.to_string());
