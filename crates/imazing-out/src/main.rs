@@ -6,12 +6,15 @@ use imazing_out::convert_export;
 use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
 use message_contacts::ContactsBook;
 use message_csv::DateRange;
+use message_media::{
+    compress_options_from_cli, eprint_report, process_near_vault_media, MaxResolution, MediaMode,
+};
 
 #[derive(Parser, Debug)]
 #[command(name = "imazing-out")]
 #[command(about = "Convert iMazing Messages / WhatsApp CSV exports to per-conversation CSV")]
 struct Cli {
-    /// One Messages/WhatsApp CSV, a chat folder, Messages/, WhatsApp/, or a full device export root
+    /// Messages/WhatsApp export directory (or a single CSV for CLI convenience)
     #[arg(long)]
     input: PathBuf,
 
@@ -24,7 +27,7 @@ struct Cli {
     #[arg(long)]
     contacts: Option<PathBuf>,
 
-    /// IANA timezone for naive Message Date values (default: host local)
+    /// UTC offset for naive Message Date values (e.g. UTC-05:00). Default: host local.
     #[arg(long)]
     timezone: Option<String>,
 
@@ -43,6 +46,26 @@ struct Cli {
     /// Optional 64-char hex seed for reproducible anonymization (implies --anonymize)
     #[arg(long = "anonymize-seed")]
     anonymize_seed: Option<String>,
+
+    /// Attachment media: disabled (no files), clone (default), convert, or compress
+    #[arg(long = "media-mode", default_value = "clone", value_name = "MODE")]
+    media_mode: MediaMode,
+
+    /// Compress only: max long edge (720p, 1080p, 4k)
+    #[arg(long = "media-max-resolution", default_value = "1080p", value_name = "RES")]
+    media_max_resolution: MaxResolution,
+
+    /// Compress only: max frame rate
+    #[arg(long = "media-max-fps", default_value_t = 30.0)]
+    media_max_fps: f32,
+
+    /// Compress only: only re-encode videos at/above this size (e.g. 20M)
+    #[arg(long = "media-min-size", default_value = "20M")]
+    media_min_size: String,
+
+    /// Compress only: skip already-efficient HEVC under max resolution (default on)
+    #[arg(long = "media-skip-efficient", default_value_t = true, action = clap::ArgAction::Set)]
+    media_skip_efficient: bool,
 }
 
 fn main() -> Result<()> {
@@ -75,7 +98,22 @@ fn main() -> Result<()> {
         &book,
         cli.timezone.as_deref(),
         &date_range,
+        cli.media_mode.copies_attachments(),
     )?;
+
+    if cli.media_mode.needs_tools() {
+        let compress = compress_options_from_cli(
+            cli.media_max_resolution,
+            cli.media_max_fps,
+            &cli.media_min_size,
+            cli.media_skip_efficient,
+        )?;
+        let media = process_near_vault_media(&cli.output, cli.media_mode, &compress)?;
+        eprint_report(&media);
+        if !media.errors.is_empty() && media.processed == 0 {
+            anyhow::bail!("media processing failed for all candidate files");
+        }
+    }
 
     if cli.anonymize || cli.anonymize_seed.is_some() {
         let mut anon = resolve_anonymizer(cli.anonymize_seed.as_deref())?;
@@ -92,6 +130,7 @@ fn main() -> Result<()> {
     println!("  whatsapp CSVs:       {}", report.whatsapp_files);
     println!("  conversations:       {}", report.conversations);
     println!("  messages:            {}", report.messages);
+    println!("  attachments:         {}", report.attachments_saved);
     println!("  sent / received:     {} / {}", report.sent, report.received);
     if report.notifications > 0 {
         println!("  notifications:       {}", report.notifications);
@@ -120,7 +159,7 @@ fn main() -> Result<()> {
     if !report.errors.is_empty() {
         println!("  errors:              {}", report.errors.len());
         for err in report.errors.iter().take(10) {
-            println!("    {err}");
+            eprintln!("  - {err}");
         }
     }
     Ok(())

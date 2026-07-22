@@ -19,7 +19,8 @@ use fltk::{
 };
 use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
 use message_exporters_core::{
-    default_output_dir, resolve_binary, spawn, ApplePlatform, AttachmentMedia, ContactsKind,
+    default_output_dir, ensure_output_dir, resolve_binary, spawn, ApplePlatform, AttachmentMedia,
+    ContactsKind,
     Exporter, Form, ProcessControl, ProcessEvent, APPLE_PLATFORMS, ATTACHMENT_MEDIA, CONTACT_KINDS,
     EXPORTERS, MAX_RESOLUTIONS,
 };
@@ -75,7 +76,7 @@ impl Default for AppState {
             mode: AppMode::Contacts,
             exporter,
             form: Form {
-                output: default_output_dir(exporter),
+                output: default_output_dir(exporter, ""),
                 ..Form::default()
             },
             validate_usa: true,
@@ -299,7 +300,7 @@ fn main() {
 
     let mut row_output = path_row("Output directory");
     let mut output_path = row_output.1.clone();
-    output_path.set_value(&default_output_dir(Exporter::default()));
+    output_path.set_value(&default_output_dir(Exporter::default(), ""));
     let mut btn_output_folder = row_output.3;
     row_output.2.hide();
     form_col.fixed(&row_output.0, 28);
@@ -698,17 +699,32 @@ fn handle_msg(msg: UiMsg, state: &Rc<RefCell<AppState>>, widgets: &Rc<RefCell<Wi
         }
         UiMsg::PickInputFile => {
             if let Some(path) = pick_file(None) {
-                widgets.borrow_mut().input_path.set_value(&path);
+                let exporter = state.borrow().exporter;
+                let mut w = widgets.borrow_mut();
+                let old = w.input_path.value();
+                sync_output_for_input_change(&mut w, exporter, &old, &path);
+                w.input_path.set_value(&path);
             }
         }
         UiMsg::PickInputFolder | UiMsg::PickOutputFolder | UiMsg::PickDbFolder
         | UiMsg::PickAttachmentRoot => {
             if let Some(path) = pick_folder() {
+                let exporter = state.borrow().exporter;
                 let mut w = widgets.borrow_mut();
                 match msg {
-                    UiMsg::PickInputFolder => w.input_path.set_value(&path),
+                    UiMsg::PickInputFolder => {
+                        let old = w.input_path.value();
+                        sync_output_for_input_change(&mut w, exporter, &old, &path);
+                        w.input_path.set_value(&path);
+                    }
                     UiMsg::PickOutputFolder => w.output_path.set_value(&path),
-                    UiMsg::PickDbFolder => w.db_path.set_value(&path),
+                    UiMsg::PickDbFolder => {
+                        if exporter == Exporter::Imessage {
+                            let old = w.db_path.value();
+                            sync_output_for_input_change(&mut w, exporter, &old, &path);
+                        }
+                        w.db_path.set_value(&path);
+                    }
                     UiMsg::PickAttachmentRoot => w.attachment_root.set_value(&path),
                     _ => {}
                 }
@@ -719,12 +735,19 @@ fn handle_msg(msg: UiMsg, state: &Rc<RefCell<AppState>>, widgets: &Rc<RefCell<Wi
             let filter = matches!(msg, UiMsg::PickContactsFile | UiMsg::PickNameMapping)
                 .then_some("*.{csv,vcf,vcard}\nContacts");
             if let Some(path) = pick_file(filter) {
+                let exporter = state.borrow().exporter;
                 let mut w = widgets.borrow_mut();
                 match msg {
                     UiMsg::PickContactsFile => w.contacts_path.set_value(&path),
                     UiMsg::PickNameMapping => w.name_mapping.set_value(&path),
                     UiMsg::PickAppleContacts => w.apple_contacts.set_value(&path),
-                    UiMsg::PickDbPath => w.db_path.set_value(&path),
+                    UiMsg::PickDbPath => {
+                        if exporter == Exporter::Imessage {
+                            let old = w.db_path.value();
+                            sync_output_for_input_change(&mut w, exporter, &old, &path);
+                        }
+                        w.db_path.set_value(&path);
+                    }
                     _ => {}
                 }
             }
@@ -747,11 +770,22 @@ fn handle_msg(msg: UiMsg, state: &Rc<RefCell<AppState>>, widgets: &Rc<RefCell<Wi
             let idx = w.exporter_choice.value().max(0) as usize;
             let previous = st.exporter;
             if let Some(exporter) = EXPORTERS.get(idx).copied() {
+                let previous_input = if previous == Exporter::Imessage {
+                    w.db_path.value()
+                } else {
+                    w.input_path.value()
+                };
                 st.exporter = exporter;
-                let previous_default = default_output_dir(previous);
+                let previous_default = default_output_dir(previous, &previous_input);
                 let current_out = w.output_path.value();
                 if current_out.trim().is_empty() || current_out == previous_default {
-                    w.output_path.set_value(&default_output_dir(exporter));
+                    let new_input = if exporter == Exporter::Imessage {
+                        w.db_path.value()
+                    } else {
+                        w.input_path.value()
+                    };
+                    w.output_path
+                        .set_value(&default_output_dir(exporter, &new_input));
                 }
                 st.form.advanced = false;
                 st.errors.clear();
@@ -887,6 +921,14 @@ fn start_export(state: &Rc<RefCell<AppState>>, widgets: &Rc<RefCell<Widgets>>) {
             return;
         }
     };
+    let output = std::path::PathBuf::from(st.form.output.trim());
+    if let Err(error) = ensure_output_dir(&output) {
+        st.errors = vec![error.clone()];
+        st.logs.push(format!("Error: {error}"));
+        drop(st);
+        refresh_ui(state, widgets);
+        return;
+    }
     let program = match resolve_binary(st.exporter.binary()) {
         Ok(p) => p,
         Err(error) => {
@@ -904,6 +946,20 @@ fn start_export(state: &Rc<RefCell<AppState>>, widgets: &Rc<RefCell<Widgets>>) {
     spawn(program, args, st.control.clone(), tx);
     drop(st);
     refresh_ui(state, widgets);
+}
+
+fn sync_output_for_input_change(
+    w: &mut Widgets,
+    exporter: Exporter,
+    old_input: &str,
+    new_input: &str,
+) {
+    let previous_default = default_output_dir(exporter, old_input);
+    let current_out = w.output_path.value();
+    if current_out.trim().is_empty() || current_out == previous_default {
+        w.output_path
+            .set_value(&default_output_dir(exporter, new_input));
+    }
 }
 
 fn poll_process(state: &Rc<RefCell<AppState>>, widgets: &Rc<RefCell<Widgets>>) {

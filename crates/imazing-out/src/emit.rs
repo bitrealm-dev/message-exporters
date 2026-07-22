@@ -2,17 +2,17 @@
 
 use crate::parse::{discover_csv_files, parse_csv_file, RawRow, SourceKind};
 use anyhow::{Context, Result};
-use chrono::{Local, NaiveDateTime, TimeZone};
-use chrono_tz::Tz;
+use chrono::{FixedOffset, Local, NaiveDateTime, TimeZone};
 use message_contacts::ContactsBook;
 use message_csv::{
-    format_local_ts, json_cell, safe_filename, stable_guid, AttachmentCell, DateRange,
+    format_local_ts, json_cell, parse_utc_offset, safe_filename, stable_guid, AttachmentCell,
+    DateRange,
 };
 use message_phone::{sanitize_number, to_e164};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
 use std::fs::{self, File};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Windows path components max out at 255 chars; leave room for `__whatsapp.csv` / `.tmp`.
 const MAX_FILENAME_STEM: usize = 180;
@@ -70,6 +70,7 @@ pub struct ExportReport {
     pub unresolved_group_participants: u64,
     pub messages_files: u64,
     pub whatsapp_files: u64,
+    pub attachments_saved: u64,
     pub errors: Vec<String>,
 }
 
@@ -132,17 +133,24 @@ impl TransportFamily {
 
 /// Convert iMazing Messages / WhatsApp CSV(s) under `input` using `book` from Contacts CSV.
 ///
-/// `timezone`: IANA name (e.g. `America/New_York`). When `None`, use the host local zone.
+/// `timezone`: fixed UTC offset (e.g. `UTC-05:00`). When `None`, use the host local zone.
+/// When `copy_attachments` is true, media files are copied into `output/attachments/`.
 pub fn convert_export(
     input: &Path,
     output: &Path,
     book: &ContactsBook,
     timezone: Option<&str>,
     date_range: &DateRange,
+    copy_attachments: bool,
 ) -> Result<ExportReport> {
     let tz = resolve_tz(timezone)?;
     fs::create_dir_all(output).with_context(|| format!("create {}", output.display()))?;
     clean_previous_csv(output)?;
+    let attachments_dir = output.join("attachments");
+    if copy_attachments {
+        fs::create_dir_all(&attachments_dir)
+            .with_context(|| format!("create {}", attachments_dir.display()))?;
+    }
 
     let files = discover_csv_files(input)?;
     let mut report = ExportReport::default();
@@ -215,15 +223,20 @@ pub fn convert_export(
 
                 let mut attachments = Vec::new();
                 if !row.attachment.is_empty() {
-                    let mime = mime_hint(&row.attachment_type, &row.attachment);
-                    attachments.push(AttachmentCell {
-                        path: Some(row.attachment.clone()),
-                        original_name: Some(row.attachment.clone()),
-                        mime_type: mime,
-                        is_sticker: row.attachment_type.eq_ignore_ascii_case("sticker"),
-                        transcription: None,
-                        sticker_effect: None,
-                    });
+                    let csv_parent = discovered
+                        .path
+                        .parent()
+                        .unwrap_or_else(|| Path::new("."));
+                    attachments.push(resolve_attachment_cell(
+                        &row.attachment,
+                        &row.attachment_type,
+                        csv_parent,
+                        input,
+                        &attachments_dir,
+                        copy_attachments,
+                        secs,
+                        &mut report,
+                    ));
                 }
 
                 let dedupe_key = format!(
@@ -364,17 +377,15 @@ fn collect_peer_info(
 #[derive(Debug)]
 enum TzMode {
     Local,
-    Named(Tz),
+    Fixed(FixedOffset),
 }
 
 fn resolve_tz(timezone: Option<&str>) -> Result<TzMode> {
-    match timezone {
+    match timezone.map(str::trim).filter(|s| !s.is_empty()) {
         None => Ok(TzMode::Local),
         Some(name) => {
-            let tz: Tz = name.parse().map_err(|_| {
-                anyhow::anyhow!("unknown timezone {name:?} (use IANA, e.g. America/New_York)")
-            })?;
-            Ok(TzMode::Named(tz))
+            let offset = parse_utc_offset(name).map_err(anyhow::Error::msg)?;
+            Ok(TzMode::Fixed(offset))
         }
     }
 }
@@ -389,9 +400,141 @@ fn parse_message_date(raw: &str, tz: &TzMode) -> Option<(i64, String)> {
         .ok()?;
     let secs = match tz {
         TzMode::Local => Local.from_local_datetime(&naive).single()?.timestamp(),
-        TzMode::Named(tz) => tz.from_local_datetime(&naive).single()?.timestamp(),
+        TzMode::Fixed(offset) => offset.from_local_datetime(&naive).single()?.timestamp(),
     };
     Some((secs, (secs * 1000).to_string()))
+}
+
+fn resolve_attachment_cell(
+    csv_name: &str,
+    attachment_type: &str,
+    csv_parent: &Path,
+    input_root: &Path,
+    attachments_dir: &Path,
+    copy_attachments: bool,
+    message_secs: i64,
+    report: &mut ExportReport,
+) -> AttachmentCell {
+    let mime = mime_hint(attachment_type, csv_name);
+    let is_sticker = attachment_type.eq_ignore_ascii_case("sticker");
+    if !copy_attachments {
+        return AttachmentCell {
+            path: Some(csv_name.to_string()),
+            original_name: Some(csv_name.to_string()),
+            mime_type: mime,
+            is_sticker,
+            transcription: None,
+            sticker_effect: None,
+        };
+    }
+    match find_and_copy_attachment(
+        csv_name,
+        csv_parent,
+        input_root,
+        attachments_dir,
+        message_secs,
+        report,
+    ) {
+        Ok(Some(rel_path)) => AttachmentCell {
+            path: Some(rel_path),
+            original_name: Some(csv_name.to_string()),
+            mime_type: mime,
+            is_sticker,
+            transcription: None,
+            sticker_effect: None,
+        },
+        Ok(None) | Err(_) => AttachmentCell {
+            path: Some(csv_name.to_string()),
+            original_name: Some(csv_name.to_string()),
+            mime_type: mime,
+            is_sticker,
+            transcription: None,
+            sticker_effect: None,
+        },
+    }
+}
+
+fn attachment_name_matches(disk_name: &str, csv_name: &str) -> bool {
+    let disk = disk_name.to_ascii_lowercase();
+    let csv = csv_name.to_ascii_lowercase();
+    if disk == csv {
+        return true;
+    }
+    disk.ends_with(&csv)
+        || disk.ends_with(&format!("_{csv}"))
+        || disk.ends_with(&format!("-{csv}"))
+}
+
+fn find_attachment_on_disk(csv_name: &str, csv_parent: &Path, input_root: &Path) -> Option<PathBuf> {
+    if let Ok(entries) = fs::read_dir(csv_parent) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                && attachment_name_matches(name, csv_name)
+            {
+                return Some(path);
+            }
+        }
+    }
+    find_attachment_walk(csv_name, input_root)
+}
+
+fn find_attachment_walk(csv_name: &str, dir: &Path) -> Option<PathBuf> {
+    let entries = fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = find_attachment_walk(csv_name, &path) {
+                return Some(found);
+            }
+            continue;
+        }
+        if !path.is_file() {
+            continue;
+        }
+        if let Some(name) = path.file_name().and_then(|n| n.to_str())
+            && attachment_name_matches(name, csv_name)
+        {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn find_and_copy_attachment(
+    csv_name: &str,
+    csv_parent: &Path,
+    input_root: &Path,
+    attachments_dir: &Path,
+    message_secs: i64,
+    report: &mut ExportReport,
+) -> Result<Option<String>> {
+    let Some(src) = find_attachment_on_disk(csv_name, csv_parent, input_root) else {
+        return Ok(None);
+    };
+    let bytes = fs::read(&src).with_context(|| format!("read {}", src.display()))?;
+    let digest_hex = hex::encode(Sha256::digest(&bytes));
+    let digest_prefix = &digest_hex[..16.min(digest_hex.len())];
+    let ext = src
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| format!(".{e}"))
+        .unwrap_or_default();
+    let date_prefix = Local
+        .timestamp_opt(message_secs, 0)
+        .single()
+        .map(|t| t.format("%Y%m%d_%H%M%S").to_string())
+        .unwrap_or_else(|| message_secs.to_string());
+    let name = format!("{date_prefix}-{digest_prefix}{ext}");
+    let dest = attachments_dir.join(&name);
+    if !dest.exists() {
+        fs::write(&dest, &bytes).with_context(|| format!("write {}", dest.display()))?;
+        report.attachments_saved += 1;
+    }
+    Ok(Some(format!("attachments/{name}")))
 }
 
 fn clean_previous_csv(output_dir: &Path) -> Result<()> {
@@ -778,7 +921,7 @@ Bob,,McRoy,+13212462167,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default()).unwrap();
+        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false).unwrap();
         assert_eq!(report.conversations, 1);
         assert_eq!(report.unresolved_chat_phone, 0);
         assert_eq!(report.messages, 2);
@@ -808,7 +951,7 @@ Other,,Person,+15555550999,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default()).unwrap();
+        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false).unwrap();
         assert!(report.unresolved_chat_phone >= 1);
         assert_eq!(report.conversations, 1);
         assert!(out.join("Mystery_Person.csv").is_file());
@@ -832,7 +975,7 @@ Bob,,,+15555550100,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default()).unwrap();
+        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false).unwrap();
         assert_eq!(report.messages, 1);
         assert_eq!(report.duplicates_dropped, 1);
     }
@@ -855,7 +998,7 @@ Bob,,,+15555550100,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default()).unwrap();
+        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false).unwrap();
         assert_eq!(report.messages, 2);
         assert_eq!(report.duplicates_dropped, 0);
     }
@@ -880,7 +1023,7 @@ Carol,,Silent,+15555550133,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default()).unwrap();
+        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false).unwrap();
         assert_eq!(report.conversations, 1);
         assert_eq!(report.unresolved_group_participants, 0);
         let body = fs::read_to_string(out.join("_15555550111__15555550122__15555550133.csv")).unwrap();
@@ -907,7 +1050,7 @@ Bob,,Example,+15555550122,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default()).unwrap();
+        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false).unwrap();
         assert_eq!(report.conversations, 1);
         assert_eq!(report.unresolved_group_participants, 1);
     }
@@ -935,7 +1078,7 @@ Bob,,,+15555550100,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default()).unwrap();
+        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false).unwrap();
         assert_eq!(report.conversations, 2);
         assert_eq!(report.messages_files, 1);
         assert_eq!(report.whatsapp_files, 1);
@@ -947,7 +1090,34 @@ Bob,,,+15555550100,\n",
 
     #[test]
     fn rejects_unknown_timezone() {
-        let err = resolve_tz(Some("Not/AZone")).unwrap_err();
-        assert!(err.to_string().contains("timezone"));
+        let err = resolve_tz(Some("America/New_York")).unwrap_err();
+        assert!(err.to_string().contains("UTC"));
+    }
+
+    #[test]
+    fn copies_attachment_by_suffix_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let chat = dir.path().join("chat");
+        fs::create_dir_all(&chat).unwrap();
+        let csv = chat.join("Messages - Bob.csv");
+        fs::write(
+            &csv,
+            "Chat Session,Message Date,Delivered Date,Read Date,Edited Date,Deleted Date,Service,Type,Sender ID,Sender Name,Status,Replying to,Subject,Text,Reactions,Attachment,Attachment type\n\
+Bob McRoy,2020-01-01 12:00:00,,,,,SMS,Incoming,+15555550100,Bob,Read,,,Hi,,image000000.jpg,Image\n",
+        )
+        .unwrap();
+        fs::write(chat.join("ABC123_image000000.jpg"), b"fake-jpeg-bytes").unwrap();
+        let book = ContactsBook::empty();
+        let out = dir.path().join("out");
+        let report = convert_export(&chat, &out, &book, Some("UTC"), &DateRange::default(), true)
+            .unwrap();
+        assert_eq!(report.attachments_saved, 1);
+        assert_eq!(report.messages, 1);
+        let att_dir = out.join("attachments");
+        assert!(att_dir.is_dir());
+        let count = fs::read_dir(&att_dir).unwrap().count();
+        assert_eq!(count, 1);
+        let body = fs::read_to_string(out.join("_15555550100.csv")).unwrap();
+        assert!(body.contains("attachments/"));
     }
 }

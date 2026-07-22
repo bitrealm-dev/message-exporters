@@ -20,7 +20,9 @@ fn convert_messages_with_imazing_contacts() {
         &book,
         Some("UTC"),
         &DateRange::default(),
-    ).expect("convert");
+        false,
+    )
+    .expect("convert");
 
     assert_eq!(report.conversations, 1);
     assert_eq!(report.messages, 3);
@@ -52,7 +54,9 @@ fn convert_whatsapp_csv_direct() {
         &book,
         Some("UTC"),
         &DateRange::default(),
-    ).expect("convert");
+        false,
+    )
+    .expect("convert");
 
     assert_eq!(report.conversations, 1);
     assert_eq!(report.messages, 3);
@@ -77,7 +81,9 @@ fn convert_export_root_recursively_keeps_services_separate() {
         &book,
         Some("UTC"),
         &DateRange::default(),
-    ).expect("convert");
+        false,
+    )
+    .expect("convert");
 
     assert_eq!(report.messages_files, 2);
     assert_eq!(report.whatsapp_files, 1);

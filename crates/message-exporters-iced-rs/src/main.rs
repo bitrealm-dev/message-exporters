@@ -22,9 +22,10 @@ const WINDOW_MIN_HEIGHT: f32 = 360.0;
 const UI_TITLE_SIZE: f32 = 16.0;
 const UI_BODY_SIZE: f32 = 13.0;
 use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
+use message_csv::DateRange;
 use message_exporters_core::{
-    default_output_dir, resolve_binary, spawn, ApplePlatform, AttachmentMedia, ContactsKind,
-    Exporter, Form, ProcessControl, ProcessEvent, APPLE_PLATFORMS, ATTACHMENT_MEDIA, CONTACT_KINDS,
+    default_output_dir, ensure_output_dir, resolve_binary, spawn, ApplePlatform, AttachmentMedia,
+    ContactsKind, Exporter, Form, ProcessControl, ProcessEvent, APPLE_PLATFORMS, ATTACHMENT_MEDIA,
     EXPORTERS, MAX_RESOLUTIONS,
 };
 use message_media::{process_near_vault_media, MaxResolution, MediaMode};
@@ -79,7 +80,7 @@ impl Default for App {
             mode: AppMode::Contacts,
             exporter,
             form: Form {
-                output: default_output_dir(exporter),
+                output: default_output_dir(exporter, ""),
                 ..Form::default()
             },
             validate_input: String::new(),
@@ -128,7 +129,6 @@ enum Message {
     Output(String),
     OwnerPhones(String),
     OwnerEmails(String),
-    ContactsKind(ContactsKind),
     Contacts(String),
     Timezone(String),
     NameMapping(String),
@@ -153,6 +153,8 @@ enum Message {
     PickAttachmentRoot,
     PickAppleContacts,
     RunExport,
+    /// Idle: clear export form. Running: cancel the export process.
+    ClearExport,
 }
 
 impl App {
@@ -199,16 +201,25 @@ impl App {
             Message::Check => return self.start_validate(true),
             Message::Update => return self.start_validate(false),
             Message::Cancel => self.cancel(),
+            Message::ClearExport => {
+                if self.running {
+                    self.cancel();
+                } else {
+                    return self.clear_export_form();
+                }
+            }
             Message::Anonymize(v) => self.form.anonymize = v,
             Message::Seed(v) => self.form.anonymize_seed = v,
             Message::StartDate(v) => self.form.start_date = v,
             Message::EndDate(v) => self.form.end_date = v,
             Message::ExporterSelected(exporter) => {
                 let previous = self.exporter;
+                let previous_input = export_input_path(previous, &self.form).to_string();
                 self.exporter = exporter;
-                let previous_default = default_output_dir(previous);
+                let previous_default = default_output_dir(previous, &previous_input);
                 if self.form.output.trim().is_empty() || self.form.output == previous_default {
-                    self.form.output = default_output_dir(exporter);
+                    self.form.output =
+                        default_output_dir(exporter, export_input_path(exporter, &self.form));
                 }
                 self.form.advanced = false;
                 self.errors.clear();
@@ -219,15 +230,24 @@ impl App {
                 }
             }
             Message::ToggleAdvanced => self.form.advanced = !self.form.advanced,
-            Message::Input(v) => self.form.input = v,
+            Message::Input(v) => {
+                let old = self.form.input.clone();
+                self.form.input = v;
+                self.sync_default_output(&old, &self.form.input.clone());
+            }
             Message::Output(v) => self.form.output = v,
             Message::OwnerPhones(v) => self.form.owner_phones = v,
             Message::OwnerEmails(v) => self.form.owner_emails = v,
-            Message::ContactsKind(v) => self.form.contacts_kind = v,
-            Message::Contacts(v) => self.form.contacts = v,
+            Message::Contacts(v) => return self.set_contacts_path(v),
             Message::Timezone(v) => self.form.timezone = v,
             Message::NameMapping(v) => self.form.name_mapping = v,
-            Message::DbPath(v) => self.form.db_path = v,
+            Message::DbPath(v) => {
+                let old = self.form.db_path.clone();
+                self.form.db_path = v;
+                if self.exporter == Exporter::Imessage {
+                    self.sync_default_output(&old, &self.form.db_path.clone());
+                }
+            }
             Message::BackupPassword(v) => self.form.backup_password = v,
             Message::ApplePlatform(v) => self.form.apple_platform = v,
             Message::AttachmentRoot(v) => self.form.attachment_root = v,
@@ -240,31 +260,52 @@ impl App {
             Message::SkipEfficient(v) => self.form.media_skip_efficient = v,
             Message::PickInputFile => {
                 if let Some(path) = pick_file(None) {
+                    let old = self.form.input.clone();
                     self.form.input = path;
+                    self.sync_default_output(&old, &self.form.input.clone());
                 }
             }
             Message::PickInputFolder | Message::PickOutputFolder | Message::PickDbFolder
             | Message::PickAttachmentRoot => {
                 if let Some(path) = pick_folder() {
                     match message {
-                        Message::PickInputFolder => self.form.input = path,
+                        Message::PickInputFolder => {
+                            let old = self.form.input.clone();
+                            self.form.input = path;
+                            self.sync_default_output(&old, &self.form.input.clone());
+                        }
                         Message::PickOutputFolder => self.form.output = path,
-                        Message::PickDbFolder => self.form.db_path = path,
+                        Message::PickDbFolder => {
+                            let old = self.form.db_path.clone();
+                            self.form.db_path = path;
+                            if self.exporter == Exporter::Imessage {
+                                self.sync_default_output(&old, &self.form.db_path.clone());
+                            }
+                        }
                         Message::PickAttachmentRoot => self.form.attachment_root = path,
                         _ => {}
                     }
                 }
             }
-            Message::PickContactsFile | Message::PickNameMapping | Message::PickAppleContacts
-            | Message::PickDbPath => {
-                let filter = matches!(message, Message::PickContactsFile | Message::PickNameMapping)
-                    .then_some(["csv", "vcf", "vcard"].as_slice());
+            Message::PickContactsFile => {
+                if let Some(path) = pick_file(Some(&["csv", "vcf", "vcard"])) {
+                    return self.set_contacts_path(path);
+                }
+            }
+            Message::PickNameMapping | Message::PickAppleContacts | Message::PickDbPath => {
+                let filter = matches!(message, Message::PickNameMapping)
+                    .then_some(["csv"].as_slice());
                 if let Some(path) = pick_file(filter) {
                     match message {
-                        Message::PickContactsFile => self.form.contacts = path,
                         Message::PickNameMapping => self.form.name_mapping = path,
                         Message::PickAppleContacts => self.form.apple_contacts = path,
-                        Message::PickDbPath => self.form.db_path = path,
+                        Message::PickDbPath => {
+                            let old = self.form.db_path.clone();
+                            self.form.db_path = path;
+                            if self.exporter == Exporter::Imessage {
+                                self.sync_default_output(&old, &self.form.db_path.clone());
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -291,21 +332,12 @@ impl App {
         ]
         .spacing(8);
 
-        // Form stays compact above the divider; the log (Fill) owns leftover
-        // height so window resize grows/shrinks the logging area.
-        let form: Element<_> = match self.mode {
+        // Form keeps Fill above the log divider; log uses Fixed(LOG_PANE_HEIGHT) so
+        // the window boost on expand does not shrink the form viewport.
+        // Message Export pins its own title outside an inner scrollable.
+        let content: Element<_> = match self.mode {
             AppMode::Contacts => self.view_contacts(),
             AppMode::Message => self.view_export(),
-        };
-        let content: Element<_> = match self.mode {
-            AppMode::Contacts => form,
-            AppMode::Message => {
-                if self.log_expanded {
-                    scrollable(form).height(Length::FillPortion(1)).into()
-                } else {
-                    scrollable(form).height(Fill).into()
-                }
-            }
         };
 
         let mut body = column![tabs, content]
@@ -352,7 +384,7 @@ impl App {
                 .on_press(Message::ToggleLog),
         );
         if self.log_expanded {
-            // Fill: tracks window resize. Outer scrollable + selectable editor.
+            // Fixed height matches window boost so the form does not jump up.
             let log_scroll = scrollable(
                 text_editor(&self.log_content)
                     .font(Font::MONOSPACE)
@@ -371,7 +403,7 @@ impl App {
                 container(log_scroll)
                     .padding(8)
                     .width(Fill)
-                    .height(Fill)
+                    .height(Length::Fixed(LOG_PANE_HEIGHT))
                     .style(|_theme| container::Style {
                         background: Some(iced::Background::Color(iced::Color::from_rgb8(
                             36, 40, 48,
@@ -471,29 +503,27 @@ impl App {
     }
 
     fn view_export(&self) -> Element<'_, Message> {
-        let mut col = Column::new()
+        // Fields below the pinned Export title scroll; tabs/title never do.
+        let mut fields = Column::new()
             .spacing(8)
-            .push(text("Export").size(22))
-            .push(
-                text("Convert phone backups into readable conversation CSV")
-                    .color(iced::Color::from_rgb8(160, 160, 160)),
-            )
-            .push(text("Global options").size(16))
+            .push(text("Global options").size(UI_BODY_SIZE))
             .push(
                 checkbox(self.form.anonymize)
                     .label("Anonymize")
+                    .size(16)
+                    .text_size(UI_BODY_SIZE)
                     .on_toggle(Message::Anonymize),
             );
 
         if self.form.anonymize || !self.form.anonymize_seed.is_empty() {
-            col = col.push(labeled_input(
+            fields = fields.push(labeled_input(
                 "Seed",
                 "Optional 64-hex seed",
                 &self.form.anonymize_seed,
                 Message::Seed,
             ));
         }
-        col = col
+        fields = fields
             .push(labeled_input(
                 "Start date",
                 "YYYY-MM-DD",
@@ -508,25 +538,27 @@ impl App {
             ))
             .push(
                 row![
-                    text("Backup source").width(130),
+                    text("Backup source").size(UI_BODY_SIZE).width(130),
                     pick_list(
                         EXPORTERS.as_slice(),
                         Some(self.exporter),
                         Message::ExporterSelected,
                     )
+                    .text_size(UI_BODY_SIZE)
                     .width(220),
                 ]
                 .spacing(8)
                 .align_y(Alignment::Center),
             )
+            .push(rule::horizontal(1))
             .push(
-                button(self.exporter.link_label())
+                button(text(self.exporter.link_label()).size(UI_BODY_SIZE))
                     .style(button::text)
                     .on_press(Message::OpenProductUrl),
             );
 
         if self.exporter == Exporter::Imessage {
-            col = col
+            fields = fields
                 .push(path_row(
                     "Database / iOS backup path",
                     &self.form.db_path,
@@ -536,10 +568,11 @@ impl App {
                 ))
                 .push(
                     row![
-                        text("Backup password").width(130),
+                        text("Backup password").size(UI_BODY_SIZE).width(130),
                         text_input("Encrypted iOS backup password", &self.form.backup_password)
                             .secure(true)
                             .on_input(Message::BackupPassword)
+                            .size(UI_BODY_SIZE)
                             .padding(6)
                             .width(Fill),
                     ]
@@ -548,12 +581,13 @@ impl App {
                 )
                 .push(
                     row![
-                        text("Platform").width(130),
+                        text("Platform").size(UI_BODY_SIZE).width(130),
                         pick_list(
                             APPLE_PLATFORMS.as_slice(),
                             Some(self.form.apple_platform),
                             Message::ApplePlatform,
                         )
+                        .text_size(UI_BODY_SIZE)
                         .width(220),
                     ]
                     .spacing(8)
@@ -566,17 +600,20 @@ impl App {
                     None,
                     Some(Message::PickOutputFolder),
                 ));
-            col = col.push(self.view_attachment_media());
-            col = col.push(
-                button(if self.form.advanced {
-                    "▾ Hide advanced options"
-                } else {
-                    "▸ Show advanced options"
-                })
+            fields = fields.push(self.view_attachment_media());
+            fields = fields.push(
+                button(
+                    text(if self.form.advanced {
+                        "▾ Hide advanced options"
+                    } else {
+                        "▸ Show advanced options"
+                    })
+                    .size(UI_BODY_SIZE),
+                )
                 .on_press(Message::ToggleAdvanced),
             );
             if self.form.advanced {
-                col = col
+                fields = fields
                     .push(path_row(
                         "Attachment root",
                         &self.form.attachment_root,
@@ -612,7 +649,7 @@ impl App {
             } else {
                 "Input source"
             };
-            col = col
+            fields = fields
                 .push(path_row(
                     input_label,
                     &self.form.input,
@@ -632,7 +669,7 @@ impl App {
                 self.exporter,
                 Exporter::GoSmsPro | Exporter::SmsBackupRestore | Exporter::SmsBackupPlus
             ) {
-                col = col
+                fields = fields
                     .push(labeled_input(
                         "Your phone number(s)",
                         "Comma-separated phone numbers",
@@ -642,7 +679,7 @@ impl App {
                     .push(self.view_attachment_media());
             }
             if self.exporter == Exporter::SmsBackupPlus {
-                col = col.push(labeled_input(
+                fields = fields.push(labeled_input(
                     "Your email address(es)",
                     "Comma-separated email addresses",
                     &self.form.owner_emails,
@@ -650,10 +687,10 @@ impl App {
                 ));
             }
 
-            col = col.push(self.view_contacts_fields());
+            fields = fields.push(self.view_contacts_fields());
 
             if self.exporter == Exporter::Imazing {
-                col = col.push(labeled_input(
+                fields = fields.push(labeled_input(
                     "Timezone",
                     "IANA name, e.g. America/New_York",
                     &self.form.timezone,
@@ -662,16 +699,19 @@ impl App {
             }
 
             if self.exporter == Exporter::SmsBackupPlus {
-                col = col.push(
-                    button(if self.form.advanced {
-                        "▾ Hide advanced options"
-                    } else {
-                        "▸ Show advanced options"
-                    })
+                fields = fields.push(
+                    button(
+                        text(if self.form.advanced {
+                            "▾ Hide advanced options"
+                        } else {
+                            "▸ Show advanced options"
+                        })
+                        .size(UI_BODY_SIZE),
+                    )
                     .on_press(Message::ToggleAdvanced),
                 );
                 if self.form.advanced {
-                    col = col.push(path_row(
+                    fields = fields.push(path_row(
                         "Name mapping CSV",
                         &self.form.name_mapping,
                         Message::NameMapping,
@@ -682,15 +722,26 @@ impl App {
             }
         }
 
-        let mut actions = row![].spacing(8);
-        actions = actions.push(
-            button("Run exporter").on_press_maybe((!self.running).then_some(Message::RunExport)),
-        );
-        actions = actions.push(
-            button("Cancel").on_press_maybe(self.running.then_some(Message::Cancel)),
-        );
-        col = col.push(Space::new().height(8)).push(actions);
-        col.into()
+        let actions = row![
+            space().width(Fill),
+            button(text("Run exporter").size(UI_BODY_SIZE))
+                .on_press_maybe((!self.running).then_some(Message::RunExport)),
+            button(text("Clear").size(UI_BODY_SIZE)).on_press(Message::ClearExport),
+        ]
+        .spacing(8);
+        fields = fields.push(Space::new().height(8)).push(actions);
+
+        column![
+            rule::horizontal(1),
+            text("Export").size(UI_TITLE_SIZE),
+            text("Convert phone backups into readable conversation CSV")
+                .size(UI_BODY_SIZE)
+                .color(iced::Color::from_rgb8(160, 160, 160)),
+            scrollable(fields).height(Fill),
+        ]
+        .spacing(8)
+        .height(Fill)
+        .into()
     }
 
     fn view_contacts_fields(&self) -> Element<'_, Message> {
@@ -703,51 +754,25 @@ impl App {
                 None,
             );
         }
-        let mut col = Column::new().spacing(8).push(
-            row![
-                text("Contacts").width(130),
-                pick_list(
-                    CONTACT_KINDS.as_slice(),
-                    Some(self.form.contacts_kind),
-                    Message::ContactsKind,
-                )
-                .width(220),
-            ]
-            .spacing(8)
-            .align_y(Alignment::Center),
-        );
-        if self.form.contacts_kind == ContactsKind::None {
-            col = col.push(
-                text("No contacts: phone numbers may not resolve to names.")
-                    .size(12)
-                    .color(iced::Color::from_rgb8(160, 160, 160)),
-            );
-        } else {
-            let label = match self.form.contacts_kind {
-                ContactsKind::Csv => "Contacts CSV",
-                ContactsKind::Vcf => "Contacts VCF",
-                ContactsKind::None => "",
-            };
-            col = col.push(path_row(
-                label,
-                &self.form.contacts,
-                Message::Contacts,
-                Some(Message::PickContactsFile),
-                None,
-            ));
-        }
-        col.into()
+        path_row(
+            "Contacts",
+            &self.form.contacts,
+            Message::Contacts,
+            Some(Message::PickContactsFile),
+            None,
+        )
     }
 
     fn view_attachment_media(&self) -> Element<'_, Message> {
         let mut col = Column::new().spacing(8).push(
             row![
-                text("Attachments").width(130),
+                text("Attachments").size(UI_BODY_SIZE).width(130),
                 pick_list(
                     ATTACHMENT_MEDIA.as_slice(),
                     Some(self.form.attachment_media),
                     Message::AttachmentMedia,
                 )
+                .text_size(UI_BODY_SIZE)
                 .width(260),
             ]
             .spacing(8)
@@ -756,6 +781,7 @@ impl App {
         if self.form.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available() {
             col = col.push(
                 text("Convert/Compress need ffmpeg and ffprobe on PATH.")
+                    .size(UI_BODY_SIZE)
                     .color(iced::Color::from_rgb8(180, 50, 50)),
             );
         }
@@ -763,12 +789,13 @@ impl App {
             col = col
                 .push(
                     row![
-                        text("Max resolution").width(130),
+                        text("Max resolution").size(UI_BODY_SIZE).width(130),
                         pick_list(
                             MAX_RESOLUTIONS.as_slice(),
                             Some(self.form.media_max_resolution),
                             Message::MaxResolution,
                         )
+                        .text_size(UI_BODY_SIZE)
                         .width(160),
                     ]
                     .spacing(8)
@@ -789,6 +816,8 @@ impl App {
                 .push(
                     checkbox(self.form.media_skip_efficient)
                         .label("Skip already-efficient HEVC")
+                        .size(16)
+                        .text_size(UI_BODY_SIZE)
                         .on_toggle(Message::SkipEfficient),
                 );
         }
@@ -863,6 +892,17 @@ impl App {
         if self.running {
             return Task::none();
         }
+        let start = self.form.start_date.trim();
+        let end = self.form.end_date.trim();
+        if let Err(error) = DateRange::parse(
+            (!start.is_empty()).then_some(start),
+            (!end.is_empty()).then_some(end),
+        ) {
+            let grow = self.set_log_expanded(true);
+            self.begin_session_log();
+            self.push_log(format!("Invalid date range: {error}"));
+            return grow;
+        }
         let args = match self.form.build_args(self.exporter) {
             Ok(args) => args,
             Err(errors) => {
@@ -870,6 +910,14 @@ impl App {
                 return Task::none();
             }
         };
+        let output = std::path::PathBuf::from(self.form.output.trim());
+        if let Err(error) = ensure_output_dir(&output) {
+            let grow = self.set_log_expanded(true);
+            self.begin_session_log();
+            self.errors = vec![error.clone()];
+            self.push_log(format!("Error: {error}"));
+            return grow;
+        }
         let program = match resolve_binary(self.exporter.binary()) {
             Ok(program) => program,
             Err(error) => {
@@ -886,6 +934,62 @@ impl App {
         self.rx = Some(rx);
         spawn(program, args, self.control.clone(), tx);
         grow
+    }
+
+    fn sync_default_output(&mut self, old_input: &str, new_input: &str) {
+        let previous_default = default_output_dir(self.exporter, old_input);
+        if self.form.output.trim().is_empty() || self.form.output == previous_default {
+            self.form.output = default_output_dir(self.exporter, new_input);
+        }
+    }
+
+    /// Set contacts path and infer CSV/VCF kind from extension; log if invalid.
+    fn set_contacts_path(&mut self, path: String) -> Task<Message> {
+        let trimmed = path.trim().to_string();
+        if trimmed.is_empty() {
+            self.form.contacts.clear();
+            self.form.contacts_kind = ContactsKind::None;
+            return Task::none();
+        }
+        let ext = std::path::Path::new(&trimmed)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        match ext.as_str() {
+            "csv" => {
+                self.form.contacts = trimmed;
+                self.form.contacts_kind = ContactsKind::Csv;
+                Task::none()
+            }
+            "vcf" | "vcard" => {
+                self.form.contacts = trimmed;
+                self.form.contacts_kind = ContactsKind::Vcf;
+                Task::none()
+            }
+            _ => {
+                self.form.contacts = trimmed;
+                self.form.contacts_kind = ContactsKind::None;
+                let grow = self.set_log_expanded(true);
+                self.ensure_session_log();
+                self.push_log(
+                    "Contacts file must be .csv or .vcf (path kept but will not be used)."
+                        .into(),
+                );
+                grow
+            }
+        }
+    }
+
+    /// Reset export form fields; keep selected Backup source / exporter.
+    fn clear_export_form(&mut self) -> Task<Message> {
+        let exporter = self.exporter;
+        self.form = Form {
+            output: default_output_dir(exporter, ""),
+            ..Form::default()
+        };
+        self.errors.clear();
+        Task::none()
     }
 
     fn start_validate(&mut self, check_only: bool) -> Task<Message> {
@@ -1122,15 +1226,24 @@ fn labeled_input<'a>(
     on_input: impl Fn(String) -> Message + 'a,
 ) -> Element<'a, Message> {
     row![
-        text(label).width(130),
+        text(label).size(UI_BODY_SIZE).width(130),
         text_input(placeholder, value)
             .on_input(on_input)
+            .size(UI_BODY_SIZE)
             .padding(6)
             .width(Fill),
     ]
     .spacing(8)
     .align_y(Alignment::Center)
     .into()
+}
+
+fn export_input_path<'a>(exporter: Exporter, form: &'a Form) -> &'a str {
+    if exporter == Exporter::Imessage {
+        form.db_path.as_str()
+    } else {
+        form.input.as_str()
+    }
 }
 
 fn path_row<'a>(
@@ -1140,20 +1253,21 @@ fn path_row<'a>(
     file_msg: Option<Message>,
     folder_msg: Option<Message>,
 ) -> Element<'a, Message> {
-    let mut r = row![text(label).width(130),]
+    let mut r = row![text(label).size(UI_BODY_SIZE).width(130),]
         .spacing(6)
         .align_y(Alignment::Center);
     r = r.push(
         text_input("Path", value)
             .on_input(on_input)
+            .size(UI_BODY_SIZE)
             .padding(6)
             .width(Fill),
     );
     if let Some(msg) = file_msg {
-        r = r.push(button("File…").on_press(msg));
+        r = r.push(button(text("File…").size(UI_BODY_SIZE)).on_press(msg));
     }
     if let Some(msg) = folder_msg {
-        r = r.push(button("Folder…").on_press(msg));
+        r = r.push(button(text("Folder…").size(UI_BODY_SIZE)).on_press(msg));
     }
     r.into()
 }

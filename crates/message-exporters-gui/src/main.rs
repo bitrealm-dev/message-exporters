@@ -1,27 +1,81 @@
 //! egui front-end for message-exporters (Validate contacts + Export).
 
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
+use chrono::Local;
 use eframe::egui;
 use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
 use message_exporters_core::{
-    default_output_dir, resolve_binary, spawn, AttachmentMedia, ContactsKind, Exporter, Form,
-    ProcessControl, ProcessEvent, APPLE_PLATFORMS, ATTACHMENT_MEDIA, CONTACT_KINDS, EXPORTERS,
+    default_output_dir, ensure_output_dir, resolve_binary, spawn, AttachmentMedia, ContactsKind,
+    Exporter, Form,
+    ProcessControl, ProcessEvent, APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS,
     MAX_RESOLUTIONS,
 };
 use message_media::process_near_vault_media;
 
-const LABEL_W: f32 = 130.0;
+const LABEL_W: f32 = 190.0;
 const PATH_W: f32 = 280.0;
 const COMBO_W: f32 = 200.0;
 const SHORT_W: f32 = 140.0;
+const LOG_PANE_HEIGHT: f32 = 160.0;
+const LOG_HEADER_HEIGHT: f32 = 30.0;
+const LOG_PANE_MIN_HEIGHT: f32 = 80.0;
+const WINDOW_MIN_HEIGHT: f32 = 600.0;
+const LOG_PLACEHOLDER: &str = "(no log output)";
+const CONTACTS_FIELD_INDENT: f32 = 12.0;
+/// First row plus up to 9 added rows.
+const MAX_OWNER_PHONES: usize = 10;
+
+const UTC_OFFSETS: &[&str] = &[
+    "UTC-12:00",
+    "UTC-11:00",
+    "UTC-10:00",
+    "UTC-09:30",
+    "UTC-09:00",
+    "UTC-08:00",
+    "UTC-07:00",
+    "UTC-06:00",
+    "UTC-05:00",
+    "UTC-04:00",
+    "UTC-03:30",
+    "UTC-03:00",
+    "UTC-02:00",
+    "UTC-01:00",
+    "UTC+00:00",
+    "UTC+01:00",
+    "UTC+02:00",
+    "UTC+03:00",
+    "UTC+03:30",
+    "UTC+04:00",
+    "UTC+04:30",
+    "UTC+05:00",
+    "UTC+05:30",
+    "UTC+05:45",
+    "UTC+06:00",
+    "UTC+06:30",
+    "UTC+07:00",
+    "UTC+08:00",
+    "UTC+08:45",
+    "UTC+09:00",
+    "UTC+09:30",
+    "UTC+10:00",
+    "UTC+10:30",
+    "UTC+11:00",
+    "UTC+12:00",
+    "UTC+12:45",
+    "UTC+13:00",
+    "UTC+14:00",
+];
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([560.0, 420.0])
-            .with_min_inner_size([480.0, 360.0])
+            .with_inner_size([620.0, 720.0])
+            .with_min_inner_size([560.0, 600.0])
             .with_title("Message Exporters"),
         ..Default::default()
     };
@@ -43,11 +97,22 @@ struct App {
     mode: AppMode,
     exporter: Exporter,
     form: Form,
+    /// Per-row owner phone inputs (always at least one). Synced into `form.owner_phones`.
+    owner_phone_rows: Vec<String>,
     validate_input: String,
     validate_usa: bool,
     running: bool,
     control: ProcessControl,
     logs: Vec<String>,
+    /// Selectable display buffer for the bottom log pane (synced from `logs`).
+    log_text: String,
+    log_expanded: bool,
+    log_pane_height: f32,
+    /// Basename shown in the log header (no directory).
+    session_log_name: Option<String>,
+    session_log_path: Option<PathBuf>,
+    /// Applied at the start of `update` so run handlers can request expand without `Context`.
+    log_expand_pending: Option<bool>,
     errors: Vec<String>,
     rx: Option<Receiver<ProcessEvent>>,
 }
@@ -59,14 +124,21 @@ impl Default for App {
             mode: AppMode::ValidateContacts,
             exporter,
             form: Form {
-                output: default_output_dir(exporter),
+                output: default_output_dir(exporter, ""),
                 ..Form::default()
             },
+            owner_phone_rows: vec![String::new()],
             validate_input: String::new(),
             validate_usa: true,
             running: false,
             control: ProcessControl::default(),
             logs: Vec::new(),
+            log_text: LOG_PLACEHOLDER.to_string(),
+            log_expanded: true,
+            log_pane_height: LOG_PANE_HEIGHT,
+            session_log_name: None,
+            session_log_path: None,
+            log_expand_pending: None,
             errors: Vec::new(),
             rx: None,
         }
@@ -75,30 +147,38 @@ impl Default for App {
 
 impl App {
     fn poll_events(&mut self, ctx: &egui::Context) {
-        let Some(rx) = &self.rx else {
-            return;
-        };
-        while let Ok(event) = rx.try_recv() {
+        let mut events = Vec::new();
+        if let Some(rx) = &self.rx {
+            while let Ok(event) = rx.try_recv() {
+                let done = matches!(
+                    event,
+                    ProcessEvent::Finished(_) | ProcessEvent::Error(_)
+                );
+                events.push(event);
+                if done {
+                    break;
+                }
+            }
+        }
+        for event in events {
             match event {
                 ProcessEvent::Started(command) => {
-                    self.logs.push(format!("Running: {command}"));
+                    self.push_log(format!("Running: {command}"));
                 }
-                ProcessEvent::Log(line) => self.logs.push(line),
+                ProcessEvent::Log(line) => self.push_log(line),
                 ProcessEvent::Finished(summary) => {
-                    self.logs.push(summary);
+                    self.push_log(summary);
                     if self.mode == AppMode::Export && self.exporter == Exporter::Imessage {
                         self.run_imessage_media_post();
                     }
                     self.running = false;
                     self.rx = None;
-                    break;
                 }
                 ProcessEvent::Error(error) => {
                     self.errors = vec![error.clone()];
-                    self.logs.push(format!("Error: {error}"));
+                    self.push_log(format!("Error: {error}"));
                     self.running = false;
                     self.rx = None;
-                    break;
                 }
             }
         }
@@ -107,10 +187,21 @@ impl App {
         }
     }
 
+    fn sync_owner_phones(&mut self) {
+        self.form.owner_phones = self
+            .owner_phone_rows
+            .iter()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+
     fn start_export(&mut self) {
         if self.running {
             return;
         }
+        self.sync_owner_phones();
         let args = match self.form.build_args(self.exporter) {
             Ok(args) => args,
             Err(errors) => {
@@ -118,6 +209,14 @@ impl App {
                 return;
             }
         };
+        let output = PathBuf::from(self.form.output.trim());
+        if let Err(error) = ensure_output_dir(&output) {
+            self.errors = vec![error.clone()];
+            self.begin_session_log();
+            self.push_log(format!("Error: {error}"));
+            self.log_expand_pending = Some(true);
+            return;
+        }
         let program = match resolve_binary(self.exporter.binary()) {
             Ok(program) => program,
             Err(error) => {
@@ -127,7 +226,8 @@ impl App {
         };
         self.errors.clear();
         self.running = true;
-        self.logs.clear();
+        self.begin_session_log();
+        self.log_expand_pending = Some(true);
         let (tx, rx) = mpsc::channel();
         self.rx = Some(rx);
         spawn(program, args, self.control.clone(), tx);
@@ -170,7 +270,8 @@ impl App {
         }
         self.errors.clear();
         self.running = true;
-        self.logs.clear();
+        self.begin_session_log();
+        self.log_expand_pending = Some(true);
         let (tx, rx) = mpsc::channel();
         self.rx = Some(rx);
         spawn(program, args, self.control.clone(), tx);
@@ -178,7 +279,7 @@ impl App {
 
     fn cancel(&mut self) {
         match self.control.cancel() {
-            Ok(()) => self.logs.push("Cancellation requested…".into()),
+            Ok(()) => self.push_log("Cancellation requested…".into()),
             Err(error) => self.errors = vec![error],
         }
     }
@@ -188,34 +289,33 @@ impl App {
         if matches!(mode, message_media::MediaMode::Disabled) {
             return;
         }
-        let output = std::path::PathBuf::from(self.form.output.trim());
+        let output = PathBuf::from(self.form.output.trim());
         if mode.needs_tools() {
-            self.logs
-                .push(format!("Processing attachment media ({mode})…"));
+            self.push_log(format!("Processing attachment media ({mode})…"));
             let compress = match self.form.compress_options() {
                 Ok(opts) => opts,
                 Err(error) => {
                     self.errors = vec![error.clone()];
-                    self.logs.push(format!("Error: {error}"));
+                    self.push_log(format!("Error: {error}"));
                     return;
                 }
             };
             match process_near_vault_media(&output, mode, &compress) {
                 Ok(report) => {
                     if report.processed > 0 || report.skipped > 0 || !report.errors.is_empty() {
-                        self.logs.push(format!(
+                        self.push_log(format!(
                             "Media: processed {} file(s), skipped {}, updated {} CSV(s)",
                             report.processed, report.skipped, report.csv_files_updated
                         ));
                     }
                     for err in report.errors.iter().take(10) {
-                        self.logs.push(format!("media warning: {err}"));
+                        self.push_log(format!("media warning: {err}"));
                     }
                 }
                 Err(error) => {
                     let msg = format!("Media processing failed: {error}");
                     self.errors = vec![msg.clone()];
-                    self.logs.push(msg);
+                    self.push_log(msg);
                     return;
                 }
             }
@@ -234,13 +334,14 @@ impl App {
             match resolve_anonymizer(seed.as_deref())
                 .and_then(|mut anon| anonymize_near_vault_dir(&output, &mut anon).map(|n| (n, anon)))
             {
-                Ok((n, _)) => self
-                    .logs
-                    .push(format!("Anonymized {n} CSV file(s) under {}", output.display())),
+                Ok((n, _)) => self.push_log(format!(
+                    "Anonymized {n} CSV file(s) under {}",
+                    output.display()
+                )),
                 Err(error) => {
                     let msg = format!("Anonymize failed: {error}");
                     self.errors = vec![msg.clone()];
-                    self.logs.push(msg);
+                    self.push_log(msg);
                 }
             }
         }
@@ -265,6 +366,7 @@ impl App {
                 ui.label("Contacts file");
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
+                    ui.add_space(CONTACTS_FIELD_INDENT);
                     if ui
                         .add_enabled(!self.running, egui::Button::new("File…"))
                         .clicked()
@@ -291,10 +393,13 @@ impl App {
                 ui.add_space(18.0);
                 ui.label("Phone number format");
                 ui.add_space(4.0);
-                ui.vertical(|ui| {
-                    ui.add_enabled_ui(!self.running, |ui| {
-                        ui.radio_value(&mut self.validate_usa, true, "USA");
-                        ui.radio_value(&mut self.validate_usa, false, "International");
+                ui.horizontal(|ui| {
+                    ui.add_space(CONTACTS_FIELD_INDENT);
+                    ui.vertical(|ui| {
+                        ui.add_enabled_ui(!self.running, |ui| {
+                            ui.radio_value(&mut self.validate_usa, true, "USA");
+                            ui.radio_value(&mut self.validate_usa, false, "International");
+                        });
                     });
                 });
 
@@ -308,12 +413,19 @@ impl App {
                         if self.running && ui.button("Cancel").clicked() {
                             self.cancel();
                         }
+                        let btn_size = egui::vec2(72.0, ui.spacing().interact_size.y);
                         let can_update = !self.running && !self.validate_input.trim().is_empty();
-                        let update = ui.add_enabled(can_update, egui::Button::new("Update"));
+                        let update = ui.add_enabled(
+                            can_update,
+                            egui::Button::new("Update").min_size(btn_size),
+                        );
                         if update.clicked() {
                             self.start_validate(false);
                         }
-                        let check = ui.add_enabled(!self.running, egui::Button::new("Check"));
+                        let check = ui.add_enabled(
+                            !self.running,
+                            egui::Button::new("Check").min_size(btn_size),
+                        );
                         if check.clicked() {
                             self.start_validate(true);
                         }
@@ -329,158 +441,42 @@ impl App {
         );
         ui.add_space(8.0);
 
-        ui.heading(egui::RichText::new("Global options").size(16.0));
-        ui.checkbox(&mut self.form.anonymize, "Anonymize");
-        if self.form.anonymize || !self.form.anonymize_seed.is_empty() {
-            labeled_text(
-                ui,
-                "Seed",
-                &mut self.form.anonymize_seed,
-                "Optional 64-hex seed",
-                PATH_W,
-            );
-        }
-        labeled_text(
-            ui,
-            "Start date",
-            &mut self.form.start_date,
-            "YYYY-MM-DD",
-            SHORT_W,
-        );
-        labeled_text(
-            ui,
-            "End date",
-            &mut self.form.end_date,
-            "YYYY-MM-DD",
-            SHORT_W,
-        );
-
-        ui.add_space(10.0);
-        ui.separator();
-        ui.add_space(6.0);
-
         self.ui_backup_source(ui);
-        ui.add_space(6.0);
-        if ui
-            .link(self.exporter.link_label())
-            .on_hover_text(self.exporter.product_url())
-            .clicked()
-        {
-            if let Err(error) = open::that(self.exporter.product_url()) {
-                self.errors = vec![format!("Could not open link: {error}")];
-            }
-        }
         ui.add_space(8.0);
 
-        if self.exporter == Exporter::Imessage {
-            path_or_text(
-                ui,
-                "Database / iOS backup path",
-                &mut self.form.db_path,
-                "Path",
-                true,
-                true,
-            );
-            ui.horizontal(|ui| {
-                form_label(ui, "Backup password");
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.form.backup_password)
-                        .password(true)
-                        .desired_width(PATH_W)
-                        .clip_text(true)
-                        .hint_text("Encrypted iOS backup password"),
-                );
-            });
-            combo_enum(
-                ui,
-                "Platform",
-                &mut self.form.apple_platform,
-                &APPLE_PLATFORMS,
-            );
-            path_or_text(
-                ui,
-                "Output directory",
-                &mut self.form.output,
-                "Path",
-                false,
-                true,
-            );
-            self.ui_attachment_media(ui);
-            if ui
-                .button(if self.form.advanced {
-                    "▾ Hide advanced options"
-                } else {
-                    "▸ Show advanced options"
-                })
-                .clicked()
-            {
-                self.form.advanced = !self.form.advanced;
-            }
-            if self.form.advanced {
-                path_or_text(
-                    ui,
-                    "Attachment root",
-                    &mut self.form.attachment_root,
-                    "Path",
-                    false,
-                    true,
-                );
-                path_or_text(
-                    ui,
-                    "Conversation filter",
-                    &mut self.form.conversation_filter,
-                    "Names, numbers, or emails",
-                    false,
-                    false,
-                );
-                path_or_text(
-                    ui,
-                    "Apple AddressBook DB",
-                    &mut self.form.apple_contacts,
-                    "Path",
-                    true,
-                    false,
-                );
-            }
-        } else {
-            let (file, folder) = match self.exporter {
-                Exporter::GoSmsPro => (false, true),
-                Exporter::SmsBackupRestore
+        // Common fields (same order for every exporter).
+        self.ui_common_input(ui);
+        let output_hint = format!("…/{}", self.exporter.binary());
+        path_or_text(
+            ui,
+            "Output directory",
+            &mut self.form.output,
+            &output_hint,
+            false,
+            true,
+        );
+        let contacts_enabled = self.exporter != Exporter::Imessage;
+        let attachments_enabled = matches!(
+            self.exporter,
+            Exporter::GoSmsPro
+                | Exporter::SmsBackupRestore
                 | Exporter::SmsBackupPlus
-                | Exporter::OpenExtract
-                | Exporter::Imazing => (true, true),
-                Exporter::Imessage => unreachable!(),
-            };
-            let input_label = if self.exporter == Exporter::SmsBackupPlus {
-                "Input file or folder"
-            } else {
-                "Input source"
-            };
-            path_or_text(ui, input_label, &mut self.form.input, "Path", file, folder);
-            path_or_text(
-                ui,
-                "Output directory",
-                &mut self.form.output,
-                "Path",
-                false,
-                true,
-            );
+                | Exporter::Imazing
+                | Exporter::Imessage
+        );
+        if self.exporter == Exporter::OpenExtract {
+            self.form.attachment_media = AttachmentMedia::Disabled;
+        }
+        self.ui_contacts(ui, contacts_enabled);
+        self.ui_attachment_media(ui, attachments_enabled);
 
-            if matches!(
-                self.exporter,
-                Exporter::GoSmsPro | Exporter::SmsBackupRestore | Exporter::SmsBackupPlus
-            ) {
-                path_or_text(
-                    ui,
-                    "Your phone number(s)",
-                    &mut self.form.owner_phones,
-                    "Comma-separated phone numbers",
-                    false,
-                    false,
-                );
-                self.ui_attachment_media(ui);
+        // Exporter-specific fields.
+        match self.exporter {
+            Exporter::GoSmsPro | Exporter::SmsBackupRestore => {
+                self.ui_owner_phones(ui);
             }
-            if self.exporter == Exporter::SmsBackupPlus {
+            Exporter::SmsBackupPlus => {
+                self.ui_owner_phones(ui);
                 path_or_text(
                     ui,
                     "Your email address(es)",
@@ -489,22 +485,6 @@ impl App {
                     false,
                     false,
                 );
-            }
-
-            self.ui_contacts(ui);
-
-            if self.exporter == Exporter::Imazing {
-                path_or_text(
-                    ui,
-                    "Timezone",
-                    &mut self.form.timezone,
-                    "IANA name, e.g. America/New_York",
-                    false,
-                    false,
-                );
-            }
-
-            if self.exporter == Exporter::SmsBackupPlus {
                 if ui
                     .button(if self.form.advanced {
                         "▾ Hide advanced options"
@@ -526,19 +506,124 @@ impl App {
                     );
                 }
             }
+            Exporter::Imazing => {
+                self.ui_timezone(ui);
+            }
+            Exporter::OpenExtract => {}
+            Exporter::Imessage => {
+                ui.horizontal(|ui| {
+                    ui.allocate_exact_size(
+                        egui::vec2(LABEL_W, ui.spacing().interact_size.y),
+                        egui::Sense::hover(),
+                    );
+                    if ui
+                        .button(if self.form.advanced {
+                            "▾ Hide advanced options"
+                        } else {
+                            "▸ Show advanced options"
+                        })
+                        .clicked()
+                    {
+                        self.form.advanced = !self.form.advanced;
+                    }
+                });
+                if self.form.advanced {
+                    combo_enum(
+                        ui,
+                        "Platform",
+                        &mut self.form.apple_platform,
+                        &APPLE_PLATFORMS,
+                        PATH_W,
+                    );
+                    ui.horizontal(|ui| {
+                        form_label(ui, "Backup password");
+                        with_field_width(ui, PATH_W, |ui| {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.form.backup_password)
+                                    .password(true)
+                                    .desired_width(PATH_W)
+                                    .clip_text(true)
+                                    .hint_text("Encrypted iOS backup password"),
+                            );
+                        });
+                    });
+                    path_or_text(
+                        ui,
+                        "Apple AddressBook DB",
+                        &mut self.form.apple_contacts,
+                        "Path",
+                        true,
+                        false,
+                    );
+                    path_or_text(
+                        ui,
+                        "Attachment root",
+                        &mut self.form.attachment_root,
+                        "Path",
+                        false,
+                        true,
+                    );
+                    path_or_text(
+                        ui,
+                        "Conversation filter",
+                        &mut self.form.conversation_filter,
+                        "Names, numbers, or emails (comma-separated)",
+                        false,
+                        false,
+                    );
+                }
+            }
         }
 
         self.ui_errors(ui);
 
         ui.add_space(10.0);
+        ui.separator();
+        ui.add_space(6.0);
+        ui.heading(egui::RichText::new("Message filtering").size(16.0));
+        labeled_text(
+            ui,
+            "Start date",
+            &mut self.form.start_date,
+            "YYYY-MM-DD",
+            PATH_W,
+        );
+        labeled_text(
+            ui,
+            "End date",
+            &mut self.form.end_date,
+            "YYYY-MM-DD (exclusive)",
+            PATH_W,
+        );
         ui.horizontal(|ui| {
+            form_label(ui, "Anonymize");
+            let anonymize_text = if self.form.anonymize { "Yes" } else { "No" };
+            with_field_width(ui, PATH_W, |ui| {
+                egui::ComboBox::from_id_salt("anonymize")
+                    .selected_text(anonymize_text)
+                    .width(PATH_W)
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.form.anonymize, false, "No");
+                        ui.selectable_value(&mut self.form.anonymize, true, "Yes");
+                    });
+            });
+        });
+        if self.form.anonymize || !self.form.anonymize_seed.is_empty() {
+            labeled_text(
+                ui,
+                "Seed",
+                &mut self.form.anonymize_seed,
+                "Optional 64-hex seed",
+                PATH_W,
+            );
+        }
+        ui.add_space(6.0);
+        ui.separator();
+        ui.add_space(10.0);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let run = ui.add_enabled(!self.running, egui::Button::new("Run exporter"));
             if run.clicked() {
                 self.start_export();
-            }
-            let cancel = ui.add_enabled(self.running, egui::Button::new("Cancel"));
-            if cancel.clicked() {
-                self.cancel();
             }
         });
     }
@@ -546,97 +631,241 @@ impl App {
     fn ui_backup_source(&mut self, ui: &mut egui::Ui) {
         let previous = self.exporter;
         ui.horizontal(|ui| {
-            form_label(ui, "Backup source");
-            egui::ComboBox::from_id_salt("exporter")
-                .selected_text(self.exporter.display_name())
-                .width(COMBO_W)
-                .show_ui(ui, |ui| {
-                    for exporter in EXPORTERS {
-                        ui.selectable_value(
-                            &mut self.exporter,
-                            exporter,
-                            exporter.display_name(),
-                        );
-                    }
-                });
+            form_label(ui, "Backup type");
+            with_field_width(ui, PATH_W, |ui| {
+                egui::ComboBox::from_id_salt("exporter")
+                    .selected_text(self.exporter.display_name())
+                    .width(PATH_W)
+                    .show_ui(ui, |ui| {
+                        for exporter in EXPORTERS {
+                            ui.selectable_value(
+                                &mut self.exporter,
+                                exporter,
+                                exporter.display_name(),
+                            );
+                        }
+                    });
+            });
+            let link_text = format!("↗ {}", self.exporter.link_label());
+            if ui
+                .link(link_text)
+                .on_hover_text(self.exporter.product_url())
+                .clicked()
+            {
+                if let Err(error) = open::that(self.exporter.product_url()) {
+                    self.errors = vec![format!("Could not open link: {error}")];
+                }
+            }
         });
         if self.exporter != previous {
-            let previous_default = default_output_dir(previous);
+            let previous_input = if previous == Exporter::Imessage {
+                self.form.db_path.as_str()
+            } else {
+                self.form.input.as_str()
+            };
+            let previous_default = default_output_dir(previous, previous_input);
             if self.form.output.trim().is_empty() || self.form.output == previous_default {
-                self.form.output = default_output_dir(self.exporter);
+                let new_input = if self.exporter == Exporter::Imessage {
+                    self.form.db_path.as_str()
+                } else {
+                    self.form.input.as_str()
+                };
+                self.form.output = default_output_dir(self.exporter, new_input);
             }
             self.form.advanced = false;
             self.errors.clear();
         }
     }
 
-    fn ui_contacts(&mut self, ui: &mut egui::Ui) {
-        if self.exporter == Exporter::Imazing {
-            path_or_text(
-                ui,
-                "iMazing Contacts CSV (recommended)",
-                &mut self.form.contacts,
-                "Path",
-                true,
-                false,
-            );
-            return;
-        }
-        combo_enum(
-            ui,
-            "Contacts",
-            &mut self.form.contacts_kind,
-            &CONTACT_KINDS,
-        );
-        if self.form.contacts_kind == ContactsKind::None {
-            ui.label(
-                egui::RichText::new("No contacts: phone numbers may not resolve to names.")
-                    .small()
-                    .weak(),
-            );
-        } else {
-            let label = match self.form.contacts_kind {
-                ContactsKind::Csv => "Contacts CSV",
-                ContactsKind::Vcf => "Contacts VCF",
-                ContactsKind::None => "",
-            };
-            path_or_text(ui, label, &mut self.form.contacts, "Path", true, false);
+    fn sync_default_output(&mut self, old_input: &str, new_input: &str) {
+        let previous_default = default_output_dir(self.exporter, old_input);
+        if self.form.output.trim().is_empty() || self.form.output == previous_default {
+            self.form.output = default_output_dir(self.exporter, new_input);
         }
     }
 
-    fn ui_attachment_media(&mut self, ui: &mut egui::Ui) {
-        combo_enum(
-            ui,
-            "Attachments",
-            &mut self.form.attachment_media,
-            &ATTACHMENT_MEDIA,
-        );
-        if self.form.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available() {
-            ui.colored_label(
-                egui::Color32::from_rgb(180, 50, 50),
-                "Convert/Compress need ffmpeg and ffprobe on PATH.",
+    fn ui_common_input(&mut self, ui: &mut egui::Ui) {
+        if self.exporter == Exporter::Imessage {
+            let old_db = self.form.db_path.clone();
+            path_or_text(
+                ui,
+                "Database / iOS backup path",
+                &mut self.form.db_path,
+                "Path",
+                true,
+                true,
             );
+            if self.form.db_path != old_db {
+                self.sync_default_output(&old_db, &self.form.db_path.clone());
+            }
+            return;
         }
-        if self.form.attachment_media == AttachmentMedia::Compress {
+        let (file, folder) = match self.exporter {
+            Exporter::GoSmsPro | Exporter::Imazing => (false, true),
+            Exporter::SmsBackupRestore
+            | Exporter::SmsBackupPlus
+            | Exporter::OpenExtract => (true, true),
+            Exporter::Imessage => unreachable!(),
+        };
+        let input_label = if self.exporter == Exporter::SmsBackupPlus {
+            "Input file or folder"
+        } else {
+            "Input directory"
+        };
+        let old_input = self.form.input.clone();
+        path_or_text(ui, input_label, &mut self.form.input, "Path", file, folder);
+        if self.form.input != old_input {
+            self.sync_default_output(&old_input, &self.form.input.clone());
+        }
+    }
+
+    fn ui_timezone(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            form_label(ui, "Timezone");
+            let selected = if self.form.timezone.trim().is_empty() {
+                "Local time".to_string()
+            } else {
+                self.form.timezone.clone()
+            };
+            with_field_width(ui, PATH_W, |ui| {
+                egui::ComboBox::from_id_salt("timezone")
+                    .selected_text(selected)
+                    .width(PATH_W)
+                    .show_ui(ui, |ui| {
+                        if ui
+                            .selectable_label(self.form.timezone.trim().is_empty(), "Local time")
+                            .clicked()
+                        {
+                            self.form.timezone.clear();
+                        }
+                        for offset in UTC_OFFSETS {
+                            if ui
+                                .selectable_label(self.form.timezone == *offset, *offset)
+                                .clicked()
+                            {
+                                self.form.timezone = (*offset).to_string();
+                            }
+                        }
+                    });
+            });
+        });
+    }
+
+    fn ui_owner_phones(&mut self, ui: &mut egui::Ui) {
+        if self.owner_phone_rows.is_empty() {
+            self.owner_phone_rows.push(String::new());
+        }
+        let mut remove_idx = None;
+        let mut add_row = false;
+        let row_count = self.owner_phone_rows.len();
+        for i in 0..row_count {
+            ui.horizontal(|ui| {
+                if i == 0 {
+                    form_label(ui, "Your phone number(s)");
+                } else {
+                    ui.allocate_exact_size(
+                        egui::vec2(LABEL_W, ui.spacing().interact_size.y),
+                        egui::Sense::hover(),
+                    );
+                }
+                with_field_width(ui, PATH_W, |ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.owner_phone_rows[i])
+                            .id_salt(("owner_phone", i))
+                            .desired_width(PATH_W)
+                            .clip_text(true)
+                            .hint_text("+19995551234"),
+                    );
+                });
+                if i == 0 {
+                    let can_add = row_count < MAX_OWNER_PHONES;
+                    let add = ui
+                        .add_enabled(can_add, egui::Button::new("+"))
+                        .on_hover_text(if can_add {
+                            "Add phone number"
+                        } else {
+                            "Maximum of 10 phone numbers"
+                        });
+                    if add.clicked() {
+                        add_row = true;
+                    }
+                } else if ui
+                    .button("−")
+                    .on_hover_text("Remove phone number")
+                    .clicked()
+                {
+                    remove_idx = Some(i);
+                }
+            });
+        }
+        if add_row && self.owner_phone_rows.len() < MAX_OWNER_PHONES {
+            self.owner_phone_rows.push(String::new());
+        }
+        if let Some(i) = remove_idx {
+            if i > 0 && i < self.owner_phone_rows.len() {
+                self.owner_phone_rows.remove(i);
+            }
+        }
+        self.sync_owner_phones();
+    }
+
+    fn ui_contacts(&mut self, ui: &mut egui::Ui, enabled: bool) {
+        ui.add_enabled_ui(enabled, |ui| {
+            path_or_text(
+                ui,
+                "Contacts file",
+                &mut self.form.contacts,
+                ".csv or .vcf",
+                true,
+                false,
+            );
+        });
+        if enabled {
+            self.form.contacts_kind = if self.form.contacts.trim().is_empty() {
+                ContactsKind::None
+            } else {
+                ContactsKind::Csv
+            };
+        }
+    }
+
+    fn ui_attachment_media(&mut self, ui: &mut egui::Ui, enabled: bool) {
+        ui.add_enabled_ui(enabled, |ui| {
             combo_enum(
                 ui,
-                "Max resolution",
-                &mut self.form.media_max_resolution,
-                &MAX_RESOLUTIONS,
+                "Attachments",
+                &mut self.form.attachment_media,
+                &ATTACHMENT_MEDIA,
+                PATH_W,
             );
-            labeled_text(ui, "Max fps", &mut self.form.media_max_fps, "e.g. 30", SHORT_W);
-            labeled_text(
-                ui,
-                "Min size",
-                &mut self.form.media_min_size,
-                "e.g. 20M",
-                SHORT_W,
-            );
-            ui.checkbox(
-                &mut self.form.media_skip_efficient,
-                "Skip already-efficient HEVC",
-            );
-        }
+            if self.form.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available() {
+                ui.colored_label(
+                    egui::Color32::from_rgb(180, 50, 50),
+                    "Convert/Compress need ffmpeg and ffprobe on PATH.",
+                );
+            }
+            if self.form.attachment_media == AttachmentMedia::Compress {
+                combo_enum(
+                    ui,
+                    "Max resolution",
+                    &mut self.form.media_max_resolution,
+                    &MAX_RESOLUTIONS,
+                    COMBO_W,
+                );
+                labeled_text(ui, "Max fps", &mut self.form.media_max_fps, "e.g. 30", SHORT_W);
+                labeled_text(
+                    ui,
+                    "Min size",
+                    &mut self.form.media_min_size,
+                    "e.g. 20M",
+                    SHORT_W,
+                );
+                ui.checkbox(
+                    &mut self.form.media_skip_efficient,
+                    "Skip already-efficient HEVC",
+                );
+            }
+        });
     }
 
     fn ui_errors(&self, ui: &mut egui::Ui) {
@@ -672,6 +901,74 @@ impl App {
         String::new()
     }
 
+    fn sync_log_text(&mut self) {
+        self.log_text = if self.logs.is_empty() {
+            LOG_PLACEHOLDER.to_string()
+        } else {
+            self.logs.join("\n")
+        };
+    }
+
+    fn ensure_session_log(&mut self) {
+        if self.session_log_path.is_some() {
+            return;
+        }
+        let (name, path) = new_session_log_file();
+        self.session_log_name = Some(name);
+        self.session_log_path = Some(path);
+    }
+
+    /// Start (or reset) the current session log file and clear the in-UI buffer.
+    fn begin_session_log(&mut self) {
+        self.ensure_session_log();
+        self.logs.clear();
+        if let Some(path) = &self.session_log_path {
+            let _ = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(path);
+        }
+        self.sync_log_text();
+    }
+
+    fn push_log(&mut self, line: String) {
+        self.ensure_session_log();
+        if let Some(path) = &self.session_log_path {
+            if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+                let _ = writeln!(file, "{line}");
+            }
+        }
+        self.logs.push(line);
+        self.sync_log_text();
+    }
+
+    /// Expand/collapse by the current body height so the Log header stays put:
+    /// body opens downward on expand, rolls up from the bottom on collapse
+    /// (including after the user has dragged the panel taller).
+    fn set_log_expanded(&mut self, expanded: bool, ctx: &egui::Context) {
+        if expanded == self.log_expanded {
+            return;
+        }
+        self.log_expanded = expanded;
+        let body_height = (self.log_pane_height - LOG_HEADER_HEIGHT).max(0.0);
+        let Some(size) = viewport_inner_size(ctx) else {
+            return;
+        };
+        if expanded {
+            self.sync_log_text();
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+                size.x,
+                size.y + body_height,
+            )));
+            return;
+        }
+        let height = (size.y - body_height).max(WINDOW_MIN_HEIGHT);
+        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+            size.x, height,
+        )));
+    }
+
     fn ui_status_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_centered(|ui| {
             let status = self.status_text();
@@ -679,46 +976,76 @@ impl App {
                 ui.label(egui::RichText::new(&status).weak().small())
                     .on_hover_text(&status);
             }
+        });
+    }
+
+    /// Returns true if the chevron was clicked (caller should toggle expand via ctx).
+    fn ui_log_panel(&mut self, ui: &mut egui::Ui) -> bool {
+        let mut toggle = false;
+        ui.horizontal(|ui| {
+            let chevron = if self.log_expanded { "▾" } else { "▸" };
+            if ui
+                .add_sized(
+                    egui::vec2(22.0, 18.0),
+                    egui::Button::new(chevron),
+                )
+                .clicked()
+            {
+                toggle = true;
+            }
+            let name = self.session_log_name.as_deref().unwrap_or("(log)");
+            ui.label(egui::RichText::new(name).strong());
             if !self.logs.is_empty() {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.small_button("Clear").clicked() {
                         self.logs.clear();
+                        self.sync_log_text();
                     }
                 });
             }
         });
-    }
 
-    fn ui_run_log(&mut self, ui: &mut egui::Ui) {
-        if self.logs.is_empty() {
-            return;
+        if self.log_expanded {
+            ui.add_space(4.0);
+            // Fill whatever height the resizable bottom panel currently has.
+            let body_height = ui.available_height().max(LOG_PANE_MIN_HEIGHT);
+            egui::ScrollArea::vertical()
+                .id_salt("export_log_scroll")
+                .stick_to_bottom(true)
+                .auto_shrink([false, false])
+                .max_height(body_height)
+                .min_scrolled_height(body_height)
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                .show(ui, |ui| {
+                    let row_height = ui.text_style_height(&egui::TextStyle::Monospace);
+                    let line_count = self.log_text.lines().count().max(1) as f32;
+                    let content_height = (line_count * row_height + 8.0).max(body_height);
+                    // Immutable &str TextBuffer: select/copy work; typing cannot mutate.
+                    let mut readonly: &str = self.log_text.as_str();
+                    ui.add_sized(
+                        [ui.available_width(), content_height],
+                        egui::TextEdit::multiline(&mut readonly)
+                            .desired_width(f32::INFINITY)
+                            .font(egui::TextStyle::Monospace)
+                            .interactive(true),
+                    );
+                });
         }
-        ui.add_space(12.0);
-        ui.separator();
-        egui::CollapsingHeader::new("Run log")
-            .default_open(self.mode == AppMode::Export || self.logs.len() > 1)
-            .show(ui, |ui| {
-                egui::ScrollArea::vertical()
-                    .stick_to_bottom(true)
-                    .max_height(180.0)
-                    .show(ui, |ui| {
-                        ui.set_max_width(ui.available_width());
-                        for line in &self.logs {
-                            ui.add(
-                                egui::Label::new(egui::RichText::new(line).monospace().small())
-                                    .wrap()
-                                    .truncate(),
-                            )
-                            .on_hover_text(line);
-                        }
-                    });
-            });
+        toggle
     }
+}
+
+fn viewport_inner_size(ctx: &egui::Context) -> Option<egui::Vec2> {
+    ctx.input(|i| i.viewport().inner_rect.map(|r| r.size()))
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_events(ctx);
+        self.sync_log_text();
+        if let Some(expanded) = self.log_expand_pending.take() {
+            self.set_log_expanded(expanded, ctx);
+        }
 
         egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
             ui.add_space(4.0);
@@ -726,6 +1053,7 @@ impl eframe::App for App {
             ui.add_space(2.0);
         });
 
+        // Outermost bottom panel first (status sits under the log).
         egui::TopBottomPanel::bottom("status")
             .exact_height(28.0)
             .show_separator_line(true)
@@ -733,16 +1061,60 @@ impl eframe::App for App {
                 self.ui_status_bar(ui);
             });
 
+        let mut toggle_log = false;
+        if self.log_expanded {
+            // Separate id from collapsed header so collapsing does not reset stored height.
+            let response = egui::TopBottomPanel::bottom("log_expanded")
+                .resizable(true)
+                .default_height(self.log_pane_height)
+                .min_height(LOG_PANE_MIN_HEIGHT + LOG_HEADER_HEIGHT)
+                .max_height(f32::INFINITY)
+                .show_separator_line(true)
+                .show(ctx, |ui| {
+                    // Claim the full panel so the log body grows with drag-resize.
+                    ui.set_min_size(ui.available_size());
+                    toggle_log = self.ui_log_panel(ui);
+                });
+            self.log_pane_height = response
+                .response
+                .rect
+                .height()
+                .max(LOG_PANE_MIN_HEIGHT + LOG_HEADER_HEIGHT);
+        } else {
+            egui::TopBottomPanel::bottom("log_collapsed")
+                .exact_height(LOG_HEADER_HEIGHT)
+                .resizable(false)
+                .show_separator_line(true)
+                .show(ctx, |ui| {
+                    toggle_log = self.ui_log_panel(ui);
+                });
+        }
+        if toggle_log {
+            self.set_log_expanded(!self.log_expanded, ctx);
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 match self.mode {
                     AppMode::ValidateContacts => self.ui_validate(ui),
                     AppMode::Export => self.ui_export(ui),
                 }
-                self.ui_run_log(ui);
             });
         });
     }
+}
+
+fn new_session_log_file() -> (String, PathBuf) {
+    let name = Local::now()
+        .format("message-exporters-%Y-%m-%d_%H%M%S.log")
+        .to_string();
+    let path = std::env::temp_dir().join(&name);
+    let _ = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&path);
+    (name, path)
 }
 
 fn form_label(ui: &mut egui::Ui, label: &str) {
@@ -755,17 +1127,33 @@ fn form_label(ui: &mut egui::Ui, label: &str) {
     );
 }
 
+/// Reserve an exact field width so trailing buttons cannot shrink the control.
+fn with_field_width(ui: &mut egui::Ui, width: f32, add: impl FnOnce(&mut egui::Ui)) {
+    ui.allocate_ui_with_layout(
+        egui::vec2(width, ui.spacing().interact_size.y),
+        egui::Layout::left_to_right(egui::Align::Center),
+        add,
+    );
+}
+
 fn labeled_text(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &str, width: f32) {
     ui.horizontal(|ui| {
         form_label(ui, label);
-        let response = ui.add(
-            egui::TextEdit::singleline(value)
-                .desired_width(width)
-                .clip_text(true)
-                .hint_text(hint),
-        );
-        if !value.is_empty() {
-            response.on_hover_text(value.as_str());
+        let mut response = None;
+        with_field_width(ui, width, |ui| {
+            response = Some(
+                ui.add(
+                    egui::TextEdit::singleline(value)
+                        .desired_width(width)
+                        .clip_text(true)
+                        .hint_text(hint),
+                ),
+            );
+        });
+        if let Some(response) = response {
+            if !value.is_empty() {
+                response.on_hover_text(value.as_str());
+            }
         }
     });
 }
@@ -780,17 +1168,29 @@ fn path_or_text(
 ) {
     ui.horizontal(|ui| {
         form_label(ui, label);
-        let response = ui.add(
-            egui::TextEdit::singleline(value)
-                .id_salt(label)
-                .desired_width(PATH_W)
-                .clip_text(true)
-                .hint_text(hint),
-        );
-        if !value.is_empty() {
-            response.on_hover_text(value.as_str());
+        let mut response = None;
+        with_field_width(ui, PATH_W, |ui| {
+            response = Some(
+                ui.add(
+                    egui::TextEdit::singleline(value)
+                        .id_salt(label)
+                        .desired_width(PATH_W)
+                        .clip_text(true)
+                        .hint_text(hint),
+                ),
+            );
+        });
+        if let Some(response) = response {
+            if !value.is_empty() {
+                response.on_hover_text(value.as_str());
+            }
         }
-        if allow_file && ui.button("File…").clicked() {
+        if allow_file
+            && ui
+                .button("📄")
+                .on_hover_text("Choose file…")
+                .clicked()
+        {
             let mut dialog = rfd::FileDialog::new();
             if label.to_ascii_lowercase().contains("contact") {
                 dialog = dialog.add_filter("Contacts", &["csv", "vcf", "vcard"]);
@@ -799,7 +1199,12 @@ fn path_or_text(
                 *value = path.display().to_string();
             }
         }
-        if allow_folder && ui.button("Folder…").clicked() {
+        if allow_folder
+            && ui
+                .button("📁")
+                .on_hover_text("Choose folder…")
+                .clicked()
+        {
             if let Some(path) = rfd::FileDialog::new().pick_folder() {
                 *value = path.display().to_string();
             }
@@ -812,16 +1217,19 @@ fn combo_enum<T: Copy + PartialEq + std::fmt::Display>(
     label: &str,
     value: &mut T,
     options: &[T],
+    width: f32,
 ) {
     ui.horizontal(|ui| {
         form_label(ui, label);
-        egui::ComboBox::from_id_salt(label)
-            .selected_text(value.to_string())
-            .width(COMBO_W)
-            .show_ui(ui, |ui| {
-                for opt in options {
-                    ui.selectable_value(value, *opt, opt.to_string());
-                }
-            });
+        with_field_width(ui, width, |ui| {
+            egui::ComboBox::from_id_salt(label)
+                .selected_text(value.to_string())
+                .width(width)
+                .show_ui(ui, |ui| {
+                    for opt in options {
+                        ui.selectable_value(value, *opt, opt.to_string());
+                    }
+                });
+        });
     });
 }

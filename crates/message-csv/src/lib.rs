@@ -1,8 +1,10 @@
 //! Shared CSV emit helpers for message exporters.
 
 mod date_range;
+mod utc_offset;
 
 pub use date_range::DateRange;
+pub use utc_offset::parse_utc_offset;
 
 use chrono::{Local, TimeZone, Utc};
 use serde::Serialize;

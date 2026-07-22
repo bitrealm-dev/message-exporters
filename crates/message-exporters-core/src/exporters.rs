@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 use std::fmt;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use message_media::{MaxResolution, MediaMode};
@@ -79,15 +80,41 @@ impl Exporter {
     }
 }
 
-/// Documents/message-exporters/<source> (or home fallback).
-pub fn default_output_dir(exporter: Exporter) -> String {
-    let root = dirs::document_dir()
-        .or_else(dirs::home_dir)
-        .unwrap_or_else(|| PathBuf::from("."));
-    root.join("message-exporters")
-        .join(exporter.output_subdir())
-        .display()
-        .to_string()
+/// Default output directory for an exporter.
+///
+/// With a non-empty `input`, uses `{input-dir}/{exporter.binary()}` where
+/// `input-dir` is the input path itself if it looks like a directory, or its
+/// parent if it looks like a file. With empty input, falls back to
+/// `{Documents|home}/message-exporters/{exporter.binary()}`.
+pub fn default_output_dir(exporter: Exporter, input: &str) -> String {
+    let base = input_base_dir(input);
+    base.join(exporter.binary()).display().to_string()
+}
+
+fn input_base_dir(input: &str) -> PathBuf {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        let root = dirs::document_dir()
+            .or_else(dirs::home_dir)
+            .unwrap_or_else(|| PathBuf::from("."));
+        return root.join("message-exporters");
+    }
+    let path = Path::new(trimmed);
+    if path.is_file() || path.extension().is_some() {
+        path.parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."))
+    } else {
+        path.to_path_buf()
+    }
+}
+
+/// Create `path` and parents if missing.
+pub fn ensure_output_dir(path: &Path) -> Result<(), String> {
+    fs::create_dir_all(path).map_err(|error| {
+        format!("Could not create output directory {}: {error}", path.display())
+    })
 }
 
 impl fmt::Display for Exporter {
@@ -130,9 +157,9 @@ pub enum AttachmentMedia {
 impl fmt::Display for AttachmentMedia {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Self::Clone => "Copy (recommended)",
-            Self::Convert => "Convert (.jpg / .mp4 / .mp3)",
-            Self::Compress => "Compress",
+            Self::Clone => "Copy",
+            Self::Convert => "Convert",
+            Self::Compress => "Convert & compress",
             Self::Disabled => "Do not copy",
         })
     }
@@ -222,7 +249,7 @@ impl Default for Form {
     fn default() -> Self {
         Self {
             input: String::new(),
-            output: default_output_dir(Exporter::default()),
+            output: default_output_dir(Exporter::default(), ""),
             contacts: String::new(),
             contacts_kind: ContactsKind::default(),
             owner_phones: String::new(),
@@ -318,7 +345,10 @@ impl Form {
 
                 if matches!(
                     exporter,
-                    Exporter::GoSmsPro | Exporter::SmsBackupRestore | Exporter::SmsBackupPlus
+                    Exporter::GoSmsPro
+                        | Exporter::SmsBackupRestore
+                        | Exporter::SmsBackupPlus
+                        | Exporter::Imazing
                 ) {
                     self.push_media_args(&mut args, &mut errors);
                 }
@@ -570,7 +600,7 @@ mod tests {
         assert!(form.build_args(Exporter::Imessage).is_err());
 
         let form = Form {
-            output: default_output_dir(Exporter::Imessage),
+            output: default_output_dir(Exporter::Imessage, ""),
             ..Form::default()
         };
         let args = form.build_args(Exporter::Imessage).unwrap();
@@ -621,8 +651,35 @@ mod tests {
 
     #[test]
     fn default_output_is_under_documents_or_home() {
-        let path = default_output_dir(Exporter::OpenExtract);
+        let path = default_output_dir(Exporter::OpenExtract, "");
         assert!(path.contains("message-exporters"));
-        assert!(path.contains("openextract"));
+        assert!(path.contains("openextract-out"));
+    }
+
+    #[test]
+    fn default_output_is_relative_to_input_dir() {
+        let path = default_output_dir(Exporter::GoSmsPro, "/home/foo");
+        assert_eq!(path, "/home/foo/go-sms-pro-out");
+    }
+
+    #[test]
+    fn default_output_uses_parent_for_file_input() {
+        let path = default_output_dir(Exporter::GoSmsPro, "/home/foo/backup.xml");
+        assert_eq!(path, "/home/foo/go-sms-pro-out");
+    }
+
+    #[test]
+    fn ensure_output_dir_creates_missing_path() {
+        let out = std::env::temp_dir().join(format!(
+            "message-exporters-core-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        ensure_output_dir(&out).unwrap();
+        assert!(out.is_dir());
+        let _ = fs::remove_dir_all(&out);
     }
 }

@@ -42,32 +42,32 @@ cargo run --release -p imazing-out -- \
   --input "/path/to/Messages - Bob McRoy.csv" \
   --output ./staging/imazing \
   --contacts "/path/to/Contacts - 2026-07-19.csv" \
-  --timezone America/New_York
+  --timezone UTC-05:00
 
 # Full device export root (Messages + WhatsApp, recursive)
 cargo run --release -p imazing-out -- \
   --input "/path/to/Device Export Root" \
   --output ./staging/imazing \
   --contacts "/path/to/Contacts - 2026-07-19.csv" \
-  --timezone America/New_York
+  --timezone UTC-05:00
 
 # WhatsApp tree only
 cargo run --release -p imazing-out -- \
   --input "/path/to/WhatsApp" \
   --output ./staging/imazing-wa \
   --contacts "/path/to/Contacts - 2026-07-19.csv" \
-  --timezone America/New_York
+  --timezone UTC-05:00
 ```
 
 `--input` may be one Messages/WhatsApp CSV or any folder under the export. Contacts CSVs and `*attachment*` filenames are skipped. Nested chat folders are walked recursively.
 
-`Message Date` values have no timezone. Pass `--timezone` (IANA name) if the phone lived in a different zone than this machine; otherwise the host local zone is used.
+`Message Date` values have no timezone. Pass `--timezone` as a fixed UTC offset (e.g. `UTC-05:00`) if the phone lived in a different zone than this machine; otherwise the host local zone is used. Offsets do not observe DST.
 
 Optional `--start-date` / `--end-date` (`YYYY-MM-DD`) keep messages in `[start, end)` using midnight in that same timezone (end exclusive).
 
-Add `--anonymize` (optional `--anonymize-seed <64-hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-anonymize`](../message-anonymize).
+Attachment media: `--media-mode disabled|clone|convert|compress` (default `clone`). Clone copies files from the export by suffix-matching the CSV Attachment name into `output/attachments/`. Convert/compress need `ffmpeg`/`ffprobe`. See [`message-media`](../message-media).
 
-Attachments are recorded in `attachments_json` by filename only in this version (no media copy).
+Add `--anonymize` (optional `--anonymize-seed <64-hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-anonymize`](../message-anonymize).
 
 ## Important limitations
 

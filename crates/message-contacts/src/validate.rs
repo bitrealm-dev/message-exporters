@@ -306,10 +306,7 @@ fn is_phone_header(h: &str) -> bool {
 
 fn detect_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> {
     if !path.is_file() {
-        return Err(ContactsInputError::simple(format!(
-            "Contacts file not found: {}",
-            path.display()
-        )));
+        return Err(ContactsInputError::simple("Contacts file not found"));
     }
     let ext = path
         .extension()
