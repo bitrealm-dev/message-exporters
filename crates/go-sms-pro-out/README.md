@@ -11,11 +11,14 @@ GO SMS Pro can save texts onto a phone in a backup folder. That folder usually c
 
 MMS `.pdu` files are binary files that are not human readable. GO SMS Pro appears to store each MMS as a packed binary blob: phone numbers, the message text, and any photos or other media are encoded into one file. Those files often look like pieces of a real phone MMS, but are not always a complete message.
 
-Historically, phones encoded MMS messages according to the MMS Encapsulation Protocol (formerly known as WAP-209). The protocol evolved over the years and was later published as the more [modern Open Mobile Alliance version](https://www.openmobilealliance.org/release/MMS/V1_3-20110913-A/OMA-TS-MMS_ENC-V1_3-20110913-A.pdf). It describes how an MMS is laid out—contacts, text, and media in one binary message. [WSP](https://www.openmobilealliance.org/tech/affiliates/wap/wap-230-wsp-20010705-a.pdf) (Wireless Session Protocol, also known as WAP-230) is the companion labeling system for the pieces inside that message—for example marking something as plain text or a JPEG and giving it a filename.
+For years, phones packed MMS the same way using a public recipe called the MMS Encapsulation Protocol (first published as [WAP-209](docs/wap-209-mmsencapsulation-20020105-a.pdf)). That recipe says how to put contacts, text, and media into one binary message. A later revision is the [Open Mobile Alliance MMS Encapsulation specification](docs/OMA-TS-MMS_ENC-V1_3-20110913-A.pdf).
 
-The converter first tries a structured parser built around those rules. It looks for the usual message structure and pulls out contacts, text, and media when it can find them. If something is still missing after that pass, it falls back to simpler searches—for example looking for known text markers or the telltale start of a JPEG. The decode approach is guided by those public specs and ideas from [python-messaging](https://github.com/pmarti/python-messaging) (reference only; nothing from that project is bundled into this tool).
+A second standard, [WSP](docs/wap-230-wsp-20010705-a.pdf) (Wireless Session Protocol, also called WAP-230), labels the pieces inside that message. For example, it can mark one piece as plain text, another as a JPEG, and attach a filename.
 
-There is no official public description of this backup format. For a detailed walkthrough of how each message becomes a spreadsheet row, see [docs/XML_CSV_MAPPING.md](docs/XML_CSV_MAPPING.md).
+Go SMS Pro has not publically described their backup format, and it does not 
+ strictly follow the standards. As such, `the go-sms-pro-out` converter attempts to parse the PDU according to the protocol specification. It pulls out contacts, text, and media when it can find them. If something is still missing after that pass, the coverter falls back to heuristics to find data—for example looking for known text markers or the telltale start of a JPEG.
+
+ For a detailed walkthrough of how each message becomes a spreadsheet row, see [docs/XML_CSV_MAPPING.md](docs/XML_CSV_MAPPING.md).
 
 ## What you get
 
@@ -59,6 +62,10 @@ Attachment media (after export; needs `ffmpeg` / `ffprobe` for convert/compress)
 - `--media-mode compress` — re-encode; options `--media-max-resolution 720p|1080p|4k`, `--media-max-fps`, `--media-min-size`, `--media-skip-efficient true|false`
 
 See [`message-media`](../message-media).
+
+## Thanks
+
+https://github.com/pmarti/python-messaging - For their reference implementation of MMS decoding.
 
 ## License
 
