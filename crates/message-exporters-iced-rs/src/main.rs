@@ -11,7 +11,6 @@ use iced::widget::{
     button, checkbox, column, container, pick_list, radio, row, rule, scrollable, space, svg, text,
     text_editor, text_input, Column, Space,
 };
-use iced::widget::scrollable::{Direction as ScrollDirection, Scrollbar};
 use iced::widget::svg::Handle as SvgHandle;
 use iced::{Alignment, Element, Fill, Font, Length, Subscription, Task};
 
@@ -351,36 +350,28 @@ impl App {
         );
         if self.log_expanded {
             // Fill: tracks window resize. LOG_PANE_HEIGHT is only the expand boost.
-            let log_scroll = scrollable(
-                text_editor(&self.log_content)
-                    .font(Font::MONOSPACE)
-                    .size(12)
-                    .height(Length::Shrink)
-                    .on_action(Message::LogAction),
-            )
-            .height(Fill)
-            .direction(ScrollDirection::Vertical(
-                Scrollbar::new()
-                    .width(12)
-                    .scroller_width(12)
-                    .spacing(4),
-            ));
             body = body.push(
-                container(log_scroll)
-                    .padding(8)
-                    .width(Fill)
-                    .height(Fill)
-                    .style(|_theme| container::Style {
-                        background: Some(iced::Background::Color(iced::Color::from_rgb8(
-                            36, 40, 48,
-                        ))),
-                        border: iced::Border {
-                            color: iced::Color::from_rgb8(90, 98, 112),
-                            width: 1.0,
-                            radius: 6.0.into(),
-                        },
-                        ..Default::default()
-                    }),
+                container(
+                    text_editor(&self.log_content)
+                        .font(Font::MONOSPACE)
+                        .size(12)
+                        .height(Fill)
+                        .on_action(Message::LogAction),
+                )
+                .padding(8)
+                .width(Fill)
+                .height(Fill)
+                .style(|_theme| container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgb8(
+                        36, 40, 48,
+                    ))),
+                    border: iced::Border {
+                        color: iced::Color::from_rgb8(90, 98, 112),
+                        width: 1.0,
+                        radius: 6.0.into(),
+                    },
+                    ..Default::default()
+                }),
             );
         }
 
