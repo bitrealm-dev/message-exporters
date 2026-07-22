@@ -115,21 +115,15 @@ pub fn normalize_uncertain_reason(raw: &str, region: PhoneRegion) -> String {
             } else if digits.is_empty() {
                 "no digits".into()
             } else {
-                format!(
-                    "USA needs 10 digits or 11 starting with 1 (got {} digit{})",
-                    digits.len(),
-                    if digits.len() == 1 { "" } else { "s" }
-                )
+                // Fixed string so validate log groups all USA length failures under one header.
+                "USA needs 10 digits or 11 starting with 1".into()
             }
         }
         PhoneRegion::International => {
             if !raw.contains('+') {
                 "international mode requires a leading +".into()
             } else if !(8..=15).contains(&digits.len()) {
-                format!(
-                    "international needs 8–15 digits after + (got {})",
-                    digits.len()
-                )
+                "international needs 8–15 digits after +".into()
             } else {
                 "unexpected: looked certain".into()
             }
