@@ -1,19 +1,17 @@
 # GO SMS Pro → CSV
 
-Convert a **GO SMS Pro** (GOMO / Jiubang) local backup into one spreadsheet file per conversation, plus any photos or other media found in the backup.
-
-**Targeted upstream:** GO SMS Pro *(app version not pinned yet)* (`export_tool` on every output row; `export_tool_version` empty).
+The `go-sms-pro-out` converter transforms a **GO SMS Pro** (GOMO / Jiubang) Android backup into `.csv` files, one file per conversation with any attachments found in that conversation.
 
 ## What this is for
 
-GO SMS Pro can save texts onto the phone as a backup folder. That folder usually contains:
+GO SMS Pro can save texts onto a phone in a backup folder. That folder usually contains:
 
 - XML files named like `gosms_sys….xml` — ordinary SMS text messages
 - files ending in `.pdu` — MMS messages (often with pictures or other media packed inside)
 
-MMS `.pdu` files are not readable like a normal text file. GO SMS Pro appears to store each MMS as a packed binary blob: phone numbers, the message text, and any photos or other media are squeezed into one file. Those files often look like pieces of a real phone MMS, not always a complete message.
+MMS `.pdu` files are binary files that are not human readable. GO SMS Pro appears to store each MMS as a packed binary blob: phone numbers, the message text, and any photos or other media are encoded into one file. Those files often look like pieces of a real phone MMS, but are not always a complete message.
 
-Phones used to pack MMS that way using older public standards. The main recipe is called [MMS Encapsulation](https://www.openmobilealliance.org/release/MMS/V1_3-20110913-A/OMA-TS-MMS_ENC-V1_3-20110913-A.pdf) (it started life as WAP-209). It describes how an MMS is laid out—contacts, text, and media in one binary message. [WSP](https://www.openmobilealliance.org/tech/affiliates/wap/wap-230-wsp-20010705-a.pdf) (Wireless Session Protocol) is the companion labeling system for the pieces inside that message—for example marking something as plain text or a JPEG and giving it a filename.
+Historically, phones encoded MMS messages according to the MMS Encapsulation Protocol (formerly known as WAP-209). The protocol evolved over the years and was later published as the more [modern Open Mobile Alliance version](https://www.openmobilealliance.org/release/MMS/V1_3-20110913-A/OMA-TS-MMS_ENC-V1_3-20110913-A.pdf). It describes how an MMS is laid out—contacts, text, and media in one binary message. [WSP](https://www.openmobilealliance.org/tech/affiliates/wap/wap-230-wsp-20010705-a.pdf) (Wireless Session Protocol, also known as WAP-230) is the companion labeling system for the pieces inside that message—for example marking something as plain text or a JPEG and giving it a filename.
 
 The converter first tries a structured parser built around those rules. It looks for the usual message structure and pulls out contacts, text, and media when it can find them. If something is still missing after that pass, it falls back to simpler searches—for example looking for known text markers or the telltale start of a JPEG. The decode approach is guided by those public specs and ideas from [python-messaging](https://github.com/pmarti/python-messaging) (reference only; nothing from that project is bundled into this tool).
 
