@@ -446,7 +446,7 @@ fn emit_uncertain_sections(log_lines: &mut Vec<String>, unable: &[UnableEntry]) 
         log_lines.push(format!("UNCERTAIN FORMAT - {reason}"));
         for entry in &by_reason[&reason] {
             log_lines.push(format!(
-                "  - contact={:?} phone={:?}",
+                "  - {:?} - {:?}",
                 entry.contact, entry.phone
             ));
         }
@@ -967,7 +967,7 @@ END:VCARD\n",
         assert!(report
             .log_lines
             .iter()
-            .any(|l| l.contains("contact=\"Ada Lovelace\"") && l.contains("phone=")));
+            .any(|l| l.contains("\"Ada Lovelace\" - ")));
         assert!(report
             .log_lines
             .iter()

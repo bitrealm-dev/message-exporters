@@ -9,7 +9,7 @@ use std::time::Duration;
 use chrono::Local;
 use iced::widget::{
     button, checkbox, column, container, pick_list, radio, row, rule, scrollable, space, svg, text,
-    text_input, Column, Space,
+    text_editor, text_input, Column, Space,
 };
 use iced::widget::scrollable::{Direction as ScrollDirection, Scrollbar};
 use iced::widget::svg::Handle as SvgHandle;
@@ -19,6 +19,8 @@ const LOG_PLACEHOLDER: &str = "Output of the current operation will appear here.
 /// Extra window height added when the log pane opens so it grows downward.
 const LOG_PANE_HEIGHT: f32 = 200.0;
 const WINDOW_MIN_HEIGHT: f32 = 360.0;
+const UI_TITLE_SIZE: f32 = 16.0;
+const UI_BODY_SIZE: f32 = 13.0;
 use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
 use message_exporters_core::{
     default_output_dir, resolve_binary, spawn, ApplePlatform, AttachmentMedia, ContactsKind,
@@ -65,6 +67,7 @@ struct App {
     running: bool,
     control: ProcessControl,
     logs: Vec<String>,
+    log_content: text_editor::Content,
     errors: Vec<String>,
     rx: Option<Receiver<ProcessEvent>>,
 }
@@ -90,6 +93,7 @@ impl Default for App {
             running: false,
             control: ProcessControl::default(),
             logs: Vec::new(),
+            log_content: text_editor::Content::with_text(LOG_PLACEHOLDER),
             errors: Vec::new(),
             rx: None,
         }
@@ -103,6 +107,7 @@ enum Message {
     ToggleLog,
     /// Captured window size before applying the log expand boost.
     LogWindowBoost(iced::Size),
+    LogAction(text_editor::Action),
     // Contacts
     ValidatePath(String),
     ValidateUsa(bool),
@@ -177,6 +182,12 @@ impl App {
                 let target = iced::Size::new(size.width, size.height + LOG_PANE_HEIGHT);
                 return iced::window::latest()
                     .and_then(move |id| iced::window::resize(id, target));
+            }
+            Message::LogAction(action) => {
+                // Selection + scroll (+ Ctrl+C); block typing/paste into the log.
+                if !matches!(action, text_editor::Action::Edit(_)) {
+                    self.log_content.perform(action);
+                }
             }
             Message::ValidatePath(v) => self.set_validate_input(v),
             Message::ValidateUsa(v) => self.validate_usa = v,
@@ -336,23 +347,18 @@ impl App {
             format!("▸ {name}")
         };
         body = body.push(
-            button(text(log_label))
+            button(text(log_label).size(UI_BODY_SIZE))
                 .style(button::text)
                 .on_press(Message::ToggleLog),
         );
         if self.log_expanded {
-            // Fill: tracks window resize. Plain text + scrollbar (not a text_editor).
-            let log_body = if self.logs.is_empty() {
-                LOG_PLACEHOLDER.to_string()
-            } else {
-                self.logs.join("\n")
-            };
+            // Fill: tracks window resize. Outer scrollable + selectable editor.
             let log_scroll = scrollable(
-                text(log_body)
+                text_editor(&self.log_content)
                     .font(Font::MONOSPACE)
                     .size(12)
-                    .color(iced::Color::from_rgb8(220, 224, 230))
-                    .width(Fill),
+                    .height(Fill)
+                    .on_action(Message::LogAction),
             )
             .height(Fill)
             .direction(ScrollDirection::Vertical(
@@ -385,10 +391,11 @@ impl App {
 
     fn view_contacts(&self) -> Element<'_, Message> {
         let file_row = row![
-            button("File…")
+            button(text("File…").size(UI_BODY_SIZE))
                 .on_press_maybe((!self.running).then_some(Message::PickValidateFile)),
             text_input(".vcf or .csv", &self.validate_input)
                 .on_input(Message::ValidatePath)
+                .size(UI_BODY_SIZE)
                 .padding(6)
                 .width(Fill),
         ]
@@ -401,13 +408,17 @@ impl App {
                 true,
                 Some(self.validate_usa),
                 Message::ValidateUsa,
-            ),
+            )
+            .size(16)
+            .text_size(UI_BODY_SIZE),
             radio(
                 "International",
                 false,
                 Some(self.validate_usa),
                 Message::ValidateUsa,
-            ),
+            )
+            .size(16)
+            .text_size(UI_BODY_SIZE),
         ]
         .spacing(6);
 
@@ -419,18 +430,25 @@ impl App {
             .is_some_and(|p| p == self.validate_input.trim());
         let can_update = can_check && !already_updated;
         let mut actions = row![].spacing(8);
-        actions = actions.push(button("Check").on_press_maybe(can_check.then_some(Message::Check)));
-        actions =
-            actions.push(button("Format").on_press_maybe(can_update.then_some(Message::Update)));
+        actions = actions.push(
+            button(text("Check").size(UI_BODY_SIZE))
+                .on_press_maybe(can_check.then_some(Message::Check)),
+        );
+        actions = actions.push(
+            button(text("Format").size(UI_BODY_SIZE))
+                .on_press_maybe(can_update.then_some(Message::Update)),
+        );
         if self.running {
-            actions = actions.push(button("Cancel").on_press(Message::Cancel));
+            actions = actions.push(
+                button(text("Cancel").size(UI_BODY_SIZE)).on_press(Message::Cancel),
+            );
         }
 
         column![
             rule::horizontal(1),
-            text("Phone Numbers").size(22),
+            text("Phone Numbers").size(UI_TITLE_SIZE),
             Space::new().height(8),
-            text("Contacts file"),
+            text("Contacts file").size(UI_BODY_SIZE),
             container(file_row).padding(iced::Padding {
                 top: 0.0,
                 right: 0.0,
@@ -438,7 +456,7 @@ impl App {
                 left: 12.0,
             }),
             Space::new().height(10),
-            text("Phone number format"),
+            text("Phone number format").size(UI_BODY_SIZE),
             container(radios).padding(iced::Padding {
                 top: 0.0,
                 right: 0.0,
@@ -929,6 +947,7 @@ impl App {
         }
         self.log_expanded = expanded;
         if expanded {
+            self.sync_log_content();
             if self.window_height_before_log.is_some() {
                 return Task::none();
             }
@@ -960,6 +979,7 @@ impl App {
                 .truncate(true)
                 .open(path);
         }
+        self.sync_log_content();
     }
 
     fn push_log(&mut self, line: String) {
@@ -970,6 +990,16 @@ impl App {
             }
         }
         self.logs.push(line);
+        self.sync_log_content();
+    }
+
+    fn sync_log_content(&mut self) {
+        let text = if self.logs.is_empty() {
+            LOG_PLACEHOLDER.to_string()
+        } else {
+            self.logs.join("\n")
+        };
+        self.log_content = text_editor::Content::with_text(&text);
     }
 
     fn cancel(&mut self) {
