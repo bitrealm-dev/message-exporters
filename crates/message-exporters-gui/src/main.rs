@@ -425,31 +425,28 @@ impl App {
                 self.ui_errors(ui);
 
                 ui.add_space(24.0);
-                ui.allocate_ui_with_layout(
-                    egui::vec2(ui.available_width(), ui.spacing().interact_size.y),
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| {
-                        if self.running && ui.button("Cancel").clicked() {
-                            self.cancel();
-                        }
-                        let btn_size = egui::vec2(72.0, ui.spacing().interact_size.y);
-                        let can_update = !self.running && !self.validate_input.trim().is_empty();
-                        let update = ui.add_enabled(
-                            can_update,
-                            egui::Button::new("Update").min_size(btn_size),
-                        );
-                        if update.clicked() {
-                            self.start_validate(false);
-                        }
-                        let check = ui.add_enabled(
-                            !self.running,
-                            egui::Button::new("Check").min_size(btn_size),
-                        );
-                        if check.clicked() {
-                            self.start_validate(true);
-                        }
-                    },
-                );
+                ui.horizontal(|ui| {
+                    ui.add_space(CONTACTS_FIELD_INDENT);
+                    let btn_size = egui::vec2(72.0, ui.spacing().interact_size.y);
+                    let check = ui.add_enabled(
+                        !self.running,
+                        egui::Button::new("Check").min_size(btn_size),
+                    );
+                    if check.clicked() {
+                        self.start_validate(true);
+                    }
+                    let can_update = !self.running && !self.validate_input.trim().is_empty();
+                    let update = ui.add_enabled(
+                        can_update,
+                        egui::Button::new("Update").min_size(btn_size),
+                    );
+                    if update.clicked() {
+                        self.start_validate(false);
+                    }
+                    if self.running && ui.button("Cancel").clicked() {
+                        self.cancel();
+                    }
+                });
             });
     }
 
@@ -619,10 +616,6 @@ impl App {
         }
         ui.add_space(10.0);
         ui.horizontal(|ui| {
-            let row_h = ui.spacing().interact_size.y;
-            // Sit in the trailing-button column (right of label + PATH_W field).
-            ui.allocate_exact_size(egui::vec2(LABEL_W, row_h), egui::Sense::hover());
-            ui.allocate_exact_size(egui::vec2(PATH_W, row_h), egui::Sense::hover());
             let run = ui.add_enabled(!self.running, egui::Button::new("Run exporter"));
             if run.clicked() {
                 self.start_export();

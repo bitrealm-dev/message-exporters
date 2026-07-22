@@ -52,7 +52,7 @@ impl Exporter {
     /// Form title / hyperlink text (may be longer than the dropdown label).
     pub fn link_label(self) -> &'static str {
         match self {
-            Self::Imessage => "iPhone backup - imessage-exporter",
+            Self::Imessage => "imessage-exporter",
             other => other.display_name(),
         }
     }

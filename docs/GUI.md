@@ -167,7 +167,7 @@ Global Anonymize and Start/End date apply. WhatsApp chats write as separate `…
 
 ### iPhone backup — `imessage-exporter`
 
-Form link label: **iPhone backup - imessage-exporter** → [imessage-exporter](https://github.com/ReagentX/imessage-exporter). Dropdown stays **iPhone backup**.
+Form link label: **imessage-exporter** → [imessage-exporter](https://github.com/ReagentX/imessage-exporter). Dropdown stays **iPhone backup**.
 
 GUI defaults: `-f csv`, `--copy-method clone` (or `disabled`), always `--use-caller-id`. Convert/Compress run as a GUI post-step via `message-media` (not imessage `basic`/`full`).
 
