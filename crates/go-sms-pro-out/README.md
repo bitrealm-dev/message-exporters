@@ -11,7 +11,11 @@ GO SMS Pro can save texts onto the phone as a backup folder. That folder usually
 - XML files named like `gosms_sys….xml` — ordinary SMS text messages
 - files ending in `.pdu` — MMS messages (often with pictures or other media packed inside)
 
-MMS `.pdu` files are decoded with a WAP-209 / WSP-inspired structured parser first: From/To/Cc/Date/Subject headers, Content-Location named parts (`text.txt`, images, …), SMIL `src` binding when present, mid-file multipart `Content-Type` bodies, then full PDUs from offset 0. CSV rows include `pdu_fields_json` (optional headers) and `pdu_decode` (`structured` / `mixed` / `heuristic`). Older text-marker / magic-byte heuristics run only when a field is still empty. The decode path is modeled on the concepts in [python-messaging](https://github.com/pmarti/python-messaging) and the public WAP specs (reference only; not vendored).
+MMS `.pdu` files are not readable like a normal text file. GO SMS Pro appears to store each MMS as a packed binary blob: phone numbers, the message text, and any photos or other media are squeezed into one file. Those files often look like pieces of a real phone MMS, not always a complete message.
+
+Phones used to pack MMS that way using older public standards. The main recipe is called [MMS Encapsulation](https://www.openmobilealliance.org/release/MMS/V1_3-20110913-A/OMA-TS-MMS_ENC-V1_3-20110913-A.pdf) (it started life as WAP-209). It describes how an MMS is laid out—contacts, text, and media in one binary message. [WSP](https://www.openmobilealliance.org/tech/affiliates/wap/wap-230-wsp-20010705-a.pdf) (Wireless Session Protocol) is the companion labeling system for the pieces inside that message—for example marking something as plain text or a JPEG and giving it a filename.
+
+The converter first tries a structured parser built around those rules. It looks for the usual message structure and pulls out contacts, text, and media when it can find them. If something is still missing after that pass, it falls back to simpler searches—for example looking for known text markers or the telltale start of a JPEG. The decode approach is guided by those public specs and ideas from [python-messaging](https://github.com/pmarti/python-messaging) (reference only; nothing from that project is bundled into this tool).
 
 There is no official public description of this backup format. For a detailed walkthrough of how each message becomes a spreadsheet row, see [docs/XML_CSV_MAPPING.md](docs/XML_CSV_MAPPING.md).
 
