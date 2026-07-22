@@ -56,8 +56,8 @@ struct App {
     /// True while a Contacts Update (not Check) process is running.
     pending_validate_update: bool,
     log_expanded: bool,
-    /// True after we grew the window to make room for the log pane.
-    log_window_boosted: bool,
+    /// Window height before the log pane opened; restored on roll-up.
+    window_height_before_log: Option<f32>,
     /// Basename shown in the log chevron (no directory).
     session_log_name: Option<String>,
     session_log_path: Option<PathBuf>,
@@ -84,7 +84,7 @@ impl Default for App {
             last_updated_input: None,
             pending_validate_update: false,
             log_expanded: false,
-            log_window_boosted: false,
+            window_height_before_log: None,
             session_log_name: None,
             session_log_path: None,
             running: false,
@@ -102,6 +102,8 @@ enum Message {
     Tab(AppMode),
     Tick,
     ToggleLog,
+    /// Captured window size before applying the log expand boost.
+    LogWindowBoost(iced::Size),
     LogAction(text_editor::Action),
     // Contacts
     ValidatePath(String),
@@ -169,6 +171,14 @@ impl App {
             Message::Tick => self.poll_events(),
             Message::ToggleLog => {
                 return self.set_log_expanded(!self.log_expanded);
+            }
+            Message::LogWindowBoost(size) => {
+                if self.window_height_before_log.is_none() {
+                    self.window_height_before_log = Some(size.height);
+                }
+                let target = iced::Size::new(size.width, size.height + LOG_PANE_HEIGHT);
+                return iced::window::latest()
+                    .and_then(move |id| iced::window::resize(id, target));
             }
             Message::LogAction(action) => {
                 // Read-only: allow selection / copy / scroll, block edits.
@@ -907,7 +917,7 @@ impl App {
         grow
     }
 
-    /// Expand/collapse the log pane and grow/shrink the window so the box opens downward.
+    /// Expand/collapse the log pane: grow on open, restore prior height on roll-up.
     fn set_log_expanded(&mut self, expanded: bool) -> Task<Message> {
         if expanded == self.log_expanded {
             return Task::none();
@@ -915,17 +925,15 @@ impl App {
         self.log_expanded = expanded;
         if expanded {
             self.sync_log_content();
-            if self.log_window_boosted {
+            if self.window_height_before_log.is_some() {
                 return Task::none();
             }
-            self.log_window_boosted = true;
-            return grow_window_by(LOG_PANE_HEIGHT);
+            return iced::window::latest().and_then(|id| {
+                iced::window::size(id).map(Message::LogWindowBoost)
+            });
         }
-        if !self.log_window_boosted {
-            return Task::none();
-        }
-        self.log_window_boosted = false;
-        shrink_window_by(LOG_PANE_HEIGHT)
+        let restore = self.window_height_before_log.take();
+        resize_window_to_height(restore)
     }
 
     fn ensure_session_log(&mut self) {
@@ -1127,21 +1135,13 @@ fn path_row<'a>(
     r.into()
 }
 
-fn grow_window_by(delta: f32) -> Task<Message> {
+/// Restore compact height on roll-up (`stored`), or subtract the expand boost.
+fn resize_window_to_height(stored: Option<f32>) -> Task<Message> {
     iced::window::latest().and_then(move |id| {
         iced::window::size(id).then(move |size| {
-            iced::window::resize(
-                id,
-                iced::Size::new(size.width, size.height + delta),
-            )
-        })
-    })
-}
-
-fn shrink_window_by(delta: f32) -> Task<Message> {
-    iced::window::latest().and_then(move |id| {
-        iced::window::size(id).then(move |size| {
-            let height = (size.height - delta).max(WINDOW_MIN_HEIGHT);
+            let height = stored
+                .unwrap_or_else(|| size.height - LOG_PANE_HEIGHT)
+                .max(WINDOW_MIN_HEIGHT);
             iced::window::resize(id, iced::Size::new(size.width, height))
         })
     })
