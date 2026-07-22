@@ -1,11 +1,19 @@
 //! Parse GO SMS Pro MMS PDU backup files (`I_<timestamp>_*.pdu`).
-//! PDU attachment / text extraction heuristics.
+//!
+//! Prefers WAP-209 / Content-Location / SMIL structured fields ([`crate::mms_enc`]),
+//! then falls back to text-marker / magic-byte heuristics only when a field is empty.
 
 use crate::emoji::decode_gosms_emojis;
-use std::collections::HashSet;
+use crate::mms_enc::{
+    content_type_from_filename, decode_mms_best_effort, extension_for_content_type, NamedPart,
+    StructuredMms,
+};
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{Context, Result};
 use message_phone::sanitize_number;
+use quick_xml::events::Event;
+use quick_xml::Reader;
 use regex::bytes::Regex as BytesRegex;
 use regex::Regex;
 use std::path::Path;
@@ -13,11 +21,11 @@ use std::sync::OnceLock;
 
 static PDU_FILENAME_RE: OnceLock<Regex> = OnceLock::new();
 static PLMN_RE: OnceLock<BytesRegex> = OnceLock::new();
-static SMIL_IMG_SRC_RE: OnceLock<BytesRegex> = OnceLock::new();
 static TEXT_CONTENT_RE: OnceLock<BytesRegex> = OnceLock::new();
 static MMS_PART_JUNK_RE: OnceLock<Regex> = OnceLock::new();
 static PRINTABLE_RUN_RE: OnceLock<BytesRegex> = OnceLock::new();
 static TRAILING_GARBAGE_RE: OnceLock<Regex> = OnceLock::new();
+static TEXT_PART_NAME_RE: OnceLock<Regex> = OnceLock::new();
 
 const TEXT_PART_END_MARKERS: &[&[u8]] = &[
     b"\x8c",
@@ -59,6 +67,12 @@ pub struct ParsedPdu {
     pub sender_number: String,
 }
 
+#[derive(Debug, Default)]
+struct SmilRefs {
+    text_srcs: Vec<String>,
+    media_srcs: Vec<String>,
+}
+
 fn timestamp_from_filename(name: &str) -> Option<i64> {
     let re = PDU_FILENAME_RE.get_or_init(|| Regex::new(r"^I_(?P<ts>\d+)_").expect("pdu name"));
     re.captures(name)
@@ -79,18 +93,214 @@ fn extract_plmn_numbers(data: &[u8]) -> Vec<String> {
     numbers
 }
 
-fn extract_smil_image_names(data: &[u8]) -> Vec<String> {
-    let re = SMIL_IMG_SRC_RE
-        .get_or_init(|| BytesRegex::new(r#"(?i)<img\s+src="([^"]+)""#).expect("smil"));
-    let mut seen = std::collections::HashSet::new();
-    let mut names = Vec::new();
-    for caps in re.captures_iter(data) {
-        let name = String::from_utf8_lossy(&caps[1]).into_owned();
-        if !name.is_empty() && seen.insert(name.clone()) {
-            names.push(name);
+/// Digits from an MMS address (`+1…/TYPE=PLMN` or bare digits).
+fn digits_from_mms_address(addr: &str) -> Option<String> {
+    let base = addr.split('/').next().unwrap_or(addr).trim();
+    let trimmed = base.trim_start_matches('+');
+    sanitize_number(trimmed).or_else(|| sanitize_number(base))
+}
+
+fn participants_from_structured(msg: &StructuredMms) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut numbers = Vec::new();
+    for addr in msg.address_strings() {
+        if let Some(digits) = digits_from_mms_address(&addr) {
+            if seen.insert(digits.clone()) {
+                numbers.push(digits);
+            }
         }
     }
-    names
+    numbers
+}
+
+fn is_text_part_name(name: &str) -> bool {
+    let re = TEXT_PART_NAME_RE
+        .get_or_init(|| Regex::new(r"(?i)^text(?:_\d+)?\.txt$").expect("text name"));
+    re.is_match(name)
+}
+
+fn text_from_part_data(data: &[u8]) -> Option<String> {
+    let text = String::from_utf8_lossy(data)
+        .replace('\0', "")
+        .trim()
+        .to_string();
+    let text = truncate_mms_binary_tail(&text);
+    if text.is_empty() || is_mms_part_junk(&text) {
+        return None;
+    }
+    Some(decode_gosms_emojis(&text))
+}
+
+fn body_from_named_parts(named: &[NamedPart], smil: &SmilRefs) -> Option<String> {
+    let by_name: HashMap<&str, &NamedPart> = named.iter().map(|p| (p.name.as_str(), p)).collect();
+    for src in &smil.text_srcs {
+        if let Some(part) = by_name.get(src.as_str()) {
+            if let Some(text) = text_from_part_data(&part.data) {
+                return Some(text);
+            }
+        }
+    }
+    let mut texts = Vec::new();
+    let mut seen = HashSet::new();
+    for part in named {
+        if !is_text_part_name(&part.name)
+            && !content_type_from_filename(&part.name).starts_with("text/")
+        {
+            continue;
+        }
+        if let Some(text) = text_from_part_data(&part.data) {
+            if seen.insert(text.clone()) {
+                texts.push(text);
+            }
+        }
+    }
+    if texts.is_empty() {
+        None
+    } else {
+        Some(texts.join("\n"))
+    }
+}
+
+fn body_from_structured(msg: &StructuredMms) -> Option<String> {
+    if msg.parts.is_empty() {
+        return None;
+    }
+    let mut texts = Vec::new();
+    let mut seen = HashSet::new();
+    for part in &msg.parts {
+        let ct = part.content_type.to_ascii_lowercase();
+        let base = ct.split(';').next().unwrap_or(&ct).trim();
+        if !(base.starts_with("text/plain") || base == "text/*" || base == "text/html") {
+            continue;
+        }
+        if let Some(text) = text_from_part_data(&part.data) {
+            if seen.insert(text.clone()) {
+                texts.push(text);
+            }
+        }
+    }
+    if texts.is_empty() {
+        None
+    } else {
+        Some(texts.join("\n"))
+    }
+}
+
+fn ext_from_filename(name: &str) -> Option<String> {
+    let ct = content_type_from_filename(name);
+    extension_for_content_type(&ct).map(|e| e.to_string())
+}
+
+fn attachment_ok(ext: &str, len: usize) -> bool {
+    if len < 64 && matches!(ext, ".jpg" | ".png" | ".gif") {
+        return false;
+    }
+    if ext == ".wav" && len < 10000 {
+        return false;
+    }
+    true
+}
+
+fn attachments_from_named_parts(named: &[NamedPart], smil: &SmilRefs) -> Vec<ParsedAttachment> {
+    let media_set: HashSet<&str> = smil.media_srcs.iter().map(String::as_str).collect();
+    let mut out = Vec::new();
+    for part in named {
+        if is_text_part_name(&part.name) {
+            continue;
+        }
+        let Some(ext) = ext_from_filename(&part.name) else {
+            continue;
+        };
+        if ext == ".txt" {
+            continue;
+        }
+        if !media_set.is_empty() && !media_set.contains(part.name.as_str()) {
+            // SMIL listed media: only keep those srcs.
+            continue;
+        }
+        if !attachment_ok(&ext, part.data.len()) {
+            continue;
+        }
+        out.push(ParsedAttachment {
+            ext,
+            data: part.data.clone(),
+            smil_name: Some(part.name.clone()),
+        });
+    }
+    out
+}
+
+fn attachments_from_structured(msg: &StructuredMms) -> Vec<ParsedAttachment> {
+    let mut out = Vec::new();
+    for part in &msg.parts {
+        let Some(ext) = extension_for_content_type(&part.content_type) else {
+            continue;
+        };
+        if ext == ".txt" {
+            continue;
+        }
+        if !attachment_ok(ext, part.data.len()) {
+            continue;
+        }
+        out.push(ParsedAttachment {
+            ext: ext.to_string(),
+            data: part.data.clone(),
+            smil_name: part.content_location.clone(),
+        });
+    }
+    out
+}
+
+fn extract_smil_region<'a>(data: &'a [u8]) -> Option<&'a [u8]> {
+    let lower = data.to_ascii_lowercase();
+    let start = lower.windows(5).position(|w| w == b"<smil")?;
+    let end_rel = lower[start..]
+        .windows(7)
+        .position(|w| w == b"</smil>")
+        .map(|p| start + p + 7)?;
+    Some(&data[start..end_rel])
+}
+
+fn parse_smil_refs(data: &[u8]) -> SmilRefs {
+    let mut refs = SmilRefs::default();
+    let Some(smil_bytes) = extract_smil_region(data) else {
+        return refs;
+    };
+    let Ok(text) = std::str::from_utf8(smil_bytes) else {
+        return refs;
+    };
+    let mut reader = Reader::from_str(text);
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e) | Event::Empty(e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_ascii_lowercase();
+                let mut src = None;
+                for attr in e.attributes().flatten() {
+                    let key = String::from_utf8_lossy(attr.key.as_ref()).to_ascii_lowercase();
+                    if key == "src" {
+                        src = Some(String::from_utf8_lossy(&attr.value).into_owned());
+                    }
+                }
+                if let Some(s) = src {
+                    if s.is_empty() {
+                        continue;
+                    }
+                    match tag.as_str() {
+                        "text" => refs.text_srcs.push(s),
+                        "img" | "audio" | "video" => refs.media_srcs.push(s),
+                        _ => {}
+                    }
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    refs
 }
 
 fn truncate_mms_binary_tail(text: &str) -> String {
@@ -134,16 +344,7 @@ fn extract_text_after_marker(data: &[u8], start: usize) -> String {
             end = end.min(pos);
         }
     }
-    let text = String::from_utf8_lossy(&data[start..end])
-        .replace('\0', "")
-        .trim()
-        .to_string();
-    let text = truncate_mms_binary_tail(&text);
-    if !text.is_empty() && !is_mms_part_junk(&text) {
-        decode_gosms_emojis(&text)
-    } else {
-        String::new()
-    }
+    text_from_part_data(&data[start..end]).unwrap_or_default()
 }
 
 fn find_bytes(haystack: &[u8], needle: &[u8], start: usize) -> Option<usize> {
@@ -153,7 +354,8 @@ fn find_bytes(haystack: &[u8], needle: &[u8], start: usize) -> Option<usize> {
         .map(|p| start + p)
 }
 
-fn extract_wap_text_body(data: &[u8]) -> String {
+/// Last-resort body when Content-Location / multipart text is missing.
+fn extract_wap_text_body_fallback(data: &[u8]) -> String {
     let re =
         TEXT_CONTENT_RE.get_or_init(|| BytesRegex::new(r"(?-u)\x8etext(?:_\d+)?\.txt\x00").expect("txt"));
     let mut texts = Vec::new();
@@ -205,10 +407,7 @@ fn detect_attachment_blobs(data: &[u8]) -> Vec<(String, usize, usize)> {
             .map(|(s, _)| *s)
             .unwrap_or(data.len());
         let size = next_start - start;
-        if size < 64 && matches!(*ext, ".jpg" | ".png" | ".gif") {
-            continue;
-        }
-        if *ext == ".wav" && size < 10000 {
+        if !attachment_ok(ext, size) {
             continue;
         }
         merged.push((ext.to_string(), *start, next_start));
@@ -227,58 +426,34 @@ fn unique_participants(parts: &[String]) -> Vec<String> {
     unique
 }
 
-/// WAP/MMS header bytes that appear just before a From PLMN address.
-const PLMN_FROM_MARKER_A: &[u8] = b"\x89\x1a\x80\x18\xea";
-const PLMN_FROM_MARKER_B: &[u8] = b"\x8e\x89\x1a\x80\x18\xea";
-/// WAP/MMS header bytes that appear just before a To PLMN address.
-const PLMN_TO_MARKER: &[u8] = b"\x97\x18\xea";
-
 fn is_owner_digit(digits: &str, owners: &HashSet<String>) -> bool {
     sanitize_number(digits).is_some_and(|d| owners.contains(&d))
 }
 
-fn plmn_address_roles(
-    data: &[u8],
+fn roles_from_structured(
+    msg: &StructuredMms,
     owners: &HashSet<String>,
 ) -> (Option<String>, bool, bool) {
-    let re = PLMN_RE.get_or_init(|| BytesRegex::new(r"\+(\d{10,15})/TYPE=PLMN").expect("plmn"));
-    let mut from_digits = None;
-    let mut my_is_from = false;
-    let mut my_is_to = false;
-
-    for caps in re.captures_iter(data) {
-        let digits_raw = String::from_utf8_lossy(&caps[1]).into_owned();
-        let Some(normalized) = sanitize_number(&digits_raw) else {
-            continue;
-        };
-        let pos = caps.get(0).map(|m| m.start()).unwrap_or(0);
-        let before_start = pos.saturating_sub(8);
-        let before = &data[before_start..pos];
-        let before_short_start = pos.saturating_sub(6);
-        let before_short = &data[before_short_start..pos];
-        let before4 = &data[pos.saturating_sub(4)..pos];
-
-        let has_from_marker = before_short.ends_with(PLMN_FROM_MARKER_A)
-            || before_short.ends_with(PLMN_FROM_MARKER_B);
-        let is_to = before_short.ends_with(PLMN_TO_MARKER) || before4.ends_with(PLMN_TO_MARKER);
-        let is_real_from = has_from_marker && !before.contains(&0xa5);
-
-        if is_real_from {
-            from_digits = Some(normalized.clone());
-            if is_owner_digit(&normalized, owners) {
-                my_is_from = true;
-            }
-        }
-        if is_to && is_owner_digit(&normalized, owners) {
-            my_is_to = true;
-        }
-    }
-
+    let from_digits = msg
+        .from
+        .as_ref()
+        .and_then(|a| digits_from_mms_address(a));
+    let my_is_from = from_digits
+        .as_ref()
+        .is_some_and(|d| is_owner_digit(d, owners));
+    let my_is_to = msg
+        .to
+        .iter()
+        .chain(msg.cc.iter())
+        .filter_map(|a| digits_from_mms_address(a))
+        .any(|d| is_owner_digit(&d, owners));
     (from_digits, my_is_from, my_is_to)
 }
 
+/// Direction from decoded From/To/Cc when present; otherwise owner/participant rules
+/// (no byte-prefix markers — sent fixtures often lack From/To headers entirely).
 fn infer_pdu_direction(
-    data: &[u8],
+    structured: &StructuredMms,
     unique_parts: &[String],
     owners: &HashSet<String>,
     primary_digits: &str,
@@ -287,8 +462,11 @@ fn infer_pdu_direction(
         return (false, String::new());
     }
 
-    if unique_parts.len() >= 3 {
-        let (from_digits, my_is_from, my_is_to) = plmn_address_roles(data, owners);
+    let has_roles =
+        structured.from.is_some() || !structured.to.is_empty() || !structured.cc.is_empty();
+
+    if has_roles {
+        let (from_digits, my_is_from, my_is_to) = roles_from_structured(structured, owners);
         if my_is_from {
             return (true, primary_digits.to_string());
         }
@@ -296,9 +474,9 @@ fn infer_pdu_direction(
             if !is_owner_digit(&from, owners) {
                 return (false, from);
             }
+            return (true, primary_digits.to_string());
         }
         if my_is_to {
-            // Owner appears as To → incoming. Prefer a non-owner participant as sender.
             let sender = unique_parts
                 .iter()
                 .find(|p| !is_owner_digit(p, owners))
@@ -306,27 +484,30 @@ fn infer_pdu_direction(
                 .unwrap_or_else(|| unique_parts[0].clone());
             return (false, sender);
         }
-        let sender = unique_parts[0].clone();
-        return (is_owner_digit(&sender, owners), sender);
     }
 
-    let first = unique_parts[0].clone();
-    if unique_parts.len() == 2 && is_owner_digit(&unique_parts[1], owners) {
-        let re = PLMN_RE.get_or_init(|| BytesRegex::new(r"\+(\d{10,15})/TYPE=PLMN").expect("plmn"));
-        if let Some(m) = re.find(data) {
-            let before = &data[m.start().saturating_sub(6)..m.start()];
-            if before.ends_with(PLMN_FROM_MARKER_B) {
-                return (false, first);
-            }
-        }
-        return (true, primary_digits.to_string());
+    // Raw PLMN lists without From/To headers (e.g. sent one-to-one dumps).
+    if unique_parts.len() >= 3 {
+        let sender = unique_parts
+            .iter()
+            .find(|p| !is_owner_digit(p, owners))
+            .cloned()
+            .unwrap_or_else(|| unique_parts[0].clone());
+        return (false, sender);
     }
 
     if unique_parts.iter().any(|p| is_owner_digit(p, owners)) {
         return (true, primary_digits.to_string());
     }
 
-    (false, first)
+    (false, unique_parts[0].clone())
+}
+
+fn resolve_timestamp(filename_ts: i64, structured: &StructuredMms) -> i64 {
+    match structured.date_unix {
+        Some(d) if d > 0 && d <= i64::MAX as u64 => d as i64,
+        _ => filename_ts,
+    }
 }
 
 /// Parse one PDU file. Returns `None` for unparseable / bad filenames.
@@ -335,7 +516,7 @@ pub fn parse_pdu_file(path: &Path, owners: &HashSet<String>, primary_digits: &st
     if data.len() < 10 {
         return Ok(None);
     }
-    let Some(ts) = timestamp_from_filename(
+    let Some(filename_ts) = timestamp_from_filename(
         path.file_name()
             .and_then(|s| s.to_str())
             .unwrap_or(""),
@@ -343,18 +524,43 @@ pub fn parse_pdu_file(path: &Path, owners: &HashSet<String>, primary_digits: &st
         return Ok(None);
     };
 
-    let participants_raw = extract_plmn_numbers(&data);
-    let body = extract_wap_text_body(&data);
-    let blobs = detect_attachment_blobs(&data);
-    let smil_names = extract_smil_image_names(&data);
-    let mut attachments = Vec::new();
-    for (i, (ext, start, end)) in blobs.into_iter().enumerate() {
-        let smil_name = smil_names.get(i).cloned();
-        attachments.push(ParsedAttachment {
-            ext,
-            data: data[start..end].to_vec(),
-            smil_name,
-        });
+    let structured = decode_mms_best_effort(&data);
+    let smil = parse_smil_refs(&data);
+    let timestamp = resolve_timestamp(filename_ts, &structured);
+
+    let participants_raw = {
+        let mut parts = participants_from_structured(&structured);
+        if parts.is_empty() {
+            extract_plmn_numbers(&data)
+        } else {
+            let mut seen: HashSet<String> = parts.iter().cloned().collect();
+            for n in extract_plmn_numbers(&data) {
+                if seen.insert(n.clone()) {
+                    parts.push(n);
+                }
+            }
+            parts
+        }
+    };
+
+    let body = body_from_named_parts(&structured.named_parts, &smil)
+        .or_else(|| body_from_structured(&structured))
+        .unwrap_or_else(|| extract_wap_text_body_fallback(&data));
+
+    let mut attachments = attachments_from_named_parts(&structured.named_parts, &smil);
+    if attachments.is_empty() {
+        attachments = attachments_from_structured(&structured);
+    }
+    if attachments.is_empty() {
+        let blobs = detect_attachment_blobs(&data);
+        for (i, (ext, start, end)) in blobs.into_iter().enumerate() {
+            let smil_name = smil.media_srcs.get(i).cloned();
+            attachments.push(ParsedAttachment {
+                ext,
+                data: data[start..end].to_vec(),
+                smil_name,
+            });
+        }
     }
 
     let normalized_parts: Vec<String> = participants_raw
@@ -364,11 +570,11 @@ pub fn parse_pdu_file(path: &Path, owners: &HashSet<String>, primary_digits: &st
     let unique_parts = unique_participants(&normalized_parts);
     let is_group = unique_parts.len() >= 3;
     let (is_sent, sender_number) =
-        infer_pdu_direction(&data, &unique_parts, owners, primary_digits);
+        infer_pdu_direction(&structured, &unique_parts, owners, primary_digits);
 
     Ok(Some(ParsedPdu {
         path: path.to_path_buf(),
-        timestamp: ts,
+        timestamp,
         participants: unique_parts,
         body,
         attachments,
@@ -462,5 +668,63 @@ mod tests {
         assert_eq!(parsed.attachments.len(), 1);
         assert_eq!(parsed.attachments[0].ext, ".jpg");
         assert!(parsed.attachments[0].data.len() >= 256);
+    }
+
+    #[test]
+    fn body_from_content_location_without_marker_regex() {
+        let data = std::fs::read(fixture("I_1609459200_recv.pdu")).unwrap();
+        let structured = decode_mms_best_effort(&data);
+        let smil = SmilRefs::default();
+        let body = body_from_named_parts(&structured.named_parts, &smil).expect("named body");
+        assert_eq!(body, "Hello one to one");
+    }
+
+    #[test]
+    fn smil_binds_text_and_image_parts() {
+        let mut data = Vec::new();
+        data.extend_from_slice(b"<smil><body><text src=\"text.txt\"/><img src=\"IMG_1.jpg\"/></body></smil>");
+        data.extend_from_slice(&[0x8e]);
+        data.extend_from_slice(b"text.txt\0Hello from SMIL");
+        data.extend_from_slice(&[0x8e]);
+        data.extend_from_slice(b"IMG_1.jpg\0");
+        // Minimal JPEG large enough to pass size guard
+        let mut jpeg = vec![0xff, 0xd8, 0xff, 0xe0];
+        jpeg.extend(std::iter::repeat_n(0x00, 80));
+        data.extend_from_slice(&jpeg);
+
+        let structured = decode_mms_best_effort(&data);
+        let smil = parse_smil_refs(&data);
+        assert_eq!(smil.text_srcs, vec!["text.txt".to_string()]);
+        assert_eq!(smil.media_srcs, vec!["IMG_1.jpg".to_string()]);
+        let body = body_from_named_parts(&structured.named_parts, &smil).unwrap();
+        assert_eq!(body, "Hello from SMIL");
+        let atts = attachments_from_named_parts(&structured.named_parts, &smil);
+        assert_eq!(atts.len(), 1);
+        assert_eq!(atts[0].ext, ".jpg");
+        assert_eq!(atts[0].smil_name.as_deref(), Some("IMG_1.jpg"));
+    }
+
+    #[test]
+    fn mms_date_overrides_filename_timestamp() {
+        let dir = tempfile::tempdir().unwrap();
+        // Filename says 1609459200; Date header says 1700000000
+        let path = dir.path().join("I_1609459200_dated.pdu");
+        let mut bytes = vec![0x85, 0x04, 0x65, 0x53, 0xf1, 0x00]; // 1700000000
+        bytes.extend_from_slice(&[0x89, 0x1a, 0x80, 0x18, 0xea]);
+        bytes.extend_from_slice(b"+4075551234/TYPE=PLMN");
+        bytes.extend_from_slice(&[0x97, 0x18, 0xea]);
+        bytes.extend_from_slice(b"+15555550100/TYPE=PLMN");
+        bytes.extend_from_slice(&[0x8e]);
+        bytes.extend_from_slice(b"text.txt\0Dated body");
+        // Pad so To value-length overshoot has a following header byte
+        bytes.push(0x8c);
+        std::fs::write(&path, &bytes).unwrap();
+
+        let (owners, primary) = test_owners();
+        let parsed = parse_pdu_file(&path, &owners, &primary)
+            .unwrap()
+            .expect("parsed");
+        assert_eq!(parsed.timestamp, 1700000000);
+        assert_eq!(parsed.body, "Dated body");
     }
 }

@@ -71,8 +71,15 @@ MMS from `I_<unix>_*.pdu` files use the same header. Differences:
 |------------|--------------|
 | `source_kind` | `pdu` |
 | `chat_identifier` / `conversation_type` / `group_title` | From PLMN participants; groups use `chat-group-…` ids |
-| `timestamp*` | From PDU filename timestamp (seconds) |
-| `text` | Extracted WAP text body (emoji-decoded) |
-| `attachments_json` | Extracted media under `attachments/` |
+| `timestamp*` | MMS `Date` header when present; else filename `I_<unix>_` (seconds). Filename still required to accept the file. |
+| `text` | Content-Location text parts / multipart `text/*` (emoji-decoded); marker/`</smil>` fallback if needed |
+| `attachments_json` | Named/typed media parts, else magic-byte splits under `attachments/` |
 | `android_type`, `date_ms`, `contact_name`, `xml_fields_json` | Empty |
 | `pdu_filename` | Source PDU basename |
+
+### MMS parse path
+
+1. **Structured decode** (`mms_enc`): WAP-209 headers (From/To/Cc/Date) + Content-Location named parts + multipart when present. Direction from decoded From/To/Cc; body/attachments from named parts and SMIL `src` when present.
+2. **Heuristic fallback**: PLMN regex for raw address lists, legacy `text_*.txt` markers / `</smil>` printable tails, and magic-byte attachment splits — only when the structured path left that field empty.
+
+Algorithm reference: OMA WAP-209 / WAP-230 and the decode concepts in [python-messaging](https://github.com/pmarti/python-messaging) `messaging/mms` (not a dependency; not copied).

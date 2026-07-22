@@ -2,6 +2,7 @@
 
 pub(crate) mod emit;
 pub(crate) mod emoji;
+pub(crate) mod mms_enc;
 pub(crate) mod pdu;
 pub(crate) mod phone;
 pub(crate) mod xml;
