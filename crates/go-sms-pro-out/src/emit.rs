@@ -40,6 +40,8 @@ const HEADERS: &[&str] = &[
     "contact_name",
     "pdu_filename",
     "xml_fields_json",
+    "pdu_fields_json",
+    "pdu_decode",
 ];
 
 const EXPORT_SOURCE: &str = "go-sms-pro";
@@ -96,6 +98,8 @@ struct PendingMessage {
     contact_name: String,
     pdu_filename: String,
     xml_fields: BTreeMap<String, String>,
+    pdu_fields: BTreeMap<String, String>,
+    pdu_decode: String,
 }
 
 #[derive(Debug, Default)]
@@ -213,6 +217,8 @@ fn add_xml_messages(
             contact_name: msg.contact_name,
             pdu_filename: String::new(),
             xml_fields: msg.xml_fields,
+            pdu_fields: BTreeMap::new(),
+            pdu_decode: String::new(),
         });
     }
 }
@@ -311,9 +317,7 @@ fn add_pdu_message(
         .unwrap_or("")
         .to_string();
 
-    let sender_digits = if parsed.is_sent {
-        None
-    } else if parsed.sender_number.is_empty() {
+    let sender_digits = if parsed.is_sent || parsed.sender_number.is_empty() {
         None
     } else {
         Some(parsed.sender_number.clone())
@@ -333,6 +337,8 @@ fn add_pdu_message(
         contact_name: String::new(),
         pdu_filename,
         xml_fields: BTreeMap::new(),
+        pdu_fields: parsed.pdu_fields.clone(),
+        pdu_decode: parsed.decode_quality.to_string(),
     };
 
     for (chat_id, conversation_type, group_title) in targets {
@@ -433,6 +439,11 @@ fn write_conversation(
         } else {
             json_cell(&msg.xml_fields)
         };
+        let pdu_fields_json = if msg.pdu_fields.is_empty() {
+            String::new()
+        } else {
+            json_cell(&msg.pdu_fields)
+        };
 
         wtr.write_record([
             chat_id,
@@ -457,6 +468,8 @@ fn write_conversation(
             msg.contact_name.as_str(),
             msg.pdu_filename.as_str(),
             xml_fields_json.as_str(),
+            pdu_fields_json.as_str(),
+            msg.pdu_decode.as_str(),
         ])
         .with_context(|| format!("write row {}", path.display()))?;
 

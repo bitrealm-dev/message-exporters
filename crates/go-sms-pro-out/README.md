@@ -11,7 +11,7 @@ GO SMS Pro can save texts onto the phone as a backup folder. That folder usually
 - XML files named like `gosms_sys….xml` — ordinary SMS text messages
 - files ending in `.pdu` — MMS messages (often with pictures or other media packed inside)
 
-MMS `.pdu` files are decoded with a WAP-209 / WSP-inspired structured parser first: From/To/Cc/Date headers, Content-Location named parts (`text.txt`, images, …), SMIL `src` binding when present, then multipart parts on full PDUs. Older text-marker / magic-byte heuristics run only when a field is still empty. The decode path is modeled on the concepts in [python-messaging](https://github.com/pmarti/python-messaging) and the public WAP specs (reference only; not vendored).
+MMS `.pdu` files are decoded with a WAP-209 / WSP-inspired structured parser first: From/To/Cc/Date/Subject headers, Content-Location named parts (`text.txt`, images, …), SMIL `src` binding when present, mid-file multipart `Content-Type` bodies, then full PDUs from offset 0. CSV rows include `pdu_fields_json` (optional headers) and `pdu_decode` (`structured` / `mixed` / `heuristic`). Older text-marker / magic-byte heuristics run only when a field is still empty. The decode path is modeled on the concepts in [python-messaging](https://github.com/pmarti/python-messaging) and the public WAP specs (reference only; not vendored).
 
 There is no official public description of this backup format. For a detailed walkthrough of how each message becomes a spreadsheet row, see [docs/XML_CSV_MAPPING.md](docs/XML_CSV_MAPPING.md).
 

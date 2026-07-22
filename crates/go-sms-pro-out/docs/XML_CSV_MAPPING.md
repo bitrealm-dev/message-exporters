@@ -62,6 +62,8 @@ Each `<SMS>` becomes one CSV data row. The `chat_identifier` column holds the pe
 | `contact_name` | Raw `<contactName>`; empty for PDU |
 | `pdu_filename` | PDU basename; empty for XML |
 | `xml_fields_json` | All `<SMS>` children as JSON object; empty for PDU |
+| `pdu_fields_json` | Optional MMS headers for PDU rows; empty for XML |
+| `pdu_decode` | PDU decode confidence; empty for XML |
 
 ## PDU rows
 
@@ -76,10 +78,16 @@ MMS from `I_<unix>_*.pdu` files use the same header. Differences:
 | `attachments_json` | Named/typed media parts, else magic-byte splits under `attachments/` |
 | `android_type`, `date_ms`, `contact_name`, `xml_fields_json` | Empty |
 | `pdu_filename` | Source PDU basename |
+| `pdu_fields_json` | Optional MMS headers (see below); empty for XML |
+| `pdu_decode` | `structured` / `mixed` / `heuristic` confidence for body, attachments, and direction; empty for XML |
+
+`pdu_fields_json` keys when present: `subject`, `message_id`, `message_type`, `mms_version`, `message_size`, `message_class`, `transaction_id`, `priority`, `delivery_report`, `read_report`, `report_allowed`, `delivery_time`, `expiry`, `status`, `response_status`, `response_text`, `sender_visibility`, `bcc` (comma-joined), plus `app:<name>` for non-well-known MMS application headers.
+
+`message_size` is the WAP-209 Message-Size long-integer (advisory octets). GO SMS Pro `0x8e` + `filename\0` named parts are unrelated and are not decoded as Message-Size.
 
 ### MMS parse path
 
-1. **Structured decode** (`mms_enc`): WAP-209 headers (From/To/Cc/Date) + Content-Location named parts + multipart when present. Direction from decoded From/To/Cc; body/attachments from named parts and SMIL `src` when present.
+1. **Structured decode** (`mms_enc`): WAP-209 headers (From/To/Cc/Bcc/Date/Subject/Status/…) + Content-Location named parts + mid-file / offset-0 multipart (part Content-ID, Content-Disposition/Filename, Content-Type Name/Filename/Start/Type/Start-info). Direction from decoded address roles; body from named parts, multipart text (including SMIL `cid:` → Content-ID), or Subject; attachments from named/typed parts and SMIL `src` / `cid:` / filename.
 2. **Heuristic fallback**: PLMN regex for raw address lists, legacy `text_*.txt` markers / `</smil>` printable tails, and magic-byte attachment splits — only when the structured path left that field empty.
 
 Algorithm reference: OMA WAP-209 / WAP-230 and the decode concepts in [python-messaging](https://github.com/pmarti/python-messaging) `messaging/mms` (not a dependency; not copied).
