@@ -59,21 +59,11 @@ Converters that write `attachments/` also support `--media-mode disabled|clone|c
 
 ## Desktop GUI
 
-Desktop GUIs share the same form/process core ([`message-exporters-core`](crates/message-exporters-core)):
-
-- [egui](crates/message-exporters-gui) — `cargo run -p message-exporters-gui`
-- [FLTK](crates/message-exporters-fltk-rs) — `cargo run -p message-exporters-fltk-rs`
-- [iced](crates/message-exporters-iced-rs) — `cargo run -p message-exporters-iced-rs`
-
-All have **Contacts** (validate) and **Message** (export) tabs, native file/folder pickers, exporter-specific forms (including Attachments copy/convert/compress), validation, live logs, and cancel support on Linux, macOS, and Windows.
+The egui desktop app ([`message-exporters-gui`](crates/message-exporters-gui)) shares form/process helpers with [`message-exporters-core`](crates/message-exporters-core). It has **Contacts** (validate) and **Message** (export) tabs, native file/folder pickers, exporter-specific forms (including Attachments copy/convert/compress), validation, live logs, and cancel support on Linux, macOS, and Windows.
 
 ```bash
 cargo build --workspace
 cargo run -p message-exporters-gui
-# or
-cargo run -p message-exporters-fltk-rs
-# or
-cargo run -p message-exporters-iced-rs
 ```
 
 Options and architecture: [`docs/GUI.md`](docs/GUI.md).
