@@ -5,5 +5,4 @@ edition = "2024"
 description = "Shared form models and process spawning for message-exporters GUIs"
 
 [dependencies]
-dirs = "6"
 message-media = { path = "../message-media" }

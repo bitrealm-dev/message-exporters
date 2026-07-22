@@ -84,29 +84,30 @@ impl Exporter {
 ///
 /// With a non-empty `input`, uses `{input-dir}/{exporter.binary()}` where
 /// `input-dir` is the input path itself if it looks like a directory, or its
-/// parent if it looks like a file. With empty input, falls back to
-/// `{Documents|home}/message-exporters/{exporter.binary()}`.
+/// parent if it looks like a file. With empty input, returns an empty string
+/// so the UI leaves Output blank until the user selects an input path.
 pub fn default_output_dir(exporter: Exporter, input: &str) -> String {
-    let base = input_base_dir(input);
+    let Some(base) = input_base_dir(input) else {
+        return String::new();
+    };
     base.join(exporter.binary()).display().to_string()
 }
 
-fn input_base_dir(input: &str) -> PathBuf {
+fn input_base_dir(input: &str) -> Option<PathBuf> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
-        let root = dirs::document_dir()
-            .or_else(dirs::home_dir)
-            .unwrap_or_else(|| PathBuf::from("."));
-        return root.join("message-exporters");
+        return None;
     }
     let path = Path::new(trimmed);
     if path.is_file() || path.extension().is_some() {
-        path.parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| PathBuf::from("."))
+        Some(
+            path.parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| PathBuf::from(".")),
+        )
     } else {
-        path.to_path_buf()
+        Some(path.to_path_buf())
     }
 }
 
@@ -600,7 +601,7 @@ mod tests {
         assert!(form.build_args(Exporter::Imessage).is_err());
 
         let form = Form {
-            output: default_output_dir(Exporter::Imessage, ""),
+            output: "out".into(),
             ..Form::default()
         };
         let args = form.build_args(Exporter::Imessage).unwrap();
@@ -650,10 +651,9 @@ mod tests {
     }
 
     #[test]
-    fn default_output_is_under_documents_or_home() {
+    fn default_output_is_empty_without_input() {
         let path = default_output_dir(Exporter::OpenExtract, "");
-        assert!(path.contains("message-exporters"));
-        assert!(path.contains("openextract-out"));
+        assert!(path.is_empty());
     }
 
     #[test]

@@ -21,10 +21,6 @@ const LABEL_W: f32 = 190.0;
 const PATH_W: f32 = 280.0;
 const COMBO_W: f32 = 200.0;
 const SHORT_W: f32 = 140.0;
-const LOG_PANE_HEIGHT: f32 = 160.0;
-const LOG_HEADER_HEIGHT: f32 = 30.0;
-const LOG_PANE_MIN_HEIGHT: f32 = 80.0;
-const WINDOW_MIN_HEIGHT: f32 = 600.0;
 const LOG_PLACEHOLDER: &str = "(no log output)";
 const CONTACTS_FIELD_INDENT: f32 = 12.0;
 /// First row plus up to 9 added rows.
@@ -99,20 +95,20 @@ struct App {
     form: Form,
     /// Per-row owner phone inputs (always at least one). Synced into `form.owner_phones`.
     owner_phone_rows: Vec<String>,
+    /// Per-row owner email inputs for SMS Backup+ (always at least one). Synced into `form.owner_emails`.
+    owner_email_rows: Vec<String>,
     validate_input: String,
     validate_usa: bool,
     running: bool,
     control: ProcessControl,
     logs: Vec<String>,
-    /// Selectable display buffer for the bottom log pane (synced from `logs`).
+    /// Selectable display buffer for the full-window log view (synced from `logs`).
     log_text: String,
-    log_expanded: bool,
-    log_pane_height: f32,
+    /// When true, central panel shows the scrollable log instead of the form.
+    show_log: bool,
     /// Basename shown in the log header (no directory).
     session_log_name: Option<String>,
     session_log_path: Option<PathBuf>,
-    /// Applied at the start of `update` so run handlers can request expand without `Context`.
-    log_expand_pending: Option<bool>,
     errors: Vec<String>,
     rx: Option<Receiver<ProcessEvent>>,
 }
@@ -128,17 +124,16 @@ impl Default for App {
                 ..Form::default()
             },
             owner_phone_rows: vec![String::new()],
+            owner_email_rows: vec![String::new()],
             validate_input: String::new(),
             validate_usa: true,
             running: false,
             control: ProcessControl::default(),
             logs: Vec::new(),
             log_text: LOG_PLACEHOLDER.to_string(),
-            log_expanded: true,
-            log_pane_height: LOG_PANE_HEIGHT,
+            show_log: false,
             session_log_name: None,
             session_log_path: None,
-            log_expand_pending: None,
             errors: Vec::new(),
             rx: None,
         }
@@ -197,11 +192,22 @@ impl App {
             .join("\n");
     }
 
+    fn sync_owner_emails(&mut self) {
+        self.form.owner_emails = self
+            .owner_email_rows
+            .iter()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+
     fn start_export(&mut self) {
         if self.running {
             return;
         }
         self.sync_owner_phones();
+        self.sync_owner_emails();
         let args = match self.form.build_args(self.exporter) {
             Ok(args) => args,
             Err(errors) => {
@@ -214,7 +220,7 @@ impl App {
             self.errors = vec![error.clone()];
             self.begin_session_log();
             self.push_log(format!("Error: {error}"));
-            self.log_expand_pending = Some(true);
+            self.show_log = true;
             return;
         }
         let program = match resolve_binary(self.exporter.binary()) {
@@ -227,7 +233,7 @@ impl App {
         self.errors.clear();
         self.running = true;
         self.begin_session_log();
-        self.log_expand_pending = Some(true);
+        self.show_log = true;
         let (tx, rx) = mpsc::channel();
         self.rx = Some(rx);
         spawn(program, args, self.control.clone(), tx);
@@ -271,7 +277,7 @@ impl App {
         self.errors.clear();
         self.running = true;
         self.begin_session_log();
-        self.log_expand_pending = Some(true);
+        self.show_log = true;
         let (tx, rx) = mpsc::channel();
         self.rx = Some(rx);
         spawn(program, args, self.control.clone(), tx);
@@ -350,9 +356,22 @@ impl App {
     fn ui_tabs(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.add_enabled_ui(!self.running, |ui| {
-                ui.selectable_value(&mut self.mode, AppMode::ValidateContacts, "Contacts");
-                ui.selectable_value(&mut self.mode, AppMode::Export, "Message");
+                if ui
+                    .selectable_value(&mut self.mode, AppMode::ValidateContacts, "Contacts")
+                    .clicked()
+                {
+                    self.show_log = false;
+                }
+                if ui
+                    .selectable_value(&mut self.mode, AppMode::Export, "Message")
+                    .clicked()
+                {
+                    self.show_log = false;
+                }
             });
+            if ui.selectable_label(self.show_log, "Log").clicked() {
+                self.show_log = !self.show_log;
+            }
         });
     }
 
@@ -477,34 +496,15 @@ impl App {
             }
             Exporter::SmsBackupPlus => {
                 self.ui_owner_phones(ui);
+                self.ui_owner_emails(ui);
                 path_or_text(
                     ui,
-                    "Your email address(es)",
-                    &mut self.form.owner_emails,
-                    "Comma-separated email addresses",
-                    false,
+                    "Name mapping",
+                    &mut self.form.name_mapping,
+                    ".csv",
+                    true,
                     false,
                 );
-                if ui
-                    .button(if self.form.advanced {
-                        "▾ Hide advanced options"
-                    } else {
-                        "▸ Show advanced options"
-                    })
-                    .clicked()
-                {
-                    self.form.advanced = !self.form.advanced;
-                }
-                if self.form.advanced {
-                    path_or_text(
-                        ui,
-                        "Name mapping CSV",
-                        &mut self.form.name_mapping,
-                        "Path",
-                        true,
-                        false,
-                    );
-                }
             }
             Exporter::Imazing => {
                 self.ui_timezone(ui);
@@ -617,10 +617,12 @@ impl App {
                 PATH_W,
             );
         }
-        ui.add_space(6.0);
-        ui.separator();
         ui.add_space(10.0);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        ui.horizontal(|ui| {
+            let row_h = ui.spacing().interact_size.y;
+            // Sit in the trailing-button column (right of label + PATH_W field).
+            ui.allocate_exact_size(egui::vec2(LABEL_W, row_h), egui::Sense::hover());
+            ui.allocate_exact_size(egui::vec2(PATH_W, row_h), egui::Sense::hover());
             let run = ui.add_enabled(!self.running, egui::Button::new("Run exporter"));
             if run.clicked() {
                 self.start_export();
@@ -809,6 +811,64 @@ impl App {
         self.sync_owner_phones();
     }
 
+    fn ui_owner_emails(&mut self, ui: &mut egui::Ui) {
+        if self.owner_email_rows.is_empty() {
+            self.owner_email_rows.push(String::new());
+        }
+        let mut remove_idx = None;
+        let mut add_row = false;
+        let row_count = self.owner_email_rows.len();
+        for i in 0..row_count {
+            ui.horizontal(|ui| {
+                if i == 0 {
+                    form_label(ui, "Backup email address");
+                } else {
+                    ui.allocate_exact_size(
+                        egui::vec2(LABEL_W, ui.spacing().interact_size.y),
+                        egui::Sense::hover(),
+                    );
+                }
+                with_field_width(ui, PATH_W, |ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.owner_email_rows[i])
+                            .id_salt(("owner_email", i))
+                            .desired_width(PATH_W)
+                            .clip_text(true)
+                            .hint_text("you@example.com"),
+                    );
+                });
+                if i == 0 {
+                    let can_add = row_count < MAX_OWNER_PHONES;
+                    let add = ui
+                        .add_enabled(can_add, egui::Button::new("+"))
+                        .on_hover_text(if can_add {
+                            "Add email address"
+                        } else {
+                            "Maximum of 10 email addresses"
+                        });
+                    if add.clicked() {
+                        add_row = true;
+                    }
+                } else if ui
+                    .button("−")
+                    .on_hover_text("Remove email address")
+                    .clicked()
+                {
+                    remove_idx = Some(i);
+                }
+            });
+        }
+        if add_row && self.owner_email_rows.len() < MAX_OWNER_PHONES {
+            self.owner_email_rows.push(String::new());
+        }
+        if let Some(i) = remove_idx {
+            if i > 0 && i < self.owner_email_rows.len() {
+                self.owner_email_rows.remove(i);
+            }
+        }
+        self.sync_owner_emails();
+    }
+
     fn ui_contacts(&mut self, ui: &mut egui::Ui, enabled: bool) {
         ui.add_enabled_ui(enabled, |ui| {
             path_or_text(
@@ -943,32 +1003,6 @@ impl App {
         self.sync_log_text();
     }
 
-    /// Expand/collapse by the current body height so the Log header stays put:
-    /// body opens downward on expand, rolls up from the bottom on collapse
-    /// (including after the user has dragged the panel taller).
-    fn set_log_expanded(&mut self, expanded: bool, ctx: &egui::Context) {
-        if expanded == self.log_expanded {
-            return;
-        }
-        self.log_expanded = expanded;
-        let body_height = (self.log_pane_height - LOG_HEADER_HEIGHT).max(0.0);
-        let Some(size) = viewport_inner_size(ctx) else {
-            return;
-        };
-        if expanded {
-            self.sync_log_text();
-            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
-                size.x,
-                size.y + body_height,
-            )));
-            return;
-        }
-        let height = (size.y - body_height).max(WINDOW_MIN_HEIGHT);
-        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
-            size.x, height,
-        )));
-    }
-
     fn ui_status_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_centered(|ui| {
             let status = self.status_text();
@@ -979,20 +1013,8 @@ impl App {
         });
     }
 
-    /// Returns true if the chevron was clicked (caller should toggle expand via ctx).
-    fn ui_log_panel(&mut self, ui: &mut egui::Ui) -> bool {
-        let mut toggle = false;
+    fn ui_log_panel(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            let chevron = if self.log_expanded { "▾" } else { "▸" };
-            if ui
-                .add_sized(
-                    egui::vec2(22.0, 18.0),
-                    egui::Button::new(chevron),
-                )
-                .clicked()
-            {
-                toggle = true;
-            }
             let name = self.session_log_name.as_deref().unwrap_or("(log)");
             ui.label(egui::RichText::new(name).strong());
             if !self.logs.is_empty() {
@@ -1005,47 +1027,36 @@ impl App {
             }
         });
 
-        if self.log_expanded {
-            ui.add_space(4.0);
-            // Fill whatever height the resizable bottom panel currently has.
-            let body_height = ui.available_height().max(LOG_PANE_MIN_HEIGHT);
-            egui::ScrollArea::vertical()
-                .id_salt("export_log_scroll")
-                .stick_to_bottom(true)
-                .auto_shrink([false, false])
-                .max_height(body_height)
-                .min_scrolled_height(body_height)
-                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                .show(ui, |ui| {
-                    let row_height = ui.text_style_height(&egui::TextStyle::Monospace);
-                    let line_count = self.log_text.lines().count().max(1) as f32;
-                    let content_height = (line_count * row_height + 8.0).max(body_height);
-                    // Immutable &str TextBuffer: select/copy work; typing cannot mutate.
-                    let mut readonly: &str = self.log_text.as_str();
-                    ui.add_sized(
-                        [ui.available_width(), content_height],
-                        egui::TextEdit::multiline(&mut readonly)
-                            .desired_width(f32::INFINITY)
-                            .font(egui::TextStyle::Monospace)
-                            .interactive(true),
-                    );
-                });
-        }
-        toggle
+        ui.add_space(4.0);
+        let body_height = ui.available_height().max(80.0);
+        egui::ScrollArea::vertical()
+            .id_salt("export_log_scroll")
+            .stick_to_bottom(true)
+            .auto_shrink([false, false])
+            .max_height(body_height)
+            .min_scrolled_height(body_height)
+            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+            .show(ui, |ui| {
+                let row_height = ui.text_style_height(&egui::TextStyle::Monospace);
+                let line_count = self.log_text.lines().count().max(1) as f32;
+                let content_height = (line_count * row_height + 8.0).max(body_height);
+                // Immutable &str TextBuffer: select/copy work; typing cannot mutate.
+                let mut readonly: &str = self.log_text.as_str();
+                ui.add_sized(
+                    [ui.available_width(), content_height],
+                    egui::TextEdit::multiline(&mut readonly)
+                        .desired_width(f32::INFINITY)
+                        .font(egui::TextStyle::Monospace)
+                        .interactive(true),
+                );
+            });
     }
-}
-
-fn viewport_inner_size(ctx: &egui::Context) -> Option<egui::Vec2> {
-    ctx.input(|i| i.viewport().inner_rect.map(|r| r.size()))
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_events(ctx);
         self.sync_log_text();
-        if let Some(expanded) = self.log_expand_pending.take() {
-            self.set_log_expanded(expanded, ctx);
-        }
 
         egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
             ui.add_space(4.0);
@@ -1053,7 +1064,6 @@ impl eframe::App for App {
             ui.add_space(2.0);
         });
 
-        // Outermost bottom panel first (status sits under the log).
         egui::TopBottomPanel::bottom("status")
             .exact_height(28.0)
             .show_separator_line(true)
@@ -1061,45 +1071,18 @@ impl eframe::App for App {
                 self.ui_status_bar(ui);
             });
 
-        let mut toggle_log = false;
-        if self.log_expanded {
-            // Separate id from collapsed header so collapsing does not reset stored height.
-            let response = egui::TopBottomPanel::bottom("log_expanded")
-                .resizable(true)
-                .default_height(self.log_pane_height)
-                .min_height(LOG_PANE_MIN_HEIGHT + LOG_HEADER_HEIGHT)
-                .max_height(f32::INFINITY)
-                .show_separator_line(true)
-                .show(ctx, |ui| {
-                    // Claim the full panel so the log body grows with drag-resize.
-                    ui.set_min_size(ui.available_size());
-                    toggle_log = self.ui_log_panel(ui);
-                });
-            self.log_pane_height = response
-                .response
-                .rect
-                .height()
-                .max(LOG_PANE_MIN_HEIGHT + LOG_HEADER_HEIGHT);
-        } else {
-            egui::TopBottomPanel::bottom("log_collapsed")
-                .exact_height(LOG_HEADER_HEIGHT)
-                .resizable(false)
-                .show_separator_line(true)
-                .show(ctx, |ui| {
-                    toggle_log = self.ui_log_panel(ui);
-                });
-        }
-        if toggle_log {
-            self.set_log_expanded(!self.log_expanded, ctx);
-        }
-
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                match self.mode {
-                    AppMode::ValidateContacts => self.ui_validate(ui),
-                    AppMode::Export => self.ui_export(ui),
-                }
-            });
+            if self.show_log {
+                ui.set_min_size(ui.available_size());
+                self.ui_log_panel(ui);
+            } else {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    match self.mode {
+                        AppMode::ValidateContacts => self.ui_validate(ui),
+                        AppMode::Export => self.ui_export(ui),
+                    }
+                });
+            }
         });
     }
 }
@@ -1118,11 +1101,12 @@ fn new_session_log_file() -> (String, PathBuf) {
 }
 
 fn form_label(ui: &mut egui::Ui, label: &str) {
+    // Fixed LABEL_W column (keeps fields aligned); right-to-left packs label against the inputs.
     ui.allocate_ui_with_layout(
         egui::vec2(LABEL_W, ui.spacing().interact_size.y),
         egui::Layout::right_to_left(egui::Align::Center),
         |ui| {
-            ui.label(label);
+            ui.add(egui::Label::new(label).truncate());
         },
     );
 }
