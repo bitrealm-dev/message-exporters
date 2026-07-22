@@ -1,12 +1,16 @@
 [package]
-name = "message-exporters-gui"
+name = "message-exporters-iced-rs"
 version = "0.1.0"
 edition = "2024"
-description = "Cross-platform egui GUI for message-exporters"
+description = "iced desktop GUI for message-exporters"
+
+[[bin]]
+name = "message-exporters-iced-rs"
+path = "src/main.rs"
 
 [dependencies]
-eframe = "0.31"
-egui = "0.31"
+chrono = "0.4.44"
+iced = { version = "0.14", features = ["tokio", "svg"] }
 message-anonymize = { path = "../message-anonymize" }
 message-contacts = { path = "../message-contacts" }
 message-exporters-core = { path = "../message-exporters-core" }

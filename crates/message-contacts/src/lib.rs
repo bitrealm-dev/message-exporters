@@ -12,4 +12,7 @@ mod vcf;
 pub use book::{resolve_contacts_cli, ContactsBook};
 pub use mapping::NameMapping;
 pub use name::{collapse_inner_whitespace, normalize_name_key};
-pub use validate::{validate_contacts_file, ValidateMode, ValidateReport};
+pub use validate::{
+    ensure_contacts_input, probe_contacts_input, validate_contacts_file, ContactsInputError,
+    ValidateMode, ValidateReport, UNRECOGNIZED_CONTACTS_FORMAT,
+};

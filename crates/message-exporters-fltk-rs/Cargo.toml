@@ -1,0 +1,18 @@
+[package]
+name = "message-exporters-fltk-rs"
+version = "0.1.0"
+edition = "2024"
+description = "FLTK desktop GUI for message-exporters"
+
+[[bin]]
+name = "message-exporters-fltk-rs"
+path = "src/main.rs"
+
+[dependencies]
+# `no-pango` avoids needing Pango headers; still requires libxft-dev (and related X11 -dev packages) to link.
+fltk = { version = "1.5", features = ["no-pango"] }
+message-anonymize = { path = "../message-anonymize" }
+message-contacts = { path = "../message-contacts" }
+message-exporters-core = { path = "../message-exporters-core" }
+message-media = { path = "../message-media" }
+open = "5"

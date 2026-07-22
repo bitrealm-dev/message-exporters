@@ -5,7 +5,7 @@ use anyhow::{bail, Context, Result};
 use message_phone::{normalize_certain, normalize_uncertain_reason, PhoneRegion};
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -42,6 +42,13 @@ struct OutCard {
     phones: Vec<String>,
 }
 
+#[derive(Debug, Clone)]
+struct UnableEntry {
+    contact: String,
+    phone: String,
+    reason: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ContactsFormat {
     Vcf,
@@ -49,9 +56,60 @@ enum ContactsFormat {
     ImazingCsv,
 }
 
+/// Short red-box message when CSV/VCF content is not a known contacts format.
+pub const UNRECOGNIZED_CONTACTS_FORMAT: &str = "Unrecognized contacts format.";
+
+/// Probe failure for GUI preflight (short `message` + optional log `details`).
+#[derive(Debug, Clone)]
+pub struct ContactsInputError {
+    pub message: String,
+    pub details: Vec<String>,
+}
+
+impl std::fmt::Display for ContactsInputError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for ContactsInputError {}
+
+impl ContactsInputError {
+    fn simple(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            details: Vec::new(),
+        }
+    }
+
+    fn unrecognized(details: Vec<String>) -> Self {
+        Self {
+            message: UNRECOGNIZED_CONTACTS_FORMAT.into(),
+            details,
+        }
+    }
+}
+
+/// Probe that `path` exists and is a contacts `.csv` / `.vcf` this crate can validate.
+pub fn probe_contacts_input(path: &Path) -> Result<(), ContactsInputError> {
+    detect_format(path).map(|_| ())
+}
+
+/// Ensure `path` exists and is a contacts `.csv` / `.vcf` this crate can validate.
+pub fn ensure_contacts_input(path: &Path) -> Result<()> {
+    probe_contacts_input(path).map_err(|e| {
+        if e.details.is_empty() {
+            anyhow::anyhow!("{}", e.message)
+        } else {
+            anyhow::anyhow!("{} ({})", e.message, e.details.join("; "))
+        }
+    })
+}
+
 /// Validate contacts beside `input`.
 ///
-/// - [`ValidateMode::Update`]: write `{stem}-corrected-{YYMMDD-hhmmss}.{ext}` (+ `.vcf` for CSV) and `.log`.
+/// - [`ValidateMode::Update`]: write `{stem}-update.{ext}` (or `{stem}-update-N` when the
+///   input already ends in `-update` / `-update-N`) plus `.log`; CSV also writes `.vcf`.
 /// - [`ValidateMode::Check`]: same analysis; no files written; results are in [`ValidateReport::log_lines`].
 pub fn validate_contacts_file(
     input: &Path,
@@ -63,30 +121,32 @@ pub fn validate_contacts_file(
     }
 
     let write = mode == ValidateMode::Update;
-    let format = detect_format(input)?;
+    let format = detect_format(input).map_err(|e| {
+        if e.details.is_empty() {
+            anyhow::anyhow!("{}", e.message)
+        } else {
+            anyhow::anyhow!("{} ({})", e.message, e.details.join("; "))
+        }
+    })?;
     let (output_path, log_path) = corrected_output_paths(input);
 
+    let mode_label = match mode {
+        ValidateMode::Check => "check",
+        ValidateMode::Update => "format",
+    };
     let mut log_lines: Vec<String> = Vec::new();
     log_lines.push(format!(
-        "# contacts-validate mode={} region={region}",
-        match mode {
-            ValidateMode::Check => "check",
-            ValidateMode::Update => "update",
-        }
+        "# contacts-validate mode={mode_label} region={region}"
     ));
     log_lines.push(format!("# input={}", input.display()));
-    log_lines.push(format!(
-        "# output={}{}",
-        output_path.display(),
-        if write { "" } else { " (not written)" }
-    ));
     log_lines.push(String::new());
 
     let mut rewritten = 0u64;
     let mut uncertain = 0u64;
-    // e164 → list of contact display names that own it (after rewrite)
+    // e164 → list of contact labels (with row) that own it (after rewrite)
     let mut by_e164: HashMap<String, Vec<String>> = HashMap::new();
     let mut cards: Vec<OutCard> = Vec::new();
+    let mut unable: Vec<UnableEntry> = Vec::new();
 
     match format {
         ContactsFormat::Vcf => {
@@ -98,6 +158,7 @@ pub fn validate_contacts_file(
                 &mut rewritten,
                 &mut uncertain,
                 &mut log_lines,
+                &mut unable,
                 &mut by_e164,
             )?;
         }
@@ -110,6 +171,7 @@ pub fn validate_contacts_file(
                 &mut rewritten,
                 &mut uncertain,
                 &mut log_lines,
+                &mut unable,
                 &mut by_e164,
                 &mut cards,
             )?;
@@ -123,6 +185,7 @@ pub fn validate_contacts_file(
                 &mut rewritten,
                 &mut uncertain,
                 &mut log_lines,
+                &mut unable,
                 &mut by_e164,
                 &mut cards,
             )?;
@@ -137,39 +200,43 @@ pub fn validate_contacts_file(
         if write {
             write_vcf_cards(&vcf_path, &cards)?;
         }
-        log_lines.push(format!(
-            "# vcf={}{}",
-            vcf_path.display(),
-            if write { "" } else { " (not written)" }
-        ));
         Some(vcf_path)
     } else {
         None
     };
 
+    emit_uncertain_sections(&mut log_lines, &unable);
+
     let mut duplicate_groups = 0u64;
     log_lines.push(String::new());
-    log_lines.push("# duplicate numbers (same E.164 on more than one contact)".into());
+    log_lines.push("Duplicate numbers (same E.164 on more than one contact)".into());
     let mut keys: Vec<_> = by_e164.keys().cloned().collect();
     keys.sort();
+    let mut any_dup = false;
     for e164 in keys {
         let names = by_e164.get(&e164).cloned().unwrap_or_default();
         if names.len() > 1 {
             duplicate_groups += 1;
-            log_lines.push(format!("DUPLICATE {e164}: {}", names.join(" | ")));
+            any_dup = true;
+            log_lines.push(format!("  {e164}: {}", names.join(" | ")));
         }
     }
-    if duplicate_groups == 0 {
-        log_lines.push("(none)".into());
+    if !any_dup {
+        log_lines.push("  (none)".into());
     }
 
+    let file_written = if write {
+        output_path.display().to_string()
+    } else {
+        "none".into()
+    };
     log_lines.push(String::new());
-    log_lines.push(format!(
-        "# summary rewritten={rewritten} uncertain={uncertain} duplicate_groups={duplicate_groups}"
-    ));
-    if !write {
-        log_lines.push("# check only — no files written".into());
-    }
+    log_lines.push("Summary".into());
+    log_lines.push(format!("  - Numbers formatted: {rewritten}"));
+    log_lines.push(format!("  - Uncertain: {uncertain}"));
+    log_lines.push(format!("  - Duplicates: {duplicate_groups}"));
+    log_lines.push(format!("  - Mode: {mode_label}"));
+    log_lines.push(format!("    - File written: {file_written}"));
 
     if write {
         let mut log_file =
@@ -202,48 +269,203 @@ fn corrected_output_paths(input: &Path) -> (PathBuf, PathBuf) {
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("csv");
-    let stamp = chrono::Local::now().format("%y%m%d-%H%M%S");
-    let base = format!("{stem}-corrected-{stamp}");
-    (parent.join(format!("{base}.{ext}")), parent.join(format!("{base}.log")))
+    let base = update_output_stem(stem);
+    (
+        parent.join(format!("{base}.{ext}")),
+        parent.join(format!("{base}.log")),
+    )
 }
 
-fn detect_format(path: &Path) -> Result<ContactsFormat> {
+/// `contacts` → `contacts-update`; `contacts-update` → `contacts-update-2`;
+/// `contacts-update-N` → `contacts-update-(N+1)`.
+fn update_output_stem(stem: &str) -> String {
+    if let Some(prefix) = stem.strip_suffix("-update") {
+        return format!("{prefix}-update-2");
+    }
+    if let Some((prefix, n_str)) = stem.rsplit_once("-update-")
+        && let Ok(n) = n_str.parse::<u32>()
+        && n >= 2
+        && !n_str.is_empty()
+        && n_str.chars().all(|c| c.is_ascii_digit())
+    {
+        return format!("{prefix}-update-{}", n + 1);
+    }
+    format!("{stem}-update")
+}
+
+fn normalize_header_name(h: &str) -> String {
+    h.trim()
+        .trim_start_matches('\u{feff}')
+        .to_ascii_lowercase()
+        .replace('_', " ")
+}
+
+fn is_phone_header(h: &str) -> bool {
+    h == "phones" || h.contains("phone")
+}
+
+fn detect_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> {
+    if !path.is_file() {
+        return Err(ContactsInputError::simple(format!(
+            "Contacts file not found: {}",
+            path.display()
+        )));
+    }
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("")
         .to_ascii_lowercase();
+    if ext != "csv" && ext != "vcf" && ext != "vcard" {
+        return Err(ContactsInputError::simple(format!(
+            "Contacts file must be a .csv or .vcf file: {}",
+            path.display()
+        )));
+    }
     if ext == "vcf" || ext == "vcard" {
-        return Ok(ContactsFormat::Vcf);
+        return detect_vcf_format(path);
     }
-    let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-    let mut reader = BufReader::new(file);
-    let mut header = String::new();
-    reader.read_line(&mut header)?;
-    let header = header.trim_start_matches('\u{feff}').to_ascii_lowercase();
-    if header.contains("phones") && header.contains("first_name") {
-        return Ok(ContactsFormat::VaultCsv);
+    detect_csv_format(path)
+}
+
+fn detect_vcf_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> {
+    let text = fs::read_to_string(path).map_err(|e| {
+        ContactsInputError::simple(format!("Could not read {}: {e}", path.display()))
+    })?;
+    let mut has_begin = false;
+    let mut has_end = false;
+    for line in text.lines() {
+        let t = line.trim();
+        if t.eq_ignore_ascii_case("BEGIN:VCARD") {
+            has_begin = true;
+        } else if t.eq_ignore_ascii_case("END:VCARD") {
+            has_end = true;
+        }
+        if has_begin && has_end {
+            return Ok(ContactsFormat::Vcf);
+        }
     }
-    if header.contains("first name") || header.contains("mobile phone") {
+    let mut details = vec![format!("file={}", path.display())];
+    if !has_begin {
+        details.push("missing BEGIN:VCARD".into());
+    }
+    if !has_end {
+        details.push("missing END:VCARD".into());
+    }
+    details.push("expected at least one BEGIN:VCARD … END:VCARD block".into());
+    Err(ContactsInputError::unrecognized(details))
+}
+
+fn detect_csv_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> {
+    let file = File::open(path).map_err(|e| {
+        ContactsInputError::simple(format!("Could not open {}: {e}", path.display()))
+    })?;
+    let mut rdr = csv::ReaderBuilder::new()
+        .flexible(true)
+        .has_headers(true)
+        .from_reader(file);
+    let headers = rdr.headers().map_err(|e| {
+        ContactsInputError::unrecognized(vec![
+            format!("file={}", path.display()),
+            format!("could not read CSV header: {e}"),
+        ])
+    })?;
+    let header_l: Vec<String> = headers.iter().map(normalize_header_name).collect();
+    let has_first = header_l.iter().any(|h| h == "first name");
+    let has_last = header_l.iter().any(|h| h == "last name");
+    let phone_cols: Vec<&str> = header_l
+        .iter()
+        .filter(|h| is_phone_header(h))
+        .map(String::as_str)
+        .collect();
+    let has_phone = !phone_cols.is_empty();
+
+    if has_first && has_last && has_phone {
+        if header_l.iter().any(|h| h == "phones") {
+            return Ok(ContactsFormat::VaultCsv);
+        }
         return Ok(ContactsFormat::ImazingCsv);
     }
-    if header.contains("begin:vcard") {
-        return Ok(ContactsFormat::Vcf);
+
+    let mut details = vec![
+        format!("file={}", path.display()),
+        format!("headers={}", header_l.join(" | ")),
+    ];
+    if !has_first {
+        details.push("missing First Name column".into());
     }
-    bail!(
-        "unrecognized contacts format for {} (need .vcf, vault phones/first_name CSV, or iMazing Contacts CSV)",
-        path.display()
+    if !has_last {
+        details.push("missing Last Name column".into());
+    }
+    if !has_phone {
+        details.push("missing Phone column (phones, Mobile Phone, …)".into());
+    } else {
+        details.push(format!("phone columns: {}", phone_cols.join(", ")));
+    }
+    details.push(
+        "valid CSV needs First Name, Last Name, and at least one Phone column".into(),
     );
+    Err(ContactsInputError::unrecognized(details))
+}
+
+/// Label used in duplicate listings (always includes CSV/VCF row index).
+fn contact_label(row: u64, name: &str) -> String {
+    let name = collapse_inner_whitespace(name);
+    if name.is_empty() || name == "(unnamed)" {
+        format!("row {row}")
+    } else {
+        format!("row {row}: {name}")
+    }
+}
+
+/// Display name for uncertain-format lines (name, or `row N` when unnamed).
+fn contact_display_name(row: u64, name: &str) -> String {
+    let name = collapse_inner_whitespace(name);
+    if name.is_empty() || name == "(unnamed)" {
+        format!("row {row}")
+    } else {
+        name
+    }
+}
+
+fn emit_uncertain_sections(log_lines: &mut Vec<String>, unable: &[UnableEntry]) {
+    log_lines.push(String::new());
+    if unable.is_empty() {
+        return;
+    }
+    let mut by_reason: HashMap<String, Vec<&UnableEntry>> = HashMap::new();
+    for entry in unable {
+        by_reason
+            .entry(entry.reason.clone())
+            .or_default()
+            .push(entry);
+    }
+    let mut reasons: Vec<_> = by_reason.keys().cloned().collect();
+    reasons.sort();
+    for reason in reasons {
+        log_lines.push(format!("UNCERTAIN FORMAT - {reason}"));
+        for entry in &by_reason[&reason] {
+            log_lines.push(format!(
+                "  - contact={:?} phone={:?}",
+                entry.contact, entry.phone
+            ));
+        }
+    }
 }
 
 fn rewrite_phone_token(
     raw: &str,
-    contact: &str,
+    // Label for duplicate tracking (includes row).
+    contact_dup: &str,
+    // Name shown under UNCERTAIN FORMAT (name or `row N`).
+    contact_uncertain: &str,
     region: PhoneRegion,
     rewritten: &mut u64,
     uncertain: &mut u64,
     log_lines: &mut Vec<String>,
+    unable: &mut Vec<UnableEntry>,
     by_e164: &mut HashMap<String, Vec<String>>,
+    log_success: bool,
 ) -> String {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -255,15 +477,26 @@ fn rewrite_phone_token(
             by_e164
                 .entry(e164.clone())
                 .or_default()
-                .push(contact.to_string());
+                .push(contact_dup.to_string());
+            if log_success {
+                if e164 == trimmed {
+                    log_lines.push(format!("TEL contact={contact_dup:?} phone={e164}"));
+                } else {
+                    log_lines.push(format!(
+                        "REWRITTEN contact={contact_dup:?} phone={trimmed:?} -> {e164}"
+                    ));
+                }
+            }
             e164
         }
         None => {
             *uncertain += 1;
             let reason = normalize_uncertain_reason(trimmed, region);
-            log_lines.push(format!(
-                "UNCERTAIN contact={contact:?} phone={trimmed:?} reason={reason}"
-            ));
+            unable.push(UnableEntry {
+                contact: contact_uncertain.to_string(),
+                phone: trimmed.to_string(),
+                reason,
+            });
             raw.to_string()
         }
     }
@@ -271,12 +504,14 @@ fn rewrite_phone_token(
 
 fn rewrite_phone_list(
     raw: &str,
-    contact: &str,
+    contact_dup: &str,
+    contact_uncertain: &str,
     region: PhoneRegion,
     sep: char,
     rewritten: &mut u64,
     uncertain: &mut u64,
     log_lines: &mut Vec<String>,
+    unable: &mut Vec<UnableEntry>,
     by_e164: &mut HashMap<String, Vec<String>>,
 ) -> String {
     if raw.trim().is_empty() {
@@ -287,12 +522,15 @@ fn rewrite_phone_list(
         .map(|p| {
             rewrite_phone_token(
                 p,
-                contact,
+                contact_dup,
+                contact_uncertain,
                 region,
                 rewritten,
                 uncertain,
                 log_lines,
+                unable,
                 by_e164,
+                false,
             )
         })
         .collect();
@@ -307,23 +545,45 @@ fn rewrite_vcf(
     rewritten: &mut u64,
     uncertain: &mut u64,
     log_lines: &mut Vec<String>,
+    unable: &mut Vec<UnableEntry>,
     by_e164: &mut HashMap<String, Vec<String>>,
 ) -> Result<()> {
     let text = fs::read_to_string(input).with_context(|| format!("read {}", input.display()))?;
     let mut out = String::new();
     let mut current_name = String::from("(unnamed)");
+    let mut card_index = 0u64;
     for line in text.lines() {
         let trimmed = line.trim_end();
-        if trimmed.to_ascii_uppercase().starts_with("FN:") {
-            current_name = trimmed[3..].trim().to_string();
-            if current_name.is_empty() {
-                current_name = "(unnamed)".into();
-            }
+        let upper = trimmed.to_ascii_uppercase();
+        if upper == "BEGIN:VCARD" {
+            card_index += 1;
+            current_name = "(unnamed)".into();
+            log_lines.push(format!("# vcard {card_index} begin"));
             out.push_str(line);
             out.push('\n');
             continue;
         }
-        if trimmed.to_ascii_uppercase().starts_with("N:") && current_name == "(unnamed)" {
+        if upper == "END:VCARD" {
+            log_lines.push(format!(
+                "# vcard {card_index} end name={current_name:?}"
+            ));
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        }
+        if upper.starts_with("FN:") {
+            current_name = trimmed[3..].trim().to_string();
+            if current_name.is_empty() {
+                current_name = "(unnamed)".into();
+            }
+            log_lines.push(format!(
+                "# vcard {card_index} FN={current_name:?}"
+            ));
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        }
+        if upper.starts_with("N:") && current_name == "(unnamed)" {
             // fallback name from N if FN missing
             let n = &trimmed[2..];
             let parts: Vec<&str> = n.split(';').collect();
@@ -333,22 +593,29 @@ fn rewrite_vcf(
             if current_name.is_empty() {
                 current_name = "(unnamed)".into();
             }
+            log_lines.push(format!(
+                "# vcard {card_index} N={current_name:?}"
+            ));
             out.push_str(line);
             out.push('\n');
             continue;
         }
         // TEL;TYPE=CELL:+1-555… or TEL:+1…
-        let upper = trimmed.to_ascii_uppercase();
         if upper.starts_with("TEL") {
             if let Some((prefix, value)) = trimmed.split_once(':') {
+                let label = contact_label(card_index, &current_name);
+                let display = contact_display_name(card_index, &current_name);
                 let new_val = rewrite_phone_token(
                     value,
-                    &current_name,
+                    &label,
+                    &display,
                     region,
                     rewritten,
                     uncertain,
                     log_lines,
+                    unable,
                     by_e164,
+                    true,
                 );
                 out.push_str(prefix);
                 out.push(':');
@@ -356,9 +623,6 @@ fn rewrite_vcf(
                 out.push('\n');
                 continue;
             }
-        }
-        if trimmed.eq_ignore_ascii_case("BEGIN:VCARD") {
-            current_name = "(unnamed)".into();
         }
         out.push_str(line);
         out.push('\n');
@@ -411,6 +675,7 @@ fn rewrite_vault_csv(
     rewritten: &mut u64,
     uncertain: &mut u64,
     log_lines: &mut Vec<String>,
+    unable: &mut Vec<UnableEntry>,
     by_e164: &mut HashMap<String, Vec<String>>,
     cards: &mut Vec<OutCard>,
 ) -> Result<()> {
@@ -447,12 +712,10 @@ fn rewrite_vault_csv(
             .unwrap_or("")
             .trim();
         let last = last_i.and_then(|i| rec.get(i)).unwrap_or("").trim();
-        let contact = collapse_inner_whitespace(&format!("{first} {last}"));
-        let contact = if contact.is_empty() {
-            format!("row {}", idx + 2)
-        } else {
-            contact
-        };
+        let name = collapse_inner_whitespace(&format!("{first} {last}"));
+        let row = (idx + 2) as u64;
+        let contact_dup = contact_label(row, &name);
+        let contact_uncertain = contact_display_name(row, &name);
 
         let mut fields: Vec<String> = rec.iter().map(|s| s.to_string()).collect();
         while fields.len() < headers.len() {
@@ -461,12 +724,14 @@ fn rewrite_vault_csv(
         if let Some(cell) = fields.get_mut(phones_i) {
             *cell = rewrite_phone_list(
                 cell,
-                &contact,
+                &contact_dup,
+                &contact_uncertain,
                 region,
                 ';',
                 rewritten,
                 uncertain,
                 log_lines,
+                unable,
                 by_e164,
             );
         }
@@ -505,6 +770,7 @@ fn rewrite_imazing_csv(
     rewritten: &mut u64,
     uncertain: &mut u64,
     log_lines: &mut Vec<String>,
+    unable: &mut Vec<UnableEntry>,
     by_e164: &mut HashMap<String, Vec<String>>,
     cards: &mut Vec<OutCard>,
 ) -> Result<()> {
@@ -559,12 +825,10 @@ fn rewrite_imazing_csv(
         if !last.is_empty() {
             parts.push(last);
         }
-        let contact = collapse_inner_whitespace(&parts.join(" "));
-        let contact = if contact.is_empty() {
-            format!("row {}", idx + 2)
-        } else {
-            contact
-        };
+        let name = collapse_inner_whitespace(&parts.join(" "));
+        let row = (idx + 2) as u64;
+        let contact_dup = contact_label(row, &name);
+        let contact_uncertain = contact_display_name(row, &name);
 
         let mut fields: Vec<String> = rec.iter().map(|s| s.to_string()).collect();
         while fields.len() < headers.len() {
@@ -579,12 +843,14 @@ fn rewrite_imazing_csv(
                 // iMazing sometimes packs multiple phones with `;`
                 *cell = rewrite_phone_list(
                     cell,
-                    &contact,
+                    &contact_dup,
+                    &contact_uncertain,
                     region,
                     ';',
                     rewritten,
                     uncertain,
                     log_lines,
+                    unable,
                     by_e164,
                 );
                 for p in cell.split(';') {
@@ -595,9 +861,9 @@ fn rewrite_imazing_csv(
                 }
             }
         }
-        if !phones.is_empty() || !contact.is_empty() {
+        if !phones.is_empty() || !name.is_empty() {
             cards.push(OutCard {
-                fn_raw: contact.clone(),
+                fn_raw: name,
                 n_family: last.to_string(),
                 n_given: first.to_string(),
                 phones,
@@ -626,6 +892,106 @@ mod tests {
     }
 
     #[test]
+    fn probe_rejects_missing_wrong_ext_and_bad_format() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("nope.csv");
+        let err = probe_contacts_input(&missing).unwrap_err();
+        assert!(err.message.contains("not found"));
+
+        let wrong_ext = write(&dir, "contacts.txt", "BEGIN:VCARD\nEND:VCARD\n");
+        let err = probe_contacts_input(&wrong_ext).unwrap_err();
+        assert!(err.message.contains("must be a .csv or .vcf"));
+
+        let bad_csv = write(&dir, "contacts.csv", "name,phone\nAda,123\n");
+        let err = probe_contacts_input(&bad_csv).unwrap_err();
+        assert_eq!(err.message, UNRECOGNIZED_CONTACTS_FORMAT);
+        assert!(err.details.iter().any(|d| d.contains("First Name")));
+        assert!(err.details.iter().any(|d| d.contains("Last Name")));
+
+        let missing_last = write(
+            &dir,
+            "partial.csv",
+            "First Name,Mobile Phone\nAda,+15551234567\n",
+        );
+        let err = probe_contacts_input(&missing_last).unwrap_err();
+        assert_eq!(err.message, UNRECOGNIZED_CONTACTS_FORMAT);
+        assert!(err.details.iter().any(|d| d.contains("Last Name")));
+
+        let empty_vcf = write(&dir, "empty.vcf", "NOTE: not a vcard\n");
+        let err = probe_contacts_input(&empty_vcf).unwrap_err();
+        assert_eq!(err.message, UNRECOGNIZED_CONTACTS_FORMAT);
+        assert!(err.details.iter().any(|d| d.contains("BEGIN:VCARD")));
+
+        let vault = write(
+            &dir,
+            "contacts.csv",
+            "phones,first_name,last_name\n+15551234567,Ada,Lovelace\n",
+        );
+        probe_contacts_input(&vault).unwrap();
+
+        let imazing = write(
+            &dir,
+            "imazing.csv",
+            "First Name,Last Name,Mobile Phone\nAda,Lovelace,+15551234567\n",
+        );
+        probe_contacts_input(&imazing).unwrap();
+
+        let vcf = write(&dir, "ok.vcf", "BEGIN:VCARD\nFN:Ada\nEND:VCARD\n");
+        probe_contacts_input(&vcf).unwrap();
+    }
+
+    #[test]
+    fn vcf_validate_logs_card_and_phone_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = write(
+            &dir,
+            "c.vcf",
+            "BEGIN:VCARD\nVERSION:3.0\nFN:Ada Lovelace\n\
+TEL;TYPE=CELL:+44 20 7183 8750\n\
+TEL;TYPE=HOME:(542).341-2398\n\
+END:VCARD\n",
+        );
+        let report =
+            validate_contacts_file(&input, PhoneRegion::International, ValidateMode::Check)
+                .unwrap();
+        assert!(report.log_lines.iter().any(|l| l.contains("# vcard 1 begin")));
+        assert!(report
+            .log_lines
+            .iter()
+            .any(|l| l.contains("FN=\"Ada Lovelace\"")));
+        assert!(report.log_lines.iter().any(|l| l.contains("REWRITTEN")));
+        assert!(report
+            .log_lines
+            .iter()
+            .any(|l| l.starts_with("UNCERTAIN FORMAT - ")));
+        assert!(report
+            .log_lines
+            .iter()
+            .any(|l| l.contains("contact=\"Ada Lovelace\"") && l.contains("phone=")));
+        assert!(report
+            .log_lines
+            .iter()
+            .any(|l| l.contains("# vcard 1 end name=\"Ada Lovelace\"")));
+        assert!(report.log_lines.iter().any(|l| l == "Summary"));
+        assert!(report
+            .log_lines
+            .iter()
+            .any(|l| l == "  - Numbers formatted: 1"));
+        assert!(report
+            .log_lines
+            .iter()
+            .any(|l| l == "  - Uncertain: 1"));
+        assert!(report
+            .log_lines
+            .iter()
+            .any(|l| l == "  - Mode: check"));
+        assert!(report
+            .log_lines
+            .iter()
+            .any(|l| l == "    - File written: none"));
+    }
+
+    #[test]
     fn validates_vault_csv_usa() {
         let dir = tempfile::tempdir().unwrap();
         let input = write(
@@ -643,10 +1009,7 @@ mod tests {
         assert_eq!(report.uncertain, 1);
         assert_eq!(report.duplicate_groups, 1);
         let name = report.output_path.file_name().unwrap().to_str().unwrap();
-        assert!(
-            name.starts_with("contacts-corrected-") && name.ends_with(".csv"),
-            "unexpected name {name}"
-        );
+        assert_eq!(name, "contacts-update.csv");
         assert_eq!(report.output_path.parent(), Some(dir.path()));
         assert_eq!(
             report.log_path.extension().and_then(|e| e.to_str()),
@@ -662,8 +1025,16 @@ mod tests {
         assert!(vcf.contains("FN:Ada Lovelace"));
         assert!(vcf.contains("TEL:+15423412398"));
         let log = fs::read_to_string(&report.log_path).unwrap();
-        assert!(log.contains("UNCERTAIN"));
-        assert!(log.contains("DUPLICATE"));
+        assert!(log.contains("UNCERTAIN FORMAT - "));
+        assert!(log.contains("Duplicate numbers (same E.164 on more than one contact)"));
+        assert!(log.contains("row 2: Ada Lovelace"));
+        assert!(log.contains("row 4: Clone Contact"));
+        assert!(log.contains("Summary"));
+        assert!(log.contains("  - Numbers formatted: 2"));
+        assert!(log.contains("  - Uncertain: 1"));
+        assert!(log.contains("  - Duplicates: 1"));
+        assert!(log.contains("  - Mode: format"));
+        assert!(log.contains("    - File written: "));
     }
 
     #[test]
@@ -680,11 +1051,23 @@ mod tests {
         assert!(!report.wrote_files);
         assert_eq!(report.rewritten, 1);
         assert_eq!(report.uncertain, 1);
-        assert!(report.log_lines.iter().any(|l| l.contains("UNCERTAIN")));
         assert!(report
             .log_lines
             .iter()
-            .any(|l| l.contains("check only — no files written")));
+            .any(|l| l.starts_with("UNCERTAIN FORMAT - ")));
+        assert!(report.log_lines.iter().any(|l| l == "Summary"));
+        assert!(report
+            .log_lines
+            .iter()
+            .any(|l| l == "  - Numbers formatted: 1"));
+        assert!(report
+            .log_lines
+            .iter()
+            .any(|l| l == "  - Mode: check"));
+        assert!(report
+            .log_lines
+            .iter()
+            .any(|l| l == "    - File written: none"));
         let after: Vec<_> = fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().path()).collect();
         assert_eq!(before.len(), after.len(), "check must not create files");
         assert!(!report.output_path.exists());
@@ -707,9 +1090,17 @@ END:VCARD\n",
         assert_eq!(report.rewritten, 1);
         assert_eq!(report.uncertain, 1);
         let name = report.output_path.file_name().unwrap().to_str().unwrap();
-        assert!(name.starts_with("c-corrected-") && name.ends_with(".vcf"));
+        assert_eq!(name, "c-update.vcf");
         let body = fs::read_to_string(&report.output_path).unwrap();
         assert!(body.contains("+442071838750"));
         assert!(body.contains("(542).341-2398"));
+    }
+
+    #[test]
+    fn update_stem_increments_when_input_already_updated() {
+        assert_eq!(update_output_stem("contacts"), "contacts-update");
+        assert_eq!(update_output_stem("contacts-update"), "contacts-update-2");
+        assert_eq!(update_output_stem("contacts-update-2"), "contacts-update-3");
+        assert_eq!(update_output_stem("foo-update-9"), "foo-update-10");
     }
 }

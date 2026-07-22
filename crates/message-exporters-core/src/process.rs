@@ -130,11 +130,11 @@ pub fn spawn(
                 for line in BufReader::new(out).lines() {
                     match line {
                         Ok(line) => {
-                            let _ = tx_out.send(ProcessEvent::Log(format!("[stdout] {line}")));
+                            let _ = tx_out.send(ProcessEvent::Log(line));
                         }
                         Err(error) => {
                             let _ = tx_out.send(ProcessEvent::Log(format!(
-                                "[stdout] read error: {error}"
+                                "stdout read error: {error}"
                             )));
                             break;
                         }
@@ -148,11 +148,11 @@ pub fn spawn(
                 for line in BufReader::new(err).lines() {
                     match line {
                         Ok(line) => {
-                            let _ = tx_err.send(ProcessEvent::Log(format!("[stderr] {line}")));
+                            let _ = tx_err.send(ProcessEvent::Log(line));
                         }
                         Err(error) => {
                             let _ = tx_err.send(ProcessEvent::Log(format!(
-                                "[stderr] read error: {error}"
+                                "stderr read error: {error}"
                             )));
                             break;
                         }

@@ -1,19 +1,16 @@
 //! egui front-end for message-exporters (Validate contacts + Export).
 
-mod exporters;
-mod process;
-
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use eframe::egui;
-use exporters::{
-    default_output_dir, AttachmentMedia, ContactsKind, Exporter, Form, APPLE_PLATFORMS,
-    ATTACHMENT_MEDIA, CONTACT_KINDS, EXPORTERS, MAX_RESOLUTIONS,
-};
 use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
+use message_exporters_core::{
+    default_output_dir, resolve_binary, spawn, AttachmentMedia, ContactsKind, Exporter, Form,
+    ProcessControl, ProcessEvent, APPLE_PLATFORMS, ATTACHMENT_MEDIA, CONTACT_KINDS, EXPORTERS,
+    MAX_RESOLUTIONS,
+};
 use message_media::process_near_vault_media;
-use process::{ProcessControl, ProcessEvent};
 
 const LABEL_W: f32 = 130.0;
 const PATH_W: f32 = 280.0;
@@ -23,8 +20,8 @@ const SHORT_W: f32 = 140.0;
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([720.0, 700.0])
-            .with_min_inner_size([560.0, 480.0])
+            .with_inner_size([560.0, 420.0])
+            .with_min_inner_size([480.0, 360.0])
             .with_title("Message Exporters"),
         ..Default::default()
     };
@@ -121,7 +118,7 @@ impl App {
                 return;
             }
         };
-        let program = match process::resolve_binary(self.exporter.binary()) {
+        let program = match resolve_binary(self.exporter.binary()) {
             Ok(program) => program,
             Err(error) => {
                 self.errors = vec![error];
@@ -133,26 +130,24 @@ impl App {
         self.logs.clear();
         let (tx, rx) = mpsc::channel();
         self.rx = Some(rx);
-        process::spawn(program, args, self.control.clone(), tx);
+        spawn(program, args, self.control.clone(), tx);
     }
 
     fn start_validate(&mut self, check_only: bool) {
         if self.running {
             return;
         }
-        let mut errors = Vec::new();
         let input = self.validate_input.trim();
         if input.is_empty() {
-            errors.push("Choose a contacts CSV or VCF file.".into());
-        } else if !std::path::Path::new(input).is_file() {
-            errors.push(format!("Contacts file not found: {input}"));
+            self.errors = vec!["Choose a contacts CSV or VCF file.".into()];
+            return;
         }
-        if !errors.is_empty() {
-            self.errors = errors;
+        if let Err(error) = message_contacts::probe_contacts_input(std::path::Path::new(input)) {
+            self.errors = vec![error.message];
             return;
         }
 
-        let program = match process::resolve_binary("contacts-validate") {
+        let program = match resolve_binary("contacts-validate") {
             Ok(program) => program,
             Err(error) => {
                 self.errors = vec![error];
@@ -178,7 +173,7 @@ impl App {
         self.logs.clear();
         let (tx, rx) = mpsc::channel();
         self.rx = Some(rx);
-        process::spawn(program, args, self.control.clone(), tx);
+        spawn(program, args, self.control.clone(), tx);
     }
 
     fn cancel(&mut self) {
@@ -254,66 +249,77 @@ impl App {
     fn ui_tabs(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.add_enabled_ui(!self.running, |ui| {
-                ui.selectable_value(
-                    &mut self.mode,
-                    AppMode::ValidateContacts,
-                    "Validate contacts",
-                );
-                ui.selectable_value(&mut self.mode, AppMode::Export, "Export");
+                ui.selectable_value(&mut self.mode, AppMode::ValidateContacts, "Contacts");
+                ui.selectable_value(&mut self.mode, AppMode::Export, "Message");
             });
         });
     }
 
     fn ui_validate(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Validate contacts");
-        ui.label(
-            egui::RichText::new(
-                "Check analyzes phones without writing files. Update writes \
-                 <name>-corrected-<YYMMDD-hhmmss>.<ext> beside the original \
-                 (plus .log; CSV also writes .vcf). Uncertain values stay as-is.",
-            )
-            .weak(),
-        );
-        ui.add_space(10.0);
+        egui::Frame::NONE
+            .inner_margin(egui::Margin::same(18))
+            .show(ui, |ui| {
+                ui.heading("Validate Contacts");
+                ui.add_space(20.0);
 
-        path_or_text(
-            ui,
-            "Contacts file",
-            &mut self.validate_input,
-            "contacts.vcf or contacts.csv",
-            true,
-            false,
-        );
+                ui.label("Contacts file");
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    if ui
+                        .add_enabled(!self.running, egui::Button::new("File…"))
+                        .clicked()
+                    {
+                        let dialog =
+                            rfd::FileDialog::new().add_filter("Contacts", &["csv", "vcf", "vcard"]);
+                        if let Some(path) = dialog.pick_file() {
+                            self.validate_input = path.display().to_string();
+                        }
+                    }
+                    let path_w = (ui.available_width() - 8.0).max(160.0);
+                    let response = ui.add(
+                        egui::TextEdit::singleline(&mut self.validate_input)
+                            .id_salt("validate_contacts_file")
+                            .desired_width(path_w)
+                            .clip_text(true)
+                            .hint_text(".vcf or .csv"),
+                    );
+                    if !self.validate_input.is_empty() {
+                        response.on_hover_text(self.validate_input.as_str());
+                    }
+                });
 
-        ui.add_space(6.0);
-        ui.checkbox(&mut self.validate_usa, "USA numbers");
-        ui.label(
-            egui::RichText::new(if self.validate_usa {
-                "Certain: 10-digit or 11-digit (leading 1) US numbers → +1…"
-            } else {
-                "International: only numbers that already start with + are rewritten."
-            })
-            .small()
-            .weak(),
-        );
+                ui.add_space(18.0);
+                ui.label("Phone number format");
+                ui.add_space(4.0);
+                ui.vertical(|ui| {
+                    ui.add_enabled_ui(!self.running, |ui| {
+                        ui.radio_value(&mut self.validate_usa, true, "USA");
+                        ui.radio_value(&mut self.validate_usa, false, "International");
+                    });
+                });
 
-        self.ui_errors(ui);
+                self.ui_errors(ui);
 
-        ui.add_space(10.0);
-        ui.horizontal(|ui| {
-            let check = ui.add_enabled(!self.running, egui::Button::new("Check"));
-            if check.clicked() {
-                self.start_validate(true);
-            }
-            let update = ui.add_enabled(!self.running, egui::Button::new("Update"));
-            if update.clicked() {
-                self.start_validate(false);
-            }
-            let cancel = ui.add_enabled(self.running, egui::Button::new("Cancel"));
-            if cancel.clicked() {
-                self.cancel();
-            }
-        });
+                ui.add_space(24.0);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(ui.available_width(), ui.spacing().interact_size.y),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| {
+                        if self.running && ui.button("Cancel").clicked() {
+                            self.cancel();
+                        }
+                        let can_update = !self.running && !self.validate_input.trim().is_empty();
+                        let update = ui.add_enabled(can_update, egui::Button::new("Update"));
+                        if update.clicked() {
+                            self.start_validate(false);
+                        }
+                        let check = ui.add_enabled(!self.running, egui::Button::new("Check"));
+                        if check.clicked() {
+                            self.start_validate(true);
+                        }
+                    },
+                );
+            });
     }
 
     fn ui_export(&mut self, ui: &mut egui::Ui) {
@@ -656,34 +662,56 @@ impl App {
             });
     }
 
-    fn ui_log(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.heading(egui::RichText::new("Run log").size(16.0));
-            if ui.button("Clear").clicked() {
-                self.logs.clear();
+    fn status_text(&self) -> String {
+        if let Some(last) = self.logs.last() {
+            return last.clone();
+        }
+        if self.running {
+            return "Running…".into();
+        }
+        String::new()
+    }
+
+    fn ui_status_bar(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal_centered(|ui| {
+            let status = self.status_text();
+            if !status.is_empty() {
+                ui.label(egui::RichText::new(&status).weak().small())
+                    .on_hover_text(&status);
+            }
+            if !self.logs.is_empty() {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.small_button("Clear").clicked() {
+                        self.logs.clear();
+                    }
+                });
             }
         });
-        let empty = match self.mode {
-            AppMode::Export => "Exporter output will appear here.",
-            AppMode::ValidateContacts => "Validation output will appear here.",
-        };
-        egui::ScrollArea::vertical()
-            .stick_to_bottom(true)
-            .max_height(220.0)
+    }
+
+    fn ui_run_log(&mut self, ui: &mut egui::Ui) {
+        if self.logs.is_empty() {
+            return;
+        }
+        ui.add_space(12.0);
+        ui.separator();
+        egui::CollapsingHeader::new("Run log")
+            .default_open(self.mode == AppMode::Export || self.logs.len() > 1)
             .show(ui, |ui| {
-                ui.set_max_width(ui.available_width());
-                if self.logs.is_empty() {
-                    ui.label(egui::RichText::new(empty).weak().monospace());
-                } else {
-                    for line in &self.logs {
-                        ui.add(
-                            egui::Label::new(egui::RichText::new(line).monospace())
-                                .wrap()
-                                .truncate(),
-                        )
-                        .on_hover_text(line);
-                    }
-                }
+                egui::ScrollArea::vertical()
+                    .stick_to_bottom(true)
+                    .max_height(180.0)
+                    .show(ui, |ui| {
+                        ui.set_max_width(ui.available_width());
+                        for line in &self.logs {
+                            ui.add(
+                                egui::Label::new(egui::RichText::new(line).monospace().small())
+                                    .wrap()
+                                    .truncate(),
+                            )
+                            .on_hover_text(line);
+                        }
+                    });
             });
     }
 }
@@ -698,11 +726,11 @@ impl eframe::App for App {
             ui.add_space(2.0);
         });
 
-        egui::TopBottomPanel::bottom("log")
-            .resizable(true)
-            .default_height(240.0)
+        egui::TopBottomPanel::bottom("status")
+            .exact_height(28.0)
+            .show_separator_line(true)
             .show(ctx, |ui| {
-                self.ui_log(ui);
+                self.ui_status_bar(ui);
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -711,6 +739,7 @@ impl eframe::App for App {
                     AppMode::ValidateContacts => self.ui_validate(ui),
                     AppMode::Export => self.ui_export(ui),
                 }
+                self.ui_run_log(ui);
             });
         });
     }

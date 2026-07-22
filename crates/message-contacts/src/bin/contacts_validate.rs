@@ -37,24 +37,8 @@ fn main() -> Result<()> {
     };
     let report = validate_contacts_file(&cli.input, region, mode)?;
 
-    if cli.check {
-        for line in &report.log_lines {
-            println!("{line}");
-        }
-        println!();
-        println!(
-            "Check complete — rewritten={} uncertain={} duplicate_groups={} (no files written)",
-            report.rewritten, report.uncertain, report.duplicate_groups
-        );
-    } else {
-        println!("Wrote {}", report.output_path.display());
-        if let Some(vcf) = &report.vcf_path {
-            println!("  vcf:               {}", vcf.display());
-        }
-        println!("  log:               {}", report.log_path.display());
-        println!("  rewritten phones:  {}", report.rewritten);
-        println!("  uncertain phones:  {}", report.uncertain);
-        println!("  duplicate groups:  {}", report.duplicate_groups);
+    for line in &report.log_lines {
+        println!("{line}");
     }
     Ok(())
 }

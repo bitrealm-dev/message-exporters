@@ -23,7 +23,7 @@ Pass at most one. Shared logic: [`crates/message-contacts`](crates/message-conta
 
 ### Contacts tools
 
-**`contacts-validate`** rewrites only phones that are unambiguous for the chosen region (`usa` or `international`). **`--check`** prints the validate report without writing files. Without `--check`, it writes `<stem>-corrected-<YYMMDD-hhmmss>.<ext>` (+ `.log`; CSV also `.vcf`). Uncertain values stay as-is. The GUI **Validate contacts** tab runs this binary (Check / Update).
+**`contacts-validate`** rewrites only phones that are unambiguous for the chosen region (`usa` or `international`). **`--check`** prints the validate report without writing files. Without `--check`, it writes `<stem>-update.<ext>` (or `<stem>-update-2` if the input already ends in `-update`, then `-update-3`, …) plus `.log`; CSV also `.vcf`. Uncertain values stay as-is. The GUI **Validate contacts** tab runs this binary (Check / Update).
 
 ```bash
 # Dry run (no files written)
@@ -59,11 +59,21 @@ Converters that write `attachments/` also support `--media-mode disabled|clone|c
 
 ## Desktop GUI
 
-The [egui desktop GUI](crates/message-exporters-gui) has tabs for **Validate contacts** and **Export**, with native file/folder pickers, exporter-specific forms (including Attachments copy/convert/compress), validation, live logs, and cancel support on Linux, macOS, and Windows.
+Desktop GUIs share the same form/process core ([`message-exporters-core`](crates/message-exporters-core)):
+
+- [egui](crates/message-exporters-gui) — `cargo run -p message-exporters-gui`
+- [FLTK](crates/message-exporters-fltk-rs) — `cargo run -p message-exporters-fltk-rs`
+- [iced](crates/message-exporters-iced-rs) — `cargo run -p message-exporters-iced-rs`
+
+All have **Contacts** (validate) and **Message** (export) tabs, native file/folder pickers, exporter-specific forms (including Attachments copy/convert/compress), validation, live logs, and cancel support on Linux, macOS, and Windows.
 
 ```bash
 cargo build --workspace
 cargo run -p message-exporters-gui
+# or
+cargo run -p message-exporters-fltk-rs
+# or
+cargo run -p message-exporters-iced-rs
 ```
 
 Options and architecture: [`docs/GUI.md`](docs/GUI.md).

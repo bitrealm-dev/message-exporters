@@ -48,7 +48,7 @@ cargo run -p message-exporters-gui
 Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules as exporters).
 
 - **Check** (`--check`): dry run — no files written; the run log shows the same UNCERTAIN / DUPLICATE / summary content as a validate log.
-- **Update**: write `<stem>-corrected-<YYMMDD-hhmmss>.<ext>` (+ `.log`; CSV also `.vcf`). Only unambiguous phones are rewritten; uncertain values stay as-is.
+- **Update**: write `<stem>-update.<ext>` (or `<stem>-update-N` when re-updating) (+ `.log`; CSV also `.vcf`). Only unambiguous phones are rewritten; uncertain values stay as-is.
 - **Cancel**: stop the running job.
 
 ## Shared / global controls
