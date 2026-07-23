@@ -35,6 +35,17 @@ pub struct XmlMessage {
     pub xml_fields: BTreeMap<String, String>,
 }
 
+/// Diagnostic row when an XML SMS has no usable `<address>` digits.
+#[derive(Debug, Clone)]
+pub struct SkippedBadAddrDetail {
+    pub xml_file: String,
+    pub address: String,
+    pub contact_name: String,
+    pub android_type: String,
+    pub date_ms: String,
+    pub body: String,
+}
+
 #[derive(Debug, Default)]
 pub struct XmlParseStats {
     pub messages: u64,
@@ -43,12 +54,22 @@ pub struct XmlParseStats {
     pub skipped_invalid_date: u64,
     pub skipped_unknown_type: u64,
     pub skipped_unknown_address: u64,
+    pub skipped_unknown_address_details: Vec<SkippedBadAddrDetail>,
 }
 
 pub fn parse_xml_file(path: &Path) -> Result<(Vec<XmlMessage>, XmlParseStats)> {
     let text = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read {}", path.display()))?;
-    parse_xml_str(&text)
+    let (msgs, mut stats) = parse_xml_str(&text)?;
+    let xml_file = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_string();
+    for d in &mut stats.skipped_unknown_address_details {
+        d.xml_file = xml_file.clone();
+    }
+    Ok((msgs, stats))
 }
 
 pub fn parse_xml_str(text: &str) -> Result<(Vec<XmlMessage>, XmlParseStats)> {
@@ -81,7 +102,7 @@ pub fn parse_xml_str(text: &str) -> Result<(Vec<XmlMessage>, XmlParseStats)> {
         let msg = match typ.as_str() {
             "2" => {
                 let Some(other) = addr else {
-                    stats.skipped_unknown_address += 1;
+                    push_bad_addr(&mut stats, &fields, &contact, &typ, &date_ms, &body);
                     continue;
                 };
                 stats.sent += 1;
@@ -115,7 +136,7 @@ pub fn parse_xml_str(text: &str) -> Result<(Vec<XmlMessage>, XmlParseStats)> {
                     }
                 } else {
                     let Some(other) = addr else {
-                        stats.skipped_unknown_address += 1;
+                        push_bad_addr(&mut stats, &fields, &contact, &typ, &date_ms, &body);
                         continue;
                     };
                     stats.received += 1;
@@ -157,6 +178,28 @@ fn non_empty(s: &str) -> Option<String> {
     } else {
         Some(t.to_string())
     }
+}
+
+fn push_bad_addr(
+    stats: &mut XmlParseStats,
+    fields: &BTreeMap<String, String>,
+    contact: &str,
+    typ: &str,
+    date_ms: &str,
+    body: &str,
+) {
+    stats.skipped_unknown_address += 1;
+    let body_preview: String = body.chars().take(160).collect();
+    stats
+        .skipped_unknown_address_details
+        .push(SkippedBadAddrDetail {
+            xml_file: String::new(),
+            address: fields.get("address").cloned().unwrap_or_default(),
+            contact_name: contact.to_string(),
+            android_type: typ.to_string(),
+            date_ms: date_ms.to_string(),
+            body: body_preview,
+        });
 }
 
 #[cfg(test)]

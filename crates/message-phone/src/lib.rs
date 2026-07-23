@@ -7,8 +7,9 @@ use anyhow::{bail, Context, Result};
 
 /// Minimum digit length after stripping formatting.
 ///
-/// Allows 5–6 digit short codes (carrier/bank SMS). Rejects junk like `"4"`.
-const MIN_PHONE_DIGITS: usize = 5;
+/// Allows 4–6 digit short codes (carrier/bank SMS, e.g. AT&T `7535`).
+/// Rejects junk like `"4"` or `"06"`.
+const MIN_PHONE_DIGITS: usize = 4;
 
 /// Region rules for [`normalize_certain`] (contacts validation only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -183,7 +184,9 @@ mod tests {
 
     #[test]
     fn sanitize_keeps_short_codes() {
+        assert_eq!(sanitize_number("7535").as_deref(), Some("7535"));
         assert_eq!(sanitize_number("73737").as_deref(), Some("73737"));
+        assert_eq!(to_e164("7535"), "+7535");
         assert_eq!(to_e164("73737"), "+73737");
     }
 

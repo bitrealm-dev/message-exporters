@@ -17,13 +17,14 @@ A second standard, [WSP](docs/wap-230-wsp-20010705-a.pdf) (Wireless Session Prot
 
 GO SMS Pro has not publicly described this backup format, and the saved files do not always follow those standards closely. The `go-sms-pro-out` converter still tries to read each `.pdu` using that protocol layout. It pulls out contacts, text, and media when it can find them. If something is still missing after that pass, the converter falls back to simpler searches—for example looking for known text markers or the telltale start of a JPEG.
 
-For a detailed walkthrough of how each message becomes a spreadsheet row, see [docs/XML_CSV_MAPPING.md](docs/XML_CSV_MAPPING.md).
+For a detailed walkthrough of how each message becomes a spreadsheet row, see [docs/XML_CSV_MAPPING.md](docs/XML_CSV_MAPPING.md). That doc also defines the CLI skip counters (`skipped invalid address`, `skipped empty pdu`, and others).
 
 ## What you get
 
 - One CSV file per conversation, easily viewed in Excel, Numbers, or Google Sheets
 - An `attachments/` folder next to those files for media pulled out of MMS backups
 - Each row is one message: who it was with, when it was sent or received, the text, and whether media was attached
+- Diagnostic CSVs when skips occur: `skipped_invalid_address.csv`, `skipped_empty_pdu.csv`, `skipped_no_party.csv`
 
 Example output from a small test backup: [`sample-output/`](sample-output/).
 

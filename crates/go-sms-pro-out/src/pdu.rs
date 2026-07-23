@@ -71,6 +71,10 @@ pub struct ParsedPdu {
     pub is_sent: bool,
     pub is_group: bool,
     pub sender_number: String,
+    /// Structured MMS From header was present (before digit sanitize).
+    pub has_from: bool,
+    /// Structured MMS To header list was non-empty.
+    pub has_to: bool,
     /// Optional MMS headers (subject, message_id, …).
     pub pdu_fields: BTreeMap<String, String>,
     /// `structured` | `mixed` | `heuristic`
@@ -785,6 +789,8 @@ pub fn parse_pdu_file(path: &Path, owners: &HashSet<String>, primary_digits: &st
         is_sent,
         is_group,
         sender_number,
+        has_from: structured.from.is_some(),
+        has_to: !structured.to.is_empty(),
         pdu_fields,
         decode_quality,
     }))

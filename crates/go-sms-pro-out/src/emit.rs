@@ -1,7 +1,7 @@
 //! Convert GO SMS Pro export → per-conversation CSV.
 
 use crate::pdu::{parse_pdu_file, ParsedPdu};
-use crate::xml::{parse_xml_file, XmlMessage};
+use crate::xml::{parse_xml_file, SkippedBadAddrDetail, XmlMessage};
 use anyhow::{bail, Context, Result};
 use chrono::{Local, TimeZone};
 use message_contacts::ContactsBook;
@@ -66,10 +66,33 @@ pub struct ExportReport {
     pub skipped_out_of_range: u64,
     pub skipped_unknown_type: u64,
     pub skipped_unknown_address: u64,
+    /// One row per invalid-address XML SMS (`skipped_invalid_address.csv` / stderr sample).
+    pub skipped_unknown_address_details: Vec<SkippedBadAddrDetail>,
     pub skipped_unparseable_pdu: u64,
+    /// Hollow PDU stub (no addresses, body, or attachments) — e.g. `application/smil\0` only.
+    pub skipped_empty_pdu: u64,
+    pub skipped_empty_pdu_details: Vec<SkippedEmptyPduDetail>,
     /// PDU parsed but no non-owner participant (self-only / empty PLMN set).
     pub skipped_no_other_party: u64,
+    /// One row per `skipped_no_other_party` (for `skipped_no_party.csv` / stderr sample).
+    pub skipped_no_other_party_details: Vec<SkippedNoPartyDetail>,
     pub errors: Vec<String>,
+}
+
+/// Diagnostic row for an empty/stub PDU file.
+#[derive(Debug, Clone)]
+pub struct SkippedEmptyPduDetail {
+    pub pdu_filename: String,
+}
+
+/// Diagnostic row when a non-group PDU has no non-owner peer.
+#[derive(Debug, Clone)]
+pub struct SkippedNoPartyDetail {
+    pub pdu_filename: String,
+    pub participants: String,
+    pub is_sent: bool,
+    pub has_from: bool,
+    pub has_to: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -267,6 +290,24 @@ fn save_pdu_attachments(
     Ok(out)
 }
 
+fn pdu_basename(parsed: &ParsedPdu) -> String {
+    parsed
+        .path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_string()
+}
+
+/// GO SMS Pro stub / hollow PDU: no peers, no text, no media, no From/To headers.
+fn is_empty_pdu(parsed: &ParsedPdu) -> bool {
+    parsed.participants.is_empty()
+        && parsed.body.trim().is_empty()
+        && parsed.attachments.is_empty()
+        && !parsed.has_from
+        && !parsed.has_to
+}
+
 fn add_pdu_message(
     conversations: &mut BTreeMap<String, PendingConversation>,
     parsed: ParsedPdu,
@@ -274,6 +315,14 @@ fn add_pdu_message(
     owners: &OwnerPhoneSet,
     report: &mut ExportReport,
 ) {
+    if is_empty_pdu(&parsed) {
+        report.skipped_empty_pdu += 1;
+        report.skipped_empty_pdu_details.push(SkippedEmptyPduDetail {
+            pdu_filename: pdu_basename(&parsed),
+        });
+        return;
+    }
+
     let targets: Vec<(String, String, Option<String>)> = if parsed.is_group {
         let (id, title) = chat_id_group(&parsed.participants, owners);
         vec![(id, "group".to_string(), Some(title))]
@@ -286,6 +335,13 @@ fn add_pdu_message(
             .collect();
         if others.is_empty() {
             report.skipped_no_other_party += 1;
+            report.skipped_no_other_party_details.push(SkippedNoPartyDetail {
+                pdu_filename: pdu_basename(&parsed),
+                participants: parsed.participants.join(";"),
+                is_sent: parsed.is_sent,
+                has_from: parsed.has_from,
+                has_to: parsed.has_to,
+            });
             return;
         }
         let other = &others[0];
@@ -549,6 +605,9 @@ pub fn convert_export(
                 report.skipped_invalid_date += stats.skipped_invalid_date;
                 report.skipped_unknown_type += stats.skipped_unknown_type;
                 report.skipped_unknown_address += stats.skipped_unknown_address;
+                report
+                    .skipped_unknown_address_details
+                    .extend(stats.skipped_unknown_address_details);
                 let msgs: Vec<_> = msgs
                     .into_iter()
                     .filter(|msg| {
@@ -621,5 +680,94 @@ pub fn convert_export(
         write_conversation(output_dir, &chat_id, &mut convo, &mut report)?;
     }
 
+    write_skipped_invalid_address_csv(output_dir, &report.skipped_unknown_address_details)?;
+    write_skipped_empty_pdu_csv(output_dir, &report.skipped_empty_pdu_details)?;
+    write_skipped_no_party_csv(output_dir, &report.skipped_no_other_party_details)?;
+
     Ok(report)
+}
+
+fn remove_if_exists(path: &Path) {
+    if path.exists() {
+        let _ = fs::remove_file(path);
+    }
+}
+
+fn write_skipped_invalid_address_csv(
+    output_dir: &Path,
+    details: &[SkippedBadAddrDetail],
+) -> Result<()> {
+    let path = output_dir.join("skipped_invalid_address.csv");
+    // Remove legacy filename from earlier builds.
+    remove_if_exists(&output_dir.join("skipped_bad_addr.csv"));
+    if details.is_empty() {
+        remove_if_exists(&path);
+        return Ok(());
+    }
+    let mut wtr = csv::Writer::from_path(&path)
+        .with_context(|| format!("create {}", path.display()))?;
+    wtr.write_record([
+        "xml_file",
+        "address",
+        "contact_name",
+        "android_type",
+        "date_ms",
+        "body",
+    ])?;
+    for d in details {
+        wtr.write_record([
+            d.xml_file.as_str(),
+            d.address.as_str(),
+            d.contact_name.as_str(),
+            d.android_type.as_str(),
+            d.date_ms.as_str(),
+            d.body.as_str(),
+        ])?;
+    }
+    wtr.flush()?;
+    Ok(())
+}
+
+fn write_skipped_empty_pdu_csv(output_dir: &Path, details: &[SkippedEmptyPduDetail]) -> Result<()> {
+    let path = output_dir.join("skipped_empty_pdu.csv");
+    if details.is_empty() {
+        remove_if_exists(&path);
+        return Ok(());
+    }
+    let mut wtr = csv::Writer::from_path(&path)
+        .with_context(|| format!("create {}", path.display()))?;
+    wtr.write_record(["pdu_filename"])?;
+    for d in details {
+        wtr.write_record([d.pdu_filename.as_str()])?;
+    }
+    wtr.flush()?;
+    Ok(())
+}
+
+fn write_skipped_no_party_csv(output_dir: &Path, details: &[SkippedNoPartyDetail]) -> Result<()> {
+    let path = output_dir.join("skipped_no_party.csv");
+    if details.is_empty() {
+        remove_if_exists(&path);
+        return Ok(());
+    }
+    let mut wtr = csv::Writer::from_path(&path)
+        .with_context(|| format!("create {}", path.display()))?;
+    wtr.write_record([
+        "pdu_filename",
+        "participants",
+        "is_sent",
+        "has_from",
+        "has_to",
+    ])?;
+    for d in details {
+        wtr.write_record([
+            d.pdu_filename.as_str(),
+            d.participants.as_str(),
+            if d.is_sent { "1" } else { "0" },
+            if d.has_from { "1" } else { "0" },
+            if d.has_to { "1" } else { "0" },
+        ])?;
+    }
+    wtr.flush()?;
+    Ok(())
 }

@@ -126,7 +126,10 @@ fn main() -> Result<()> {
         println!("  skipped draft/out: {}", report.skipped_draft_or_outbox);
     }
     if report.skipped_unknown_address > 0 {
-        println!("  skipped bad addr:  {}", report.skipped_unknown_address);
+        println!(
+            "  skipped invalid address: {}",
+            report.skipped_unknown_address
+        );
     }
     if report.skipped_empty_participants > 0 {
         println!("  skipped empty:     {}", report.skipped_empty_participants);

@@ -65,6 +65,20 @@ Each `<SMS>` becomes one CSV data row. The `chat_identifier` column holds the pe
 | `pdu_fields_json` | Optional MMS headers for PDU rows; empty for XML |
 | `pdu_decode` | PDU decode confidence; empty for XML |
 
+## Skip counters (CLI summary)
+
+Printed only when non-zero:
+
+| Label | Meaning |
+|-------|---------|
+| `skipped bad date` | XML `<date>` was not a number |
+| `skipped date range` | Message outside `--start-date` / `--end-date` |
+| `skipped bad type` | XML `<type>` was not `1` (inbox) or `2` (sent) |
+| `skipped invalid address` | XML SMS with no usable phone digits in `<address>` (empty, under 4 digits, email-like, junk). 4–6 digit short codes (e.g. AT&T `7535`) are kept. Google Voice voicemail can still export if the caller is parsed from `<body>`. Full list: `skipped_invalid_address.csv`; first 10 also printed on stderr. |
+| `skipped empty pdu` | Hollow PDU stub with no participants, From/To, body, or attachments (common GO SMS Pro placeholder is only `application/smil` + null). Full list: `skipped_empty_pdu.csv`. |
+| `skipped no party` | Non-empty PDU classified as non-group (`< 3` unique participants) where every decoded number was empty or the owner (`--owner-phone`). Full list: `skipped_no_party.csv` (`pdu_filename`, `participants`, `is_sent`, `has_from`, `has_to`); first 10 also printed on stderr. |
+| `skipped bad PDU` | PDU filename/timestamp could not be parsed |
+
 ## PDU rows
 
 MMS from `I_<unix>_*.pdu` files use the same header. Differences:

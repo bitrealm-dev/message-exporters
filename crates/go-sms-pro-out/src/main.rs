@@ -126,10 +126,61 @@ fn main() -> Result<()> {
         println!("  skipped bad type:  {}", report.skipped_unknown_type);
     }
     if report.skipped_unknown_address > 0 {
-        println!("  skipped bad addr:  {}", report.skipped_unknown_address);
+        println!(
+            "  skipped invalid address: {}",
+            report.skipped_unknown_address
+        );
+        println!(
+            "  invalid-address detail: {}/skipped_invalid_address.csv",
+            cli.output.display()
+        );
+        for d in report.skipped_unknown_address_details.iter().take(10) {
+            eprintln!(
+                "    invalid address: {} address={:?} contact={:?} type={} date_ms={} body={:?}",
+                d.xml_file,
+                d.address,
+                d.contact_name,
+                d.android_type,
+                d.date_ms,
+                d.body,
+            );
+        }
+        if report.skipped_unknown_address_details.len() > 10 {
+            eprintln!(
+                "    … and {} more (see skipped_invalid_address.csv)",
+                report.skipped_unknown_address_details.len() - 10
+            );
+        }
+    }
+    if report.skipped_empty_pdu > 0 {
+        println!("  skipped empty pdu: {}", report.skipped_empty_pdu);
+        println!(
+            "  empty-pdu detail:   {}/skipped_empty_pdu.csv",
+            cli.output.display()
+        );
     }
     if report.skipped_no_other_party > 0 {
         println!("  skipped no party:  {}", report.skipped_no_other_party);
+        println!(
+            "  no-party detail:    {}/skipped_no_party.csv",
+            cli.output.display()
+        );
+        for d in report.skipped_no_other_party_details.iter().take(10) {
+            eprintln!(
+                "    no party: {} participants=[{}] sent={} from={} to={}",
+                d.pdu_filename,
+                d.participants,
+                d.is_sent as u8,
+                d.has_from as u8,
+                d.has_to as u8,
+            );
+        }
+        if report.skipped_no_other_party_details.len() > 10 {
+            eprintln!(
+                "    … and {} more (see skipped_no_party.csv)",
+                report.skipped_no_other_party_details.len() - 10
+            );
+        }
     }
     if report.skipped_unparseable_pdu > 0 {
         println!("  skipped bad PDU:   {}", report.skipped_unparseable_pdu);
