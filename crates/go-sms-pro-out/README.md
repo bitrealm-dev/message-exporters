@@ -21,7 +21,7 @@ For a detailed walkthrough of how each message becomes a spreadsheet row, see [d
 
 ## What you get
 
-- One CSV file per conversation (a CSV is a plain table you can open in Excel, Numbers, or Google Sheets)
+- One CSV file per conversation, easily viewed in Excel, Numbers, or Google Sheets
 - An `attachments/` folder next to those files for media pulled out of MMS backups
 - Each row is one message: who it was with, when it was sent or received, the text, and whether media was attached
 
