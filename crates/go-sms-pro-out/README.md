@@ -4,7 +4,7 @@ The `go-sms-pro-out` converter transforms a **GO SMS Pro** (GOMO / Jiubang) Andr
 
 ## What this is for
 
-GO SMS Pro can save texts onto a phone in a backup folder. That folder usually contains:
+GO SMS Pro can save texts (both SMS and MMS) onto a phone in a backup folder. That folder usually contains:
 
 - XML files named like `gosms_sys….xml` — ordinary SMS text messages
 - files ending in `.pdu` — MMS messages (often with pictures or other media packed inside)
