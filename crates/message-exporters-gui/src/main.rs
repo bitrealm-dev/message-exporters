@@ -70,8 +70,8 @@ const UTC_OFFSETS: &[&str] = &[
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([620.0, 720.0])
-            .with_min_inner_size([560.0, 600.0])
+            .with_inner_size([620.0, 560.0])
+            .with_min_inner_size([560.0, 480.0])
             .with_title("Message Exporters"),
         ..Default::default()
     };
@@ -452,9 +452,6 @@ impl App {
 
     fn ui_export(&mut self, ui: &mut egui::Ui) {
         ui.heading("Export");
-        ui.label(
-            egui::RichText::new("Convert phone backups into readable conversation CSV").weak(),
-        );
         ui.add_space(8.0);
 
         self.ui_backup_source(ui);
@@ -577,7 +574,7 @@ impl App {
         ui.add_space(10.0);
         ui.separator();
         ui.add_space(6.0);
-        ui.heading(egui::RichText::new("Message filtering").size(16.0));
+        ui.heading(egui::RichText::new("Message filtering (optional)").size(16.0));
         labeled_text(
             ui,
             "Start date",
@@ -619,6 +616,11 @@ impl App {
             let run = ui.add_enabled(!self.running, egui::Button::new("Run exporter"));
             if run.clicked() {
                 self.start_export();
+            }
+            if self.exporter == Exporter::GoSmsPro {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(optional_field_footnote(ui));
+                });
             }
         });
     }
@@ -864,8 +866,15 @@ impl App {
 
     fn ui_contacts(&mut self, ui: &mut egui::Ui, enabled: bool) {
         ui.add_enabled_ui(enabled, |ui| {
-            path_or_text(
+            // GO SMS Pro: superscript * marks optional contacts (blank names fill).
+            let label: egui::WidgetText = if self.exporter == Exporter::GoSmsPro {
+                starred_contacts_file_label(ui).into()
+            } else {
+                "Contacts file".into()
+            };
+            path_or_text_labeled(
                 ui,
+                label,
                 "Contacts file",
                 &mut self.form.contacts,
                 ".csv or .vcf",
@@ -1093,8 +1102,9 @@ fn new_session_log_file() -> (String, PathBuf) {
     (name, path)
 }
 
-fn form_label(ui: &mut egui::Ui, label: &str) {
+fn form_label(ui: &mut egui::Ui, label: impl Into<egui::WidgetText>) {
     // Fixed LABEL_W column (keeps fields aligned); right-to-left packs label against the inputs.
+    let label = label.into();
     ui.allocate_ui_with_layout(
         egui::vec2(LABEL_W, ui.spacing().interact_size.y),
         egui::Layout::right_to_left(egui::Align::Center),
@@ -1102,6 +1112,53 @@ fn form_label(ui: &mut egui::Ui, label: &str) {
             ui.add(egui::Label::new(label).truncate());
         },
     );
+}
+
+fn append_raised_star(job: &mut egui::text::LayoutJob, style: &egui::Style, color: egui::Color32) {
+    egui::RichText::new("*")
+        .small_raised()
+        .color(color)
+        .append_to(
+            job,
+            style,
+            egui::FontSelection::Default,
+            egui::Align::Center,
+        );
+}
+
+/// `*Contacts file` with a small raised star (optional for GO SMS Pro).
+fn starred_contacts_file_label(ui: &egui::Ui) -> egui::text::LayoutJob {
+    let style = ui.style();
+    let color = style.visuals.text_color();
+    let mut job = egui::text::LayoutJob::default();
+    append_raised_star(&mut job, style, color);
+    egui::RichText::new("Contacts file")
+        .color(color)
+        .append_to(
+            &mut job,
+            style,
+            egui::FontSelection::Default,
+            egui::Align::Center,
+        );
+    job
+}
+
+/// Footnote next to Run: raised star means the field is optional.
+fn optional_field_footnote(ui: &egui::Ui) -> egui::text::LayoutJob {
+    let style = ui.style();
+    let color = style.visuals.weak_text_color();
+    let mut job = egui::text::LayoutJob::default();
+    append_raised_star(&mut job, style, color);
+    egui::RichText::new(" Optional field")
+        .small()
+        .color(color)
+        .append_to(
+            &mut job,
+            style,
+            egui::FontSelection::Default,
+            egui::Align::Center,
+        );
+    job
 }
 
 /// Reserve an exact field width so trailing buttons cannot shrink the control.
@@ -1143,6 +1200,18 @@ fn path_or_text(
     allow_file: bool,
     allow_folder: bool,
 ) {
+    path_or_text_labeled(ui, label, label, value, hint, allow_file, allow_folder);
+}
+
+fn path_or_text_labeled(
+    ui: &mut egui::Ui,
+    label: impl Into<egui::WidgetText>,
+    id_salt: &str,
+    value: &mut String,
+    hint: &str,
+    allow_file: bool,
+    allow_folder: bool,
+) {
     ui.horizontal(|ui| {
         form_label(ui, label);
         let mut response = None;
@@ -1150,7 +1219,7 @@ fn path_or_text(
             response = Some(
                 ui.add(
                     egui::TextEdit::singleline(value)
-                        .id_salt(label)
+                        .id_salt(id_salt)
                         .desired_width(PATH_W)
                         .clip_text(true)
                         .hint_text(hint),
@@ -1169,7 +1238,7 @@ fn path_or_text(
                 .clicked()
         {
             let mut dialog = rfd::FileDialog::new();
-            if label.to_ascii_lowercase().contains("contact") {
+            if id_salt.to_ascii_lowercase().contains("contact") {
                 dialog = dialog.add_filter("Contacts", &["csv", "vcf", "vcard"]);
             }
             if let Some(path) = dialog.pick_file() {
