@@ -6,7 +6,6 @@ use anyhow::{bail, Context, Result};
 use message_phone::{sanitize_number, to_e164};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 /// Name → phone digits and phone → display name.
@@ -26,70 +25,20 @@ impl ContactsBook {
         }
     }
 
-    /// Load vault-shaped CSV: `phones,first_name,last_name[,exclude,…]`.
-    pub fn load_csv(path: &Path) -> Result<Self> {
-        let file = File::open(path).with_context(|| format!("open contacts {}", path.display()))?;
-        let reader = BufReader::new(file);
-        let mut lines = reader.lines();
-        let header = lines.next().transpose()?.unwrap_or_default();
-        let header_cols: Vec<String> = split_csv_line(&header)
-            .into_iter()
-            .map(|c| c.trim().to_ascii_lowercase())
-            .collect();
-        let phones_i = header_cols.iter().position(|c| c == "phones");
-        let first_i = header_cols.iter().position(|c| c == "first_name");
-        let last_i = header_cols.iter().position(|c| c == "last_name");
-        let exclude_i = header_cols.iter().position(|c| c == "exclude");
-        if phones_i.is_none() || first_i.is_none() {
-            bail!(
-                "contacts CSV {} missing expected header phones,first_name,last_name",
-                path.display()
-            );
-        }
-        let phones_i = phones_i.unwrap();
-        let first_i = first_i.unwrap();
-        let last_i = last_i.unwrap_or(usize::MAX);
-
-        let mut book = Self::empty();
-        for (idx, line) in lines.enumerate() {
-            let line = line.with_context(|| format!("read contacts line {}", idx + 2))?;
-            let line = line.trim();
-            if line.is_empty() {
-                continue;
-            }
-            let parts = split_csv_line(line);
-            if let Some(ei) = exclude_i {
-                if parse_exclude(parts.get(ei).map(String::as_str).unwrap_or("")) {
-                    continue;
-                }
-            }
-            let phones_raw = parts.get(phones_i).map(String::as_str).unwrap_or("");
-            let first = parts.get(first_i).map(String::as_str).unwrap_or("");
-            let last = if last_i == usize::MAX {
-                ""
+    /// Load a contacts file using the same format rules as contacts-validate.
+    pub fn load_contacts_file(path: &Path) -> Result<Self> {
+        use crate::validate::{detect_contacts_format, ContactsFormat};
+        let format = detect_contacts_format(path).map_err(|e| {
+            if e.details.is_empty() {
+                anyhow::anyhow!("{}", e.message)
             } else {
-                parts.get(last_i).map(String::as_str).unwrap_or("")
-            };
-            if last.contains("__") {
-                continue;
+                anyhow::anyhow!("{} ({})", e.message, e.details.join("; "))
             }
-            let phones = all_valid_phones(phones_raw);
-            if phones.is_empty() {
-                continue;
-            }
-            let first = collapse_inner_whitespace(first.trim());
-            let last = collapse_inner_whitespace(last.trim());
-            if first.is_empty() && last.is_empty() {
-                continue;
-            }
-            let display = if last.is_empty() {
-                first.clone()
-            } else {
-                format!("{first} {last}")
-            };
-            book.insert_entry(&display, &phones);
+        })?;
+        match format {
+            ContactsFormat::Vcf => Self::load_vcf(path),
+            ContactsFormat::ImazingCsv => Self::load_imazing_contacts_csv(path),
         }
-        Ok(book)
     }
 
     /// Load contacts from a VCF file (FN/N + TEL).
@@ -266,6 +215,9 @@ impl ContactsBook {
 
 /// Load contacts from at most one of `--contacts` or `--vcf`.
 ///
+/// `--contacts` accepts the same files as contacts-validate (VCF or iMazing
+/// Contacts CSV). `--vcf` is a VCF-only alias.
+///
 /// When neither is passed, returns an empty book and prints a stderr warning.
 pub fn resolve_contacts_cli(
     contacts: Option<PathBuf>,
@@ -273,15 +225,15 @@ pub fn resolve_contacts_cli(
 ) -> Result<(ContactsBook, Option<PathBuf>)> {
     match (contacts, vcf) {
         (Some(path), None) => {
-            let book = ContactsBook::load_csv(&path)?;
+            let book = ContactsBook::load_contacts_file(&path)?;
             Ok((book, Some(path)))
         }
         (None, Some(path)) => {
-            let book = ContactsBook::load_vcf(&path)?;
+            let book = ContactsBook::load_contacts_file(&path)?;
             Ok((book, Some(path)))
         }
         (Some(_), Some(_)) => {
-            bail!("pass only one of --contacts PATH.csv or --vcf PATH.vcf")
+            bail!("pass only one of --contacts PATH or --vcf PATH")
         }
         (None, None) => {
             eprintln!(
@@ -318,12 +270,6 @@ pub(crate) fn split_csv_line(line: &str) -> Vec<String> {
     out
 }
 
-fn all_valid_phones(phones_raw: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    push_phones_from_raw(phones_raw, &mut out);
-    out
-}
-
 /// Collect sanitized digit strings from semicolon-separated fields and `+E.164` tokens in free text.
 fn push_phones_from_raw(raw: &str, out: &mut Vec<String>) {
     for part in raw.split([';', ',', '|']) {
@@ -356,13 +302,6 @@ fn push_phones_from_raw(raw: &str, out: &mut Vec<String>) {
     }
 }
 
-fn parse_exclude(raw: &str) -> bool {
-    matches!(
-        raw.trim().to_ascii_lowercase().as_str(),
-        "1" | "true" | "yes" | "y"
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -376,16 +315,16 @@ mod tests {
     }
 
     #[test]
-    fn loads_csv_both_directions() {
+    fn loads_imazing_csv_both_directions() {
         let dir = tempfile::tempdir().unwrap();
         let path = write_file(
             &dir,
             "contacts.csv",
-            "phones,first_name,last_name\n\
-15555550122,Sam,Example\n\
-+15555550133;+15555550144,Pat,Contact\n",
+            "First Name,Last Name,Mobile Phone,Home Phone\n\
+Sam,Example,15555550122,\n\
+Pat,Contact,+15555550133,+15555550144\n",
         );
-        let book = ContactsBook::load_csv(&path).unwrap();
+        let book = ContactsBook::load_imazing_contacts_csv(&path).unwrap();
         assert_eq!(
             book.lookup_phone_by_name("Sam Example").as_deref(),
             Some("5555550122")
@@ -405,21 +344,15 @@ mod tests {
     }
 
     #[test]
-    fn skips_excluded_rows() {
+    fn rejects_legacy_vault_csv() {
         let dir = tempfile::tempdir().unwrap();
         let path = write_file(
             &dir,
             "contacts.csv",
-            "phones,first_name,last_name,exclude\n\
-+15555550100,Ada,Lovelace,false\n\
-+15555550999,Skip,Me,true\n",
+            "phones,first_name,last_name\n+15555550100,Ada,Lovelace\n",
         );
-        let book = ContactsBook::load_csv(&path).unwrap();
-        assert_eq!(
-            book.lookup_phone_by_name("Ada Lovelace").as_deref(),
-            Some("5555550100")
-        );
-        assert!(book.lookup_phone_by_name("Skip Me").is_none());
+        let err = ContactsBook::load_contacts_file(&path).unwrap_err();
+        assert!(err.to_string().contains("legacy vault CSV"));
     }
 
     #[test]
@@ -451,7 +384,7 @@ TEL;TYPE=CELL:+1-555-555-0100\nEND:VCARD\n",
         let csv = write_file(
             &dir,
             "c.csv",
-            "phones,first_name,last_name\n+15555550100,A,B\n",
+            "First Name,Last Name,Mobile Phone\nA,B,+15555550100\n",
         );
         let vcf = write_file(
             &dir,
@@ -462,6 +395,23 @@ TEL;TYPE=CELL:+1-555-555-0100\nEND:VCARD\n",
         let (book, path) = resolve_contacts_cli(Some(csv), None).unwrap();
         assert!(!book.is_empty());
         assert!(path.is_some());
+    }
+
+    #[test]
+    fn resolve_cli_loads_imazing_csv_via_contacts() {
+        let dir = tempfile::tempdir().unwrap();
+        let csv = write_file(
+            &dir,
+            "Contacts.csv",
+            "First Name,Last Name,Mobile Phone\n\
+Ada,Lovelace,+15555550100\n",
+        );
+        let (book, path) = resolve_contacts_cli(Some(csv), None).unwrap();
+        assert!(path.is_some());
+        assert_eq!(
+            book.lookup_name_by_phone("+15555550100"),
+            Some("Ada Lovelace")
+        );
     }
 
     #[test]

@@ -49,10 +49,10 @@ struct UnableEntry {
     reason: String,
 }
 
+/// Formats accepted by contacts-validate and by [`crate::ContactsBook::load_contacts_file`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ContactsFormat {
+pub enum ContactsFormat {
     Vcf,
-    VaultCsv,
     ImazingCsv,
 }
 
@@ -162,20 +162,6 @@ pub fn validate_contacts_file(
                 &mut by_e164,
             )?;
         }
-        ContactsFormat::VaultCsv => {
-            rewrite_vault_csv(
-                input,
-                &output_path,
-                region,
-                write,
-                &mut rewritten,
-                &mut uncertain,
-                &mut log_lines,
-                &mut unable,
-                &mut by_e164,
-                &mut cards,
-            )?;
-        }
         ContactsFormat::ImazingCsv => {
             rewrite_imazing_csv(
                 input,
@@ -192,10 +178,7 @@ pub fn validate_contacts_file(
         }
     }
 
-    let vcf_path = if matches!(
-        format,
-        ContactsFormat::VaultCsv | ContactsFormat::ImazingCsv
-    ) {
+    let vcf_path = if matches!(format, ContactsFormat::ImazingCsv) {
         let vcf_path = output_path.with_extension("vcf");
         if write {
             write_vcf_cards(&vcf_path, &cards)?;
@@ -304,6 +287,11 @@ fn is_phone_header(h: &str) -> bool {
     h == "phones" || h.contains("phone")
 }
 
+/// Detect VCF or iMazing Contacts CSV (First Name, Last Name, phone columns).
+pub fn detect_contacts_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> {
+    detect_format(path)
+}
+
 fn detect_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> {
     if !path.is_file() {
         return Err(ContactsInputError::simple("Contacts file not found"));
@@ -376,11 +364,12 @@ fn detect_csv_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> 
         .map(String::as_str)
         .collect();
     let has_phone = !phone_cols.is_empty();
+    let legacy_vault = header_l.iter().any(|h| h == "phones")
+        && !header_l
+            .iter()
+            .any(|h| is_phone_header(h) && h.as_str() != "phones");
 
-    if has_first && has_last && has_phone {
-        if header_l.iter().any(|h| h == "phones") {
-            return Ok(ContactsFormat::VaultCsv);
-        }
+    if has_first && has_last && has_phone && !legacy_vault {
         return Ok(ContactsFormat::ImazingCsv);
     }
 
@@ -388,6 +377,16 @@ fn detect_csv_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> 
         format!("file={}", path.display()),
         format!("headers={}", header_l.join(" | ")),
     ];
+    if legacy_vault {
+        details.push(
+            "legacy vault CSV (phones,first_name,last_name) is not supported".into(),
+        );
+        details.push(
+            "use a VCF or an iMazing Contacts CSV (First Name, Last Name, Mobile Phone, …)"
+                .into(),
+        );
+        return Err(ContactsInputError::unrecognized(details));
+    }
     if !has_first {
         details.push("missing First Name column".into());
     }
@@ -395,12 +394,14 @@ fn detect_csv_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> 
         details.push("missing Last Name column".into());
     }
     if !has_phone {
-        details.push("missing Phone column (phones, Mobile Phone, …)".into());
+        details.push("missing Phone column (Mobile Phone, Home Phone, …)".into());
     } else {
         details.push(format!("phone columns: {}", phone_cols.join(", ")));
     }
     details.push(
-        "valid CSV needs First Name, Last Name, and at least one Phone column".into(),
+        "valid CSV needs First Name, Last Name, and at least one Phone column \
+         (iMazing Contacts export). Legacy phones,first_name,last_name is not supported."
+            .into(),
     );
     Err(ContactsInputError::unrecognized(details))
 }
@@ -664,101 +665,6 @@ fn vcf_escape(s: &str) -> String {
         .replace('\n', "\\n")
 }
 
-fn rewrite_vault_csv(
-    input: &Path,
-    output: &Path,
-    region: PhoneRegion,
-    write: bool,
-    rewritten: &mut u64,
-    uncertain: &mut u64,
-    log_lines: &mut Vec<String>,
-    unable: &mut Vec<UnableEntry>,
-    by_e164: &mut HashMap<String, Vec<String>>,
-    cards: &mut Vec<OutCard>,
-) -> Result<()> {
-    let file = File::open(input).with_context(|| format!("open {}", input.display()))?;
-    let mut rdr = csv::ReaderBuilder::new()
-        .flexible(true)
-        .from_reader(file);
-    let headers = rdr.headers()?.clone();
-    let header_l: Vec<String> = headers
-        .iter()
-        .map(|h| h.trim().to_ascii_lowercase())
-        .collect();
-    let phones_i = header_l
-        .iter()
-        .position(|h| h == "phones")
-        .context("vault CSV missing phones column")?;
-    let first_i = header_l.iter().position(|h| h == "first_name");
-    let last_i = header_l.iter().position(|h| h == "last_name");
-
-    let mut wtr = if write {
-        let out_file =
-            File::create(output).with_context(|| format!("create {}", output.display()))?;
-        let mut wtr = csv::Writer::from_writer(out_file);
-        wtr.write_record(&headers)?;
-        Some(wtr)
-    } else {
-        None
-    };
-
-    for (idx, rec) in rdr.records().enumerate() {
-        let rec = rec.with_context(|| format!("row {}", idx + 2))?;
-        let first = first_i
-            .and_then(|i| rec.get(i))
-            .unwrap_or("")
-            .trim();
-        let last = last_i.and_then(|i| rec.get(i)).unwrap_or("").trim();
-        let name = collapse_inner_whitespace(&format!("{first} {last}"));
-        let row = (idx + 2) as u64;
-        let contact_dup = contact_label(row, &name);
-        let contact_uncertain = contact_display_name(row, &name);
-
-        let mut fields: Vec<String> = rec.iter().map(|s| s.to_string()).collect();
-        while fields.len() < headers.len() {
-            fields.push(String::new());
-        }
-        if let Some(cell) = fields.get_mut(phones_i) {
-            *cell = rewrite_phone_list(
-                cell,
-                &contact_dup,
-                &contact_uncertain,
-                region,
-                ';',
-                rewritten,
-                uncertain,
-                log_lines,
-                unable,
-                by_e164,
-            );
-        }
-        let phones: Vec<String> = fields
-            .get(phones_i)
-            .map(|c| {
-                c.split(';')
-                    .map(|p| p.trim().to_string())
-                    .filter(|p| !p.is_empty())
-                    .collect()
-            })
-            .unwrap_or_default();
-        if !phones.is_empty() || !first.is_empty() || !last.is_empty() {
-            cards.push(OutCard {
-                fn_raw: collapse_inner_whitespace(&format!("{first} {last}")),
-                n_family: last.to_string(),
-                n_given: first.to_string(),
-                phones,
-            });
-        }
-        if let Some(wtr) = wtr.as_mut() {
-            wtr.write_record(&fields)?;
-        }
-    }
-    if let Some(mut wtr) = wtr {
-        wtr.flush()?;
-    }
-    Ok(())
-}
-
 fn rewrite_imazing_csv(
     input: &Path,
     output: &Path,
@@ -924,7 +830,12 @@ mod tests {
             "contacts.csv",
             "phones,first_name,last_name\n+15551234567,Ada,Lovelace\n",
         );
-        probe_contacts_input(&vault).unwrap();
+        let err = probe_contacts_input(&vault).unwrap_err();
+        assert_eq!(err.message, UNRECOGNIZED_CONTACTS_FORMAT);
+        assert!(err
+            .details
+            .iter()
+            .any(|d| d.contains("legacy vault CSV")));
 
         let imazing = write(
             &dir,
@@ -989,15 +900,15 @@ END:VCARD\n",
     }
 
     #[test]
-    fn validates_vault_csv_usa() {
+    fn validates_imazing_csv_usa() {
         let dir = tempfile::tempdir().unwrap();
         let input = write(
             &dir,
             "contacts.csv",
-            "phones,first_name,last_name\n\
-(542).341-2398,Ada,Lovelace\n\
-1555-4567,Short,Number\n\
-(542).341-2398,Clone,Contact\n",
+            "First Name,Last Name,Mobile Phone\n\
+Ada,Lovelace,(542).341-2398\n\
+Short,Number,1555-4567\n\
+Clone,Contact,(542).341-2398\n",
         );
         let report =
             validate_contacts_file(&input, PhoneRegion::Usa, ValidateMode::Update).unwrap();
@@ -1040,7 +951,7 @@ END:VCARD\n",
         let input = write(
             &dir,
             "contacts.csv",
-            "phones,first_name,last_name\n(542).341-2398,Ada,Lovelace\n1555-4567,Short,Number\n",
+            "First Name,Last Name,Mobile Phone\nAda,Lovelace,(542).341-2398\nShort,Number,1555-4567\n",
         );
         let before: Vec<_> = fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().path()).collect();
         let report =

@@ -569,6 +569,17 @@ impl App {
             }
         }
 
+        if self.exporter == Exporter::GoSmsPro {
+            ui.add_space(6.0);
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), ui.spacing().interact_size.y),
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| {
+                    ui.label(optional_field_footnote(ui));
+                },
+            );
+        }
+
         self.ui_errors(ui);
 
         ui.add_space(10.0);
@@ -616,11 +627,6 @@ impl App {
             let run = ui.add_enabled(!self.running, egui::Button::new("Run exporter"));
             if run.clicked() {
                 self.start_export();
-            }
-            if self.exporter == Exporter::GoSmsPro {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(optional_field_footnote(ui));
-                });
             }
         });
     }
@@ -883,10 +889,16 @@ impl App {
             );
         });
         if enabled {
-            self.form.contacts_kind = if self.form.contacts.trim().is_empty() {
+            let path = self.form.contacts.trim();
+            self.form.contacts_kind = if path.is_empty() {
                 ContactsKind::None
             } else {
-                ContactsKind::Csv
+                let lower = path.to_ascii_lowercase();
+                if lower.ends_with(".vcf") || lower.ends_with(".vcard") {
+                    ContactsKind::Vcf
+                } else {
+                    ContactsKind::Csv
+                }
             };
         }
     }
@@ -1143,14 +1155,14 @@ fn starred_contacts_file_label(ui: &egui::Ui) -> egui::text::LayoutJob {
     job
 }
 
-/// Footnote next to Run: raised star means the field is optional.
+/// Bottom-right of the Export field block: raised star means the field is optional.
 fn optional_field_footnote(ui: &egui::Ui) -> egui::text::LayoutJob {
     let style = ui.style();
     let color = style.visuals.weak_text_color();
     let mut job = egui::text::LayoutJob::default();
     append_raised_star(&mut job, style, color);
     egui::RichText::new(" Optional field")
-        .small()
+        .size(14.0)
         .color(color)
         .append_to(
             &mut job,

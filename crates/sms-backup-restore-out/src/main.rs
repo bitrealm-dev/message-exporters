@@ -27,7 +27,7 @@ struct Cli {
     #[arg(long = "owner-phone", required = true)]
     owner_phones: Vec<String>,
 
-    /// Vault-shaped contacts CSV (phones,first_name,last_name,…) for phone→name fill.
+    /// Contacts file for phone→name fill (VCF or iMazing Contacts CSV; same as contacts-validate).
     /// Optional; without it (or `--vcf`) phone numbers are not resolved to names.
     #[arg(long)]
     contacts: Option<PathBuf>,

@@ -16,10 +16,10 @@ CSV sits in the middle: human-readable enough that you can open a file and verif
 
 Android converters **recommend** a contacts file so names and phone numbers are resolved when the CSV is written (not later in the vault). Without one, export still runs and a warning is printed; phone numbers are left unresolved:
 
-- `--contacts path/to/contacts.csv` — vault-shaped `phones,first_name,last_name[,exclude,…]` (phones `;`-separated), or
+- `--contacts path/to/contacts.csv` — iMazing Contacts CSV (`First Name`, `Last Name`, phone columns), or a VCF, or
 - `--vcf path/to/contacts.vcf` — same index from a VCF
 
-Pass at most one. Shared logic: [`crates/message-contacts`](crates/message-contacts). Open the CSV afterward and fix anything still wrong before vault import.
+Pass at most one. Legacy vault CSV (`phones,first_name,last_name`) is not supported. Shared logic: [`crates/message-contacts`](crates/message-contacts). Open the CSV afterward and fix anything still wrong before vault import.
 
 ### Contacts tools
 

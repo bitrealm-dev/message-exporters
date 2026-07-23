@@ -27,12 +27,13 @@ struct Cli {
     #[arg(long = "owner-phone", required = true)]
     owner_phones: Vec<String>,
 
-    /// Vault-shaped contacts CSV (phones,first_name,last_name,…) for phone→name fill.
+    /// Contacts file for phone→name fill (same formats as contacts-validate:
+    /// VCF, or CSV with First Name, Last Name, and a Phone column).
     /// Optional; without it (or `--vcf`) phone numbers are not resolved to names.
     #[arg(long)]
     contacts: Option<PathBuf>,
 
-    /// Contacts VCF (alternate to `--contacts`).
+    /// Contacts VCF (alternate to `--contacts`; same loader).
     #[arg(long)]
     vcf: Option<PathBuf>,
 

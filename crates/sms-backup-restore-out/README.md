@@ -25,7 +25,7 @@ Example output from a small test backup: [`sample-output/`](sample-output/).
 
 1. Either one `sms-….xml` file, or a folder that contains several `.xml` backups (all of them are combined into one export)
 2. **Your phone number** — the number that owned the messages on that phone (required; there is no demo default)
-3. **Contacts** (recommended) — `--contacts` (vault-shaped CSV) or `--vcf` so blank display names can be filled from phone numbers; without either, a warning is printed and names are left unresolved
+3. **Contacts** (recommended) — `--contacts` (VCF or iMazing Contacts CSV) or `--vcf` so blank display names can be filled from phone numbers; without either, a warning is printed and names are left unresolved
 
 For ordinary SMS, sent vs received comes from the backup’s own type field. Your number is still required so MMS chat keys, group membership, and senders are correct. For example, if your number is `+1 555 555 0100`, pass that (or the same digits without spaces) as `--owner-phone`.
 

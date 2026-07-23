@@ -22,7 +22,7 @@ Example output: [`sample-output/`](sample-output/).
 ## What you need
 
 1. OpenExtract conversation CSV file(s) — one file or a folder
-2. The contacts `.vcf` from the same export (or a vault-shaped `--contacts` CSV) — recommended; without either, a warning is printed and names/phones are left unresolved
+2. The contacts `.vcf` from the same export (or an iMazing Contacts `--contacts` CSV) — recommended; without either, a warning is printed and names/phones are left unresolved
 
 ## How to run
 

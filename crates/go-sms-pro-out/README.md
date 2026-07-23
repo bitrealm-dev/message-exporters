@@ -31,7 +31,7 @@ Example output from a small test backup: [`sample-output/`](sample-output/).
 
 1. The GO SMS Pro backup folder on disk
 2. **Your phone number** (required) — pass as `--owner-phone` (for example `+15555550100`). Ordinary SMS in the XML backup already records sent vs received, but this number is still needed so MMS (`.pdu`) direction and chat grouping are correct.
-3. **Contacts** (recommended) — a contacts file so blank display names can be filled from phone numbers. Pass a CSV with `--contacts` (columns `phones`, `first_name`, `last_name`) or a VCF address-book file with `--vcf`. Numbers work best in E.164 form (for example `+15555550100`). Without either file, a warning is printed and names stay unresolved.
+3. **Contacts** (recommended) — a contacts file so blank display names can be filled from phone numbers. Use the same formats as **Contacts → Check** in the desktop app: a VCF, or an iMazing Contacts CSV (First Name, Last Name, and a phone column such as Mobile Phone). Pass with `--contacts` or `--vcf`. Numbers work best in E.164 form (for example `+15555550100`). Without either file, a warning is printed and names stay unresolved.
 
 ## How to run
 
@@ -45,7 +45,7 @@ cargo run --release -p go-sms-pro-out -- \
   --contacts /path/to/contacts.csv
 ```
 
-Replace the paths and phone number with your own. `--input` is the backup folder. `--output` is where the CSV files and `attachments/` folder are written. Use `--vcf` instead of `--contacts` if you have a VCF.
+Replace the paths and phone number with your own. `--input` is the backup folder. `--output` is where the CSV files and `attachments/` folder are written. `--contacts` and `--vcf` both accept a validated contacts file; use whichever flag matches how you export contacts.
 
 Add `--anonymize` (optional `--anonymize-seed <64-hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-anonymize`](../message-anonymize).
 
@@ -62,7 +62,7 @@ See [`message-media`](../message-media).
 
 ## Thanks
 
-[python-messaging](https://github.com/pmarti/python-messaging) — reference ideas for MMS decoding.
+[python-messaging](https://github.com/pmarti/python-messaging) — reference implementation for MMS decoding.
 
 ## License
 

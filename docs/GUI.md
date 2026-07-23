@@ -75,7 +75,7 @@ Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules a
 | DB path / Platform | — | — | — | — | — | primary |
 | Your phone number(s) | required | required | required\* | — | — | — |
 | Your email address(es) | — | — | required\* | — | — | — |
-| Contacts vault CSV / VCF | yes | yes | yes | yes | — | — |
+| Contacts VCF / iMazing CSV | yes | yes | yes | yes | — | — |
 | Contacts iMazing CSV | — | — | — | — | yes | — |
 | Contacts Apple AddressBook | — | — | — | — | — | advanced |
 | Timezone | — | — | — | — | yes | — |
@@ -148,7 +148,7 @@ Product: [OpenExtract](https://www.openextract.app/)
 |---------|------|:--------:|-----|
 | Input | CSV file or folder | yes | `--input` |
 | Output | folder | yes | `--output` |
-| Contacts VCF / vault CSV | file | no† | `--vcf` / `--contacts` |
+| Contacts VCF / iMazing CSV | file | no† | `--vcf` / `--contacts` |
 
 Global Anonymize and Start/End date apply.
 
@@ -189,8 +189,8 @@ Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox
 
 ## Validation rules
 
-1. **Contacts mutual exclusion:** for Android/OpenExtract, allow at most one of vault CSV vs VCF.
-2. **Contacts format:** label and file filters must match the exporter (vault/VCF vs iMazing CSV vs Apple AddressBook).
+1. **Contacts mutual exclusion:** for Android/OpenExtract, allow at most one of `--contacts` vs `--vcf`.
+2. **Contacts format:** label and file filters must match the exporter (VCF / iMazing Contacts CSV vs Apple AddressBook). Legacy vault CSV is not supported.
 3. **Phone numbers:** required for GO SMS Pro and SMS Backup & Restore before Run; Plus also requires email address(es).
 4. **Path existence:** input must exist; output folder may be created on run.
 5. **Anonymize seed:** if provided, must be 64 hex characters; empty means generate.

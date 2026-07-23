@@ -30,7 +30,7 @@ Example output from test emails: [`sample-output/`](sample-output/).
 1. A folder of `.eml` files from SMS Backup+
 2. **Your phone number** — so the converter can tell which messages you sent
 3. **Your email address** — the address SMS Backup+ used when it mailed the texts (needed when the email does not clearly mark sent vs received)
-4. **Contacts** (recommended) — `--contacts` (vault-shaped CSV) or `--vcf` for name↔phone resolution; without either, a warning is printed and names are left unresolved
+4. **Contacts** (recommended) — `--contacts` (VCF or iMazing Contacts CSV) or `--vcf` for name↔phone resolution; without either, a warning is printed and names are left unresolved
 
 Pass owner phone/email on the command line, or put them in `config/owner.toml` next to this converter (`phones = […]` and `emails = […]`; see `config/owner.example.toml`). Optional `--name-mapping` still defaults to `config/name-mapping.csv` when that file exists (crate-relative). Repeat `--owner-phone` or `--owner-email` if you used more than one number or address.
 

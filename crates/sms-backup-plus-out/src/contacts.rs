@@ -100,8 +100,8 @@ mod tests {
         let contacts = write_csv(
             &dir,
             "contacts.csv",
-            "phones,first_name,last_name\n\
-15555550144,Jordan,Alias\n",
+            "First Name,Last Name,Mobile Phone\n\
+Jordan,Alias,15555550144\n",
         );
         let mapping_path = write_csv(
             &dir,
@@ -109,7 +109,7 @@ mod tests {
             "correct_name,incorrect_name\n\
 Jordan Alias,Jordan Alias (SKIP)\n",
         );
-        let book = ContactsBook::load_csv(&contacts).unwrap();
+        let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let mapping = NameMapping::load(&mapping_path).unwrap();
 
         let mut msg = ParsedMessage {

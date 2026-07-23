@@ -8,8 +8,8 @@ use std::path::PathBuf;
 fn empty_contacts(dir: &tempfile::TempDir) -> ContactsBook {
     let path = dir.path().join("contacts.csv");
     let mut f = File::create(&path).unwrap();
-    writeln!(f, "phones,first_name,last_name").unwrap();
-    ContactsBook::load_csv(&path).unwrap()
+    writeln!(f, "First Name,Last Name,Mobile Phone").unwrap();
+    ContactsBook::load_imazing_contacts_csv(&path).unwrap()
 }
 
 #[test]

@@ -23,7 +23,7 @@ struct Cli {
     #[arg(long)]
     vcf: Option<PathBuf>,
 
-    /// Vault-shaped contacts CSV (phones,first_name,last_name) instead of --vcf
+    /// Contacts file instead of --vcf (VCF or iMazing Contacts CSV; same as contacts-validate)
     #[arg(long)]
     contacts: Option<PathBuf>,
 
