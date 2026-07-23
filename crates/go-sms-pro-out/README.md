@@ -15,10 +15,9 @@ For years, phones packed MMS the same way using a public recipe called the MMS E
 
 A second standard, [WSP](docs/wap-230-wsp-20010705-a.pdf) (Wireless Session Protocol, also called WAP-230), labels the pieces inside that message. For example, it can mark one piece as plain text, another as a JPEG, and attach a filename.
 
-Go SMS Pro has not publically described their backup format, and it does not 
- strictly follow the standards. As such, `the go-sms-pro-out` converter attempts to parse the PDU according to the protocol specification. It pulls out contacts, text, and media when it can find them. If something is still missing after that pass, the coverter falls back to heuristics to find data—for example looking for known text markers or the telltale start of a JPEG.
+GO SMS Pro has not publicly described this backup format, and the saved files do not always follow those standards closely. The `go-sms-pro-out` converter still tries to read each `.pdu` using that protocol layout. It pulls out contacts, text, and media when it can find them. If something is still missing after that pass, the converter falls back to simpler searches—for example looking for known text markers or the telltale start of a JPEG.
 
- For a detailed walkthrough of how each message becomes a spreadsheet row, see [docs/XML_CSV_MAPPING.md](docs/XML_CSV_MAPPING.md).
+For a detailed walkthrough of how each message becomes a spreadsheet row, see [docs/XML_CSV_MAPPING.md](docs/XML_CSV_MAPPING.md).
 
 ## What you get
 
@@ -31,10 +30,8 @@ Example output from a small test backup: [`sample-output/`](sample-output/).
 ## What you need
 
 1. The GO SMS Pro backup folder on disk
-2. **Your phone number** — the number that owned the messages on that phone (required; there is no demo default)
-3. **Contacts** (recommended) — `--contacts` (vault-shaped CSV) or `--vcf` so blank display names can be filled from phone numbers; without either, a warning is printed and names are left unresolved
-
-For ordinary SMS in the XML backup, sent vs received comes from the backup’s own type field. Your number is still required so MMS (`.pdu`) direction and chat grouping are correct. For example, if your number is `+1 555 555 0100`, pass that (or the same digits without spaces) as `--owner-phone`.
+2. **Your phone number** (required) — pass as `--owner-phone` (for example `+15555550100`). Ordinary SMS in the XML backup already records sent vs received, but this number is still needed so MMS (`.pdu`) direction and chat grouping are correct.
+3. **Contacts** (recommended) — a contacts file so blank display names can be filled from phone numbers. Pass a CSV with `--contacts` (columns `phones`, `first_name`, `last_name`) or a VCF address-book file with `--vcf`. Numbers work best in E.164 form (for example `+15555550100`). Without either file, a warning is printed and names stay unresolved.
 
 ## How to run
 
