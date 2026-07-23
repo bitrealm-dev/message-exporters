@@ -32,6 +32,9 @@ pub fn process_near_vault_media(
         return Ok(MediaReport::default());
     }
 
+    // Leftovers from a previous failed ffmpeg run.
+    remove_msgmedia_temps(&attachments)?;
+
     let mut report = MediaReport::default();
     let mut remap = HashMap::new();
     let files = collect_media_files(&attachments)?;
@@ -45,6 +48,9 @@ pub fn process_near_vault_media(
             Err(err) => report.errors.push(format!("{}: {err}", path.display())),
         }
     }
+
+    // Always sweep again so a failed convert cannot leave junk behind.
+    remove_msgmedia_temps(&attachments)?;
 
     report.csv_files_updated = rewrite_attachment_paths(output_dir, &remap)?;
     Ok(report)
@@ -71,7 +77,7 @@ fn collect_media_files(root: &Path) -> Result<Vec<PathBuf>> {
             let path = entry.path();
             if path.is_dir() {
                 stack.push(path);
-            } else if classify(&path).is_some() {
+            } else if !is_msgmedia_temp(&path) && classify(&path).is_some() {
                 out.push(path);
             }
         }
@@ -80,7 +86,63 @@ fn collect_media_files(root: &Path) -> Result<Vec<PathBuf>> {
     Ok(out)
 }
 
+/// Sidecar written by ffmpeg before [`replace_original`] (must never remain on disk).
+fn is_msgmedia_temp(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.contains(".msgmedia.tmp."))
+}
+
+fn remove_msgmedia_temps(root: &Path) -> Result<()> {
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if is_msgmedia_temp(&path) {
+                let _ = fs::remove_file(&path);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn temp_sibling(path: &Path, ext: &str) -> PathBuf {
+    path.with_extension(format!("msgmedia.tmp.{ext}"))
+}
+
+/// Run work that writes `tmp`. Deletes `tmp` on any error (success must rename it away).
+fn with_temp_output<T>(tmp: &Path, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    match f() {
+        Ok(v) => Ok(v),
+        Err(err) => {
+            let _ = fs::remove_file(tmp);
+            Err(err)
+        }
+    }
+}
+
+fn try_remux_replace(path: &Path) -> Result<Option<PathBuf>> {
+    let tmp = temp_sibling(path, "mp4");
+    if remux_mp4(path, &tmp).is_err() {
+        let _ = fs::remove_file(&tmp);
+        return Ok(None);
+    }
+    match replace_original(path, &tmp) {
+        Ok(p) => Ok(Some(p)),
+        Err(err) => {
+            let _ = fs::remove_file(&tmp);
+            Err(err)
+        }
+    }
+}
+
 fn classify(path: &Path) -> Option<Kind> {
+    if is_msgmedia_temp(path) {
+        return None;
+    }
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
@@ -114,13 +176,17 @@ fn process_one(
 
     match (kind, mode) {
         (Kind::Image, MediaMode::Convert) => {
-            if matches!(ext.as_str(), "jpg" | "jpeg") {
+            // Keep GIF as-is (animation); jpg already in target form.
+            if matches!(ext.as_str(), "jpg" | "jpeg" | "gif") {
                 return Ok(Outcome::Skipped);
             }
             convert_image(path, false)
                 .map(|new_path| changed(output_dir, &old_rel, &new_path))?
         }
         (Kind::Image, MediaMode::Compress) => {
+            if ext == "gif" {
+                return Ok(Outcome::Skipped);
+            }
             let meta = fs::metadata(path)?;
             if matches!(ext.as_str(), "jpg" | "jpeg") && meta.len() <= 500 * 1024 {
                 return Ok(Outcome::Skipped);
@@ -225,22 +291,30 @@ fn replace_original(original: &Path, produced: &Path) -> Result<PathBuf> {
 }
 
 fn convert_image(path: &Path, compress: bool) -> Result<PathBuf> {
-    let tmp = path.with_extension("msgmedia.tmp.jpg");
+    let tmp = temp_sibling(path, "jpg");
     let quality = if compress { "5" } else { "2" }; // ffmpeg -q:v (2 best … 31 worst for mjpeg)
+    // `-frames:v 1 -update 1`: animated GIF/WebP must write a single still, not an
+    // image2 sequence (otherwise ffmpeg leaves a partial tmp and exits non-zero).
     let args = vec![
         "-y".into(),
         "-i".into(),
         path_str(path),
+        "-frames:v".into(),
+        "1".into(),
+        "-update".into(),
+        "1".into(),
         "-q:v".into(),
         quality.into(),
         path_str(&tmp),
     ];
-    run_ffmpeg(&args).with_context(|| format!("convert image {}", path.display()))?;
-    replace_original(path, &tmp)
+    with_temp_output(&tmp, || {
+        run_ffmpeg(&args).with_context(|| format!("convert image {}", path.display()))?;
+        replace_original(path, &tmp)
+    })
 }
 
 fn convert_audio(path: &Path, compress: bool) -> Result<PathBuf> {
-    let tmp = path.with_extension("msgmedia.tmp.mp3");
+    let tmp = temp_sibling(path, "mp3");
     let mut args = vec![
         "-y".into(),
         "-i".into(),
@@ -255,48 +329,46 @@ fn convert_audio(path: &Path, compress: bool) -> Result<PathBuf> {
         args.extend(["-q:a".into(), "4".into()]);
     }
     args.push(path_str(&tmp));
-    run_ffmpeg(&args).with_context(|| format!("convert audio {}", path.display()))?;
-    replace_original(path, &tmp)
+    with_temp_output(&tmp, || {
+        run_ffmpeg(&args).with_context(|| format!("convert audio {}", path.display()))?;
+        replace_original(path, &tmp)
+    })
 }
 
 fn convert_video(path: &Path) -> Result<PathBuf> {
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    let tmp = path.with_extension("msgmedia.tmp.mp4");
+    let tmp = temp_sibling(path, "mp4");
 
-    // Prefer remux into mp4 when already a video file.
-    if remux_mp4(path, &tmp).is_ok() {
-        return replace_original(path, &tmp);
-    }
-    let _ = fs::remove_file(&tmp);
+    with_temp_output(&tmp, || {
+        // Prefer remux into mp4 when already a video file.
+        if remux_mp4(path, &tmp).is_ok() {
+            return replace_original(path, &tmp);
+        }
+        let _ = fs::remove_file(&tmp);
 
-    // Light standardize encode (H.264, 30fps, no aggressive downscale).
-    let args = vec![
-        "-y".into(),
-        "-i".into(),
-        path_str(path),
-        "-vf".into(),
-        "fps=30".into(),
-        "-c:v".into(),
-        "libx264".into(),
-        "-crf".into(),
-        "23".into(),
-        "-preset".into(),
-        "medium".into(),
-        "-c:a".into(),
-        "aac".into(),
-        "-b:a".into(),
-        "128k".into(),
-        "-movflags".into(),
-        "+faststart".into(),
-        path_str(&tmp),
-    ];
-    run_ffmpeg(&args).with_context(|| format!("convert video {}", path.display()))?;
-    let _ = ext; // silence; used for intent documentation
-    replace_original(path, &tmp)
+        // Light standardize encode (H.264, 30fps, no aggressive downscale).
+        let args = vec![
+            "-y".into(),
+            "-i".into(),
+            path_str(path),
+            "-vf".into(),
+            "fps=30".into(),
+            "-c:v".into(),
+            "libx264".into(),
+            "-crf".into(),
+            "23".into(),
+            "-preset".into(),
+            "medium".into(),
+            "-c:a".into(),
+            "aac".into(),
+            "-b:a".into(),
+            "128k".into(),
+            "-movflags".into(),
+            "+faststart".into(),
+            path_str(&tmp),
+        ];
+        run_ffmpeg(&args).with_context(|| format!("convert video {}", path.display()))?;
+        replace_original(path, &tmp)
+    })
 }
 
 fn remux_mp4(path: &Path, tmp: &Path) -> Result<()> {
@@ -325,12 +397,7 @@ fn compress_video(path: &Path, opts: &CompressOptions) -> Result<Option<PathBuf>
         if ext == "mp4" {
             return Ok(None);
         }
-        let tmp = path.with_extension("msgmedia.tmp.mp4");
-        if remux_mp4(path, &tmp).is_ok() {
-            return Ok(Some(replace_original(path, &tmp)?));
-        }
-        let _ = fs::remove_file(&tmp);
-        return Ok(None);
+        return try_remux_replace(path);
     }
 
     let probe = probe_video(path).unwrap_or_default();
@@ -343,12 +410,7 @@ fn compress_video(path: &Path, opts: &CompressOptions) -> Result<Option<PathBuf>
         if ext == "mp4" {
             return Ok(None);
         }
-        let tmp = path.with_extension("msgmedia.tmp.mp4");
-        if remux_mp4(path, &tmp).is_ok() {
-            return Ok(Some(replace_original(path, &tmp)?));
-        }
-        let _ = fs::remove_file(&tmp);
-        return Ok(None);
+        return try_remux_replace(path);
     }
 
     let max_edge = opts.max_resolution.max_long_edge();
@@ -360,48 +422,51 @@ fn compress_video(path: &Path, opts: &CompressOptions) -> Result<Option<PathBuf>
     let vf = format!(
         "scale='if(gt(iw,ih),min({max_edge},iw),-2)':'if(gt(iw,ih),-2,min({max_edge},ih))',fps={fps}"
     );
-    let tmp = path.with_extension("msgmedia.tmp.mp4");
+    let tmp = temp_sibling(path, "mp4");
 
-    // Prefer libx265; fall back to libx264.
-    let mut hevc_args = base_video_args(path, &tmp, &vf);
-    hevc_args.extend([
-        "-c:v".into(),
-        "libx265".into(),
-        "-crf".into(),
-        "22".into(),
-        "-preset".into(),
-        "medium".into(),
-        "-tag:v".into(),
-        "hvc1".into(),
-        "-c:a".into(),
-        "aac".into(),
-        "-b:a".into(),
-        "128k".into(),
-        "-movflags".into(),
-        "+faststart".into(),
-        path_str(&tmp),
-    ]);
-    if run_ffmpeg(&hevc_args).is_err() {
-        let _ = fs::remove_file(&tmp);
-        let mut avc_args = base_video_args(path, &tmp, &vf);
-        avc_args.extend([
+    with_temp_output(&tmp, || {
+        // Prefer libx265; fall back to libx264.
+        let mut hevc_args = base_video_args(path, &tmp, &vf);
+        hevc_args.extend([
             "-c:v".into(),
-            "libx264".into(),
+            "libx265".into(),
             "-crf".into(),
-            "28".into(),
+            "22".into(),
             "-preset".into(),
             "medium".into(),
+            "-tag:v".into(),
+            "hvc1".into(),
             "-c:a".into(),
             "aac".into(),
             "-b:a".into(),
-            "96k".into(),
+            "128k".into(),
             "-movflags".into(),
             "+faststart".into(),
             path_str(&tmp),
         ]);
-        run_ffmpeg(&avc_args).with_context(|| format!("compress video {}", path.display()))?;
-    }
-    Ok(Some(replace_original(path, &tmp)?))
+        if run_ffmpeg(&hevc_args).is_err() {
+            let _ = fs::remove_file(&tmp);
+            let mut avc_args = base_video_args(path, &tmp, &vf);
+            avc_args.extend([
+                "-c:v".into(),
+                "libx264".into(),
+                "-crf".into(),
+                "28".into(),
+                "-preset".into(),
+                "medium".into(),
+                "-c:a".into(),
+                "aac".into(),
+                "-b:a".into(),
+                "96k".into(),
+                "-movflags".into(),
+                "+faststart".into(),
+                path_str(&tmp),
+            ]);
+            run_ffmpeg(&avc_args)
+                .with_context(|| format!("compress video {}", path.display()))?;
+        }
+        Ok(Some(replace_original(path, &tmp)?))
+    })
 }
 
 fn base_video_args(path: &Path, _tmp: &Path, vf: &str) -> Vec<String> {
@@ -444,6 +509,29 @@ mod tests {
         assert!(matches!(classify(Path::new("v.mov")), Some(Kind::Video)));
         assert!(matches!(classify(Path::new("x.caf")), Some(Kind::Audio)));
         assert!(classify(Path::new("doc.pdf")).is_none());
+        assert!(classify(Path::new("a.msgmedia.tmp.jpg")).is_none());
+    }
+
+    #[test]
+    fn detects_msgmedia_temp_names() {
+        assert!(is_msgmedia_temp(Path::new(
+            "20150917_095137-I_1.msgmedia.tmp.jpg"
+        )));
+        assert!(!is_msgmedia_temp(Path::new("20150917_095137-I_1.jpg")));
+    }
+
+    #[test]
+    fn sweeps_leftover_msgmedia_temps() {
+        let dir = tempfile::tempdir().unwrap();
+        let att = dir.path().join("attachments");
+        fs::create_dir_all(&att).unwrap();
+        let junk = att.join("photo.msgmedia.tmp.jpg");
+        fs::write(&junk, b"partial").unwrap();
+        fs::write(att.join("keep.jpg"), b"ok").unwrap();
+
+        remove_msgmedia_temps(&att).unwrap();
+        assert!(!junk.exists());
+        assert!(att.join("keep.jpg").exists());
     }
 
     #[test]
