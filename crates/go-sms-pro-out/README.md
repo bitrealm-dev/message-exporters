@@ -62,7 +62,7 @@ See [`message-media`](../message-media).
 
 ## Thanks
 
-https://github.com/pmarti/python-messaging - For their reference implementation of MMS decoding.
+[python-messaging](https://github.com/pmarti/python-messaging) — reference ideas for MMS decoding.
 
 ## License
 
