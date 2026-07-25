@@ -15,4 +15,4 @@ Intermediate `*.msgmedia.tmp.*` files are deleted after each file and swept from
 
 Requires **ffmpeg** and **ffprobe** on `PATH` for convert/compress.
 
-Used by `go-sms-pro-export`, `sms-backup-restore-export`, `sms-backup-plus-export`, and the GUI (iPhone convert/compress post-step).
+Used by `go-sms-pro-exporter`, `sms-backup-restore-exporter`, `sms-backup-plus-exporter`, and the GUI (iPhone convert/compress post-step).

@@ -29,11 +29,11 @@ pub enum Exporter {
 impl Exporter {
     pub fn binary(self) -> &'static str {
         match self {
-            Self::GoSmsPro => "go-sms-pro-export",
-            Self::SmsBackupRestore => "sms-backup-restore-export",
-            Self::SmsBackupPlus => "sms-backup-plus-export",
-            Self::OpenExtract => "openextract-export",
-            Self::Imazing => "imazing-export",
+            Self::GoSmsPro => "go-sms-pro-exporter",
+            Self::SmsBackupRestore => "sms-backup-restore-exporter",
+            Self::SmsBackupPlus => "sms-backup-plus-exporter",
+            Self::OpenExtract => "openextract-exporter",
+            Self::Imazing => "imazing-exporter",
             Self::Imessage => "imessage-exporter",
         }
     }
