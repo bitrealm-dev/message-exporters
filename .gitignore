@@ -22,3 +22,8 @@ target
 
 # Local machine export paths / owner identity
 config/export-to-vault.sh
+**/export.ini
+
+# Converter output trees (directory kept via .gitkeep)
+/data/*
+!/data/.gitkeep
