@@ -53,9 +53,9 @@ All converters write **one CSV file per conversation**. Across the board:
 
 | Exporter | Mapping / design |
 |---|---|
-| GO SMS Pro | [`crates/go-sms-pro-out/docs/XML_CSV_MAPPING.md`](../crates/go-sms-pro-out/docs/XML_CSV_MAPPING.md) |
-| SMS Backup & Restore | [`crates/sms-backup-restore-out/docs/XML_CSV_MAPPING.md`](../crates/sms-backup-restore-out/docs/XML_CSV_MAPPING.md) |
-| SMS Backup+ | [`crates/sms-backup-plus-out/docs/EML_CSV_MAPPING.md`](../crates/sms-backup-plus-out/docs/EML_CSV_MAPPING.md) |
-| OpenExtract | [`crates/openextract-out/README.md`](../crates/openextract-out/README.md) |
-| iMazing | [`crates/imazing-out/docs/DESIGN.md`](../crates/imazing-out/docs/DESIGN.md) |
+| GO SMS Pro | [`crates/go-sms-pro-export/docs/XML_CSV_MAPPING.md`](../crates/go-sms-pro-export/docs/XML_CSV_MAPPING.md) |
+| SMS Backup & Restore | [`crates/sms-backup-restore-export/docs/XML_CSV_MAPPING.md`](../crates/sms-backup-restore-export/docs/XML_CSV_MAPPING.md) |
+| SMS Backup+ | [`crates/sms-backup-plus-export/docs/EML_CSV_MAPPING.md`](../crates/sms-backup-plus-export/docs/EML_CSV_MAPPING.md) |
+| OpenExtract | [`crates/openextract-export/README.md`](../crates/openextract-export/README.md) |
+| iMazing | [`crates/imazing-export/docs/DESIGN.md`](../crates/imazing-export/docs/DESIGN.md) |
 | iMessage Exporter | [`crates/imessage-exporter/README.md`](../crates/imessage-exporter/README.md) |

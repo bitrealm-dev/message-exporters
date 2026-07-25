@@ -42,18 +42,18 @@ cargo run -p message-contacts --bin contacts-validate -- \
 
 | Backup you have | Converter | Targeted upstream | Format docs |
 |-----------------|-----------|-------------------|-------------|
-| **GO SMS Pro** local backup folder (Android) | [`go-sms-pro-out`](crates/go-sms-pro-out) | GO SMS Pro *(version TBD)* | [How messages become spreadsheet rows](crates/go-sms-pro-out/docs/XML_CSV_MAPPING.md) |
-| **SMS Backup & Restore** XML from SyncTech (Android) | [`sms-backup-restore-out`](crates/sms-backup-restore-out) | SMS Backup & Restore **10.26.003** | [What the XML contains](crates/sms-backup-restore-out/docs/FIELDS.md), [How messages become spreadsheet rows](crates/sms-backup-restore-out/docs/XML_CSV_MAPPING.md) |
-| **SMS Backup+** email exports (`.eml` files) | [`sms-backup-plus-out`](crates/sms-backup-plus-out) | SMS Backup+ **1.5.11** | [How the email backup is structured](crates/sms-backup-plus-out/docs/FORMAT.md), [How messages become spreadsheet rows](crates/sms-backup-plus-out/docs/EML_CSV_MAPPING.md) |
-| **OpenExtract** conversation CSV + contacts `.vcf` | [`openextract-out`](crates/openextract-out) | OpenExtract **0.5.1** | [Converter README](crates/openextract-out/README.md), [example spreadsheet](crates/openextract-out/sample-output/_15555550122.csv) |
-| **iMazing** Messages / WhatsApp CSV + Contacts CSV | [`imazing-out`](crates/imazing-out) | iMazing **3.5.5** | [Converter README](crates/imazing-out/README.md), [Design & limitations](crates/imazing-out/docs/DESIGN.md), [example spreadsheet](crates/imazing-out/sample-output/_13212462167.csv) |
+| **GO SMS Pro** local backup folder (Android) | [`go-sms-pro-export`](crates/go-sms-pro-export) | GO SMS Pro *(version TBD)* | [How messages become spreadsheet rows](crates/go-sms-pro-export/docs/XML_CSV_MAPPING.md) |
+| **SMS Backup & Restore** XML from SyncTech (Android) | [`sms-backup-restore-export`](crates/sms-backup-restore-export) | SMS Backup & Restore **10.26.003** | [What the XML contains](crates/sms-backup-restore-export/docs/FIELDS.md), [How messages become spreadsheet rows](crates/sms-backup-restore-export/docs/XML_CSV_MAPPING.md) |
+| **SMS Backup+** email exports (`.eml` files) | [`sms-backup-plus-export`](crates/sms-backup-plus-export) | SMS Backup+ **1.5.11** | [How the email backup is structured](crates/sms-backup-plus-export/docs/FORMAT.md), [How messages become spreadsheet rows](crates/sms-backup-plus-export/docs/EML_CSV_MAPPING.md) |
+| **OpenExtract** conversation CSV + contacts `.vcf` | [`openextract-export`](crates/openextract-export) | OpenExtract **0.5.1** | [Converter README](crates/openextract-export/README.md), [example spreadsheet](crates/openextract-export/sample-output/_15555550122.csv) |
+| **iMazing** Messages / WhatsApp CSV + Contacts CSV | [`imazing-export`](crates/imazing-export) | iMazing **3.5.5** | [Converter README](crates/imazing-export/README.md), [Design & limitations](crates/imazing-export/docs/DESIGN.md), [example spreadsheet](crates/imazing-export/sample-output/_13212462167.csv) |
 | **Apple Messages** database on a Mac (`chat.db`) | [`imessage-exporter`](crates/imessage-exporter) | iMessage Exporter **4.2.0** | [Converter README](crates/imessage-exporter/README.md), [example spreadsheet](crates/imessage-exporter/sample-output/15551212.csv) |
 
 Capability matrix: [`docs/EXPORTER_MATRIX.md`](docs/EXPORTER_MATRIX.md).
 
 Each converter writes `export_source`, `export_tool`, and `export_tool_version` on every CSV row so downstream vault import knows which upstream tool/version the export targets.
 
-Raw **iMazing** vendor Messages CSV can also be ingested by [message-vault-rs](https://github.com/bitrealm-dev/message-vault-rs) `csv-ingest` (no contact enrichment). Prefer [`imazing-out`](crates/imazing-out) when you have the Contacts export (Messages and/or WhatsApp). To share structure without PII, rewrite vendor CSV with [`imazing-obfuscate`](crates/message-obfuscate).
+Raw **iMazing** vendor Messages CSV can also be ingested by [message-vault-rs](https://github.com/bitrealm-dev/message-vault-rs) `csv-ingest` (no contact enrichment). Prefer [`imazing-export`](crates/imazing-export) when you have the Contacts export (Messages and/or WhatsApp). To share structure without PII, rewrite vendor CSV with [`imazing-obfuscate`](crates/message-obfuscate).
 
 Each converter’s README explains what the backup looks like, what you need to run it, and extra options.
 
@@ -87,7 +87,7 @@ Binaries land under `target/release/`. Replace the example paths and identity va
 ### GO SMS Pro (Android backup folder)
 
 ```bash
-cargo run --release -p go-sms-pro-out -- \
+cargo run --release -p go-sms-pro-export -- \
   --input /path/to/gosms_export \
   --output ./staging/go-sms-pro \
   --owner-phone +15555550100 \
@@ -99,7 +99,7 @@ cargo run --release -p go-sms-pro-out -- \
 ### SMS Backup & Restore (SyncTech XML)
 
 ```bash
-cargo run --release -p sms-backup-restore-out -- \
+cargo run --release -p sms-backup-restore-export -- \
   --input /path/to/sms-20210328165031.xml \
   --output ./staging/sms-backup-restore \
   --owner-phone +15555550100 \
@@ -111,7 +111,7 @@ cargo run --release -p sms-backup-restore-out -- \
 ### SMS Backup+ (folder of `.eml` files)
 
 ```bash
-cargo run --release -p sms-backup-plus-out -- convert \
+cargo run --release -p sms-backup-plus-export -- convert \
   --input /path/to/eml_export \
   --output ./staging/sms-backup-plus \
   --owner-phone +15555550100 \
@@ -119,12 +119,12 @@ cargo run --release -p sms-backup-plus-out -- convert \
   --contacts /path/to/contacts.csv
 ```
 
-Or put phone/email in [`crates/sms-backup-plus-out/config/owner.toml`](crates/sms-backup-plus-out/config/owner.example.toml) instead of the flags. `--contacts` or `--vcf` is recommended so names resolve; without it a warning is printed.
+Or put phone/email in [`crates/sms-backup-plus-export/config/owner.toml`](crates/sms-backup-plus-export/config/owner.example.toml) instead of the flags. `--contacts` or `--vcf` is recommended so names resolve; without it a warning is printed.
 
 ### OpenExtract (conversation CSV + VCF)
 
 ```bash
-cargo run --release -p openextract-out -- \
+cargo run --release -p openextract-export -- \
   --input /path/to/openextract_csv_dir \
   --output ./staging/openextract \
   --vcf /path/to/contacts.vcf
@@ -135,14 +135,14 @@ cargo run --release -p openextract-out -- \
 ### iMazing (Messages / WhatsApp CSV + Contacts CSV)
 
 ```bash
-cargo run --release -p imazing-out -- \
+cargo run --release -p imazing-export -- \
   --input "/path/to/Device Export Root" \
   --output ./staging/imazing \
   --contacts "/path/to/Contacts - ….csv" \
   --timezone America/New_York
 ```
 
-`--input` may be one Messages/WhatsApp CSV, a chat folder, `Messages/`, `WhatsApp/`, or a full device export root (recursive). WhatsApp chats write as separate `…__whatsapp.csv` files. Export from the **All backup** view when you want attachment filenames. `--contacts` is the iMazing Contacts CSV from the same backup (recommended; without it a warning is printed and phones are not resolved to names). Known limitations (silent group members, no WhatsApp roster, …): [`crates/imazing-out/docs/DESIGN.md`](crates/imazing-out/docs/DESIGN.md). Distinct from `imessage-exporter` (which reads `chat.db`).
+`--input` may be one Messages/WhatsApp CSV, a chat folder, `Messages/`, `WhatsApp/`, or a full device export root (recursive). WhatsApp chats write as separate `…__whatsapp.csv` files. Export from the **All backup** view when you want attachment filenames. `--contacts` is the iMazing Contacts CSV from the same backup (recommended; without it a warning is printed and phones are not resolved to names). Known limitations (silent group members, no WhatsApp roster, …): [`crates/imazing-export/docs/DESIGN.md`](crates/imazing-export/docs/DESIGN.md). Distinct from `imessage-exporter` (which reads `chat.db`).
 
 ### Apple Messages (`chat.db` on a Mac)
 

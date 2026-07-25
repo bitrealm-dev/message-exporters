@@ -94,7 +94,7 @@ Convert/Compress need `ffmpeg`/`ffprobe` on PATH. **Do not copy** skips writing 
 
 ## Per-exporter options
 
-### GO SMS Pro — `go-sms-pro-out`
+### GO SMS Pro — `go-sms-pro-export`
 
 Product: [GO SMS Pro](https://play.google.com/store/apps/details?id=com.jb.gosms)
 
@@ -110,7 +110,7 @@ Product: [GO SMS Pro](https://play.google.com/store/apps/details?id=com.jb.gosms
 
 † At most one of `--contacts` / `--vcf`. Global Obfuscate and Start/End date apply (see Shared / global controls). Convert → `.jpg`/`.mp4`/`.mp3`; Compress re-encodes (needs ffmpeg).
 
-### SMS Backup & Restore — `sms-backup-restore-out`
+### SMS Backup & Restore — `sms-backup-restore-export`
 
 Product: [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/)
 
@@ -124,7 +124,7 @@ Product: [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/)
 
 Encrypted ZIP backups must be unlocked/extracted before selecting input. Global Obfuscate and Start/End date apply.
 
-### SMS Backup+ — `sms-backup-plus-out convert`
+### SMS Backup+ — `sms-backup-plus-export convert`
 
 Product: [SMS Backup+](https://github.com/jberkel/sms-backup-plus)
 
@@ -143,7 +143,7 @@ GUI always runs the `convert` subcommand and always passes `--verbose`.
 
 \* Or from crate-relative `config/owner.toml` — GUI does not rely on that; collect explicitly. Global Obfuscate and Start/End date apply.
 
-### OpenExtract — `openextract-out`
+### OpenExtract — `openextract-export`
 
 Product: [OpenExtract](https://www.openextract.app/)
 
@@ -155,7 +155,7 @@ Product: [OpenExtract](https://www.openextract.app/)
 
 Global Obfuscate and Start/End date apply.
 
-### iMazing — `imazing-out`
+### iMazing — `imazing-export`
 
 Product: [iMazing](https://imazing.com/)
 
@@ -166,7 +166,7 @@ Product: [iMazing](https://imazing.com/)
 | Contacts | iMazing Contacts CSV only | no | `--contacts` |
 | Timezone | IANA text | no | `--timezone` (default: host local) |
 
-Global Obfuscate and Start/End date apply. WhatsApp chats write as separate `…__whatsapp.csv` files. See [`crates/imazing-out/docs/DESIGN.md`](../crates/imazing-out/docs/DESIGN.md).
+Global Obfuscate and Start/End date apply. WhatsApp chats write as separate `…__whatsapp.csv` files. See [`crates/imazing-export/docs/DESIGN.md`](../crates/imazing-export/docs/DESIGN.md).
 
 ### iPhone backup — `imessage-exporter`
 

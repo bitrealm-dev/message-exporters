@@ -1869,7 +1869,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "go-sms-pro-out"
+name = "go-sms-pro-export"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2178,7 +2178,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "imazing-out"
+name = "imazing-export"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -3060,7 +3060,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "openextract-out"
+name = "openextract-export"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -3969,7 +3969,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sms-backup-plus-out"
+name = "sms-backup-plus-export"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -3993,7 +3993,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sms-backup-restore-out"
+name = "sms-backup-restore-export"
 version = "0.1.0"
 dependencies = [
  "anyhow",
