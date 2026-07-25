@@ -46,3 +46,16 @@ Re-running the workflow with a version that already has a tag/release will fail 
 The workflow does not send email itself. GitHub may still email you about failed (or successful) Actions runs based on your account settings.
 
 To quiet that: [Notification settings](https://github.com/settings/notifications) → **Actions** → turn off the emails you do not want. That is account-level; it cannot be forced from the workflow YAML.
+
+## Documentation site (GitHub Pages)
+
+User-facing docs are an [mdBook](https://rust-lang.github.io/mdBook/) under [`docs/`](.) , deployed by [`.github/workflows/docs.yml`](../.github/workflows/docs.yml).
+
+### Enable Pages (one-time)
+
+1. Repo **Settings → Pages**.
+2. **Build and deployment → Source** → **GitHub Actions** (not “Deploy from a branch”).
+3. Push to `main` or run the **Docs** workflow under **Actions**.
+4. Site URL: `https://bitrealm-dev.github.io/message-exporters/`.
+
+Local preview: `cargo install mdbook && cd docs && mdbook serve --open`.

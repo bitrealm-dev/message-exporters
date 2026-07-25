@@ -27,3 +27,6 @@ config/export-to-vault.sh
 # Converter output trees (directory kept via .gitkeep)
 /data/*
 !/data/.gitkeep
+
+# mdBook output
+/docs/book/

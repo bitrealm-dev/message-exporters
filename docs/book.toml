@@ -1,0 +1,15 @@
+[book]
+title = "message-exporters"
+description = "Turn phone message backups into per-conversation CSV"
+authors = ["bitrealm-dev"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+site-url = "/message-exporters/"
+git-repository-url = "https://github.com/bitrealm-dev/message-exporters"
+edit-url-template = "https://github.com/bitrealm-dev/message-exporters/edit/main/docs/{path}"
