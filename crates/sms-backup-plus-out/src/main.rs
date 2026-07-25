@@ -61,7 +61,7 @@ enum Commands {
         #[arg(long)]
         vcf: Option<PathBuf>,
 
-        /// Name mapping CSV (correct_name,incorrect_name) for EML export aliases.
+        /// Name mapping CSV (`Phone,Incorrect Name`) for EML export aliases.
         /// Default: config/name-mapping.csv when that file exists.
         #[arg(long = "name-mapping")]
         name_mapping: Option<PathBuf>,

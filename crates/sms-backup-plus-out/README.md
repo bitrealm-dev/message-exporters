@@ -36,7 +36,7 @@ Pass owner phone/email on the command line, or put them in `config/owner.toml` n
 
 Also useful:
 
-- `--name-mapping` — maps nicknames in the backup to the names you want in the export
+- `--name-mapping` — CSV of `Phone,Incorrect Name` mapping EML nicknames to a phone (contacts book then fills the display name)
 - `-v` / `--verbose` — progress messages while large folders are scanned
 - `--start-date` / `--end-date` — `YYYY-MM-DD` window `[start, end)` at host local midnight (end exclusive)
 

@@ -533,7 +533,7 @@ pub fn convert_export<P: AsRef<Path>>(
                     report.skipped_invalid_date += skipped_dates;
                     for msg in &mut msgs {
                         msg.eml_path = rel_path.clone();
-                        let _ = apply_name_mapping(msg, name_mapping);
+                        let _ = apply_name_mapping(msg, name_mapping, contacts);
                         let _ = fill_unknown_phone(msg, contacts);
                         enrich_display_names(msg, contacts);
                     }
@@ -572,7 +572,7 @@ pub fn convert_export<P: AsRef<Path>>(
             match parse_flat_eml_mail(&eml_path, &mail, &owners.all_digits, owner_emails) {
                 Ok(Some(mut msg)) => {
                     msg.eml_path = rel_path;
-                    let _ = apply_name_mapping(&mut msg, name_mapping);
+                    let _ = apply_name_mapping(&mut msg, name_mapping, contacts);
                     let _ = fill_unknown_phone(&mut msg, contacts);
                     enrich_display_names(&mut msg, contacts);
                     report.flat_eml += 1;

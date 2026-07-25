@@ -10,14 +10,14 @@ use chrono::Local;
 use eframe::egui;
 use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
 use message_exporters_core::{
-    default_output_dir, ensure_output_dir, resolve_binary, spawn, AttachmentMedia, ContactsKind,
-    ExportIniState, Exporter, Form, ProcessControl, ProcessEvent, APPLE_PLATFORMS,
-    ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS,
+    ensure_output_dir, resolve_binary, spawn, AttachmentMedia, ContactsKind, ExportIniState,
+    Exporter, Form, ProcessControl, ProcessEvent, APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS,
+    MAX_RESOLUTIONS,
 };
 use message_media::process_near_vault_media;
 
 const LABEL_W: f32 = 190.0;
-const PATH_W: f32 = 280.0;
+const PATH_W: f32 = 400.0;
 const COMBO_W: f32 = 200.0;
 const SHORT_W: f32 = 140.0;
 const LOG_PLACEHOLDER: &str = "(no log output)";
@@ -69,8 +69,8 @@ const UTC_OFFSETS: &[&str] = &[
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([620.0, 560.0])
-            .with_min_inner_size([560.0, 480.0])
+            .with_inner_size([760.0, 560.0])
+            .with_min_inner_size([680.0, 480.0])
             .with_title("Message Exporters"),
         ..Default::default()
     };
@@ -498,12 +498,11 @@ impl App {
 
         // Common fields (same order for every exporter).
         self.ui_common_input(ui);
-        let output_hint = format!("…/{}", self.exporter.binary());
         path_or_text(
             ui,
             "Output directory",
             &mut self.form.output,
-            &output_hint,
+            "Path",
             false,
             true,
         );
@@ -534,7 +533,7 @@ impl App {
                     ui,
                     "Name mapping",
                     &mut self.form.name_mapping,
-                    ".csv",
+                    "Phone,Incorrect Name CSV",
                     true,
                     false,
                 );
@@ -720,16 +719,8 @@ impl App {
         }
     }
 
-    fn sync_default_output(&mut self, old_input: &str, new_input: &str) {
-        let previous_default = default_output_dir(self.exporter, old_input);
-        if self.form.output.trim().is_empty() || self.form.output == previous_default {
-            self.form.output = default_output_dir(self.exporter, new_input);
-        }
-    }
-
     fn ui_common_input(&mut self, ui: &mut egui::Ui) {
         if self.exporter == Exporter::Imessage {
-            let old_db = self.form.db_path.clone();
             path_or_text(
                 ui,
                 "Database / iOS backup path",
@@ -738,9 +729,6 @@ impl App {
                 true,
                 true,
             );
-            if self.form.db_path != old_db {
-                self.sync_default_output(&old_db, &self.form.db_path.clone());
-            }
             return;
         }
         let (file, folder) = match self.exporter {
@@ -755,11 +743,7 @@ impl App {
         } else {
             "Input directory"
         };
-        let old_input = self.form.input.clone();
         path_or_text(ui, input_label, &mut self.form.input, "Path", file, folder);
-        if self.form.input != old_input {
-            self.sync_default_output(&old_input, &self.form.input.clone());
-        }
     }
 
     fn ui_timezone(&mut self, ui: &mut egui::Ui) {
@@ -918,15 +902,30 @@ impl App {
             } else {
                 "Contacts file".into()
             };
-            path_or_text_labeled(
-                ui,
-                label,
-                "Contacts file",
-                &mut self.form.contacts,
-                ".csv or .vcf",
-                true,
-                false,
-            );
+            // iPhone backup: keep the row for layout, but show an empty field so a
+            // shared [common] contacts path does not look like it applies here.
+            if enabled {
+                path_or_text_labeled(
+                    ui,
+                    label,
+                    "Contacts file",
+                    &mut self.form.contacts,
+                    ".csv or .vcf",
+                    true,
+                    false,
+                );
+            } else {
+                let mut blank = String::new();
+                path_or_text_labeled(
+                    ui,
+                    label,
+                    "Contacts file",
+                    &mut blank,
+                    "Not used — set Apple AddressBook under Advanced",
+                    true,
+                    false,
+                );
+            }
         });
         if enabled {
             let path = self.form.contacts.trim();

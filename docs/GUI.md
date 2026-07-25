@@ -65,7 +65,7 @@ Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules a
 | End date | text (global) | `--end-date` | Optional `YYYY-MM-DD`, exclusive |
 | Product title | hyperlink | — | Opens the upstream product/tool site |
 | Input | path picker (file and/or folder) | `--input` / `-p` / etc. | Single path only |
-| Output | folder picker | `--output` / `-o` | Required; defaults to Documents/`message-exporters`/<source> |
+| Output | folder picker | `--output` / `-o` | Required; choose explicitly (not derived from input) |
 | Contacts | path picker | `--contacts` / `--vcf` / `-n` | Format depends on exporter; optional with warning |
 | Run / Cancel | actions | spawn process | Stream logs; kill on cancel |
 
@@ -137,7 +137,7 @@ GUI always runs the `convert` subcommand and always passes `--verbose`.
 | Your phone numbers | multi-value text | yes\* | `--owner-phone` |
 | Your email addresses | multi-value text | yes\* | `--owner-email` |
 | Contacts CSV / VCF | file | no† | `--contacts` / `--vcf` |
-| Name mapping CSV | file | no | `--name-mapping` (advanced) |
+| Name mapping CSV | file | no | `--name-mapping` (`Phone,Incorrect Name`) |
 | Verbose | — | always | `--verbose` |
 | Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro) |
 

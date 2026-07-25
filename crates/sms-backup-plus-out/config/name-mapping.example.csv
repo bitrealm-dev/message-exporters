@@ -1,4 +1,3 @@
-correct_name,incorrect_name
-Jordan Alias,Jordan Alias (SKIP)
-Casey Proper,Casey Typo
-,OrphanLabel
+Phone,Incorrect Name
++15555550144,Jordan Alias (SKIP)
++15555550155,Casey Typo

@@ -1,7 +1,7 @@
 use std::ffi::OsString;
 use std::fmt;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use message_media::{MaxResolution, MediaMode};
 
@@ -94,37 +94,6 @@ impl Exporter {
             "iphone-backup" => Some(Self::Imessage),
             _ => None,
         }
-    }
-}
-
-/// Default output directory for an exporter.
-///
-/// With a non-empty `input`, uses `{input-dir}/{exporter.binary()}` where
-/// `input-dir` is the input path itself if it looks like a directory, or its
-/// parent if it looks like a file. With empty input, returns an empty string
-/// so the UI leaves Output blank until the user selects an input path.
-pub fn default_output_dir(exporter: Exporter, input: &str) -> String {
-    let Some(base) = input_base_dir(input) else {
-        return String::new();
-    };
-    base.join(exporter.binary()).display().to_string()
-}
-
-fn input_base_dir(input: &str) -> Option<PathBuf> {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    let path = Path::new(trimmed);
-    if path.is_file() || path.extension().is_some() {
-        Some(
-            path.parent()
-                .filter(|p| !p.as_os_str().is_empty())
-                .map(Path::to_path_buf)
-                .unwrap_or_else(|| PathBuf::from(".")),
-        )
-    } else {
-        Some(path.to_path_buf())
     }
 }
 
@@ -313,7 +282,7 @@ impl Default for Form {
     fn default() -> Self {
         Self {
             input: String::new(),
-            output: default_output_dir(Exporter::default(), ""),
+            output: String::new(),
             contacts: String::new(),
             contacts_kind: ContactsKind::default(),
             owner_phones: String::new(),
@@ -711,24 +680,6 @@ mod tests {
         let args = form.build_args(Exporter::OpenExtract).unwrap();
         assert!(args.windows(2).any(|w| w[0] == "--start-date" && w[1] == "2020-01-01"));
         assert!(args.windows(2).any(|w| w[0] == "--end-date" && w[1] == "2020-02-01"));
-    }
-
-    #[test]
-    fn default_output_is_empty_without_input() {
-        let path = default_output_dir(Exporter::OpenExtract, "");
-        assert!(path.is_empty());
-    }
-
-    #[test]
-    fn default_output_is_relative_to_input_dir() {
-        let path = default_output_dir(Exporter::GoSmsPro, "/home/foo");
-        assert_eq!(path, "/home/foo/go-sms-pro-out");
-    }
-
-    #[test]
-    fn default_output_uses_parent_for_file_input() {
-        let path = default_output_dir(Exporter::GoSmsPro, "/home/foo/backup.xml");
-        assert_eq!(path, "/home/foo/go-sms-pro-out");
     }
 
     #[test]

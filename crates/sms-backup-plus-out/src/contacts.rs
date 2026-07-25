@@ -1,12 +1,12 @@
 //! Apply shared contact book / name mapping to SMS Backup+ messages.
 
 use crate::types::ParsedMessage;
-use message_contacts::{normalize_name_key, ContactsBook, NameMapping};
+use message_contacts::{ContactsBook, NameMapping};
 
 /// Fill empty peer phone from the contacts book using current `name_hint`.
 ///
 /// Returns `Some((display_name, phone))` when a phone fill happened.
-/// Call [`apply_name_mapping`] first so aliases resolve to the contacts CSV name.
+/// Call [`apply_name_mapping`] first so incorrect names resolve to a phone.
 pub(crate) fn fill_unknown_phone(
     msg: &mut ParsedMessage,
     book: &ContactsBook,
@@ -29,33 +29,34 @@ pub(crate) fn fill_unknown_phone(
     Some((display, phone))
 }
 
-/// Rewrite `name_hint` when the EML name appears as `incorrect_name` in the mapping.
+/// When the EML name appears as `Incorrect Name`, set the peer phone from the mapping.
 ///
-/// Returns `Some((from, to))` when the hint changed.
+/// Clears a non-book display name so [`enrich_display_names`] can fill from contacts.
+/// Returns `Some((incorrect_name, phone_digits))` when a phone was applied.
 pub(crate) fn apply_name_mapping(
     msg: &mut ParsedMessage,
     mapping: &NameMapping,
+    book: &ContactsBook,
 ) -> Option<(String, String)> {
+    if !msg.chat_key.is_empty() {
+        return None;
+    }
     let raw = msg
         .name_hint
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())?
         .to_string();
-    let correct = mapping.correct_name(&raw)?.to_string();
-    if normalize_name_key(&raw) == normalize_name_key(&correct) {
-        return None;
+    let phone = mapping.phone_for_incorrect_name(&raw)?.to_string();
+    let display = book.lookup_name_by_phone(&phone).map(str::to_string);
+    msg.chat_key = phone.clone();
+    if !msg.is_from_me {
+        msg.sender_digits = Some(phone.clone());
     }
-    msg.name_hint = Some(correct.clone());
-    for (_digits, name) in &mut msg.participant_digits {
-        if name
-            .as_deref()
-            .is_some_and(|n| normalize_name_key(n) == normalize_name_key(&raw))
-        {
-            *name = Some(correct.clone());
-        }
-    }
-    Some((raw, correct))
+    // Prefer book name now; otherwise blank so enrich_display_names can fill.
+    msg.name_hint = Some(display.clone().unwrap_or_default());
+    msg.participant_digits = vec![(phone.clone(), display)];
+    Some((raw, phone))
 }
 
 /// Fill blank/unknown display names from phone→name when the peer phone is known.
@@ -67,7 +68,8 @@ pub(crate) fn enrich_display_names(msg: &mut ParsedMessage, book: &ContactsBook)
         }
     }
     if !msg.chat_key.is_empty() {
-        if let Some(name) = book.enrich_display_name(&msg.chat_key, msg.name_hint.as_deref().unwrap_or(""))
+        if let Some(name) =
+            book.enrich_display_name(&msg.chat_key, msg.name_hint.as_deref().unwrap_or(""))
         {
             msg.name_hint = Some(name);
         }
@@ -95,7 +97,7 @@ mod tests {
     }
 
     #[test]
-    fn name_mapping_then_phone_fill() {
+    fn name_mapping_sets_phone_then_enrich_name() {
         let dir = tempfile::tempdir().unwrap();
         let contacts = write_csv(
             &dir,
@@ -106,8 +108,8 @@ Jordan,Alias,15555550144\n",
         let mapping_path = write_csv(
             &dir,
             "mapping.csv",
-            "correct_name,incorrect_name\n\
-Jordan Alias,Jordan Alias (SKIP)\n",
+            "Phone,Incorrect Name\n\
++15555550144,Jordan Alias (SKIP)\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let mapping = NameMapping::load(&mapping_path).unwrap();
@@ -128,10 +130,9 @@ Jordan Alias,Jordan Alias (SKIP)\n",
             android_type: String::new(),
             eml_path: String::new(),
         };
-        let mapped = apply_name_mapping(&mut msg, &mapping).unwrap();
-        assert_eq!(mapped.1, "Jordan Alias");
-        let hit = fill_unknown_phone(&mut msg, &book).unwrap();
-        assert_eq!(hit.1, "5555550144");
+        let mapped = apply_name_mapping(&mut msg, &mapping, &book).unwrap();
+        assert_eq!(mapped.1, "5555550144");
         assert_eq!(msg.chat_key, "5555550144");
+        assert_eq!(msg.name_hint.as_deref(), Some("Jordan Alias"));
     }
 }
