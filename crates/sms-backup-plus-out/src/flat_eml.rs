@@ -34,12 +34,39 @@ fn archive_subject_prefix_re() -> &'static Regex {
         .get_or_init(|| Regex::new(r"(?i)^SMS archive ").expect("archive subject"))
 }
 
-fn header(mail: &ParsedMail<'_>, name: &str) -> String {
-    mail.headers
-        .get_first_value(name)
-        .unwrap_or_default()
-        .trim()
-        .to_string()
+/// Cached headers read once per EML (avoids repeated `get_first_value` + alloc).
+#[derive(Debug, Clone)]
+pub(crate) struct MailHeaders {
+    pub smssync_type: String,
+    pub smssync_address: String,
+    pub smssync_date: String,
+    pub smssync_id: String,
+    pub subject: String,
+    pub from: String,
+    pub to: String,
+    pub date: String,
+}
+
+impl MailHeaders {
+    pub(crate) fn from_mail(mail: &ParsedMail<'_>) -> Self {
+        fn one(mail: &ParsedMail<'_>, name: &str) -> String {
+            mail.headers
+                .get_first_value(name)
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        }
+        Self {
+            smssync_type: one(mail, "X-smssync-type"),
+            smssync_address: one(mail, "X-smssync-address"),
+            smssync_date: one(mail, "X-smssync-date"),
+            smssync_id: one(mail, "X-smssync-id"),
+            subject: one(mail, "Subject"),
+            from: one(mail, "From"),
+            to: one(mail, "To"),
+            date: one(mail, "Date"),
+        }
+    }
 }
 
 fn smssync_participant_numbers(raw_address: &str) -> Vec<String> {
@@ -73,8 +100,8 @@ fn contact_name_from_subject(subject: &str) -> Option<String> {
     Some(name.to_string())
 }
 
-fn timestamp_seconds(mail: &ParsedMail<'_>) -> Option<f64> {
-    let raw = header(mail, "X-smssync-date");
+fn timestamp_seconds(headers: &MailHeaders) -> Option<f64> {
+    let raw = &headers.smssync_date;
     if !raw.is_empty() && raw.chars().all(|c| c.is_ascii_digit()) {
         let value: i64 = raw.parse().ok()?;
         // Android uses epoch ms (~1e12 today). Seconds stay ~1e9 until year 5138.
@@ -85,29 +112,28 @@ fn timestamp_seconds(mail: &ParsedMail<'_>) -> Option<f64> {
             value as f64
         });
     }
-    let date_hdr = header(mail, "Date");
-    if date_hdr.is_empty() {
+    if headers.date.is_empty() {
         return None;
     }
     // mailparse doesn't parse dates for us; try chrono RFC2822
-    chrono::DateTime::parse_from_rfc2822(&date_hdr)
+    chrono::DateTime::parse_from_rfc2822(&headers.date)
         .ok()
         .map(|d| d.timestamp() as f64)
 }
 
-fn is_sent(mail: &ParsedMail<'_>, owner_emails: &[String]) -> bool {
-    let typ = header(mail, "X-smssync-type");
-    if SENT_TYPES.contains(&typ.as_str()) {
+/// `owner_emails` must already be trimmed + lowercased.
+fn is_sent(headers: &MailHeaders, owner_emails: &[String]) -> bool {
+    let typ = headers.smssync_type.as_str();
+    if SENT_TYPES.contains(&typ) {
         return true;
     }
-    if RECEIVED_TYPES.contains(&typ.as_str()) {
+    if RECEIVED_TYPES.contains(&typ) {
         return false;
     }
-    let from = header(mail, "From").to_ascii_lowercase();
-    owner_emails.iter().any(|e| {
-        let e = e.trim().to_ascii_lowercase();
-        !e.is_empty() && from.contains(&e)
-    })
+    let from = headers.from.to_ascii_lowercase();
+    owner_emails
+        .iter()
+        .any(|e| !e.is_empty() && from.contains(e.as_str()))
 }
 
 fn extract_body(mail: &ParsedMail<'_>) -> String {
@@ -128,18 +154,17 @@ fn extract_body(mail: &ParsedMail<'_>) -> String {
     walk(mail).unwrap_or_default()
 }
 
-fn is_single_sms_eml(mail: &ParsedMail<'_>) -> bool {
-    if !header(mail, "X-smssync-type").is_empty() {
+fn is_single_sms_eml(headers: &MailHeaders) -> bool {
+    if !headers.smssync_type.is_empty() {
         return true;
     }
-    let subject = header(mail, "Subject");
-    let headers_blob = format!("{} {}", header(mail, "From"), header(mail, "To"));
-    subject_re().is_match(&subject) && headers_blob.contains("@sms-backup-plus.local")
+    let headers_blob = format!("{} {}", headers.from, headers.to);
+    subject_re().is_match(&headers.subject) && headers_blob.contains("@sms-backup-plus.local")
 }
 
 /// True when this looks like a flat single-message SMS Backup+ EML.
-pub(crate) fn is_flat_sms_eml(mail: &ParsedMail<'_>) -> bool {
-    is_single_sms_eml(mail)
+pub(crate) fn is_flat_sms_eml(headers: &MailHeaders) -> bool {
+    is_single_sms_eml(headers)
 }
 
 fn group_chat_id(others: &[String]) -> (String, String) {
@@ -179,23 +204,25 @@ fn group_chat_id(others: &[String]) -> (String, String) {
 }
 
 /// Parse an already-loaded flat SMS Backup+ EML (avoids a second disk read).
+///
+/// `owner_emails` must already be trimmed + lowercased.
 pub(crate) fn parse_flat_eml_mail(
     path: &Path,
     mail: &ParsedMail<'_>,
+    headers: &MailHeaders,
     owner_digits: &HashSet<String>,
     owner_emails: &[String],
 ) -> Result<Option<ParsedMessage>> {
-    if !is_single_sms_eml(mail) {
+    if !is_single_sms_eml(headers) {
         return Ok(None);
     }
 
-    let Some(ts) = timestamp_seconds(mail) else {
+    let Some(ts) = timestamp_seconds(headers) else {
         return Ok(None);
     };
 
-    let subject = header(mail, "Subject");
-    let subject_name = contact_name_from_subject(&subject);
-    let mut addr_raw = header(mail, "X-smssync-address");
+    let subject_name = contact_name_from_subject(&headers.subject);
+    let mut addr_raw = headers.smssync_address.clone();
     if addr_raw.is_empty()
         && let Some(ref name) = subject_name
     {
@@ -212,7 +239,7 @@ pub(crate) fn parse_flat_eml_mail(
     }
 
     let name_hint = subject_name.clone();
-    let sent = is_sent(mail, owner_emails);
+    let sent = is_sent(headers, owner_emails);
     let body = extract_body(mail);
 
     let file_key = hex::encode(Sha256::digest(path.to_string_lossy().as_bytes()));
@@ -230,8 +257,7 @@ pub(crate) fn parse_flat_eml_mail(
             (true, None)
         } else {
             // Prefer From header digits among participants
-            let from_hdr = header(mail, "From");
-            let from_nums = smssync_participant_numbers(&from_hdr);
+            let from_nums = smssync_participant_numbers(&headers.from);
             let sender = from_nums
                 .into_iter()
                 .find(|n| !owner_digits.contains(n) && non_owner.contains(n))
@@ -240,11 +266,11 @@ pub(crate) fn parse_flat_eml_mail(
         };
         let (chat_key, title) = group_chat_id(&non_owner);
         let participant_digits: Vec<_> = non_owner.into_iter().map(|d| (d, None)).collect();
-        let smssync_id = {
-            let raw = header(mail, "X-smssync-id");
-            if raw.is_empty() { None } else { Some(raw) }
+        let smssync_id = if headers.smssync_id.is_empty() {
+            None
+        } else {
+            Some(headers.smssync_id.clone())
         };
-        let android_type = header(mail, "X-smssync-type");
         return Ok(Some(ParsedMessage {
             chat_key,
             conversation_type: "group".into(),
@@ -258,7 +284,7 @@ pub(crate) fn parse_flat_eml_mail(
             name_hint,
             smssync_id,
             source_kind: "flat".into(),
-            android_type,
+            android_type: headers.smssync_type.clone(),
             eml_path: String::new(),
         }));
     }
@@ -282,11 +308,11 @@ pub(crate) fn parse_flat_eml_mail(
         return Ok(None);
     }
 
-    let smssync_id = {
-        let raw = header(mail, "X-smssync-id");
-        if raw.is_empty() { None } else { Some(raw) }
+    let smssync_id = if headers.smssync_id.is_empty() {
+        None
+    } else {
+        Some(headers.smssync_id.clone())
     };
-    let android_type = header(mail, "X-smssync-type");
     Ok(Some(ParsedMessage {
         chat_key: conv_number.clone(),
         conversation_type: "individual".into(),
@@ -308,16 +334,14 @@ pub(crate) fn parse_flat_eml_mail(
         name_hint,
         smssync_id,
         source_kind: "flat".into(),
-        android_type,
+        android_type: headers.smssync_type.clone(),
         eml_path: String::new(),
     }))
 }
 
 /// Classify whether this EML looks like a consolidated archive thread.
-pub(crate) fn is_archive_eml(mail: &ParsedMail<'_>) -> bool {
-    let subject = header(mail, "Subject");
-    archive_subject_prefix_re().is_match(subject.trim())
-        && header(mail, "X-smssync-type").is_empty()
+pub(crate) fn is_archive_eml(headers: &MailHeaders) -> bool {
+    archive_subject_prefix_re().is_match(headers.subject.trim()) && headers.smssync_type.is_empty()
 }
 #[cfg(test)]
 mod tests {
@@ -342,8 +366,9 @@ Hello from Alice\r\n",
         .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         let mail = mailparse::parse_mail(&bytes).unwrap();
+        let headers = MailHeaders::from_mail(&mail);
         let owners = HashSet::from(["5555550100".to_string()]);
-        let msg = parse_flat_eml_mail(&path, &mail, &owners, &[])
+        let msg = parse_flat_eml_mail(&path, &mail, &headers, &owners, &[])
             .unwrap()
             .unwrap();
         assert!(!msg.is_from_me);
@@ -371,10 +396,17 @@ Hello\r\n",
         .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         let mail = mailparse::parse_mail(&bytes).unwrap();
+        let headers = MailHeaders::from_mail(&mail);
         let owners = HashSet::from(["5555550100".to_string()]);
-        let msg = parse_flat_eml_mail(&path, &mail, &owners, &["me@example.com".into()])
-            .unwrap()
-            .unwrap();
+        let msg = parse_flat_eml_mail(
+            &path,
+            &mail,
+            &headers,
+            &owners,
+            &["me@example.com".into()],
+        )
+        .unwrap()
+        .unwrap();
         assert_eq!(msg.chat_key, "4075551234");
         assert!(msg.is_from_me);
     }
@@ -403,8 +435,9 @@ old message\r\n"
         .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         let mail = mailparse::parse_mail(&bytes).unwrap();
+        let headers = MailHeaders::from_mail(&mail);
         let owners = HashSet::from(["5555550100".to_string()]);
-        let msg = parse_flat_eml_mail(&path, &mail, &owners, &[])
+        let msg = parse_flat_eml_mail(&path, &mail, &headers, &owners, &[])
             .unwrap()
             .unwrap();
         assert!((msg.timestamp_secs - 978_307_200.0).abs() < 0.001);

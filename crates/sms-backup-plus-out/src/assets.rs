@@ -147,6 +147,7 @@ pub(crate) fn extract_attachments(
             mime_type: mime_for_ext(&ext)
                 .map(|s| s.to_string())
                 .or(if ctype.is_empty() { None } else { Some(ctype) }),
+            digest_hex,
             data: payload,
         });
     }

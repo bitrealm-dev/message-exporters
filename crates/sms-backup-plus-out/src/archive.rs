@@ -14,13 +14,13 @@
 //! guesswork — see [`assign_archive_attachments`].
 
 use crate::assets::extract_attachments;
-use crate::flat_eml::is_archive_eml;
+use crate::flat_eml::{is_archive_eml, MailHeaders};
 use crate::types::{AttachmentBlob, ParsedMessage};
 use anyhow::{Context, Result};
-use mailparse::MailHeaderMap;
 use message_phone::sanitize_number;
 use regex::Regex;
 use sha2::{Digest, Sha256};
+use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -55,14 +55,6 @@ fn message_header_re() -> &'static Regex {
 
 fn date_only_re() -> &'static Regex {
     DATE_ONLY_RE.get_or_init(|| Regex::new(r"^\d{4}-\d{2}-\d{2}$").expect("date"))
-}
-
-fn header(mail: &mailparse::ParsedMail<'_>, name: &str) -> String {
-    mail.headers
-        .get_first_value(name)
-        .unwrap_or_default()
-        .trim()
-        .to_string()
 }
 
 fn extract_plain_body(mail: &mailparse::ParsedMail<'_>) -> String {
@@ -130,18 +122,21 @@ fn parse_archive_timestamp(date_str: &str) -> Option<f64> {
 ///
 /// Tiny example: three messages (text, empty, text) and two images → the empty
 /// one gets image 1; the first text still without an attachment gets image 2.
-fn assign_archive_attachments(messages: &mut [ParsedMessage], mut att_queue: Vec<AttachmentBlob>) {
+fn assign_archive_attachments(messages: &mut [ParsedMessage], att_queue: Vec<AttachmentBlob>) {
     if messages.is_empty() || att_queue.is_empty() {
         return;
     }
+    let mut att_queue: VecDeque<AttachmentBlob> = att_queue.into();
 
     // Pass 1: empty-body messages first.
     for msg in messages.iter_mut() {
         if att_queue.is_empty() {
             break;
         }
-        if msg.text.trim().is_empty() {
-            msg.attachments.push(att_queue.remove(0));
+        if msg.text.trim().is_empty()
+            && let Some(att) = att_queue.pop_front()
+        {
+            msg.attachments.push(att);
         }
     }
 
@@ -150,8 +145,10 @@ fn assign_archive_attachments(messages: &mut [ParsedMessage], mut att_queue: Vec
         if att_queue.is_empty() {
             break;
         }
-        if msg.attachments.is_empty() {
-            msg.attachments.push(att_queue.remove(0));
+        if msg.attachments.is_empty()
+            && let Some(att) = att_queue.pop_front()
+        {
+            msg.attachments.push(att);
         }
     }
 
@@ -159,7 +156,7 @@ fn assign_archive_attachments(messages: &mut [ParsedMessage], mut att_queue: Vec
     if !att_queue.is_empty()
         && let Some(last) = messages.last_mut()
     {
-        last.attachments.append(&mut att_queue);
+        last.attachments.extend(att_queue);
     }
 }
 
@@ -168,18 +165,17 @@ fn assign_archive_attachments(messages: &mut [ParsedMessage], mut att_queue: Vec
 pub(crate) fn parse_archive_eml_mail(
     path: &Path,
     mail: &mailparse::ParsedMail<'_>,
+    headers: &MailHeaders,
 ) -> Result<(Vec<ParsedMessage>, u64)> {
-    if !is_archive_eml(mail) {
+    if !is_archive_eml(headers) {
         return Ok((Vec::new(), 0));
     }
 
-    let subject = header(mail, "Subject");
     let caps = archive_subject_re()
-        .captures(subject.trim())
+        .captures(headers.subject.trim())
         .context("archive subject")?;
     let export_name = clean_archive_contact_name(&caps[1]);
-    let from_hdr = header(mail, "From");
-    let phone_raw = phone_from_from_header(&from_hdr);
+    let phone_raw = phone_from_from_header(&headers.from);
     // Empty peer phones are kept and written under the `unknown` chat stem.
     let conv_number = if !phone_raw.is_empty() {
         phone_raw.clone()
@@ -349,7 +345,8 @@ Thanks\r\n",
         .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         let mail = mailparse::parse_mail(&bytes).unwrap();
-        let (msgs, _) = parse_archive_eml_mail(&path, &mail).unwrap();
+        let headers = MailHeaders::from_mail(&mail);
+        let (msgs, _) = parse_archive_eml_mail(&path, &mail, &headers).unwrap();
         assert_eq!(msgs.len(), 2);
         assert!(msgs[0].is_from_me);
         assert_eq!(msgs[0].text, "Check this");
@@ -386,7 +383,8 @@ Hi there\r\n",
         .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         let mail = mailparse::parse_mail(&bytes).unwrap();
-        let (msgs, _) = parse_archive_eml_mail(&path, &mail).unwrap();
+        let headers = MailHeaders::from_mail(&mail);
+        let (msgs, _) = parse_archive_eml_mail(&path, &mail, &headers).unwrap();
         assert_eq!(msgs.len(), 1);
         assert_eq!(msgs[0].chat_key, "");
         assert_eq!(crate::identity::chat_id_for(&msgs[0]), "unknown");
@@ -413,7 +411,8 @@ Thanks\r\n",
         .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         let mail = mailparse::parse_mail(&bytes).unwrap();
-        let (msgs, skipped) = parse_archive_eml_mail(&path, &mail).unwrap();
+        let headers = MailHeaders::from_mail(&mail);
+        let (msgs, skipped) = parse_archive_eml_mail(&path, &mail, &headers).unwrap();
         assert_eq!(skipped, 1);
         assert_eq!(msgs.len(), 1);
         assert_eq!(msgs[0].text, "Thanks");
@@ -442,6 +441,7 @@ Thanks\r\n",
             filename: "a.jpg".into(),
             original_name: Some("a.jpg".into()),
             mime_type: Some("image/jpeg".into()),
+            digest_hex: "abc".into(),
             data: vec![1, 2, 3],
         };
         assign_archive_attachments(&mut messages, vec![att]);

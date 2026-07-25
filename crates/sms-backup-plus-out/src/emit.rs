@@ -4,14 +4,14 @@ use crate::archive::parse_archive_eml_mail;
 use crate::contacts::{
     apply_name_mapping, enrich_display_names, fill_unknown_phone,
 };
-use message_contacts::{ContactsBook, NameMapping};
-use crate::flat_eml::{is_archive_eml, is_flat_sms_eml, parse_flat_eml_mail};
+use crate::flat_eml::{is_archive_eml, is_flat_sms_eml, MailHeaders, parse_flat_eml_mail};
 use crate::identity::{chat_id_for, cover_identity, safe_stem, timestamp_ms};
 use crate::types::{AttachmentBlob, ParsedMessage};
 use anyhow::{Context, Result, bail};
+use message_contacts::{ContactsBook, NameMapping};
 use message_csv::{format_local_ts, json_cell, stable_guid, AttachmentCell, DateRange};
 use message_phone::{OwnerPhoneSet, to_e164};
-use sha2::{Digest, Sha256};
+use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
@@ -110,13 +110,12 @@ fn safe_filename(chat_id: &str) -> String {
     format!("{}.csv", safe_stem(chat_id))
 }
 
-fn relative_eml_path(eml_path: &Path, inputs: &[impl AsRef<Path>]) -> String {
+fn relative_eml_path(eml_path: &Path, inputs: &[PathBuf], file_inputs: &HashSet<PathBuf>) -> String {
     for root in inputs {
-        let root = root.as_ref();
         if let Ok(rel) = eml_path.strip_prefix(root) {
             return rel.display().to_string();
         }
-        if root.is_file() && eml_path == root {
+        if file_inputs.contains(root) && eml_path == root {
             return root
                 .file_name()
                 .and_then(|n| n.to_str())
@@ -147,7 +146,7 @@ fn write_attachments(
             rel_path: format!("attachments/{}", blob.filename),
             original_name: blob.original_name.clone(),
             mime_type: blob.mime_type.clone(),
-            digest_hex: hex::encode(Sha256::digest(&blob.data)),
+            digest_hex: blob.digest_hex.clone(),
         });
     }
     Ok(out)
@@ -392,8 +391,9 @@ fn collect_eml_paths<P: AsRef<Path>>(inputs: &[P]) -> Result<Vec<PathBuf>> {
     fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
+            let ft = entry.file_type()?;
             let path = entry.path();
-            if path.is_dir() {
+            if ft.is_dir() {
                 let name = path
                     .file_name()
                     .and_then(|n| n.to_str())
@@ -403,10 +403,11 @@ fn collect_eml_paths<P: AsRef<Path>>(inputs: &[P]) -> Result<Vec<PathBuf>> {
                     continue;
                 }
                 walk(&path, out)?;
-            } else if path
-                .extension()
-                .and_then(|e| e.to_str())
-                .is_some_and(|e| e.eq_ignore_ascii_case("eml"))
+            } else if ft.is_file()
+                && path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| e.eq_ignore_ascii_case("eml"))
             {
                 out.push(path);
             }
@@ -435,6 +436,7 @@ fn collect_eml_paths<P: AsRef<Path>>(inputs: &[P]) -> Result<Vec<PathBuf>> {
         walk(input, &mut paths)?;
     }
 
+    // Stable order for deterministic CSV dedupe winners when timestamps tie.
     paths.sort();
     paths.dedup();
     if paths.is_empty() {
@@ -446,6 +448,92 @@ fn collect_eml_paths<P: AsRef<Path>>(inputs: &[P]) -> Result<Vec<PathBuf>> {
         bail!("no .eml files under: {listed}");
     }
     Ok(paths)
+}
+
+/// Per-file parse result produced in parallel; merged serially into conversations.
+enum ParsedEmlKind {
+    Archive {
+        msgs: Vec<ParsedMessage>,
+        skipped_dates: u64,
+        path_display: String,
+    },
+    Flat {
+        msg: ParsedMessage,
+        path_display: String,
+    },
+    FlatNone,
+    NotSms,
+    IoError(String),
+    ParseError(String),
+}
+
+fn parse_one_eml(
+    eml_path: &Path,
+    rel_path: String,
+    owner_digits: &HashSet<String>,
+    owner_emails_lc: &[String],
+    contacts: &ContactsBook,
+    name_mapping: &NameMapping,
+) -> ParsedEmlKind {
+    let bytes = match std::fs::read(eml_path) {
+        Ok(b) => b,
+        Err(err) => {
+            return ParsedEmlKind::IoError(format!("{}: {err}", eml_path.display()));
+        }
+    };
+    let mail = match mailparse::parse_mail(&bytes) {
+        Ok(m) => m,
+        Err(err) => {
+            return ParsedEmlKind::ParseError(format!(
+                "{}: parse EML: {err}",
+                eml_path.display()
+            ));
+        }
+    };
+    let headers = MailHeaders::from_mail(&mail);
+    let path_display = eml_path.display().to_string();
+
+    if is_archive_eml(&headers) {
+        match parse_archive_eml_mail(eml_path, &mail, &headers) {
+            Ok((mut msgs, skipped_dates)) => {
+                for msg in &mut msgs {
+                    msg.eml_path = rel_path.clone();
+                    let _ = apply_name_mapping(msg, name_mapping, contacts);
+                    let _ = fill_unknown_phone(msg, contacts);
+                    enrich_display_names(msg, contacts);
+                }
+                ParsedEmlKind::Archive {
+                    msgs,
+                    skipped_dates,
+                    path_display,
+                }
+            }
+            Err(err) => ParsedEmlKind::ParseError(format!("{path_display}: {err:#}")),
+        }
+    } else if is_flat_sms_eml(&headers) {
+        match parse_flat_eml_mail(
+            eml_path,
+            &mail,
+            &headers,
+            owner_digits,
+            owner_emails_lc,
+        ) {
+            Ok(Some(mut msg)) => {
+                msg.eml_path = rel_path;
+                let _ = apply_name_mapping(&mut msg, name_mapping, contacts);
+                let _ = fill_unknown_phone(&mut msg, contacts);
+                enrich_display_names(&mut msg, contacts);
+                ParsedEmlKind::Flat {
+                    msg,
+                    path_display,
+                }
+            }
+            Ok(None) => ParsedEmlKind::FlatNone,
+            Err(err) => ParsedEmlKind::ParseError(format!("{path_display}: {err:#}")),
+        }
+    } else {
+        ParsedEmlKind::NotSms
+    }
 }
 
 const EML_PROGRESS_EVERY: u64 = 5000;
@@ -482,11 +570,16 @@ pub fn convert_export<P: AsRef<Path>>(
     copy_attachments: bool,
 ) -> Result<ExportReport> {
     let owners = OwnerPhoneSet::new(owner_phones)?;
+    let owner_emails_lc: Vec<String> = owner_emails
+        .iter()
+        .map(|e| e.trim().to_ascii_lowercase())
+        .filter(|e| !e.is_empty())
+        .collect();
     let mut report = ExportReport::default();
     let mut conversations: HashMap<String, PendingConversation> = HashMap::new();
 
     vlog(verbose, format!("owner phones: {}", owners.all_digits.len()));
-    vlog(verbose, format!("owner emails: {}", owner_emails.len()));
+    vlog(verbose, format!("owner emails: {}", owner_emails_lc.len()));
     vlog(
         verbose,
         format!("contacts entries (by phone): {}", contacts.len()),
@@ -500,82 +593,46 @@ pub fn convert_export<P: AsRef<Path>>(
         fs::create_dir_all(&attachments_dir)?;
     }
 
+    let input_roots: Vec<PathBuf> = inputs.iter().map(|p| p.as_ref().to_path_buf()).collect();
+    let file_inputs: HashSet<PathBuf> = input_roots
+        .iter()
+        .filter(|p| p.is_file())
+        .cloned()
+        .collect();
+
     let eml_paths = collect_eml_paths(inputs)?;
     let total = eml_paths.len() as u64;
-    vlog(verbose, format!("scanning {total} .eml files"));
+    vlog(verbose, format!("scanning {total} .eml files (parallel parse)"));
     // Pre-size for typical 1:1 chat counts; grows as needed.
     conversations.reserve((total / 4).min(50_000) as usize);
-    for (idx, eml_path) in eml_paths.into_iter().enumerate() {
+
+    // Parallel: read + MIME parse + message build. Serial: attachment write + dedupe merge.
+    let outcomes: Vec<ParsedEmlKind> = eml_paths
+        .par_iter()
+        .map(|eml_path| {
+            let rel_path = relative_eml_path(eml_path, &input_roots, &file_inputs);
+            parse_one_eml(
+                eml_path,
+                rel_path,
+                &owners.all_digits,
+                &owner_emails_lc,
+                contacts,
+                name_mapping,
+            )
+        })
+        .collect();
+
+    for (idx, outcome) in outcomes.into_iter().enumerate() {
         report_progress(verbose, "scanned", (idx + 1) as u64, total);
-        let rel_path = relative_eml_path(&eml_path, inputs);
-        let bytes = match std::fs::read(&eml_path) {
-            Ok(b) => b,
-            Err(err) => {
-                report.errors.push(format!("{}: {err}", eml_path.display()));
-                continue;
-            }
-        };
-        let mail = match mailparse::parse_mail(&bytes) {
-            Ok(m) => m,
-            Err(err) => {
-                report.skipped_parse_error += 1;
-                report
-                    .errors
-                    .push(format!("{}: parse EML: {err}", eml_path.display()));
-                continue;
-            }
-        };
-
-        if is_archive_eml(&mail) {
-            match parse_archive_eml_mail(&eml_path, &mail) {
-                Ok((mut msgs, skipped_dates)) => {
-                    report.archive_eml += 1;
-                    report.skipped_invalid_date += skipped_dates;
-                    for msg in &mut msgs {
-                        msg.eml_path = rel_path.clone();
-                        let _ = apply_name_mapping(msg, name_mapping, contacts);
-                        let _ = fill_unknown_phone(msg, contacts);
-                        enrich_display_names(msg, contacts);
-                    }
-                    for msg in msgs {
-                        if !date_range.contains_secs_f64(msg.timestamp_secs) {
-                            report.skipped_out_of_range += 1;
-                            continue;
-                        }
-                        if msg.chat_key.is_empty() {
-                            report.unknown_chat_messages += 1;
-                        }
-                        match write_attachments(
-                            &msg.attachments,
-                            &attachments_dir,
-                            &mut report,
-                            copy_attachments,
-                        ) {
-                            Ok(atts) => add_message(&mut conversations, msg, atts, &mut report),
-                            Err(err) => report
-                                .errors
-                                .push(format!("{}: {err:#}", eml_path.display())),
-                        }
-                    }
-                }
-                Err(err) => {
-                    report.skipped_parse_error += 1;
-                    report
-                        .errors
-                        .push(format!("{}: {err:#}", eml_path.display()));
-                }
-            }
-            continue;
-        }
-
-        if is_flat_sms_eml(&mail) {
-            match parse_flat_eml_mail(&eml_path, &mail, &owners.all_digits, owner_emails) {
-                Ok(Some(mut msg)) => {
-                    msg.eml_path = rel_path;
-                    let _ = apply_name_mapping(&mut msg, name_mapping, contacts);
-                    let _ = fill_unknown_phone(&mut msg, contacts);
-                    enrich_display_names(&mut msg, contacts);
-                    report.flat_eml += 1;
+        match outcome {
+            ParsedEmlKind::Archive {
+                msgs,
+                skipped_dates,
+                path_display,
+            } => {
+                report.archive_eml += 1;
+                report.skipped_invalid_date += skipped_dates;
+                for msg in msgs {
                     if !date_range.contains_secs_f64(msg.timestamp_secs) {
                         report.skipped_out_of_range += 1;
                         continue;
@@ -590,21 +647,45 @@ pub fn convert_export<P: AsRef<Path>>(
                         copy_attachments,
                     ) {
                         Ok(atts) => add_message(&mut conversations, msg, atts, &mut report),
-                        Err(err) => report
-                            .errors
-                            .push(format!("{}: {err:#}", eml_path.display())),
+                        Err(err) => report.errors.push(format!("{path_display}: {err:#}")),
                     }
                 }
-                Ok(None) => report.skipped_parse_error += 1,
-                Err(err) => {
-                    report.skipped_parse_error += 1;
-                    report
-                        .errors
-                        .push(format!("{}: {err:#}", eml_path.display()));
+            }
+            ParsedEmlKind::Flat {
+                msg,
+                path_display,
+            } => {
+                report.flat_eml += 1;
+                if !date_range.contains_secs_f64(msg.timestamp_secs) {
+                    report.skipped_out_of_range += 1;
+                    continue;
+                }
+                if msg.chat_key.is_empty() {
+                    report.unknown_chat_messages += 1;
+                }
+                match write_attachments(
+                    &msg.attachments,
+                    &attachments_dir,
+                    &mut report,
+                    copy_attachments,
+                ) {
+                    Ok(atts) => add_message(&mut conversations, msg, atts, &mut report),
+                    Err(err) => report.errors.push(format!("{path_display}: {err:#}")),
                 }
             }
-        } else {
-            report.skipped_not_sms_backup_plus += 1;
+            ParsedEmlKind::FlatNone => {
+                report.skipped_parse_error += 1;
+            }
+            ParsedEmlKind::NotSms => {
+                report.skipped_not_sms_backup_plus += 1;
+            }
+            ParsedEmlKind::IoError(msg) => {
+                report.errors.push(msg);
+            }
+            ParsedEmlKind::ParseError(msg) => {
+                report.skipped_parse_error += 1;
+                report.errors.push(msg);
+            }
         }
     }
 

@@ -5,6 +5,8 @@ pub(crate) struct AttachmentBlob {
     pub filename: String,
     pub original_name: Option<String>,
     pub mime_type: Option<String>,
+    /// SHA-256 hex of [`Self::data`], computed once at extract time.
+    pub digest_hex: String,
     pub data: Vec<u8>,
 }
 
