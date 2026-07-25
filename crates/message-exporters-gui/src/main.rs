@@ -656,7 +656,7 @@ impl App {
                 ui,
                 "Seed",
                 &mut self.form.obfuscate_seed,
-                "Optional 64-hex seed",
+                "Optional 8-hex seed",
                 PATH_W,
             );
         }

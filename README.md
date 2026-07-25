@@ -72,7 +72,7 @@ Options and architecture: [`docs/GUI.md`](docs/GUI.md).
 
 ## Obfuscate (share structure, not PII)
 
-Add `--obfuscate` (optional `--obfuscate-seed <64-hex>`) to any converter to rewrite names, numbers, message text (same length), and attachments after export. Remaps are stable for a given seed and not reversible from the CSV alone; the seed is printed to stderr when generated. Details: [`crates/message-obfuscate`](crates/message-obfuscate).
+Add `--obfuscate` (optional `--obfuscate-seed <8-hex>`) to any converter to rewrite names, numbers, message text (same length), and attachments after export. Remaps are stable for a given seed and not reversible from the CSV alone; the seed is printed to stderr when generated. Details: [`crates/message-obfuscate`](crates/message-obfuscate).
 
 ## Quick start
 

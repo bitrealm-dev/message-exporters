@@ -9,7 +9,7 @@ Remaps are **stable** for a given secret seed (HMAC-SHA256) and **not reversible
 Every converter accepts:
 
 - `--obfuscate` — rewrite the output directory after convert
-- `--obfuscate-seed <64-hex>` — reproducible remaps (implies obfuscate). If omitted, a random seed is printed once to stderr.
+- `--obfuscate-seed <8-hex>` — reproducible remaps (implies obfuscate). Exactly 8 hex characters. If omitted, a random 8-hex seed is printed once to stderr.
 
 ## iMazing CSV rewriter
 
@@ -21,7 +21,7 @@ cargo run --release -p message-obfuscate --bin imazing-obfuscate -- \
   --output ./staging/imazing-anon
 ```
 
-Optional: `--obfuscate-seed <hex>`.
+Optional: `--obfuscate-seed <8-hex>`.
 
 ## What changes
 

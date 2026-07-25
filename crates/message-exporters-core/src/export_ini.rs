@@ -340,7 +340,7 @@ mod tests {
             start_date: "2020-01-01".into(),
             end_date: "2021-01-01".into(),
             obfuscate: true,
-            obfuscate_seed: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            obfuscate_seed: "01234567"
                 .into(),
             owner_phones: "+15555550100\n+15555550101".into(),
             contacts: "/tmp/contacts.vcf".into(),

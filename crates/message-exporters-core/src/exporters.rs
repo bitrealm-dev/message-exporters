@@ -523,8 +523,8 @@ fn push_seed(args: &mut Vec<OsString>, seed: &str, errors: &mut Vec<String>) {
     if seed.is_empty() {
         return;
     }
-    if seed.len() != 64 || !seed.chars().all(|c| c.is_ascii_hexdigit()) {
-        errors.push("Obfuscate seed must be exactly 64 hexadecimal characters.".into());
+    if seed.len() != 8 || !seed.chars().all(|c| c.is_ascii_hexdigit()) {
+        errors.push("Obfuscate seed must be exactly 8 hexadecimal characters.".into());
     } else {
         push_pair(args, "--obfuscate-seed", seed);
     }
@@ -574,7 +574,7 @@ mod tests {
     }
 
     #[test]
-    fn seed_must_be_64_hex() {
+    fn seed_must_be_valid_hex() {
         let form = Form {
             input: std::env::current_dir().unwrap().display().to_string(),
             output: "out".into(),
@@ -582,6 +582,15 @@ mod tests {
             ..Form::default()
         };
         assert!(form.build_args(Exporter::OpenExtract).is_err());
+        let form = Form {
+            input: std::env::current_dir().unwrap().display().to_string(),
+            output: "out".into(),
+            obfuscate_seed: "01234567".into(),
+            obfuscate: true,
+            ..Form::default()
+        };
+        let args = form.build_args(Exporter::OpenExtract).unwrap();
+        assert!(args.iter().any(|arg| arg == "--obfuscate-seed"));
     }
 
     #[test]

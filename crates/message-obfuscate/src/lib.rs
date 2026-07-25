@@ -17,7 +17,7 @@ use hmac::{Hmac, Mac};
 use rand::RngCore;
 use regex::Regex;
 use serde_json::{json, Value};
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 
 use names::{FIRST_NAMES, LAST_NAMES};
 
@@ -493,31 +493,40 @@ pub fn materialize_placeholders(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Parse `--obfuscate-seed` hex or generate a random key; print seed to stderr when generated.
+/// Seed length: 4 bytes → exactly 8 hex characters.
+pub const OBFUSCATE_SEED_BYTES: usize = 4;
+pub const OBFUSCATE_SEED_HEX_LEN: usize = 8;
+
+fn key_from_seed_bytes(bytes: &[u8]) -> [u8; 32] {
+    let dig = Sha256::digest(bytes);
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&dig);
+    key
+}
+
+/// Parse `--obfuscate-seed` hex or generate a random seed; print seed to stderr when generated.
 pub fn resolve_obfuscator(seed_hex: Option<&str>) -> Result<Obfuscator> {
     let key = match seed_hex {
         Some(s) => {
             let s = s.trim();
-            let bytes = hex::decode(s).context("invalid --obfuscate-seed (expected hex)")?;
-            if bytes.len() != 32 {
+            if s.len() != OBFUSCATE_SEED_HEX_LEN {
                 bail!(
-                    "--obfuscate-seed must be 32 bytes (64 hex chars), got {} bytes",
-                    bytes.len()
+                    "--obfuscate-seed must be exactly {OBFUSCATE_SEED_HEX_LEN} hex characters (got {})",
+                    s.len()
                 );
             }
-            let mut key = [0u8; 32];
-            key.copy_from_slice(&bytes);
-            key
+            let bytes = hex::decode(s).context("invalid --obfuscate-seed (expected hex)")?;
+            key_from_seed_bytes(&bytes)
         }
         None => {
-            let mut key = [0u8; 32];
-            rand::rng().fill_bytes(&mut key);
-            let hex_key = hex::encode(key);
+            let mut seed = [0u8; OBFUSCATE_SEED_BYTES];
+            rand::rng().fill_bytes(&mut seed);
+            let hex_key = hex::encode(seed);
             let _ = writeln!(
                 std::io::stderr(),
                 "obfuscate-seed: {hex_key}  (save to reproduce; not written to output)"
             );
-            key
+            key_from_seed_bytes(&seed)
         }
     };
     Ok(Obfuscator::new(key))
@@ -1067,5 +1076,24 @@ mod tests {
             assert!(text.contains("attachments/placeholder.jpg"));
         }
         assert!(!found_original);
+    }
+
+    #[test]
+    fn seed_resolves_and_is_stable() {
+        let mut a = resolve_obfuscator(Some("01234567")).unwrap();
+        let mut b = resolve_obfuscator(Some("01234567")).unwrap();
+        assert_eq!(a.obfuscate_phone("+15555550100"), b.obfuscate_phone("+15555550100"));
+        assert_ne!(
+            a.obfuscate_phone("+15555550100"),
+            resolve_obfuscator(Some("fedcba98"))
+                .unwrap()
+                .obfuscate_phone("+15555550100")
+        );
+    }
+
+    #[test]
+    fn seed_rejects_wrong_length() {
+        assert!(resolve_obfuscator(Some("abcd")).is_err());
+        assert!(resolve_obfuscator(Some("0123456789abcdef")).is_err());
     }
 }

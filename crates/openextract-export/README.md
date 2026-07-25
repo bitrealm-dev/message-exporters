@@ -37,7 +37,7 @@ cargo run --release -p openextract-export -- \
 
 `--input` may be a single `conversation_*.csv`, an `all_conversations.csv`, or a directory of those files. `*_attachments.csv` files are skipped automatically.
 
-Add `--obfuscate` (optional `--obfuscate-seed <64-hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-obfuscate`](../message-obfuscate).
+Add `--obfuscate` (optional `--obfuscate-seed <hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-obfuscate`](../message-obfuscate).
 
 Optional `--start-date` / `--end-date` (`YYYY-MM-DD`) keep messages in `[start, end)` using host local midnight (end exclusive).
 

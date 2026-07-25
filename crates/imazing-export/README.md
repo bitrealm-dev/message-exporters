@@ -67,7 +67,7 @@ Optional `--start-date` / `--end-date` (`YYYY-MM-DD`) keep messages in `[start, 
 
 Attachment media: `--media-mode disabled|clone|convert|compress` (default `clone`). Clone copies files from the export by suffix-matching the CSV Attachment name into `output/attachments/`. Convert/compress need `ffmpeg`/`ffprobe`. See [`message-media`](../message-media).
 
-Add `--obfuscate` (optional `--obfuscate-seed <64-hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-obfuscate`](../message-obfuscate).
+Add `--obfuscate` (optional `--obfuscate-seed <hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-obfuscate`](../message-obfuscate).
 
 ## Important limitations
 

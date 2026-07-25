@@ -16,7 +16,7 @@ struct Cli {
     #[arg(long)]
     output: PathBuf,
 
-    /// Optional 64-char hex seed for reproducible (but non-reversible) remaps
+    /// Optional 8-hex seed for reproducible remaps
     #[arg(long = "obfuscate-seed")]
     obfuscate_seed: Option<String>,
 }

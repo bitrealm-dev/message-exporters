@@ -60,7 +60,7 @@ Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules a
 |---------|--------|-------------|-------|
 | Backup source | labeled selector | which binary | Sorted alphabetically by display name |
 | Obfuscate | checkbox (global) | `--obfuscate` | When enabled, show seed field |
-| Seed | text (64-hex, global) | `--obfuscate-seed` | Optional; blank = generate at run time |
+| Seed | text (exactly 8 hex) | `--obfuscate-seed` | Optional; blank = generate at run time |
 | Start date | text (global) | `--start-date` | Optional `YYYY-MM-DD`, inclusive |
 | End date | text (global) | `--end-date` | Optional `YYYY-MM-DD`, exclusive |
 | Product title | hyperlink | — | Opens the upstream product/tool site |
@@ -196,7 +196,7 @@ Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox
 2. **Contacts format:** label and file filters must match the exporter (VCF / iMazing Contacts CSV vs Apple AddressBook).
 3. **Phone numbers:** required for GO SMS Pro and SMS Backup & Restore before Run; Plus also requires email address(es).
 4. **Path existence:** input must exist; output folder may be created on run.
-5. **Obfuscate seed:** if provided, must be 64 hex characters; empty means generate.
+5. **Obfuscate seed:** if provided, must be exactly 8 hex characters; empty means generate.
 6. **Timezone (iMazing):** if set, must be a valid IANA name (or defer to converter error).
 7. **iPhone backup:** output directory is required; always passes `--use-caller-id`; obfuscate only applies to CSV.
 8. **SMS Backup+:** exactly one input path; GUI always prefixes `convert` and always passes `--verbose`.

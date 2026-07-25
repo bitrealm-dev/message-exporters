@@ -40,7 +40,7 @@ struct Cli {
     #[arg(long)]
     obfuscate: bool,
 
-    /// Optional 64-char hex seed for reproducible obfuscation (implies --obfuscate)
+    /// Optional 8-hex seed for reproducible obfuscation (implies --obfuscate)
     #[arg(long = "obfuscate-seed")]
     obfuscate_seed: Option<String>,
 

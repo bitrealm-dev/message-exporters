@@ -93,7 +93,7 @@ pub struct Options {
     pub show_progress: bool,
     /// Obfuscate CSV output (names, numbers, text, attachments).
     pub obfuscate: bool,
-    /// Optional 64-char hex seed for reproducible obfuscation.
+    /// Optional 8-hex seed for reproducible obfuscation.
     pub obfuscate_seed: Option<String>,
 }
 
@@ -539,7 +539,7 @@ fn get_command() -> Command {
         .arg(
             Arg::new(OPTION_OBFUSCATE_SEED)
                 .long(OPTION_OBFUSCATE_SEED)
-                .help("64-char hex seed for reproducible --obfuscate remaps (implies --obfuscate)\n")
+                .help("8-hex seed for reproducible --obfuscate remaps (implies --obfuscate)\n")
                 .display_order(18)
                 .value_name("hex"),
         )
