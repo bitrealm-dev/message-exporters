@@ -1,23 +1,41 @@
-# Introduction
+## Introduction
 
-Backing up texts is easy. Getting the messages *out* in a form you can read is not.
+*message-exporters* converts message backups and existing export-tool output into a consistent, portable CSV format. It produces one file per conversation and saves attachments alongside the exported messages.
 
-Every backup app invents its own format—Android XML dumps, email archives, opaque PDU blobs, Apple’s Messages database. Those formats are built for restoring onto another phone, not for browsing history, searching, or keeping a durable archive.
+The project does not try to replace the specialist tools that extract data from phones and backups. Instead, it builds on their work: it wraps, normalizes, and converts their output so the result is easier to archive, search, transform, or use in another application.
 
-**message-exporters** bridges that gap: turn vendor-specific backups into plain CSV—one spreadsheet file per conversation, with photos and other media saved beside those files.
+## Motivation
+
+Phone backups are made for restoring a device—not for letting people read or reuse their message history.
+
+iCloud and Google backups generally cannot be browsed as an archive; they are meant to be restored to a phone. Apple’s local iTunes/Finder backups give users a copy of their data, but the messages still require separate tools to extract. On Android, complete application-data backups are usually unavailable without root, leaving users dependent on app-specific backup and export options.
+
+Once messages are extracted, every tool has its own format and limitations. One may produce HTML, another XML, a database, or an incomplete export. Attachments, sender phone numbers, group participants, timestamps, and conversation titles may be missing or difficult to use. The output may look fine in a browser but be unsuitable for filtering, searching, analysis, custom rendering, or conversion to JSON or XML.
+
+`message-exporters` avoids reinventing that extraction process. It provides a common CSV-based output that preserves the message data and available metadata from existing tools, giving users a format they can inspect and use however they want.
 
 ## Why CSV?
 
-JSON is great for programs, but hard for a person to skim. HTML is great in a browser, but awkward as a structured store you can sort, filter, or re-import.
+JSON is good for programs but difficult for humans to skim. HTML is easy to browse but awkward to sort, filter, or reuse as data.
 
-CSV sits in the middle: human-readable enough to open and verify, structured enough for spreadsheets and downstream tools (including [message-vault-rs](https://github.com/bitrealm-dev/message-vault-rs)).
+CSV is the middle ground: plain text, easy to check, and supported by spreadsheets, scripts, databases, and archival tools. One row per message makes conversations simple to sort, filter, validate, convert, and import elsewhere—including message-vault-rs.
 
-## Supported vs experimental
+It is not meant to preserve every source-specific detail. It is a simple, portable common format that users can keep and use without relying on the original backup tool.
 
-The desktop GUI and this site prioritize three **supported** sources:
+## Supported vs. Experimental
 
-1. **iPhone backup** (Apple Messages via `imessage-exporter`)
-2. **SMS Backup & Restore** (SyncTech XML)
-3. **WhatsApp** (native DB / crypt backup via `wtsexporter`)
+The desktop app focuses on 3 supported import paths:
 
-Other converters (GO SMS Pro, iMazing CSV, OpenExtract, SMS Backup+) ship in the same release zip but are labeled **experimental**—useful when that is the only backup you have, not the recommended path.
+1. **iPhone backups** — Apple Messages exports produced by `imessage-exporter`
+2. **SMS Backup & Restore** — SyncTech XML backups
+3. **WhatsApp** — native databases and encrypted `crypt` backups processed by `wtsexporter`
+
+Converters for:
+
+- GO SMS Pro
+- iMazing CSV
+- OpenExtract
+- SMS Backup+
+   
+are also included in the release ZIP, but are considered **experimental**. They are available for cases where those are the only backups you have, rather than recommended import methods.
+
