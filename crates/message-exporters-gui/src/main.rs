@@ -226,6 +226,19 @@ impl App {
         }
     }
 
+    /// Reset the active exporter's form fields and wipe its INI section.
+    fn clear_active_exporter(&mut self) {
+        self.sync_owner_phones();
+        self.sync_owner_emails();
+        self.export_ini.exporter = self.exporter;
+        self.export_ini.clear_active_section(&mut self.form);
+        self.owner_email_rows = rows_from_multiline(&self.form.owner_emails);
+        self.errors.clear();
+        if let Err(error) = self.export_ini.save(&self.form) {
+            self.errors = vec![error];
+        }
+    }
+
     fn start_export(&mut self) {
         if self.running {
             return;
@@ -653,6 +666,16 @@ impl App {
             let run = ui.add_enabled(!self.running, egui::Button::new("Run exporter"));
             if run.clicked() {
                 self.start_export();
+            }
+            let clear = ui
+                .add_enabled(!self.running, egui::Button::new("Clear"))
+                .on_hover_text(format!(
+                    "Clear {} fields and remove them from {}",
+                    self.exporter.display_name(),
+                    self.export_ini.path.display()
+                ));
+            if clear.clicked() {
+                self.clear_active_exporter();
             }
         });
     }

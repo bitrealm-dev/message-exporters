@@ -143,6 +143,15 @@ impl ExportIniState {
         self.apply_section_to_form(form);
     }
 
+    /// Empty the active exporter section and copy those blanks into `form`.
+    /// Leaves `[common]` fields on `form` unchanged.
+    pub fn clear_active_section(&mut self, form: &mut Form) {
+        *self.section_mut(self.exporter) = ExporterSection::default();
+        self.apply_section_to_form(form);
+        form.backup_password.clear();
+        form.advanced = false;
+    }
+
     pub fn save(&mut self, form: &Form) -> Result<(), String> {
         self.capture_form_section(form);
         let ini = build_ini(self, form);
@@ -381,6 +390,37 @@ mod tests {
         assert!(
             text.contains("exporter=sms-backup-plus") || text.contains("exporter = sms-backup-plus")
         );
+    }
+
+    #[test]
+    fn clear_active_section_empties_only_that_exporter() {
+        let mut form = Form {
+            input: "/data/go".into(),
+            output: "/data/go/out".into(),
+            owner_phones: "+15555550100".into(),
+            start_date: "2020-01-01".into(),
+            ..Form::default()
+        };
+        let mut state = ExportIniState {
+            path: PathBuf::from("unused"),
+            exporter: Exporter::GoSmsPro,
+            sections: Default::default(),
+        };
+        state.capture_form_section(&form);
+        state.switch_exporter(Exporter::Imazing, &mut form);
+        form.input = "/data/imazing".into();
+        form.output = "/data/imazing/out".into();
+        form.timezone = "UTC-05:00".into();
+        state.capture_form_section(&form);
+
+        state.clear_active_section(&mut form);
+        assert!(form.input.is_empty());
+        assert!(form.output.is_empty());
+        assert!(form.timezone.is_empty());
+        assert_eq!(form.owner_phones, "+15555550100");
+        assert_eq!(form.start_date, "2020-01-01");
+        assert!(state.section(Exporter::Imazing).input.is_empty());
+        assert_eq!(state.section(Exporter::GoSmsPro).input, "/data/go");
     }
 
     #[test]
