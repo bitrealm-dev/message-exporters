@@ -523,7 +523,7 @@ pub fn resolve_obfuscator(seed_hex: Option<&str>) -> Result<Obfuscator> {
     Ok(Obfuscator::new(key))
 }
 
-const NEAR_VAULT_IDENTITY_COLS: &[&str] = &[
+const EXPORT_IDENTITY_COLS: &[&str] = &[
     "chat_identifier",
     "group_title",
     "participants_json",
@@ -537,8 +537,8 @@ const NEAR_VAULT_IDENTITY_COLS: &[&str] = &[
     "shared_location",
 ];
 
-/// Obfuscate all `*.csv` in a near-vault export directory and replace attachments.
-pub fn obfuscate_near_vault_dir(output_dir: &Path, anon: &mut Obfuscator) -> Result<usize> {
+/// Obfuscate all `*.csv` in a converter export directory and replace attachments.
+pub fn obfuscate_export_dir(output_dir: &Path, anon: &mut Obfuscator) -> Result<usize> {
     materialize_placeholders(output_dir)?;
     let mut count = 0usize;
     let mut csv_paths: Vec<PathBuf> = fs::read_dir(output_dir)?
@@ -552,7 +552,7 @@ pub fn obfuscate_near_vault_dir(output_dir: &Path, anon: &mut Obfuscator) -> Res
         .collect();
     csv_paths.sort();
     for path in csv_paths {
-        obfuscate_near_vault_csv_file(&path, &path, anon)?;
+        obfuscate_export_csv_file(&path, &path, anon)?;
         count += 1;
     }
     rename_chat_csv_files(output_dir)?;
@@ -601,7 +601,7 @@ fn rename_chat_csv_files(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn obfuscate_near_vault_csv_file(
+fn obfuscate_export_csv_file(
     input: &Path,
     output: &Path,
     anon: &mut Obfuscator,
@@ -614,7 +614,7 @@ fn obfuscate_near_vault_csv_file(
     let mut rows: Vec<csv::StringRecord> = Vec::new();
     for result in rdr.records() {
         let record = result?;
-        rows.push(obfuscate_near_vault_record(&headers, &record, anon)?);
+        rows.push(obfuscate_export_record(&headers, &record, anon)?);
     }
 
     let tmp = output.with_extension("csv.tmp");
@@ -631,7 +631,7 @@ fn obfuscate_near_vault_csv_file(
     Ok(())
 }
 
-fn obfuscate_near_vault_record(
+fn obfuscate_export_record(
     headers: &csv::StringRecord,
     record: &csv::StringRecord,
     anon: &mut Obfuscator,
@@ -673,7 +673,7 @@ fn obfuscate_near_vault_record(
                 }
             }
             _ => {
-                if NEAR_VAULT_IDENTITY_COLS.contains(&header) {
+                if EXPORT_IDENTITY_COLS.contains(&header) {
                     anon.obfuscate_text(val)
                 } else {
                     val.to_string()
@@ -1021,7 +1021,7 @@ mod tests {
     }
 
     #[test]
-    fn near_vault_dir_smoke() {
+    fn export_dir_smoke() {
         let dir = tempfile::tempdir().unwrap();
         let csv_path = dir.path().join("_15555550100.csv");
         let mut wtr = csv::Writer::from_path(&csv_path).unwrap();
@@ -1048,7 +1048,7 @@ mod tests {
         fs::write(dir.path().join("attachments/photo.jpg"), b"REAL").unwrap();
 
         let mut anon = Obfuscator::new(key(9));
-        obfuscate_near_vault_dir(dir.path(), &mut anon).unwrap();
+        obfuscate_export_dir(dir.path(), &mut anon).unwrap();
 
         assert!(dir.path().join("attachments/placeholder.jpg").is_file());
         assert!(!dir.path().join("attachments/photo.jpg").exists());

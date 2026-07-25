@@ -8,13 +8,13 @@ use std::time::Duration;
 
 use chrono::Local;
 use eframe::egui;
-use message_obfuscate::{obfuscate_near_vault_dir, resolve_obfuscator};
+use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
 use message_exporters_core::{
     ensure_output_dir, resolve_binary, spawn, AttachmentMedia, ContactsKind, ExportIniState,
     Exporter, Form, ProcessControl, ProcessEvent, APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS,
     MAX_RESOLUTIONS,
 };
-use message_media::process_near_vault_media;
+use message_media::process_export_media;
 
 const LABEL_W: f32 = 190.0;
 const PATH_W: f32 = 400.0;
@@ -345,7 +345,7 @@ impl App {
                     return;
                 }
             };
-            match process_near_vault_media(&output, mode, &compress) {
+            match process_export_media(&output, mode, &compress) {
                 Ok(report) => {
                     if report.processed > 0 || report.skipped > 0 || !report.errors.is_empty() {
                         self.push_log(format!(
@@ -377,7 +377,7 @@ impl App {
                 }
             };
             match resolve_obfuscator(seed.as_deref())
-                .and_then(|mut anon| obfuscate_near_vault_dir(&output, &mut anon).map(|n| (n, anon)))
+                .and_then(|mut anon| obfuscate_export_dir(&output, &mut anon).map(|n| (n, anon)))
             {
                 Ok((n, _)) => self.push_log(format!(
                     "Obfuscated {n} CSV file(s) under {}",

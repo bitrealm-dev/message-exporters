@@ -1,4 +1,4 @@
-//! Convert or compress attachment media under a near-vault export directory.
+//! Convert or compress attachment media under a converter export directory.
 //!
 //! Modes:
 //! - **Disabled** — do not copy/write attachment files (CLI exporters)
@@ -14,7 +14,7 @@ mod size;
 mod tools;
 
 pub use csv_rewrite::rewrite_attachment_paths;
-pub use process::{process_near_vault_media, MediaReport};
+pub use process::{process_export_media, MediaReport};
 pub use size::parse_size;
 pub use tools::{ffmpeg_available, require_ffmpeg};
 

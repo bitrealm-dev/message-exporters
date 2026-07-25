@@ -17,7 +17,7 @@ pub struct MediaReport {
 }
 
 /// Convert or compress media under `output_dir/attachments` and rewrite CSV paths.
-pub fn process_near_vault_media(
+pub fn process_export_media(
     output_dir: &Path,
     mode: MediaMode,
     compress: &CompressOptions,
@@ -538,7 +538,7 @@ mod tests {
     fn clone_is_noop() {
         let dir = tempfile::tempdir().unwrap();
         let report =
-            process_near_vault_media(dir.path(), MediaMode::Clone, &CompressOptions::default())
+            process_export_media(dir.path(), MediaMode::Clone, &CompressOptions::default())
                 .unwrap();
         assert_eq!(report.processed, 0);
     }

@@ -594,7 +594,7 @@ impl Config {
                             self.options.obfuscate_seed.as_deref(),
                         )
                         .map_err(|e| RuntimeError::InvalidOptions(format!("{e:#}")))?;
-                        let n = message_obfuscate::obfuscate_near_vault_dir(
+                        let n = message_obfuscate::obfuscate_export_dir(
                             &self.options.export_path,
                             &mut anon,
                         )

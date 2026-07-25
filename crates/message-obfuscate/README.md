@@ -6,7 +6,7 @@ Remaps are **stable** for a given secret seed (HMAC-SHA256) and **not reversible
 
 ## Flags on converters
 
-Every near-vault converter accepts:
+Every converter accepts:
 
 - `--obfuscate` — rewrite the output directory after convert
 - `--obfuscate-seed <64-hex>` — reproducible remaps (implies obfuscate). If omitted, a random seed is printed once to stderr.

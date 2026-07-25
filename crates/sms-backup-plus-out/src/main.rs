@@ -3,11 +3,11 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use message_obfuscate::{obfuscate_near_vault_dir, resolve_obfuscator};
+use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
 use message_contacts::{resolve_contacts_cli, NameMapping};
 use message_csv::DateRange;
 use message_media::{
-    compress_options_from_cli, eprint_report, process_near_vault_media, MaxResolution, MediaMode,
+    compress_options_from_cli, eprint_report, process_export_media, MaxResolution, MediaMode,
 };
 use serde::Deserialize;
 use sms_backup_plus_out::convert_export;
@@ -243,7 +243,7 @@ fn main() -> Result<()> {
                     &media_min_size,
                     media_skip_efficient,
                 )?;
-                let media = process_near_vault_media(&output, media_mode, &compress)?;
+                let media = process_export_media(&output, media_mode, &compress)?;
                 eprint_report(&media);
                 if !media.errors.is_empty() && media.processed == 0 {
                     anyhow::bail!("media processing failed for all candidate files");
@@ -252,7 +252,7 @@ fn main() -> Result<()> {
 
             if obfuscate || obfuscate_seed.is_some() {
                 let mut anon = resolve_obfuscator(obfuscate_seed.as_deref())?;
-                let n = obfuscate_near_vault_dir(&output, &mut anon)?;
+                let n = obfuscate_export_dir(&output, &mut anon)?;
                 eprintln!("Obfuscated {n} CSV file(s) under {}", output.display());
             }
 

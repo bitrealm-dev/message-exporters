@@ -1,6 +1,6 @@
 # message-media
 
-Post-process attachment media under a near-vault export directory (`attachments/` + CSV `attachments_json` paths).
+Post-process attachment media under a converter export directory (`attachments/` + CSV `attachments_json` paths).
 
 ## Modes
 

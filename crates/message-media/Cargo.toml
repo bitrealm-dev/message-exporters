@@ -2,7 +2,7 @@
 name = "message-media"
 version = "0.1.0"
 edition = "2024"
-description = "Convert or compress attachment media in near-vault exporter output"
+description = "Convert or compress attachment media in converter export output"
 license = "MIT"
 
 [dependencies]

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use message_obfuscate::{obfuscate_near_vault_dir, resolve_obfuscator};
+use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
 use message_contacts::resolve_contacts_cli;
 use message_csv::DateRange;
 use openextract_out::convert_export;
@@ -54,7 +54,7 @@ fn main() -> Result<()> {
 
     if cli.obfuscate || cli.obfuscate_seed.is_some() {
         let mut anon = resolve_obfuscator(cli.obfuscate_seed.as_deref())?;
-        let n = obfuscate_near_vault_dir(&cli.output, &mut anon)?;
+        let n = obfuscate_export_dir(&cli.output, &mut anon)?;
         eprintln!("Obfuscated {n} CSV file(s) under {}", cli.output.display());
     }
 
