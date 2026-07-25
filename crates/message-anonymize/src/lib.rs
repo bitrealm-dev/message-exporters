@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use anyhow::{bail, Context, Result};
 use hmac::{Hmac, Mac};
@@ -30,6 +31,30 @@ const REL_IMAGE: &str = "attachments/placeholder.jpg";
 const REL_VIDEO: &str = "attachments/placeholder.mp4";
 const REL_OTHER: &str = "attachments/placeholder.bin";
 
+fn email_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}").expect("email re")
+    })
+}
+
+fn url_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r#"(?i)\b(?:https?://|www\.)[^\s<>"'\)\]]+"#).expect("url re")
+    })
+}
+
+fn phone_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"\+?\d[\d\-\s().]{4,}\d").expect("phone re"))
+}
+
+/// Trim trailing sentence punctuation often glued to URLs/emails in message text.
+fn trim_trailing_glue(s: &str) -> &str {
+    s.trim_end_matches(|c: char| matches!(c, '.' | ',' | ';' | ':' | '!' | '?' | ')' | ']' | '\''))
+}
+
 /// Media class for placeholder substitution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MediaClass {
@@ -38,12 +63,21 @@ pub enum MediaClass {
     Other,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum StructuredKind {
+    Url,
+    Email,
+    Phone,
+}
+
 /// Keyed anonymizer (in-memory cache only; never writes a real→fake map).
 pub struct Anonymizer {
     key: [u8; 32],
+    /// Digits-only → fake digits-only (same length).
     phone_cache: HashMap<String, String>,
     name_cache: HashMap<String, (String, String)>,
     email_cache: HashMap<String, String>,
+    url_cache: HashMap<String, String>,
     text_cache: HashMap<String, String>,
 }
 
@@ -54,6 +88,7 @@ impl Anonymizer {
             phone_cache: HashMap::new(),
             name_cache: HashMap::new(),
             email_cache: HashMap::new(),
+            url_cache: HashMap::new(),
             text_cache: HashMap::new(),
         }
     }
@@ -74,37 +109,46 @@ impl Anonymizer {
         out
     }
 
-    /// Fake phone with the same digit count as `raw` (formatting stripped for the key).
-    /// Preserves a leading `+` when the source had one.
+    /// Fake phone with the same digit count as `raw`.
+    ///
+    /// Non-digit formatting (`+`, spaces, dashes, parentheses) is preserved in place so
+    /// values stay phone-shaped. Cache key is digits-only so the same number always maps
+    /// to the same fake digits regardless of formatting.
     pub fn anonymize_phone(&mut self, raw: &str) -> String {
         let trimmed = raw.trim();
         let digits: String = trimmed.chars().filter(|c| c.is_ascii_digit()).collect();
         if digits.is_empty() {
             return trimmed.to_string();
         }
-        if let Some(cached) = self.phone_cache.get(&digits) {
-            return cached.clone();
-        }
-        let has_plus = trimmed.starts_with('+');
-        let d = self.digest("phone", &digits);
-        let mut fake_digits = String::with_capacity(digits.len());
-        let mut i = 0usize;
-        while fake_digits.len() < digits.len() {
-            let b = d[i % d.len()];
-            fake_digits.push(char::from(b'0' + (b % 10)));
-            i += 1;
-        }
-        // Avoid all-zeros / all-same when possible.
-        if fake_digits.chars().all(|c| c == '0') {
-            fake_digits = "1".repeat(digits.len());
-        }
-        let fake = if has_plus {
-            format!("+{fake_digits}")
+        let fake_digits = if let Some(cached) = self.phone_cache.get(&digits) {
+            cached.clone()
         } else {
+            let d = self.digest("phone", &digits);
+            let mut fake_digits = String::with_capacity(digits.len());
+            let mut i = 0usize;
+            while fake_digits.len() < digits.len() {
+                let b = d[i % d.len()];
+                fake_digits.push(char::from(b'0' + (b % 10)));
+                i += 1;
+            }
+            // Avoid all-zeros when possible.
+            if fake_digits.chars().all(|c| c == '0') {
+                fake_digits = "1".repeat(digits.len());
+            }
+            self.phone_cache.insert(digits, fake_digits.clone());
             fake_digits
         };
-        self.phone_cache.insert(digits, fake.clone());
-        fake
+        let mut out = String::with_capacity(trimmed.len());
+        let mut di = 0usize;
+        for ch in trimmed.chars() {
+            if ch.is_ascii_digit() {
+                out.push(fake_digits.as_bytes()[di] as char);
+                di += 1;
+            } else {
+                out.push(ch);
+            }
+        }
+        out
     }
 
     /// Human display name from the name word lists (keyed by normalized original).
@@ -165,6 +209,48 @@ impl Anonymizer {
         fake
     }
 
+    /// Fake URL that stays syntactically valid (`http(s)://…` or `www.…`).
+    ///
+    /// Host becomes `{hex}.example.invalid`; path/query/fragment keep separators with
+    /// letter/digit runs replaced by digest-driven nonsense of the same length.
+    pub fn anonymize_url(&mut self, raw: &str) -> String {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return String::new();
+        }
+        let key = trimmed.to_ascii_lowercase();
+        if let Some(cached) = self.url_cache.get(&key) {
+            return cached.clone();
+        }
+        let d = self.digest("url", &key);
+        let host_label = hex::encode(&d[..4]);
+
+        let lower = trimmed.to_ascii_lowercase();
+        let (prefix, rest, www_style) = if lower.starts_with("https://") {
+            ("https://", &trimmed["https://".len()..], false)
+        } else if lower.starts_with("http://") {
+            ("http://", &trimmed["http://".len()..], false)
+        } else if lower.starts_with("www.") {
+            ("", trimmed, true)
+        } else {
+            let fake = format!("https://{host_label}.example.invalid/");
+            self.url_cache.insert(key, fake.clone());
+            return fake;
+        };
+
+        let host_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+        let after_host = &rest[host_end..];
+        let fake_host = if www_style {
+            format!("www.{host_label}.example.invalid")
+        } else {
+            format!("{host_label}.example.invalid")
+        };
+        let fake_tail = shape_preserving_filler(after_host, &d, 8);
+        let fake = format!("{prefix}{fake_host}{fake_tail}");
+        self.url_cache.insert(key, fake.clone());
+        fake
+    }
+
     /// Handle: phone, email, or opaque string → fake of the same kind.
     pub fn anonymize_handle(&mut self, raw: &str) -> String {
         let t = raw.trim();
@@ -182,7 +268,7 @@ impl Anonymizer {
         self.anonymize_display_name(t)
     }
 
-    /// Same character length; content from digest-driven filler (not a scramble of the original).
+    /// Word-shape nonsense for prose; emails/URLs/phones stay valid randomized forms.
     pub fn anonymize_text(&mut self, raw: &str) -> String {
         if raw.is_empty() {
             return String::new();
@@ -190,63 +276,148 @@ impl Anonymizer {
         if let Some(cached) = self.text_cache.get(raw) {
             return cached.clone();
         }
-        let d = self.digest("text", raw);
-        let len = raw.chars().count();
-        const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz ";
-        let mut out = String::with_capacity(raw.len());
-        let mut i = 0usize;
-        for ch in raw.chars() {
-            if ch == '\n' || ch == '\r' || ch == '\t' {
-                out.push(ch);
-            } else {
-                let b = d[i % d.len()];
-                out.push(ALPHABET[(b as usize) % ALPHABET.len()] as char);
-                i += 1;
-            }
-        }
-        // Ensure we didn't shrink due to combining edge cases — pad/truncate to char len.
-        let mut chars: Vec<char> = out.chars().collect();
-        while chars.len() < len {
-            chars.push('x');
-        }
-        chars.truncate(len);
-        let fake: String = chars.into_iter().collect();
+        let fake = self.rewrite_structured_text(raw, true);
         self.text_cache.insert(raw.to_string(), fake.clone());
         fake
     }
 
-    /// Remap phone/email substrings inside a free-form field (e.g. Chat Session).
+    /// Remap URL/email/phone substrings inside a free-form field (e.g. Chat Session).
     pub fn anonymize_mixed_field(&mut self, raw: &str) -> String {
         if raw.is_empty() {
             return String::new();
         }
-        let email_re = Regex::new(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}").unwrap();
-        let phone_re = Regex::new(r"\+?\d[\d\-\s().]{4,}\d").unwrap();
+        self.rewrite_structured_text(raw, false)
+    }
 
-        let mut out = raw.to_string();
-        // Emails first so we don't mangle them as phones.
-        let emails: Vec<String> = email_re
-            .find_iter(&out)
-            .map(|m| m.as_str().to_string())
-            .collect();
-        for e in emails {
-            let fake = self.anonymize_email(&e);
-            out = out.replacen(&e, &fake, 1);
+    /// Replace URL → email → phone spans; optionally word-shape the surrounding prose.
+    fn rewrite_structured_text(&mut self, raw: &str, shape_prose: bool) -> String {
+        let spans = find_structured_spans(raw);
+        if spans.is_empty() {
+            return if shape_prose {
+                let d = self.digest("text", raw);
+                shape_preserving_filler(raw, &d, 0)
+            } else {
+                raw.to_string()
+            };
         }
-        let phones: Vec<String> = phone_re
-            .find_iter(&out)
-            .map(|m| m.as_str().to_string())
-            .collect();
-        for p in phones {
-            let digit_count = p.chars().filter(|c| c.is_ascii_digit()).count();
-            if digit_count < 5 {
-                continue;
+        let mut out = String::with_capacity(raw.len());
+        let mut cursor = 0usize;
+        for (start, end, kind) in spans {
+            let gap = &raw[cursor..start];
+            if shape_prose {
+                let d = self.digest("text", gap);
+                out.push_str(&shape_preserving_filler(gap, &d, 0));
+            } else {
+                out.push_str(gap);
             }
-            let fake = self.anonymize_phone(&p);
-            out = out.replacen(&p, &fake, 1);
+            let piece = &raw[start..end];
+            let replacement = match kind {
+                StructuredKind::Url => self.anonymize_url(piece),
+                StructuredKind::Email => self.anonymize_email(piece),
+                StructuredKind::Phone => self.anonymize_phone(piece),
+            };
+            out.push_str(&replacement);
+            cursor = end;
+        }
+        let gap = &raw[cursor..];
+        if shape_prose {
+            let d = self.digest("text", gap);
+            out.push_str(&shape_preserving_filler(gap, &d, 0));
+        } else {
+            out.push_str(gap);
         }
         out
     }
+}
+
+/// Same-length letter/digit filler; whitespace and punctuation kept in place.
+fn shape_preserving_filler(raw: &str, digest: &[u8; 32], digest_offset: usize) -> String {
+    let len = raw.chars().count();
+    let mut out = String::with_capacity(raw.len());
+    let mut i = digest_offset;
+    for ch in raw.chars() {
+        if ch.is_ascii_alphabetic() {
+            let b = digest[i % digest.len()];
+            i += 1;
+            let base = if ch.is_ascii_uppercase() { b'A' } else { b'a' };
+            out.push(char::from(base + (b % 26)));
+        } else if ch.is_ascii_digit() {
+            let b = digest[i % digest.len()];
+            i += 1;
+            out.push(char::from(b'0' + (b % 10)));
+        } else {
+            out.push(ch);
+        }
+    }
+    let mut chars: Vec<char> = out.chars().collect();
+    while chars.len() < len {
+        chars.push('x');
+    }
+    chars.truncate(len);
+    chars.into_iter().collect()
+}
+
+fn span_overlaps(covered: &[bool], start: usize, end: usize) -> bool {
+    covered[start..end].iter().any(|&c| c)
+}
+
+fn mark_covered(covered: &mut [bool], start: usize, end: usize) {
+    for slot in &mut covered[start..end] {
+        *slot = true;
+    }
+}
+
+fn find_structured_spans(raw: &str) -> Vec<(usize, usize, StructuredKind)> {
+    let mut covered = vec![false; raw.len()];
+    let mut spans = Vec::new();
+
+    for m in url_re().find_iter(raw) {
+        let full = m.as_str();
+        let trimmed = trim_trailing_glue(full);
+        if trimmed.is_empty() {
+            continue;
+        }
+        let start = m.start();
+        let end = start + trimmed.len();
+        if span_overlaps(&covered, start, end) {
+            continue;
+        }
+        mark_covered(&mut covered, start, end);
+        spans.push((start, end, StructuredKind::Url));
+    }
+
+    for m in email_re().find_iter(raw) {
+        let full = m.as_str();
+        let trimmed = trim_trailing_glue(full);
+        if trimmed.is_empty() {
+            continue;
+        }
+        let start = m.start();
+        let end = start + trimmed.len();
+        if span_overlaps(&covered, start, end) {
+            continue;
+        }
+        mark_covered(&mut covered, start, end);
+        spans.push((start, end, StructuredKind::Email));
+    }
+
+    for m in phone_re().find_iter(raw) {
+        let p = m.as_str();
+        let digit_count = p.chars().filter(|c| c.is_ascii_digit()).count();
+        if digit_count < 5 {
+            continue;
+        }
+        let start = m.start();
+        let end = m.end();
+        if span_overlaps(&covered, start, end) {
+            continue;
+        }
+        mark_covered(&mut covered, start, end);
+        spans.push((start, end, StructuredKind::Phone));
+    }
+
+    spans.sort_by_key(|(start, _, _)| *start);
+    spans
 }
 
 fn normalize_name_key(raw: &str) -> String {
@@ -792,6 +963,61 @@ mod tests {
         assert_eq!(fake.chars().count(), src.chars().count());
         assert_ne!(fake, src);
         assert!(!fake.contains("dinner"));
+        // Word shape: non-letters stay; letter/digit runs keep length.
+        let shape = |s: &str| {
+            s.chars()
+                .map(|c| {
+                    if c.is_ascii_alphabetic() {
+                        'L'
+                    } else if c.is_ascii_digit() {
+                        'D'
+                    } else {
+                        c
+                    }
+                })
+                .collect::<String>()
+        };
+        assert_eq!(shape(&fake), shape(src));
+        assert!(fake.starts_with(|c: char| c.is_ascii_uppercase()));
+        assert_eq!(&fake[5..7], ", ");
+        assert!(fake.ends_with('!'));
+    }
+
+    #[test]
+    fn text_keeps_valid_email_url_phone() {
+        let mut a = Anonymizer::new(key(6));
+        let src = "Email alice@secret.com or https://secret.example/path?x=1 call +1 (555) 123-4567 thanks";
+        let fake = a.anonymize_text(src);
+        assert!(!fake.contains("alice@secret.com"));
+        assert!(!fake.contains("secret.example"));
+        assert!(!fake.contains("555) 123-4567"));
+        assert!(fake.contains("@example.invalid"));
+        assert!(fake.contains("https://") && fake.contains(".example.invalid"));
+        assert!(fake.contains('+') && fake.contains('(') && fake.contains('-'));
+        let phone_digits: String = fake
+            .chars()
+            .skip_while(|c| *c != '+')
+            .take_while(|c| c.is_ascii_digit() || matches!(c, '+' | ' ' | '(' | ')' | '-'))
+            .filter(|c| c.is_ascii_digit())
+            .collect();
+        assert_eq!(phone_digits.len(), 11);
+    }
+
+    #[test]
+    fn phone_preserves_formatting() {
+        let mut a = Anonymizer::new(key(7));
+        let src = "+1 (555) 123-4567";
+        let fake = a.anonymize_phone(src);
+        assert_eq!(fake.len(), src.len());
+        let shape = |s: &str| {
+            s.chars()
+                .map(|c| if c.is_ascii_digit() { 'D' } else { c })
+                .collect::<String>()
+        };
+        assert_eq!(shape(&fake), shape(src));
+        let digits: String = fake.chars().filter(|c| c.is_ascii_digit()).collect();
+        assert_eq!(digits.len(), 11);
+        assert_ne!(digits, "15551234567");
     }
 
     #[test]

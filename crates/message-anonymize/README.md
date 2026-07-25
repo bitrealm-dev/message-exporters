@@ -27,7 +27,9 @@ Optional: `--anonymize-seed <hex>`.
 
 | Field | Behavior |
 |-------|----------|
-| Phone numbers | Same digit count; leading `+` kept when present |
+| Phone numbers | Same digit count; `+` / spaces / dashes / parentheses kept |
 | Display names | Human first + last from a fixed word list |
-| Message text | Same character length; digest-driven filler |
+| Emails | Valid `first.last@example.invalid` (stable per original) |
+| URLs | Valid `http(s)://…example.invalid…` (path shape kept) |
+| Message text | Word-shape nonsense; embedded emails/URLs/phones stay valid fakes |
 | Attachments | Shared placeholders: image → `placeholder.jpg`, video → `placeholder.mp4`, other → `placeholder.bin` |
