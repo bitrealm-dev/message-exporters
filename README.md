@@ -49,9 +49,11 @@ cargo run -p message-contacts --bin contacts-validate -- \
 | **iMazing** Messages / WhatsApp CSV + Contacts CSV | [`imazing-out`](crates/imazing-out) | iMazing **3.5.5** | [Converter README](crates/imazing-out/README.md), [Design & limitations](crates/imazing-out/docs/DESIGN.md), [example spreadsheet](crates/imazing-out/sample-output/_13212462167.csv) |
 | **Apple Messages** database on a Mac (`chat.db`) | [`imessage-exporter`](crates/imessage-exporter) | iMessage Exporter **4.2.0** | [Converter README](crates/imessage-exporter/README.md), [example spreadsheet](crates/imessage-exporter/sample-output/15551212.csv) |
 
+Capability matrix: [`docs/EXPORTER_MATRIX.md`](docs/EXPORTER_MATRIX.md).
+
 Each converter writes `export_source`, `export_tool`, and `export_tool_version` on every CSV row so downstream vault import knows which upstream tool/version the export targets.
 
-Raw **iMazing** vendor Messages CSV can also be ingested by [message-vault-rs](https://github.com/bitrealm-dev/message-vault-rs) `csv-ingest` (no contact enrichment). Prefer [`imazing-out`](crates/imazing-out) when you have the Contacts export (Messages and/or WhatsApp). To share structure without PII, rewrite vendor CSV with [`imazing-anonymize`](crates/message-anonymize).
+Raw **iMazing** vendor Messages CSV can also be ingested by [message-vault-rs](https://github.com/bitrealm-dev/message-vault-rs) `csv-ingest` (no contact enrichment). Prefer [`imazing-out`](crates/imazing-out) when you have the Contacts export (Messages and/or WhatsApp). To share structure without PII, rewrite vendor CSV with [`imazing-obfuscate`](crates/message-obfuscate).
 
 Each converter’s README explains what the backup looks like, what you need to run it, and extra options.
 
@@ -68,9 +70,9 @@ cargo run -p message-exporters-gui
 
 Options and architecture: [`docs/GUI.md`](docs/GUI.md).
 
-## Anonymize (share structure, not PII)
+## Obfuscate (share structure, not PII)
 
-Add `--anonymize` (optional `--anonymize-seed <64-hex>`) to any converter to rewrite names, numbers, message text (same length), and attachments after export. Remaps are stable for a given seed and not reversible from the CSV alone; the seed is printed to stderr when generated. Details: [`crates/message-anonymize`](crates/message-anonymize).
+Add `--obfuscate` (optional `--obfuscate-seed <64-hex>`) to any converter to rewrite names, numbers, message text (same length), and attachments after export. Remaps are stable for a given seed and not reversible from the CSV alone; the seed is printed to stderr when generated. Details: [`crates/message-obfuscate`](crates/message-obfuscate).
 
 ## Quick start
 
@@ -153,14 +155,14 @@ No owner phone flag. Use `-c clone` so attachments are copied into the output fo
 
 After a run, open the CSV files under `--output` / `-o` and check that times, direction, and text look right. Photos and other media are under `attachments/` (or the iMessage output folder when using `-c clone`).
 
-### Anonymized share copy
+### Obfuscated share copy
 
 ```bash
 # any converter — add after the usual flags:
-  --anonymize
+  --obfuscate
 
 # iMazing vendor CSV (rewrite only):
-cargo run --release -p message-anonymize --bin imazing-anonymize -- \
+cargo run --release -p message-obfuscate --bin imazing-obfuscate -- \
   --input /path/to/imazing.csv \
   --output ./staging/imazing-anon
 ```

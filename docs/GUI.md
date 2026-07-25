@@ -23,7 +23,7 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 - Live tagged stdout/stderr log and process cancellation (mpsc poll in `update`).
 - Exporter-specific validation before launch.
 - Backup-source titles link to the upstream product site.
-- **Global options** (Anonymize + Start/End date) above the per-source form (Export tab).
+- **Global options** (Obfuscate + Start/End date) above the per-source form (Export tab).
 
 Export options persist in `export.ini` (load on start; save on Run / exit). Prefer an existing file in the working directory, else beside the GUI binary; otherwise create `./export.ini` on first save. Template: [`export.example.ini`](../crates/message-exporters-gui/export.example.ini). Backup passwords are never written.
 
@@ -59,8 +59,8 @@ Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules a
 | Control | Widget | CLI mapping | Notes |
 |---------|--------|-------------|-------|
 | Backup source | labeled selector | which binary | Sorted alphabetically by display name |
-| Anonymize | checkbox (global) | `--anonymize` | When enabled, show seed field |
-| Seed | text (64-hex, global) | `--anonymize-seed` | Optional; blank = generate at run time |
+| Obfuscate | checkbox (global) | `--obfuscate` | When enabled, show seed field |
+| Seed | text (64-hex, global) | `--obfuscate-seed` | Optional; blank = generate at run time |
 | Start date | text (global) | `--start-date` | Optional `YYYY-MM-DD`, inclusive |
 | End date | text (global) | `--end-date` | Optional `YYYY-MM-DD`, exclusive |
 | Product title | hyperlink | — | Opens the upstream product/tool site |
@@ -108,7 +108,7 @@ Product: [GO SMS Pro](https://play.google.com/store/apps/details?id=com.jb.gosms
 | Attachments | enum | no | `--media-mode` (`clone` / `convert` / `compress` / `disabled`) |
 | Max resolution / fps / min size / skip efficient | when Compress | no | `--media-max-resolution`, `--media-max-fps`, `--media-min-size`, `--media-skip-efficient` |
 
-† At most one of `--contacts` / `--vcf`. Global Anonymize and Start/End date apply (see Shared / global controls). Convert → `.jpg`/`.mp4`/`.mp3`; Compress re-encodes (needs ffmpeg).
+† At most one of `--contacts` / `--vcf`. Global Obfuscate and Start/End date apply (see Shared / global controls). Convert → `.jpg`/`.mp4`/`.mp3`; Compress re-encodes (needs ffmpeg).
 
 ### SMS Backup & Restore — `sms-backup-restore-out`
 
@@ -122,7 +122,7 @@ Product: [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/)
 | Contacts CSV / VCF | file | no† | `--contacts` / `--vcf` |
 | Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro) |
 
-Encrypted ZIP backups must be unlocked/extracted before selecting input. Global Anonymize and Start/End date apply.
+Encrypted ZIP backups must be unlocked/extracted before selecting input. Global Obfuscate and Start/End date apply.
 
 ### SMS Backup+ — `sms-backup-plus-out convert`
 
@@ -141,7 +141,7 @@ GUI always runs the `convert` subcommand and always passes `--verbose`.
 | Verbose | — | always | `--verbose` |
 | Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro) |
 
-\* Or from crate-relative `config/owner.toml` — GUI does not rely on that; collect explicitly. Global Anonymize and Start/End date apply.
+\* Or from crate-relative `config/owner.toml` — GUI does not rely on that; collect explicitly. Global Obfuscate and Start/End date apply.
 
 ### OpenExtract — `openextract-out`
 
@@ -153,7 +153,7 @@ Product: [OpenExtract](https://www.openextract.app/)
 | Output | folder | yes | `--output` |
 | Contacts VCF / iMazing CSV | file | no† | `--vcf` / `--contacts` |
 
-Global Anonymize and Start/End date apply.
+Global Obfuscate and Start/End date apply.
 
 ### iMazing — `imazing-out`
 
@@ -166,7 +166,7 @@ Product: [iMazing](https://imazing.com/)
 | Contacts | iMazing Contacts CSV only | no | `--contacts` |
 | Timezone | IANA text | no | `--timezone` (default: host local) |
 
-Global Anonymize and Start/End date apply. WhatsApp chats write as separate `…__whatsapp.csv` files. See [`crates/imazing-out/docs/DESIGN.md`](../crates/imazing-out/docs/DESIGN.md).
+Global Obfuscate and Start/End date apply. WhatsApp chats write as separate `…__whatsapp.csv` files. See [`crates/imazing-out/docs/DESIGN.md`](../crates/imazing-out/docs/DESIGN.md).
 
 ### iPhone backup — `imessage-exporter`
 
@@ -186,7 +186,7 @@ GUI defaults: `-f csv`, `--copy-method clone` (or `disabled`), always `--use-cal
 | Conversation filter | text | no | `-t` (advanced) |
 | Contacts (AddressBook DB) | file | no | `-n` / `--contacts-path` (advanced) |
 
-Global Anonymize and Start/End date apply. With Convert/Compress, anonymize runs in the GUI after media. Not exposed: `--custom-name`, `--ignore-disk-warning`. Caller ID is always on.
+Global Obfuscate and Start/End date apply. With Convert/Compress, obfuscate runs in the GUI after media. Not exposed: `--custom-name`, `--ignore-disk-warning`. Caller ID is always on.
 
 Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox.
 
@@ -196,9 +196,9 @@ Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox
 2. **Contacts format:** label and file filters must match the exporter (VCF / iMazing Contacts CSV vs Apple AddressBook). Legacy vault CSV is not supported.
 3. **Phone numbers:** required for GO SMS Pro and SMS Backup & Restore before Run; Plus also requires email address(es).
 4. **Path existence:** input must exist; output folder may be created on run.
-5. **Anonymize seed:** if provided, must be 64 hex characters; empty means generate.
+5. **Obfuscate seed:** if provided, must be 64 hex characters; empty means generate.
 6. **Timezone (iMazing):** if set, must be a valid IANA name (or defer to converter error).
-7. **iPhone backup:** output directory is required; always passes `--use-caller-id`; anonymize only applies to CSV.
+7. **iPhone backup:** output directory is required; always passes `--use-caller-id`; obfuscate only applies to CSV.
 8. **SMS Backup+:** exactly one input path; GUI always prefixes `convert` and always passes `--verbose`.
 9. **Date range:** optional start/end `YYYY-MM-DD`; end is exclusive; blank means unbounded (CLI validates).
 10. **Media convert/compress:** require `ffmpeg` and `ffprobe` on PATH; Compress options validated (fps number, min size like `20M`).
@@ -209,7 +209,7 @@ Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox
 ```text
 Tabs: Validate contacts | Export
   Validate → contacts file, USA checkbox → Check / Update / Cancel → shared log
-  Export → pick backup source → global Anonymize/dates → per-source form → Run / Cancel → shared log
+  Export → pick backup source → global Obfuscate/dates → per-source form → Run / Cancel → shared log
 ```
 
 ## Known gaps

@@ -206,8 +206,8 @@ fn get(ini: &Ini, section: Option<&str>, key: &str) -> String {
 fn apply_common(ini: &Ini, form: &mut Form) {
     form.start_date = get(ini, Some(COMMON), "start_date");
     form.end_date = get(ini, Some(COMMON), "end_date");
-    form.anonymize = parse_bool(&get(ini, Some(COMMON), "anonymize"), false);
-    form.anonymize_seed = get(ini, Some(COMMON), "anonymize_seed");
+    form.obfuscate = parse_bool(&get(ini, Some(COMMON), "obfuscate"), false);
+    form.obfuscate_seed = get(ini, Some(COMMON), "obfuscate_seed");
     form.owner_phones = multiline_value(&get(ini, Some(COMMON), "owner_phones"));
     form.contacts = get(ini, Some(COMMON), "contacts");
     form.contacts_kind = contacts_kind_from_path(&form.contacts);
@@ -257,8 +257,8 @@ fn build_ini(state: &ExportIniState, form: &Form) -> Ini {
             .set("exporter", state.exporter.ini_key())
             .set("start_date", form.start_date.trim())
             .set("end_date", form.end_date.trim())
-            .set("anonymize", bool_str(form.anonymize))
-            .set("anonymize_seed", form.anonymize_seed.trim())
+            .set("obfuscate", bool_str(form.obfuscate))
+            .set("obfuscate_seed", form.obfuscate_seed.trim())
             .set("owner_phones", escape_multiline(form.owner_phones.trim()))
             .set("contacts", form.contacts.trim())
             .set("attachment_media", form.attachment_media.as_ini_str())
@@ -339,8 +339,8 @@ mod tests {
         let mut form = Form {
             start_date: "2020-01-01".into(),
             end_date: "2021-01-01".into(),
-            anonymize: true,
-            anonymize_seed: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            obfuscate: true,
+            obfuscate_seed: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                 .into(),
             owner_phones: "+15555550100\n+15555550101".into(),
             contacts: "/tmp/contacts.vcf".into(),
@@ -375,7 +375,7 @@ mod tests {
         let (loaded, loaded_form) = ExportIniState::load(file.path()).unwrap();
         assert_eq!(loaded.exporter, Exporter::SmsBackupPlus);
         assert_eq!(loaded_form.start_date, "2020-01-01");
-        assert_eq!(loaded_form.anonymize, true);
+        assert_eq!(loaded_form.obfuscate, true);
         assert_eq!(loaded_form.owner_phones, "+15555550100\n+15555550101");
         assert_eq!(loaded_form.input, "/data/plus");
         assert_eq!(loaded_form.owner_emails, "a@example.com");

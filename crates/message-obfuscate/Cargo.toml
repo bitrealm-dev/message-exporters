@@ -1,13 +1,13 @@
 [package]
-name = "message-anonymize"
+name = "message-obfuscate"
 version = "0.1.0"
 edition = "2024"
-description = "Stable, non-reversible anonymization for message exporter CSV output"
+description = "Stable, non-reversible obfuscation for message exporter CSV output"
 license = "MIT"
 
 [[bin]]
-name = "imazing-anonymize"
-path = "src/bin/imazing_anonymize.rs"
+name = "imazing-obfuscate"
+path = "src/bin/imazing_obfuscate.rs"
 
 [dependencies]
 anyhow = "1.0.103"

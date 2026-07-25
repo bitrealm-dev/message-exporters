@@ -1,4 +1,4 @@
-# message-anonymize
+# message-obfuscate
 
 Shared library and tools to rewrite exporter CSV output so it keeps message **structure** (chats, timestamps, directions, attachment counts) without exposing real names, phone numbers, message bodies, or media bytes.
 
@@ -8,20 +8,20 @@ Remaps are **stable** for a given secret seed (HMAC-SHA256) and **not reversible
 
 Every near-vault converter accepts:
 
-- `--anonymize` — rewrite the output directory after convert
-- `--anonymize-seed <64-hex>` — reproducible remaps (implies anonymize). If omitted, a random seed is printed once to stderr.
+- `--obfuscate` — rewrite the output directory after convert
+- `--obfuscate-seed <64-hex>` — reproducible remaps (implies obfuscate). If omitted, a random seed is printed once to stderr.
 
 ## iMazing CSV rewriter
 
 iMazing vendor CSV is not converted here—only rewritten:
 
 ```bash
-cargo run --release -p message-anonymize --bin imazing-anonymize -- \
+cargo run --release -p message-obfuscate --bin imazing-obfuscate -- \
   --input /path/to/imazing.csv \
   --output ./staging/imazing-anon
 ```
 
-Optional: `--anonymize-seed <hex>`.
+Optional: `--obfuscate-seed <hex>`.
 
 ## What changes
 

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use imazing_out::convert_export;
-use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
+use message_obfuscate::{obfuscate_near_vault_dir, resolve_obfuscator};
 use message_contacts::ContactsBook;
 use message_csv::DateRange;
 use message_media::{
@@ -41,11 +41,11 @@ struct Cli {
 
     /// Rewrite output with stable, non-reversible fake names/numbers/text and placeholder media
     #[arg(long)]
-    anonymize: bool,
+    obfuscate: bool,
 
-    /// Optional 64-char hex seed for reproducible anonymization (implies --anonymize)
-    #[arg(long = "anonymize-seed")]
-    anonymize_seed: Option<String>,
+    /// Optional 64-char hex seed for reproducible obfuscation (implies --obfuscate)
+    #[arg(long = "obfuscate-seed")]
+    obfuscate_seed: Option<String>,
 
     /// Attachment media: disabled (no files), clone (default), convert, or compress
     #[arg(long = "media-mode", default_value = "clone", value_name = "MODE")]
@@ -115,10 +115,10 @@ fn main() -> Result<()> {
         }
     }
 
-    if cli.anonymize || cli.anonymize_seed.is_some() {
-        let mut anon = resolve_anonymizer(cli.anonymize_seed.as_deref())?;
-        let n = anonymize_near_vault_dir(&cli.output, &mut anon)?;
-        eprintln!("Anonymized {n} CSV file(s) under {}", cli.output.display());
+    if cli.obfuscate || cli.obfuscate_seed.is_some() {
+        let mut anon = resolve_obfuscator(cli.obfuscate_seed.as_deref())?;
+        let n = obfuscate_near_vault_dir(&cli.output, &mut anon)?;
+        eprintln!("Obfuscated {n} CSV file(s) under {}", cli.output.display());
     }
 
     println!("Wrote {}", cli.output.display());

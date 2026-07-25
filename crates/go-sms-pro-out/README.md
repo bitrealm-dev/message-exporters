@@ -48,7 +48,7 @@ cargo run --release -p go-sms-pro-out -- \
 
 Replace the paths and phone number with your own. `--input` is the backup folder. `--output` is where the CSV files and `attachments/` folder are written. `--contacts` and `--vcf` both accept a validated contacts file; use whichever flag matches how you export contacts.
 
-Add `--anonymize` (optional `--anonymize-seed <64-hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-anonymize`](../message-anonymize).
+Add `--obfuscate` (optional `--obfuscate-seed <64-hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-obfuscate`](../message-obfuscate).
 
 Optional `--start-date` / `--end-date` (`YYYY-MM-DD`) keep messages in `[start, end)` using host local midnight (end exclusive).
 

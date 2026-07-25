@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
+use message_obfuscate::{obfuscate_near_vault_dir, resolve_obfuscator};
 use message_contacts::{resolve_contacts_cli, NameMapping};
 use message_csv::DateRange;
 use message_media::{
@@ -68,11 +68,11 @@ enum Commands {
 
         /// Rewrite output with stable, non-reversible fake names/numbers/text and placeholder media
         #[arg(long)]
-        anonymize: bool,
+        obfuscate: bool,
 
-        /// Optional 64-char hex seed for reproducible anonymization (implies --anonymize)
-        #[arg(long = "anonymize-seed")]
-        anonymize_seed: Option<String>,
+        /// Optional 64-char hex seed for reproducible obfuscation (implies --obfuscate)
+        #[arg(long = "obfuscate-seed")]
+        obfuscate_seed: Option<String>,
 
         /// Only messages on or after this date (YYYY-MM-DD, local midnight, inclusive)
         #[arg(long = "start-date", value_name = "YYYY-MM-DD")]
@@ -199,8 +199,8 @@ fn main() -> Result<()> {
             contacts,
             vcf,
             name_mapping,
-            anonymize,
-            anonymize_seed,
+            obfuscate,
+            obfuscate_seed,
             start_date,
             end_date,
             media_mode,
@@ -250,10 +250,10 @@ fn main() -> Result<()> {
                 }
             }
 
-            if anonymize || anonymize_seed.is_some() {
-                let mut anon = resolve_anonymizer(anonymize_seed.as_deref())?;
-                let n = anonymize_near_vault_dir(&output, &mut anon)?;
-                eprintln!("Anonymized {n} CSV file(s) under {}", output.display());
+            if obfuscate || obfuscate_seed.is_some() {
+                let mut anon = resolve_obfuscator(obfuscate_seed.as_deref())?;
+                let n = obfuscate_near_vault_dir(&output, &mut anon)?;
+                eprintln!("Obfuscated {n} CSV file(s) under {}", output.display());
             }
 
             if !cli.no_summary {

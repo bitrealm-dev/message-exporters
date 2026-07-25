@@ -57,7 +57,7 @@ cargo run --release -p sms-backup-plus-out -- convert \
 
 Replace the paths, phone number, and email with your own. `--input` is the folder of `.eml` files. `--output` is where the CSV files and `attachments/` folder are written. Use `--vcf` instead of `--contacts` if you have a VCF.
 
-Add `--anonymize` (optional `--anonymize-seed <64-hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-anonymize`](../message-anonymize).
+Add `--obfuscate` (optional `--obfuscate-seed <64-hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-obfuscate`](../message-obfuscate).
 
 Attachment media: `--media-mode disabled|clone|convert|compress` (default `clone`). Convert/compress need `ffmpeg`/`ffprobe`. Compress options: `--media-max-resolution`, `--media-max-fps`, `--media-min-size`, `--media-skip-efficient`. See [`message-media`](../message-media).
 

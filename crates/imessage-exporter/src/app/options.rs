@@ -43,8 +43,8 @@ pub const OPTION_CONVERSATION_FILTER: &str = "conversation-filter";
 pub const OPTION_CLEARTEXT_PASSWORD: &str = "cleartext-password";
 pub const OPTION_CUSTOM_CONTACTS_DB_PATH: &str = "contacts-path";
 pub const OPTION_NO_PROGRESS: &str = "no-progress";
-pub const OPTION_ANONYMIZE: &str = "anonymize";
-pub const OPTION_ANONYMIZE_SEED: &str = "anonymize-seed";
+pub const OPTION_OBFUSCATE: &str = "obfuscate";
+pub const OPTION_OBFUSCATE_SEED: &str = "obfuscate-seed";
 
 // Other CLI Text
 pub const SUPPORTED_FILE_TYPES: &str = "txt, html, csv";
@@ -91,10 +91,10 @@ pub struct Options {
     pub contacts_path: Option<PathBuf>,
     /// Whether to show the export progress bar when the terminal supports it.
     pub show_progress: bool,
-    /// Anonymize CSV output (names, numbers, text, attachments).
-    pub anonymize: bool,
-    /// Optional 64-char hex seed for reproducible anonymization.
-    pub anonymize_seed: Option<String>,
+    /// Obfuscate CSV output (names, numbers, text, attachments).
+    pub obfuscate: bool,
+    /// Optional 64-char hex seed for reproducible obfuscation.
+    pub obfuscate_seed: Option<String>,
 }
 
 // Redact the cleartext backup password from debug output.
@@ -121,8 +121,8 @@ impl std::fmt::Debug for Options {
             )
             .field("contacts_path", &self.contacts_path)
             .field("show_progress", &self.show_progress)
-            .field("anonymize", &self.anonymize)
-            .field("anonymize_seed", &self.anonymize_seed.as_ref().map(|_| "***"))
+            .field("obfuscate", &self.obfuscate)
+            .field("obfuscate_seed", &self.obfuscate_seed.as_ref().map(|_| "***"))
             .finish()
     }
 }
@@ -147,8 +147,8 @@ impl Options {
         let cleartext_password: Option<&String> = args.get_one(OPTION_CLEARTEXT_PASSWORD);
         let contacts_path: Option<&String> = args.get_one(OPTION_CUSTOM_CONTACTS_DB_PATH);
         let show_progress = !args.get_flag(OPTION_NO_PROGRESS);
-        let anonymize = args.get_flag(OPTION_ANONYMIZE) || args.contains_id(OPTION_ANONYMIZE_SEED);
-        let anonymize_seed: Option<String> = args.get_one::<String>(OPTION_ANONYMIZE_SEED).cloned();
+        let obfuscate = args.get_flag(OPTION_OBFUSCATE) || args.contains_id(OPTION_OBFUSCATE_SEED);
+        let obfuscate_seed: Option<String> = args.get_one::<String>(OPTION_OBFUSCATE_SEED).cloned();
 
         // Build the export type. Default to CSV unless running diagnostics only.
         let export_type: Option<ExportType> = if diagnostic {
@@ -323,8 +323,8 @@ impl Options {
             cleartext_password: cleartext_password.cloned(),
             contacts_path: contacts_path.cloned().map(PathBuf::from),
             show_progress,
-            anonymize,
-            anonymize_seed,
+            obfuscate,
+            obfuscate_seed,
         })
     }
 
@@ -530,16 +530,16 @@ fn get_command() -> Command {
                 .display_order(16),
         )
         .arg(
-            Arg::new(OPTION_ANONYMIZE)
-                .long(OPTION_ANONYMIZE)
+            Arg::new(OPTION_OBFUSCATE)
+                .long(OPTION_OBFUSCATE)
                 .help("After a CSV export, rewrite names, phone numbers, message text, and attachments with stable non-reversible fakes (structure preserved)\n")
                 .action(ArgAction::SetTrue)
                 .display_order(17),
         )
         .arg(
-            Arg::new(OPTION_ANONYMIZE_SEED)
-                .long(OPTION_ANONYMIZE_SEED)
-                .help("64-char hex seed for reproducible --anonymize remaps (implies --anonymize)\n")
+            Arg::new(OPTION_OBFUSCATE_SEED)
+                .long(OPTION_OBFUSCATE_SEED)
+                .help("64-char hex seed for reproducible --obfuscate remaps (implies --obfuscate)\n")
                 .display_order(18)
                 .value_name("hex"),
         )
@@ -571,8 +571,8 @@ impl Options {
             cleartext_password: None,
             contacts_path: None,
             show_progress: true,
-            anonymize: false,
-            anonymize_seed: None,
+            obfuscate: false,
+            obfuscate_seed: None,
         }
     }
 }
@@ -621,8 +621,8 @@ mod arg_tests {
             cleartext_password: None,
             contacts_path: None,
             show_progress: true,
-            anonymize: false,
-            anonymize_seed: None,
+            obfuscate: false,
+            obfuscate_seed: None,
         };
 
         assert_eq!(actual, expected);
@@ -699,8 +699,8 @@ mod arg_tests {
             cleartext_password: None,
             contacts_path: None,
             show_progress: true,
-            anonymize: false,
-            anonymize_seed: None,
+            obfuscate: false,
+            obfuscate_seed: None,
         };
 
         assert_eq!(actual, expected);
@@ -732,8 +732,8 @@ mod arg_tests {
             cleartext_password: None,
             contacts_path: None,
             show_progress: true,
-            anonymize: false,
-            anonymize_seed: None,
+            obfuscate: false,
+            obfuscate_seed: None,
         };
 
         assert_eq!(actual, expected);
@@ -808,8 +808,8 @@ mod arg_tests {
             cleartext_password: None,
             contacts_path: None,
             show_progress: true,
-            anonymize: false,
-            anonymize_seed: None,
+            obfuscate: false,
+            obfuscate_seed: None,
         };
 
         assert_eq!(actual, expected);
@@ -849,8 +849,8 @@ mod arg_tests {
             cleartext_password: Some("password".to_string()),
             contacts_path: None,
             show_progress: true,
-            anonymize: false,
-            anonymize_seed: None,
+            obfuscate: false,
+            obfuscate_seed: None,
         };
 
         assert_eq!(actual, expected);
@@ -904,8 +904,8 @@ mod arg_tests {
             cleartext_password: None,
             contacts_path: None,
             show_progress: true,
-            anonymize: false,
-            anonymize_seed: None,
+            obfuscate: false,
+            obfuscate_seed: None,
         };
 
         assert_eq!(actual, expected);
@@ -937,8 +937,8 @@ mod arg_tests {
             cleartext_password: None,
             contacts_path: None,
             show_progress: true,
-            anonymize: false,
-            anonymize_seed: None,
+            obfuscate: false,
+            obfuscate_seed: None,
         };
 
         assert_eq!(actual, expected);
@@ -971,8 +971,8 @@ mod arg_tests {
             cleartext_password: None,
             contacts_path: None,
             show_progress: true,
-            anonymize: false,
-            anonymize_seed: None,
+            obfuscate: false,
+            obfuscate_seed: None,
         };
 
         assert_eq!(actual, expected);
@@ -1004,8 +1004,8 @@ mod arg_tests {
             cleartext_password: None,
             contacts_path: None,
             show_progress: true,
-            anonymize: false,
-            anonymize_seed: None,
+            obfuscate: false,
+            obfuscate_seed: None,
         };
 
         assert_eq!(actual, expected);
@@ -1037,8 +1037,8 @@ mod arg_tests {
             cleartext_password: None,
             contacts_path: None,
             show_progress: true,
-            anonymize: false,
-            anonymize_seed: None,
+            obfuscate: false,
+            obfuscate_seed: None,
         };
 
         assert_eq!(actual, expected);
@@ -1109,8 +1109,8 @@ mod arg_tests {
             cleartext_password: None,
             contacts_path: None,
             show_progress: true,
-            anonymize: false,
-            anonymize_seed: None,
+            obfuscate: false,
+            obfuscate_seed: None,
         };
 
         assert_eq!(actual, expected);

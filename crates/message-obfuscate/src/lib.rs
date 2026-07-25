@@ -1,4 +1,4 @@
-//! Stable, non-reversible anonymization for exporter CSV output.
+//! Stable, non-reversible obfuscation for exporter CSV output.
 //!
 //! Fake identities are derived with HMAC-SHA256 over a secret key. The same
 //! key always yields the same remaps; fakes do not embed or encrypt the
@@ -70,8 +70,8 @@ enum StructuredKind {
     Phone,
 }
 
-/// Keyed anonymizer (in-memory cache only; never writes a real→fake map).
-pub struct Anonymizer {
+/// Keyed obfuscator (in-memory cache only; never writes a real→fake map).
+pub struct Obfuscator {
     key: [u8; 32],
     /// Digits-only → fake digits-only (same length).
     phone_cache: HashMap<String, String>,
@@ -81,7 +81,7 @@ pub struct Anonymizer {
     text_cache: HashMap<String, String>,
 }
 
-impl Anonymizer {
+impl Obfuscator {
     pub fn new(key: [u8; 32]) -> Self {
         Self {
             key,
@@ -114,7 +114,7 @@ impl Anonymizer {
     /// Non-digit formatting (`+`, spaces, dashes, parentheses) is preserved in place so
     /// values stay phone-shaped. Cache key is digits-only so the same number always maps
     /// to the same fake digits regardless of formatting.
-    pub fn anonymize_phone(&mut self, raw: &str) -> String {
+    pub fn obfuscate_phone(&mut self, raw: &str) -> String {
         let trimmed = raw.trim();
         let digits: String = trimmed.chars().filter(|c| c.is_ascii_digit()).collect();
         if digits.is_empty() {
@@ -152,7 +152,7 @@ impl Anonymizer {
     }
 
     /// Human display name from the name word lists (keyed by normalized original).
-    pub fn anonymize_display_name(&mut self, raw: &str) -> String {
+    pub fn obfuscate_display_name(&mut self, raw: &str) -> String {
         let key = normalize_name_key(raw);
         if key.is_empty() {
             return String::new();
@@ -188,10 +188,10 @@ impl Anonymizer {
             let (first, last) = self.name_parts(&format!("phone:{digits}"));
             return format!("{first} {last}");
         }
-        self.anonymize_display_name(h)
+        self.obfuscate_display_name(h)
     }
 
-    pub fn anonymize_email(&mut self, raw: &str) -> String {
+    pub fn obfuscate_email(&mut self, raw: &str) -> String {
         let key = raw.trim().to_ascii_lowercase();
         if key.is_empty() {
             return String::new();
@@ -213,7 +213,7 @@ impl Anonymizer {
     ///
     /// Host becomes `{hex}.example.invalid`; path/query/fragment keep separators with
     /// letter/digit runs replaced by digest-driven nonsense of the same length.
-    pub fn anonymize_url(&mut self, raw: &str) -> String {
+    pub fn obfuscate_url(&mut self, raw: &str) -> String {
         let trimmed = raw.trim();
         if trimmed.is_empty() {
             return String::new();
@@ -252,24 +252,24 @@ impl Anonymizer {
     }
 
     /// Handle: phone, email, or opaque string → fake of the same kind.
-    pub fn anonymize_handle(&mut self, raw: &str) -> String {
+    pub fn obfuscate_handle(&mut self, raw: &str) -> String {
         let t = raw.trim();
         if t.is_empty() {
             return String::new();
         }
         if looks_like_email(t) {
-            return self.anonymize_email(t);
+            return self.obfuscate_email(t);
         }
         let digit_count = t.chars().filter(|c| c.is_ascii_digit()).count();
         if digit_count >= 5 {
-            return self.anonymize_phone(t);
+            return self.obfuscate_phone(t);
         }
         // Name-only chat id / opaque handle
-        self.anonymize_display_name(t)
+        self.obfuscate_display_name(t)
     }
 
     /// Word-shape nonsense for prose; emails/URLs/phones stay valid randomized forms.
-    pub fn anonymize_text(&mut self, raw: &str) -> String {
+    pub fn obfuscate_text(&mut self, raw: &str) -> String {
         if raw.is_empty() {
             return String::new();
         }
@@ -282,7 +282,7 @@ impl Anonymizer {
     }
 
     /// Remap URL/email/phone substrings inside a free-form field (e.g. Chat Session).
-    pub fn anonymize_mixed_field(&mut self, raw: &str) -> String {
+    pub fn obfuscate_mixed_field(&mut self, raw: &str) -> String {
         if raw.is_empty() {
             return String::new();
         }
@@ -312,9 +312,9 @@ impl Anonymizer {
             }
             let piece = &raw[start..end];
             let replacement = match kind {
-                StructuredKind::Url => self.anonymize_url(piece),
-                StructuredKind::Email => self.anonymize_email(piece),
-                StructuredKind::Phone => self.anonymize_phone(piece),
+                StructuredKind::Url => self.obfuscate_url(piece),
+                StructuredKind::Email => self.obfuscate_email(piece),
+                StructuredKind::Phone => self.obfuscate_phone(piece),
             };
             out.push_str(&replacement);
             cursor = end;
@@ -493,15 +493,15 @@ pub fn materialize_placeholders(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Parse `--anonymize-seed` hex or generate a random key; print seed to stderr when generated.
-pub fn resolve_anonymizer(seed_hex: Option<&str>) -> Result<Anonymizer> {
+/// Parse `--obfuscate-seed` hex or generate a random key; print seed to stderr when generated.
+pub fn resolve_obfuscator(seed_hex: Option<&str>) -> Result<Obfuscator> {
     let key = match seed_hex {
         Some(s) => {
             let s = s.trim();
-            let bytes = hex::decode(s).context("invalid --anonymize-seed (expected hex)")?;
+            let bytes = hex::decode(s).context("invalid --obfuscate-seed (expected hex)")?;
             if bytes.len() != 32 {
                 bail!(
-                    "--anonymize-seed must be 32 bytes (64 hex chars), got {} bytes",
+                    "--obfuscate-seed must be 32 bytes (64 hex chars), got {} bytes",
                     bytes.len()
                 );
             }
@@ -515,12 +515,12 @@ pub fn resolve_anonymizer(seed_hex: Option<&str>) -> Result<Anonymizer> {
             let hex_key = hex::encode(key);
             let _ = writeln!(
                 std::io::stderr(),
-                "anonymize-seed: {hex_key}  (save to reproduce; not written to output)"
+                "obfuscate-seed: {hex_key}  (save to reproduce; not written to output)"
             );
             key
         }
     };
-    Ok(Anonymizer::new(key))
+    Ok(Obfuscator::new(key))
 }
 
 const NEAR_VAULT_IDENTITY_COLS: &[&str] = &[
@@ -537,8 +537,8 @@ const NEAR_VAULT_IDENTITY_COLS: &[&str] = &[
     "shared_location",
 ];
 
-/// Anonymize all `*.csv` in a near-vault export directory and replace attachments.
-pub fn anonymize_near_vault_dir(output_dir: &Path, anon: &mut Anonymizer) -> Result<usize> {
+/// Obfuscate all `*.csv` in a near-vault export directory and replace attachments.
+pub fn obfuscate_near_vault_dir(output_dir: &Path, anon: &mut Obfuscator) -> Result<usize> {
     materialize_placeholders(output_dir)?;
     let mut count = 0usize;
     let mut csv_paths: Vec<PathBuf> = fs::read_dir(output_dir)?
@@ -552,7 +552,7 @@ pub fn anonymize_near_vault_dir(output_dir: &Path, anon: &mut Anonymizer) -> Res
         .collect();
     csv_paths.sort();
     for path in csv_paths {
-        anonymize_near_vault_csv_file(&path, &path, anon)?;
+        obfuscate_near_vault_csv_file(&path, &path, anon)?;
         count += 1;
     }
     rename_chat_csv_files(output_dir)?;
@@ -601,10 +601,10 @@ fn rename_chat_csv_files(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn anonymize_near_vault_csv_file(
+fn obfuscate_near_vault_csv_file(
     input: &Path,
     output: &Path,
-    anon: &mut Anonymizer,
+    anon: &mut Obfuscator,
 ) -> Result<()> {
     let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
@@ -614,7 +614,7 @@ fn anonymize_near_vault_csv_file(
     let mut rows: Vec<csv::StringRecord> = Vec::new();
     for result in rdr.records() {
         let record = result?;
-        rows.push(anonymize_near_vault_record(&headers, &record, anon)?);
+        rows.push(obfuscate_near_vault_record(&headers, &record, anon)?);
     }
 
     let tmp = output.with_extension("csv.tmp");
@@ -631,28 +631,28 @@ fn anonymize_near_vault_csv_file(
     Ok(())
 }
 
-fn anonymize_near_vault_record(
+fn obfuscate_near_vault_record(
     headers: &csv::StringRecord,
     record: &csv::StringRecord,
-    anon: &mut Anonymizer,
+    anon: &mut Obfuscator,
 ) -> Result<csv::StringRecord> {
     let mut out = csv::StringRecord::new();
     let mut sender_handle_original = String::new();
     for (i, header) in headers.iter().enumerate() {
         let val = record.get(i).unwrap_or("");
         let new_val = match header {
-            "chat_identifier" => anon.anonymize_handle(val),
+            "chat_identifier" => anon.obfuscate_handle(val),
             "group_title" => {
                 if val.is_empty() {
                     String::new()
                 } else {
-                    anon.anonymize_mixed_field(val)
+                    anon.obfuscate_mixed_field(val)
                 }
             }
-            "participants_json" => anonymize_participants_json(val, anon),
+            "participants_json" => obfuscate_participants_json(val, anon),
             "sender_handle" => {
                 sender_handle_original = val.to_string();
-                anon.anonymize_handle(val)
+                anon.obfuscate_handle(val)
             }
             "sender_display_name" | "contact_name" => {
                 if val.is_empty() {
@@ -660,21 +660,21 @@ fn anonymize_near_vault_record(
                 } else if !sender_handle_original.is_empty() {
                     anon.display_name_for_handle(&sender_handle_original)
                 } else {
-                    anon.anonymize_display_name(val)
+                    anon.obfuscate_display_name(val)
                 }
             }
-            "text" | "subject" | "announcement" => anon.anonymize_text(val),
-            "attachments_json" => anonymize_attachments_json(val),
+            "text" | "subject" | "announcement" => anon.obfuscate_text(val),
+            "attachments_json" => obfuscate_attachments_json(val),
             "shared_location" => {
                 if val.is_empty() {
                     String::new()
                 } else {
-                    anon.anonymize_text(val)
+                    anon.obfuscate_text(val)
                 }
             }
             _ => {
                 if NEAR_VAULT_IDENTITY_COLS.contains(&header) {
-                    anon.anonymize_text(val)
+                    anon.obfuscate_text(val)
                 } else {
                     val.to_string()
                 }
@@ -685,34 +685,34 @@ fn anonymize_near_vault_record(
     Ok(out)
 }
 
-fn anonymize_participants_json(raw: &str, anon: &mut Anonymizer) -> String {
+fn obfuscate_participants_json(raw: &str, anon: &mut Obfuscator) -> String {
     let trimmed = raw.trim();
     if trimmed.is_empty() || trimmed == "null" || trimmed == "[]" {
         return trimmed.to_string();
     }
     let Ok(mut value) = serde_json::from_str::<Value>(trimmed) else {
-        return anon.anonymize_mixed_field(raw);
+        return anon.obfuscate_mixed_field(raw);
     };
     if let Some(arr) = value.as_array_mut() {
         for item in arr.iter_mut() {
             if let Some(obj) = item.as_object_mut() {
                 if let Some(h) = obj.get("handle").and_then(|v| v.as_str()) {
                     let fake_n = anon.display_name_for_handle(h);
-                    let fake_h = anon.anonymize_handle(h);
+                    let fake_h = anon.obfuscate_handle(h);
                     obj.insert("handle".into(), json!(fake_h));
                     if obj.contains_key("display_name") {
                         obj.insert("display_name".into(), json!(fake_n));
                     }
                 }
             } else if let Some(s) = item.as_str() {
-                *item = json!(anon.anonymize_handle(s));
+                *item = json!(anon.obfuscate_handle(s));
             }
         }
     }
     serde_json::to_string(&value).unwrap_or_else(|_| "[]".into())
 }
 
-fn anonymize_attachments_json(raw: &str) -> String {
+fn obfuscate_attachments_json(raw: &str) -> String {
     let trimmed = raw.trim();
     if trimmed.is_empty() || trimmed == "null" || trimmed == "[]" {
         return trimmed.to_string();
@@ -758,8 +758,8 @@ fn anonymize_attachments_json(raw: &str) -> String {
     serde_json::to_string(&value).unwrap_or_else(|_| "[]".into())
 }
 
-/// Anonymize iMazing vendor CSV(s) into an output directory.
-pub fn anonymize_imazing(input: &Path, output_dir: &Path, anon: &mut Anonymizer) -> Result<usize> {
+/// Obfuscate iMazing vendor CSV(s) into an output directory.
+pub fn obfuscate_imazing(input: &Path, output_dir: &Path, anon: &mut Obfuscator) -> Result<usize> {
     fs::create_dir_all(output_dir)?;
     materialize_placeholders(output_dir)?;
     let inputs: Vec<PathBuf> = if input.is_file() {
@@ -788,13 +788,13 @@ pub fn anonymize_imazing(input: &Path, output_dir: &Path, anon: &mut Anonymizer)
             src.file_name()
                 .context("CSV path missing file name")?,
         );
-        anonymize_imazing_csv_file(&src, &dest, anon)?;
+        obfuscate_imazing_csv_file(&src, &dest, anon)?;
         n += 1;
     }
     Ok(n)
 }
 
-fn anonymize_imazing_csv_file(input: &Path, output: &Path, anon: &mut Anonymizer) -> Result<()> {
+fn obfuscate_imazing_csv_file(input: &Path, output: &Path, anon: &mut Obfuscator) -> Result<()> {
     let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
         .from_path(input)
@@ -803,7 +803,7 @@ fn anonymize_imazing_csv_file(input: &Path, output: &Path, anon: &mut Anonymizer
     let mut rows = Vec::new();
     for result in rdr.records() {
         let record = result?;
-        rows.push(anonymize_imazing_record(&headers, &record, anon));
+        rows.push(obfuscate_imazing_record(&headers, &record, anon));
     }
     let mut wtr = csv::Writer::from_path(output)
         .with_context(|| format!("write {}", output.display()))?;
@@ -815,14 +815,14 @@ fn anonymize_imazing_csv_file(input: &Path, output: &Path, anon: &mut Anonymizer
     Ok(())
 }
 
-/// Anonymize an iMazing Chat Session value (`Name`, `Name & Name`, or phones).
-fn anonymize_imazing_session(raw: &str, anon: &mut Anonymizer) -> String {
+/// Obfuscate an iMazing Chat Session value (`Name`, `Name & Name`, or phones).
+fn obfuscate_imazing_session(raw: &str, anon: &mut Obfuscator) -> String {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return String::new();
     }
     // Prefer phone/email rewrite when present in the whole string.
-    let mixed = anon.anonymize_mixed_field(trimmed);
+    let mixed = anon.obfuscate_mixed_field(trimmed);
     if mixed != trimmed {
         return mixed;
     }
@@ -834,19 +834,19 @@ fn anonymize_imazing_session(raw: &str, anon: &mut Anonymizer) -> String {
             if p.is_empty() {
                 String::new()
             } else if looks_like_email(p) || p.chars().filter(|c| c.is_ascii_digit()).count() >= 5 {
-                anon.anonymize_handle(p)
+                anon.obfuscate_handle(p)
             } else {
-                anon.anonymize_display_name(p)
+                anon.obfuscate_display_name(p)
             }
         })
         .collect::<Vec<_>>()
         .join(" & ")
 }
 
-fn anonymize_imazing_record(
+fn obfuscate_imazing_record(
     headers: &csv::StringRecord,
     record: &csv::StringRecord,
-    anon: &mut Anonymizer,
+    anon: &mut Obfuscator,
 ) -> csv::StringRecord {
     let mut out = csv::StringRecord::new();
     let mut chat_session_original = String::new();
@@ -856,18 +856,18 @@ fn anonymize_imazing_record(
         let new_val = match header {
             "Chat Session" => {
                 chat_session_original = val.to_string();
-                anonymize_imazing_session(val, anon)
+                obfuscate_imazing_session(val, anon)
             }
             "Replying to" => {
                 if val.trim().is_empty() {
                     String::new()
                 } else {
-                    anonymize_imazing_session(val, anon)
+                    obfuscate_imazing_session(val, anon)
                 }
             }
             "Sender ID" => {
                 sender_id_original = val.to_string();
-                anon.anonymize_handle(val)
+                anon.obfuscate_handle(val)
             }
             "Sender Name" => {
                 if val.is_empty() {
@@ -876,14 +876,14 @@ fn anonymize_imazing_record(
                     && normalize_name_key(val) == normalize_name_key(&chat_session_original)
                 {
                     // Keep chat title and peer name aligned when iMazing used the same string.
-                    anon.anonymize_display_name(&chat_session_original)
+                    anon.obfuscate_display_name(&chat_session_original)
                 } else if !sender_id_original.is_empty() {
                     anon.display_name_for_handle(&sender_id_original)
                 } else {
-                    anon.anonymize_display_name(val)
+                    anon.obfuscate_display_name(val)
                 }
             }
-            "Text" | "Subject" | "Reactions" => anon.anonymize_text(val),
+            "Text" | "Subject" | "Reactions" => anon.obfuscate_text(val),
             "Attachment" => {
                 if val.trim().is_empty() {
                     String::new()
@@ -915,28 +915,28 @@ mod tests {
 
     #[test]
     fn phone_stable_same_key() {
-        let mut a = Anonymizer::new(key(1));
-        let mut b = Anonymizer::new(key(1));
+        let mut a = Obfuscator::new(key(1));
+        let mut b = Obfuscator::new(key(1));
         assert_eq!(
-            a.anonymize_phone("+15555550100"),
-            b.anonymize_phone("+15555550100")
+            a.obfuscate_phone("+15555550100"),
+            b.obfuscate_phone("+15555550100")
         );
     }
 
     #[test]
     fn phone_differs_other_key() {
-        let mut a = Anonymizer::new(key(1));
-        let mut b = Anonymizer::new(key(2));
+        let mut a = Obfuscator::new(key(1));
+        let mut b = Obfuscator::new(key(2));
         assert_ne!(
-            a.anonymize_phone("+15555550100"),
-            b.anonymize_phone("+15555550100")
+            a.obfuscate_phone("+15555550100"),
+            b.obfuscate_phone("+15555550100")
         );
     }
 
     #[test]
     fn phone_preserves_digit_length_and_plus() {
-        let mut a = Anonymizer::new(key(3));
-        let fake = a.anonymize_phone("+15555550100");
+        let mut a = Obfuscator::new(key(3));
+        let fake = a.obfuscate_phone("+15555550100");
         assert!(fake.starts_with('+'));
         assert_eq!(
             fake.chars().filter(|c| c.is_ascii_digit()).count(),
@@ -947,8 +947,8 @@ mod tests {
 
     #[test]
     fn name_is_human() {
-        let mut a = Anonymizer::new(key(4));
-        let name = a.anonymize_display_name("Secret Person");
+        let mut a = Obfuscator::new(key(4));
+        let name = a.obfuscate_display_name("Secret Person");
         let parts: Vec<_> = name.split_whitespace().collect();
         assert_eq!(parts.len(), 2);
         assert!(FIRST_NAMES.contains(&parts[0]));
@@ -957,9 +957,9 @@ mod tests {
 
     #[test]
     fn text_same_length_not_original() {
-        let mut a = Anonymizer::new(key(5));
+        let mut a = Obfuscator::new(key(5));
         let src = "Hello, call me at dinner!";
-        let fake = a.anonymize_text(src);
+        let fake = a.obfuscate_text(src);
         assert_eq!(fake.chars().count(), src.chars().count());
         assert_ne!(fake, src);
         assert!(!fake.contains("dinner"));
@@ -985,9 +985,9 @@ mod tests {
 
     #[test]
     fn text_keeps_valid_email_url_phone() {
-        let mut a = Anonymizer::new(key(6));
+        let mut a = Obfuscator::new(key(6));
         let src = "Email alice@secret.com or https://secret.example/path?x=1 call +1 (555) 123-4567 thanks";
-        let fake = a.anonymize_text(src);
+        let fake = a.obfuscate_text(src);
         assert!(!fake.contains("alice@secret.com"));
         assert!(!fake.contains("secret.example"));
         assert!(!fake.contains("555) 123-4567"));
@@ -1005,9 +1005,9 @@ mod tests {
 
     #[test]
     fn phone_preserves_formatting() {
-        let mut a = Anonymizer::new(key(7));
+        let mut a = Obfuscator::new(key(7));
         let src = "+1 (555) 123-4567";
-        let fake = a.anonymize_phone(src);
+        let fake = a.obfuscate_phone(src);
         assert_eq!(fake.len(), src.len());
         let shape = |s: &str| {
             s.chars()
@@ -1047,8 +1047,8 @@ mod tests {
         fs::create_dir_all(dir.path().join("attachments")).unwrap();
         fs::write(dir.path().join("attachments/photo.jpg"), b"REAL").unwrap();
 
-        let mut anon = Anonymizer::new(key(9));
-        anonymize_near_vault_dir(dir.path(), &mut anon).unwrap();
+        let mut anon = Obfuscator::new(key(9));
+        obfuscate_near_vault_dir(dir.path(), &mut anon).unwrap();
 
         assert!(dir.path().join("attachments/placeholder.jpg").is_file());
         assert!(!dir.path().join("attachments/photo.jpg").exists());

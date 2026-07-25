@@ -1877,10 +1877,10 @@ dependencies = [
  "clap",
  "csv",
  "hex",
- "message-anonymize",
  "message-contacts",
  "message-csv",
  "message-media",
+ "message-obfuscate",
  "message-phone",
  "quick-xml 0.41.0",
  "regex",
@@ -2186,10 +2186,10 @@ dependencies = [
  "clap",
  "csv",
  "hex",
- "message-anonymize",
  "message-contacts",
  "message-csv",
  "message-media",
+ "message-obfuscate",
  "message-phone",
  "sha2 0.11.0",
  "tempfile",
@@ -2224,7 +2224,7 @@ dependencies = [
  "fdlimit",
  "fs2",
  "imessage-database",
- "message-anonymize",
+ "message-obfuscate",
  "rpassword",
  "rusqlite",
  "serde",
@@ -2526,22 +2526,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "message-anonymize"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "csv",
- "hex",
- "hmac 0.12.1",
- "rand 0.9.5",
- "regex",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
-]
-
-[[package]]
 name = "message-contacts"
 version = "0.1.0"
 dependencies = [
@@ -2579,10 +2563,10 @@ dependencies = [
  "chrono",
  "eframe",
  "egui",
- "message-anonymize",
  "message-contacts",
  "message-exporters-core",
  "message-media",
+ "message-obfuscate",
  "open",
  "rfd",
 ]
@@ -2594,6 +2578,22 @@ dependencies = [
  "anyhow",
  "csv",
  "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "message-obfuscate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "csv",
+ "hex",
+ "hmac 0.12.1",
+ "rand 0.9.5",
+ "regex",
+ "serde_json",
+ "sha2 0.10.9",
  "tempfile",
 ]
 
@@ -3067,9 +3067,9 @@ dependencies = [
  "chrono",
  "clap",
  "csv",
- "message-anonymize",
  "message-contacts",
  "message-csv",
+ "message-obfuscate",
  "message-phone",
  "tempfile",
 ]
@@ -3978,10 +3978,10 @@ dependencies = [
  "csv",
  "hex",
  "mailparse",
- "message-anonymize",
  "message-contacts",
  "message-csv",
  "message-media",
+ "message-obfuscate",
  "message-phone",
  "rayon",
  "regex",
@@ -4003,10 +4003,10 @@ dependencies = [
  "csv",
  "hex",
  "html-escape",
- "message-anonymize",
  "message-contacts",
  "message-csv",
  "message-media",
+ "message-obfuscate",
  "message-phone",
  "quick-xml 0.41.0",
  "regex",

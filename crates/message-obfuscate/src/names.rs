@@ -1,4 +1,4 @@
-//! Human-looking first/last names for anonymized display names.
+//! Human-looking first/last names for obfuscated display names.
 
 pub const FIRST_NAMES: &[&str] = &[
     "Alex", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Avery", "Quinn", "Jamie", "Reese",

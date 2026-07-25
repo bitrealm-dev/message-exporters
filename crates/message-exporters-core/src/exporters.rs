@@ -260,8 +260,8 @@ pub struct Form {
     pub owner_emails: String,
     pub name_mapping: String,
     pub timezone: String,
-    pub anonymize: bool,
-    pub anonymize_seed: String,
+    pub obfuscate: bool,
+    pub obfuscate_seed: String,
     pub advanced: bool,
     pub db_path: String,
     pub attachment_root: String,
@@ -289,8 +289,8 @@ impl Default for Form {
             owner_emails: String::new(),
             name_mapping: String::new(),
             timezone: String::new(),
-            anonymize: false,
-            anonymize_seed: String::new(),
+            obfuscate: false,
+            obfuscate_seed: String::new(),
             advanced: false,
             db_path: String::new(),
             attachment_root: String::new(),
@@ -386,10 +386,10 @@ impl Form {
                     self.push_media_args(&mut args, &mut errors);
                 }
 
-                if self.anonymize {
-                    args.push("--anonymize".into());
+                if self.obfuscate {
+                    args.push("--obfuscate".into());
                 }
-                push_seed(&mut args, &self.anonymize_seed, &mut errors);
+                push_seed(&mut args, &self.obfuscate_seed, &mut errors);
             }
         }
 
@@ -474,11 +474,11 @@ impl Form {
             ApplePlatform::Ios => args.extend(["--platform".into(), "iOS".into()]),
         }
         args.push("--use-caller-id".into());
-        // When convert/compress, GUI anonymizes after media post-process.
-        if self.anonymize && !self.attachment_media.needs_ffmpeg() {
-            args.push("--anonymize".into());
+        // When convert/compress, GUI obfuscates after media post-process.
+        if self.obfuscate && !self.attachment_media.needs_ffmpeg() {
+            args.push("--obfuscate".into());
         }
-        push_seed(args, &self.anonymize_seed, errors);
+        push_seed(args, &self.obfuscate_seed, errors);
     }
 
     /// Compress options for GUI iMessage post-process (after exporter exits).
@@ -524,9 +524,9 @@ fn push_seed(args: &mut Vec<OsString>, seed: &str, errors: &mut Vec<String>) {
         return;
     }
     if seed.len() != 64 || !seed.chars().all(|c| c.is_ascii_hexdigit()) {
-        errors.push("Anonymize seed must be exactly 64 hexadecimal characters.".into());
+        errors.push("Obfuscate seed must be exactly 64 hexadecimal characters.".into());
     } else {
-        push_pair(args, "--anonymize-seed", seed);
+        push_pair(args, "--obfuscate-seed", seed);
     }
 }
 
@@ -562,15 +562,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn imazing_passes_anonymize() {
+    fn imazing_passes_obfuscate() {
         let form = Form {
             input: std::env::current_dir().unwrap().display().to_string(),
             output: "out".into(),
-            anonymize: true,
+            obfuscate: true,
             ..Form::default()
         };
         let args = form.build_args(Exporter::Imazing).unwrap();
-        assert!(args.iter().any(|arg| arg == "--anonymize"));
+        assert!(args.iter().any(|arg| arg == "--obfuscate"));
     }
 
     #[test]
@@ -578,7 +578,7 @@ mod tests {
         let form = Form {
             input: std::env::current_dir().unwrap().display().to_string(),
             output: "out".into(),
-            anonymize_seed: "bad".into(),
+            obfuscate_seed: "bad".into(),
             ..Form::default()
         };
         assert!(form.build_args(Exporter::OpenExtract).is_err());

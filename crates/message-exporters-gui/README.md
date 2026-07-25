@@ -28,7 +28,7 @@ The GUI searches for tool binaries beside its own executable, then in
 - Top tab panel: **Validate contacts** (default) | **Export**
 - **Validate contacts**: Check (dry run) / Update (write corrected files) / Cancel
 - Backup-source picker (alphabetical) with product/tool site links
-- Global options: Anonymize (+ seed) and Start/End date for every source
+- Global options: Obfuscate (+ seed) and Start/End date for every source
 - Attachments: Copy / Convert / Compress on sources that emit media (Compress shows resolution/fps/min-size options; needs ffmpeg)
 - Forms for GO SMS Pro, SMS Backup & Restore, SMS Backup+, OpenExtract, iMazing, and iPhone backup
 - Native file/folder dialogs

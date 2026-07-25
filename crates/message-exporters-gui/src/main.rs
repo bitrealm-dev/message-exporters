@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use chrono::Local;
 use eframe::egui;
-use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
+use message_obfuscate::{obfuscate_near_vault_dir, resolve_obfuscator};
 use message_exporters_core::{
     ensure_output_dir, resolve_binary, spawn, AttachmentMedia, ContactsKind, ExportIniState,
     Exporter, Form, ProcessControl, ProcessEvent, APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS,
@@ -366,25 +366,25 @@ impl App {
             }
         }
         if mode.needs_tools()
-            && (self.form.anonymize || !self.form.anonymize_seed.trim().is_empty())
+            && (self.form.obfuscate || !self.form.obfuscate_seed.trim().is_empty())
         {
             let seed = {
-                let s = self.form.anonymize_seed.trim();
+                let s = self.form.obfuscate_seed.trim();
                 if s.is_empty() {
                     None
                 } else {
                     Some(s.to_string())
                 }
             };
-            match resolve_anonymizer(seed.as_deref())
-                .and_then(|mut anon| anonymize_near_vault_dir(&output, &mut anon).map(|n| (n, anon)))
+            match resolve_obfuscator(seed.as_deref())
+                .and_then(|mut anon| obfuscate_near_vault_dir(&output, &mut anon).map(|n| (n, anon)))
             {
                 Ok((n, _)) => self.push_log(format!(
-                    "Anonymized {n} CSV file(s) under {}",
+                    "Obfuscated {n} CSV file(s) under {}",
                     output.display()
                 )),
                 Err(error) => {
-                    let msg = format!("Anonymize failed: {error}");
+                    let msg = format!("Obfuscate failed: {error}");
                     self.errors = vec![msg.clone()];
                     self.push_log(msg);
                 }
@@ -639,23 +639,23 @@ impl App {
             PATH_W,
         );
         ui.horizontal(|ui| {
-            form_label(ui, "Anonymize");
-            let anonymize_text = if self.form.anonymize { "Yes" } else { "No" };
+            form_label(ui, "Obfuscate");
+            let obfuscate_text = if self.form.obfuscate { "Yes" } else { "No" };
             with_field_width(ui, PATH_W, |ui| {
-                egui::ComboBox::from_id_salt("anonymize")
-                    .selected_text(anonymize_text)
+                egui::ComboBox::from_id_salt("obfuscate")
+                    .selected_text(obfuscate_text)
                     .width(PATH_W)
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.form.anonymize, false, "No");
-                        ui.selectable_value(&mut self.form.anonymize, true, "Yes");
+                        ui.selectable_value(&mut self.form.obfuscate, false, "No");
+                        ui.selectable_value(&mut self.form.obfuscate, true, "Yes");
                     });
             });
         });
-        if self.form.anonymize || !self.form.anonymize_seed.is_empty() {
+        if self.form.obfuscate || !self.form.obfuscate_seed.is_empty() {
             labeled_text(
                 ui,
                 "Seed",
-                &mut self.form.anonymize_seed,
+                &mut self.form.obfuscate_seed,
                 "Optional 64-hex seed",
                 PATH_W,
             );
