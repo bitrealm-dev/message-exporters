@@ -4,7 +4,7 @@
 //! exporters should write correct handles and display names before that stage.
 //!
 //! Accepted inputs match contacts-validate: VCF, or iMazing Contacts CSV
-//! (First Name, Last Name, phone columns). Legacy vault CSV is not supported.
+//! (First Name, Last Name, phone columns).
 
 mod book;
 mod mapping;

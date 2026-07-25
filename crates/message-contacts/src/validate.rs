@@ -284,7 +284,8 @@ fn normalize_header_name(h: &str) -> String {
 }
 
 fn is_phone_header(h: &str) -> bool {
-    h == "phones" || h.contains("phone")
+    // Bare `phones` is not an iMazing/Outlook phone column name.
+    h != "phones" && h.contains("phone")
 }
 
 /// Detect VCF or iMazing Contacts CSV (First Name, Last Name, phone columns).
@@ -364,12 +365,8 @@ fn detect_csv_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> 
         .map(String::as_str)
         .collect();
     let has_phone = !phone_cols.is_empty();
-    let legacy_vault = header_l.iter().any(|h| h == "phones")
-        && !header_l
-            .iter()
-            .any(|h| is_phone_header(h) && h.as_str() != "phones");
 
-    if has_first && has_last && has_phone && !legacy_vault {
+    if has_first && has_last && has_phone {
         return Ok(ContactsFormat::ImazingCsv);
     }
 
@@ -377,16 +374,6 @@ fn detect_csv_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> 
         format!("file={}", path.display()),
         format!("headers={}", header_l.join(" | ")),
     ];
-    if legacy_vault {
-        details.push(
-            "legacy vault CSV (phones,first_name,last_name) is not supported".into(),
-        );
-        details.push(
-            "use a VCF or an iMazing Contacts CSV (First Name, Last Name, Mobile Phone, …)"
-                .into(),
-        );
-        return Err(ContactsInputError::unrecognized(details));
-    }
     if !has_first {
         details.push("missing First Name column".into());
     }
@@ -400,7 +387,7 @@ fn detect_csv_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> 
     }
     details.push(
         "valid CSV needs First Name, Last Name, and at least one Phone column \
-         (iMazing Contacts export). Legacy phones,first_name,last_name is not supported."
+         (iMazing Contacts export)"
             .into(),
     );
     Err(ContactsInputError::unrecognized(details))
@@ -824,18 +811,6 @@ mod tests {
         let err = probe_contacts_input(&empty_vcf).unwrap_err();
         assert_eq!(err.message, UNRECOGNIZED_CONTACTS_FORMAT);
         assert!(err.details.iter().any(|d| d.contains("BEGIN:VCARD")));
-
-        let vault = write(
-            &dir,
-            "contacts.csv",
-            "phones,first_name,last_name\n+15551234567,Ada,Lovelace\n",
-        );
-        let err = probe_contacts_input(&vault).unwrap_err();
-        assert_eq!(err.message, UNRECOGNIZED_CONTACTS_FORMAT);
-        assert!(err
-            .details
-            .iter()
-            .any(|d| d.contains("legacy vault CSV")));
 
         let imazing = write(
             &dir,

@@ -19,7 +19,7 @@ Android converters **recommend** a contacts file so names and phone numbers are 
 - `--contacts path/to/contacts.csv` — iMazing Contacts CSV (`First Name`, `Last Name`, phone columns), or a VCF, or
 - `--vcf path/to/contacts.vcf` — same index from a VCF
 
-Pass at most one. Legacy vault CSV (`phones,first_name,last_name`) is not supported. Shared logic: [`crates/message-contacts`](crates/message-contacts). Open the CSV afterward and fix anything still wrong before vault import.
+Pass at most one. Shared logic: [`crates/message-contacts`](crates/message-contacts). Open the CSV afterward and fix anything still wrong before vault import.
 
 ### Contacts tools
 

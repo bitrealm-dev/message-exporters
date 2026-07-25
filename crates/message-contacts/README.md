@@ -2,7 +2,7 @@
 
 Shared **name ↔ phone** resolution for Android CSV exporters.
 
-Load the same contact files as **contacts-validate**: a VCF, or an iMazing Contacts CSV (First Name, Last Name, phone columns). Legacy vault CSV (`phones,first_name,last_name`) is not supported. Then:
+Load the same contact files as **contacts-validate**: a VCF, or an iMazing Contacts CSV (First Name, Last Name, phone columns). Then:
 
 - **name → phone** — fill missing chat peer numbers (SMS Backup+)
 - **phone → name** — fill blank / `unknown` display names (GO SMS Pro, SMS Backup & Restore, Plus)

@@ -344,18 +344,6 @@ Pat,Contact,+15555550133,+15555550144\n",
     }
 
     #[test]
-    fn rejects_legacy_vault_csv() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = write_file(
-            &dir,
-            "contacts.csv",
-            "phones,first_name,last_name\n+15555550100,Ada,Lovelace\n",
-        );
-        let err = ContactsBook::load_contacts_file(&path).unwrap_err();
-        assert!(err.to_string().contains("legacy vault CSV"));
-    }
-
-    #[test]
     fn loads_vcf() {
         let dir = tempfile::tempdir().unwrap();
         let path = write_file(

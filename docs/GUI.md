@@ -193,7 +193,7 @@ Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox
 ## Validation rules
 
 1. **Contacts mutual exclusion:** for Android/OpenExtract, allow at most one of `--contacts` vs `--vcf`.
-2. **Contacts format:** label and file filters must match the exporter (VCF / iMazing Contacts CSV vs Apple AddressBook). Legacy vault CSV is not supported.
+2. **Contacts format:** label and file filters must match the exporter (VCF / iMazing Contacts CSV vs Apple AddressBook).
 3. **Phone numbers:** required for GO SMS Pro and SMS Backup & Restore before Run; Plus also requires email address(es).
 4. **Path existence:** input must exist; output folder may be created on run.
 5. **Obfuscate seed:** if provided, must be 64 hex characters; empty means generate.
