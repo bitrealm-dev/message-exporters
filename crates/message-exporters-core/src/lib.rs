@@ -1,10 +1,15 @@
 //! Shared exporter forms and CLI process helpers for desktop GUIs.
 
+mod export_ini;
 mod exporters;
 mod process;
 
+pub use export_ini::{
+    resolve_export_ini_path, ExportIniState, ExporterSection, EXPORT_INI_NAME,
+};
 pub use exporters::{
-    default_output_dir, ensure_output_dir, ApplePlatform, AttachmentMedia, ContactsKind, Exporter,
-    Form, APPLE_PLATFORMS, ATTACHMENT_MEDIA, CONTACT_KINDS, EXPORTERS, MAX_RESOLUTIONS,
+    contacts_kind_from_path, default_output_dir, ensure_output_dir, ApplePlatform, AttachmentMedia,
+    ContactsKind, Exporter, Form, APPLE_PLATFORMS, ATTACHMENT_MEDIA, CONTACT_KINDS, EXPORTERS,
+    MAX_RESOLUTIONS,
 };
 pub use process::{resolve_binary, spawn, ProcessControl, ProcessEvent};

@@ -78,6 +78,23 @@ impl Exporter {
             Self::Imessage => "iphone-backup",
         }
     }
+
+    /// INI section name / `exporter=` value (same as [`Self::output_subdir`]).
+    pub fn ini_key(self) -> &'static str {
+        self.output_subdir()
+    }
+
+    pub fn from_ini_key(key: &str) -> Option<Self> {
+        match key.trim().to_ascii_lowercase().as_str() {
+            "go-sms-pro" => Some(Self::GoSmsPro),
+            "sms-backup-restore" => Some(Self::SmsBackupRestore),
+            "sms-backup-plus" => Some(Self::SmsBackupPlus),
+            "openextract" => Some(Self::OpenExtract),
+            "imazing" => Some(Self::Imazing),
+            "iphone-backup" => Some(Self::Imessage),
+            _ => None,
+        }
+    }
 }
 
 /// Default output directory for an exporter.
@@ -132,6 +149,20 @@ pub enum ContactsKind {
     Vcf,
 }
 
+/// Infer contacts kind from a path extension (empty → [`ContactsKind::None`]).
+pub fn contacts_kind_from_path(path: &str) -> ContactsKind {
+    let path = path.trim();
+    if path.is_empty() {
+        return ContactsKind::None;
+    }
+    let lower = path.to_ascii_lowercase();
+    if lower.ends_with(".vcf") || lower.ends_with(".vcard") {
+        ContactsKind::Vcf
+    } else {
+        ContactsKind::Csv
+    }
+}
+
 impl fmt::Display for ContactsKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
@@ -179,6 +210,19 @@ impl AttachmentMedia {
     pub fn needs_ffmpeg(self) -> bool {
         matches!(self, Self::Convert | Self::Compress)
     }
+
+    pub fn as_ini_str(self) -> &'static str {
+        self.media_mode().as_str()
+    }
+
+    pub fn from_ini_str(s: &str) -> Option<Self> {
+        MediaMode::parse(s).map(|mode| match mode {
+            MediaMode::Clone => Self::Clone,
+            MediaMode::Convert => Self::Convert,
+            MediaMode::Compress => Self::Compress,
+            MediaMode::Disabled => Self::Disabled,
+        })
+    }
 }
 
 pub const ATTACHMENT_MEDIA: [AttachmentMedia; 4] = [
@@ -209,6 +253,25 @@ impl fmt::Display for ApplePlatform {
             Self::MacOs => "macOS",
             Self::Ios => "iOS backup",
         })
+    }
+}
+
+impl ApplePlatform {
+    pub fn as_ini_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::MacOs => "macos",
+            Self::Ios => "ios",
+        }
+    }
+
+    pub fn from_ini_str(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" | "" => Some(Self::Auto),
+            "macos" | "mac" | "mac-os" => Some(Self::MacOs),
+            "ios" | "iphone" => Some(Self::Ios),
+            _ => None,
+        }
     }
 }
 

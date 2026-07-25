@@ -11,9 +11,8 @@ use eframe::egui;
 use message_anonymize::{anonymize_near_vault_dir, resolve_anonymizer};
 use message_exporters_core::{
     default_output_dir, ensure_output_dir, resolve_binary, spawn, AttachmentMedia, ContactsKind,
-    Exporter, Form,
-    ProcessControl, ProcessEvent, APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS,
-    MAX_RESOLUTIONS,
+    ExportIniState, Exporter, Form, ProcessControl, ProcessEvent, APPLE_PLATFORMS,
+    ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS,
 };
 use message_media::process_near_vault_media;
 
@@ -93,6 +92,7 @@ struct App {
     mode: AppMode,
     exporter: Exporter,
     form: Form,
+    export_ini: ExportIniState,
     /// Per-row owner phone inputs (always at least one). Synced into `form.owner_phones`.
     owner_phone_rows: Vec<String>,
     /// Per-row owner email inputs for SMS Backup+ (always at least one). Synced into `form.owner_emails`.
@@ -115,16 +115,17 @@ struct App {
 
 impl Default for App {
     fn default() -> Self {
-        let exporter = Exporter::default();
+        let (export_ini, form) = ExportIniState::load_or_default();
+        let exporter = export_ini.exporter;
+        let owner_phone_rows = rows_from_multiline(&form.owner_phones);
+        let owner_email_rows = rows_from_multiline(&form.owner_emails);
         Self {
             mode: AppMode::ValidateContacts,
             exporter,
-            form: Form {
-                output: default_output_dir(exporter, ""),
-                ..Form::default()
-            },
-            owner_phone_rows: vec![String::new()],
-            owner_email_rows: vec![String::new()],
+            form,
+            export_ini,
+            owner_phone_rows,
+            owner_email_rows,
             validate_input: String::new(),
             validate_usa: true,
             running: false,
@@ -137,6 +138,20 @@ impl Default for App {
             errors: Vec::new(),
             rx: None,
         }
+    }
+}
+
+fn rows_from_multiline(value: &str) -> Vec<String> {
+    let rows: Vec<String> = value
+        .split(|c| c == '\n' || c == ',' || c == ';')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect();
+    if rows.is_empty() {
+        vec![String::new()]
+    } else {
+        rows
     }
 }
 
@@ -202,12 +217,23 @@ impl App {
             .join("\n");
     }
 
+    fn persist_export_ini(&mut self) {
+        self.sync_owner_phones();
+        self.sync_owner_emails();
+        self.export_ini.exporter = self.exporter;
+        if let Err(error) = self.export_ini.save(&self.form) {
+            self.errors = vec![error];
+        }
+    }
+
     fn start_export(&mut self) {
         if self.running {
             return;
         }
         self.sync_owner_phones();
         self.sync_owner_emails();
+        self.export_ini.exporter = self.exporter;
+        let _ = self.export_ini.save(&self.form);
         let args = match self.form.build_args(self.exporter) {
             Ok(args) => args,
             Err(errors) => {
@@ -661,20 +687,11 @@ impl App {
             }
         });
         if self.exporter != previous {
-            let previous_input = if previous == Exporter::Imessage {
-                self.form.db_path.as_str()
-            } else {
-                self.form.input.as_str()
-            };
-            let previous_default = default_output_dir(previous, previous_input);
-            if self.form.output.trim().is_empty() || self.form.output == previous_default {
-                let new_input = if self.exporter == Exporter::Imessage {
-                    self.form.db_path.as_str()
-                } else {
-                    self.form.input.as_str()
-                };
-                self.form.output = default_output_dir(self.exporter, new_input);
-            }
+            self.sync_owner_phones();
+            self.sync_owner_emails();
+            self.export_ini
+                .switch_exporter(self.exporter, &mut self.form);
+            self.owner_email_rows = rows_from_multiline(&self.form.owner_emails);
             self.form.advanced = false;
             self.errors.clear();
         }
@@ -972,7 +989,7 @@ impl App {
         if self.running {
             return "Running…".into();
         }
-        String::new()
+        format!("Settings: {}", self.export_ini.path.display())
     }
 
     fn sync_log_text(&mut self) {
@@ -1098,6 +1115,10 @@ impl eframe::App for App {
                 });
             }
         });
+    }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.persist_export_ini();
     }
 }
 

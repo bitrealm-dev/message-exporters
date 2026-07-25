@@ -25,12 +25,13 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 - Backup-source titles link to the upstream product site.
 - **Global options** (Anonymize + Start/End date) above the per-source form (Export tab).
 
-Export options skeleton: [`export.example.ini`](../crates/message-exporters-gui/export.example.ini).
+Export options persist in `export.ini` (load on start; save on Run / exit). Prefer an existing file in the working directory, else beside the GUI binary; otherwise create `./export.ini` on first save. Template: [`export.example.ini`](../crates/message-exporters-gui/export.example.ini). Backup passwords are never written.
 
 Build all sibling executables, then run:
 
 ```bash
 cargo build --workspace
+# optional: cp crates/message-exporters-gui/export.example.ini export.ini
 cargo run -p message-exporters-gui
 ```
 
@@ -223,5 +224,4 @@ Tabs: Validate contacts | Export
 ## Next steps
 
 - Add application icons and native installers/packages.
-- Persist recently used paths and non-secret preferences.
 - Add platform CI builds and GUI smoke tests.
