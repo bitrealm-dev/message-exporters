@@ -174,7 +174,7 @@ Product: [WhatsApp Chat Exporter](https://github.com/KnugiHK/WhatsApp-Chat-Expor
 
 Requires `wtsexporter` beside the GUI, on `PATH`, in `MESSAGE_EXPORTERS_BIN`, or via `WTSEXPORTER` (pip install or release-bundled binary).
 
-No Input directory and no Contacts file row in the GUI. `wtsexporter` runs with the GUI process working directory (the folder the GUI was launched from) for relative Android defaults.
+No Input directory and no Contacts file row in the GUI. `wtsexporter` runs in a temporary directory under the Output folder (so extract junk is not written into the GUI launch directory).
 
 **iOS field order:** Platform → Backup path → Contacts → Output → Attachments → Advanced (WhatsApp Business).
 
@@ -192,7 +192,7 @@ No Input directory and no Contacts file row in the GUI. `wtsexporter` runs with 
 | Message Database | file (advanced, Android only; hint: Optional msgstore.db override) | no | `--db` |
 | WhatsApp Business | checkbox (advanced) | no | `--business` |
 
-Global Obfuscate and Start/End date apply. Output files use the `__whatsapp` suffix. Optional CLI `--input` defaults to cwd and is not sent by the GUI.
+Global Obfuscate and Start/End date apply. Output files use the `__whatsapp` suffix. Optional CLI `--input` (defaults to cwd for resolving `msgstore.db` / media folders) is not sent by the GUI; extraction always uses a temp dir under Output.
 
 ### iPhone backup — `imessage-exporter`
 

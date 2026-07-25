@@ -17,7 +17,7 @@ pip install 'whatsapp-chat-exporter[android_backup,crypt15]'
 
 ## Usage
 
-`--input` is optional (defaults to the process current working directory). The GUI does not pass `--input`; it uses the folder the GUI was launched from.
+`--input` is optional (defaults to the process cwd) and is only used to resolve relative defaults such as `msgstore.db` / `wa.db` / `WhatsApp/`. Extraction always runs in a temporary directory under `--output` (cleaned up after convert), so the launch directory is not polluted. The GUI omits `--input`.
 
 ```bash
 # Android crypt15 — run from the folder that contains the backup, or pass --input

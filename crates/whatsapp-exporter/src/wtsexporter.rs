@@ -33,8 +33,10 @@ impl Platform {
 #[derive(Debug, Clone)]
 pub struct WtsexporterArgs {
     pub platform: Platform,
-    /// Working directory for wtsexporter defaults (`msgstore.db`, etc.).
+    /// Search root for relative defaults (`msgstore.db`, `wa.db`, …). Not the process cwd.
     pub input: PathBuf,
+    /// Scratch directory for wtsexporter (media extract + JSON). Must outlive convert.
+    pub work_dir: PathBuf,
     /// Key file path or crypt15 hex string (`-k`).
     pub key: Option<String>,
     pub backup: Option<PathBuf>,
@@ -106,9 +108,13 @@ pub fn resolve_wtsexporter() -> Result<PathBuf> {
     );
 }
 
-/// Run wtsexporter; write JSON to `json_out`. Returns stderr+stdout for logging.
+/// Run wtsexporter in `args.work_dir`; write JSON to `json_out`.
+/// Returns stderr+stdout for logging.
 pub fn run_wtsexporter(bin: &Path, args: &WtsexporterArgs, json_out: &Path) -> Result<String> {
-    let (cwd, db_arg) = resolve_cwd_and_db(&args.input, args.db.as_deref())?;
+    if !args.work_dir.is_dir() {
+        bail!("work dir does not exist: {}", args.work_dir.display());
+    }
+    let paths = resolve_forwarded_paths(args)?;
     let out_dir = json_out
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
@@ -117,7 +123,8 @@ pub fn run_wtsexporter(bin: &Path, args: &WtsexporterArgs, json_out: &Path) -> R
         .with_context(|| format!("create {}", out_dir.display()))?;
 
     let mut cmd = Command::new(bin);
-    cmd.current_dir(&cwd)
+    // Scratch cwd so iOS/Android extract does not pollute the GUI launch directory.
+    cmd.current_dir(&args.work_dir)
         .arg(args.platform.as_flag())
         .arg("--no-html")
         .arg("--no-banner")
@@ -132,15 +139,15 @@ pub fn run_wtsexporter(bin: &Path, args: &WtsexporterArgs, json_out: &Path) -> R
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    if let Some(db) = db_arg {
+    if let Some(db) = &paths.db {
         cmd.arg("-d").arg(db);
     }
-    if let Some(key) = args.key.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(key) = paths.key.as_deref() {
         cmd.arg("-k").arg(key);
     }
-    push_opt(&mut cmd, "-b", args.backup.as_deref());
-    push_opt(&mut cmd, "-w", args.wa.as_deref());
-    push_opt(&mut cmd, "-m", args.media.as_deref());
+    push_opt(&mut cmd, "-b", paths.backup.as_deref());
+    push_opt(&mut cmd, "-w", paths.wa.as_deref());
+    push_opt(&mut cmd, "-m", paths.media.as_deref());
     if args.business {
         cmd.arg("--business");
     }
@@ -183,38 +190,103 @@ pub fn run_wtsexporter(bin: &Path, args: &WtsexporterArgs, json_out: &Path) -> R
     Ok(combined)
 }
 
+struct ForwardedPaths {
+    key: Option<String>,
+    backup: Option<PathBuf>,
+    wa: Option<PathBuf>,
+    media: Option<PathBuf>,
+    db: Option<PathBuf>,
+}
+
+/// Absolutize user paths and fill Android/iOS defaults from `input` when missing.
+fn resolve_forwarded_paths(args: &WtsexporterArgs) -> Result<ForwardedPaths> {
+    let search = input_search_root(&args.input)?;
+
+    let db = match &args.db {
+        Some(p) => Some(absolutize(p)?),
+        None if args.input.is_file() => Some(absolutize(&args.input)?),
+        None => first_existing(&[
+            search.join("msgstore.db"),
+            search.join("ChatStorage.sqlite"),
+        ]),
+    };
+
+    let wa = match &args.wa {
+        Some(p) => Some(absolutize(p)?),
+        None => first_existing(&[
+            search.join("wa.db"),
+            search.join("ContactsV2.sqlite"),
+            search.join("AppDomainGroup-group.net.whatsapp.WhatsApp.shared/ContactsV2.sqlite"),
+            search.join(
+                "AppDomainGroup-group.net.whatsapp.WhatsAppSMB.shared/ContactsV2.sqlite",
+            ),
+        ]),
+    };
+
+    let media = match &args.media {
+        Some(p) => Some(absolutize(p)?),
+        None => first_existing(&[
+            search.join("WhatsApp"),
+            search.join("AppDomainGroup-group.net.whatsapp.WhatsApp.shared"),
+            search.join("AppDomainGroup-group.net.whatsapp.WhatsAppSMB.shared"),
+        ]),
+    };
+
+    let backup = match &args.backup {
+        Some(p) => Some(absolutize(p)?),
+        None => None,
+    };
+
+    let key = match args.key.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(k) if looks_like_path(k) => {
+            let path = absolutize(Path::new(k))?;
+            Some(path.to_string_lossy().into_owned())
+        }
+        Some(k) => Some(k.to_string()),
+        None => None,
+    };
+
+    Ok(ForwardedPaths {
+        key,
+        backup,
+        wa,
+        media,
+        db,
+    })
+}
+
+fn input_search_root(input: &Path) -> Result<PathBuf> {
+    if input.is_dir() {
+        return Ok(absolutize(input)?);
+    }
+    if input.is_file() {
+        let parent = input
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        return Ok(absolutize(parent)?);
+    }
+    bail!("input path does not exist: {}", input.display());
+}
+
+fn first_existing(candidates: &[PathBuf]) -> Option<PathBuf> {
+    candidates.iter().find(|p| p.exists()).cloned()
+}
+
+fn looks_like_path(s: &str) -> bool {
+    s.contains('/') || s.contains('\\') || s.ends_with(".key") || Path::new(s).exists()
+}
+
+fn absolutize(path: &Path) -> Result<PathBuf> {
+    if path.is_absolute() {
+        return Ok(path.to_path_buf());
+    }
+    let cwd = env::current_dir().context("resolve current working directory")?;
+    Ok(cwd.join(path))
+}
+
 fn push_opt(cmd: &mut Command, flag: &str, path: Option<&Path>) {
     if let Some(p) = path {
         cmd.arg(flag).arg(p);
     }
-}
-
-fn resolve_cwd_and_db(
-    input: &Path,
-    db: Option<&Path>,
-) -> Result<(PathBuf, Option<PathBuf>)> {
-    if let Some(db) = db {
-        let cwd = if input.is_dir() {
-            input.to_path_buf()
-        } else {
-            input
-                .parent()
-                .filter(|p| !p.as_os_str().is_empty())
-                .unwrap_or_else(|| Path::new("."))
-                .to_path_buf()
-        };
-        return Ok((cwd, Some(db.to_path_buf())));
-    }
-    if input.is_file() {
-        let cwd = input
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .unwrap_or_else(|| Path::new("."))
-            .to_path_buf();
-        return Ok((cwd, Some(input.to_path_buf())));
-    }
-    if input.is_dir() {
-        return Ok((input.to_path_buf(), None));
-    }
-    bail!("input path does not exist: {}", input.display());
 }

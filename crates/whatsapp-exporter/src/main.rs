@@ -10,7 +10,7 @@ use message_media::{
 };
 use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
 use whatsapp_exporter::{
-    convert_json, resolve_wtsexporter, run_wtsexporter, Platform, WtsexporterArgs,
+    convert_json, resolve_wtsexporter, run_wtsexporter, ExportReport, Platform, WtsexporterArgs,
 };
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -32,8 +32,10 @@ impl From<CliPlatform> for Platform {
 #[command(name = "whatsapp-exporter")]
 #[command(about = "Convert WhatsApp DB/backup (via wtsexporter) to per-conversation CSV")]
 struct Cli {
-    /// Optional working directory for wtsexporter relative defaults (default: process cwd).
-    /// Not used by the GUI — it relies on the GUI launch directory.
+    /// Directory (or msgstore.db file) used to resolve relative defaults such as
+    /// `msgstore.db` / `wa.db` / `WhatsApp/`. Defaults to the process cwd.
+    /// Extraction always runs in a temporary directory (not this path).
+    /// The GUI omits this flag.
     #[arg(long)]
     input: Option<PathBuf>,
 
@@ -130,6 +132,8 @@ fn main() -> Result<()> {
         let bin = resolve_wtsexporter()?;
         fs::create_dir_all(&cli.output)
             .with_context(|| format!("create {}", cli.output.display()))?;
+        // Scratch dir for wtsexporter cwd (iOS/Android extract) + result.json.
+        // Kept until after convert so media copy can read extracted files.
         let work = tempfile::Builder::new()
             .prefix("wtsexporter-")
             .tempdir_in(&cli.output)
@@ -140,7 +144,8 @@ fn main() -> Result<()> {
             &bin,
             &WtsexporterArgs {
                 platform: platform.into(),
-                input,
+                input: input.clone(),
+                work_dir: work.path().to_path_buf(),
                 key: cli.key.clone(),
                 backup: cli.backup.clone(),
                 wa: cli.wa.clone(),
@@ -159,8 +164,23 @@ fn main() -> Result<()> {
         }
         let kept = cli.output.join("wtsexporter_result.json");
         fs::copy(&json_out, &kept).with_context(|| format!("copy JSON to {}", kept.display()))?;
+
+        let mut media_roots = vec![work.path().to_path_buf(), input];
+        if let Ok(cwd) = env::current_dir() {
+            media_roots.push(cwd);
+        }
+        media_roots.sort();
+        media_roots.dedup();
+
+        let report = convert_json(
+            &kept,
+            &cli.output,
+            &date_range,
+            cli.media_mode.copies_attachments(),
+            &media_roots,
+        )?;
         drop(work);
-        kept
+        return finish_export(&cli, report);
     };
 
     if !json_path.is_file() {
@@ -187,7 +207,10 @@ fn main() -> Result<()> {
         cli.media_mode.copies_attachments(),
         &media_roots,
     )?;
+    finish_export(&cli, report)
+}
 
+fn finish_export(cli: &Cli, report: ExportReport) -> Result<()> {
     if cli.media_mode.needs_tools() {
         let compress = compress_options_from_cli(
             cli.media_max_resolution,
