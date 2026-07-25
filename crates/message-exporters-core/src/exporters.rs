@@ -5,25 +5,27 @@ use std::path::Path;
 
 use message_media::{MaxResolution, MediaMode};
 
-/// Alphabetically sorted by display name.
-pub const EXPORTERS: [Exporter; 6] = [
+/// Supported exporters first, then experimental (alphabetical by display name).
+pub const EXPORTERS: [Exporter; 7] = [
+    Exporter::Imessage,
+    Exporter::SmsBackupRestore,
+    Exporter::Whatsapp,
     Exporter::GoSmsPro,
     Exporter::Imazing,
-    Exporter::Imessage,
     Exporter::OpenExtract,
-    Exporter::SmsBackupRestore,
     Exporter::SmsBackupPlus,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Exporter {
-    #[default]
     GoSmsPro,
     Imazing,
+    #[default]
     Imessage,
     OpenExtract,
     SmsBackupRestore,
     SmsBackupPlus,
+    Whatsapp,
 }
 
 impl Exporter {
@@ -35,6 +37,7 @@ impl Exporter {
             Self::OpenExtract => "openextract-exporter",
             Self::Imazing => "imazing-exporter",
             Self::Imessage => "imessage-exporter",
+            Self::Whatsapp => "whatsapp-exporter",
         }
     }
 
@@ -46,6 +49,24 @@ impl Exporter {
             Self::OpenExtract => "OpenExtract",
             Self::Imazing => "iMazing",
             Self::Imessage => "iPhone backup",
+            Self::Whatsapp => "WhatsApp",
+        }
+    }
+
+    /// Officially supported exporters (XML/spec or maintained bridges).
+    pub fn is_supported(self) -> bool {
+        matches!(
+            self,
+            Self::Imessage | Self::SmsBackupRestore | Self::Whatsapp
+        )
+    }
+
+    /// Backup-type dropdown label; experimental exporters get a suffix.
+    pub fn dropdown_label(self) -> String {
+        if self.is_supported() {
+            self.display_name().to_string()
+        } else {
+            format!("{} (experimental)", self.display_name())
         }
     }
 
@@ -65,6 +86,7 @@ impl Exporter {
             Self::OpenExtract => "https://www.openextract.app/",
             Self::Imazing => "https://imazing.com/",
             Self::Imessage => "https://github.com/ReagentX/imessage-exporter",
+            Self::Whatsapp => "https://github.com/KnugiHK/WhatsApp-Chat-Exporter",
         }
     }
 
@@ -76,6 +98,7 @@ impl Exporter {
             Self::OpenExtract => "openextract",
             Self::Imazing => "imazing",
             Self::Imessage => "iphone-backup",
+            Self::Whatsapp => "whatsapp",
         }
     }
 
@@ -92,10 +115,52 @@ impl Exporter {
             "openextract" => Some(Self::OpenExtract),
             "imazing" => Some(Self::Imazing),
             "iphone-backup" => Some(Self::Imessage),
+            "whatsapp" => Some(Self::Whatsapp),
             _ => None,
         }
     }
 }
+
+/// Android vs iOS for the WhatsApp / wtsexporter bridge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WhatsappPlatform {
+    #[default]
+    Android,
+    Ios,
+}
+
+impl fmt::Display for WhatsappPlatform {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Android => "Android",
+            Self::Ios => "iOS",
+        })
+    }
+}
+
+impl WhatsappPlatform {
+    pub fn as_cli_str(self) -> &'static str {
+        match self {
+            Self::Android => "android",
+            Self::Ios => "ios",
+        }
+    }
+
+    pub fn as_ini_str(self) -> &'static str {
+        self.as_cli_str()
+    }
+
+    pub fn from_ini_str(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "android" | "a" | "" => Some(Self::Android),
+            "ios" | "iphone" | "ipad" | "i" => Some(Self::Ios),
+            _ => None,
+        }
+    }
+}
+
+pub const WHATSAPP_PLATFORMS: [WhatsappPlatform; 2] =
+    [WhatsappPlatform::Android, WhatsappPlatform::Ios];
 
 /// Create `path` and parents if missing.
 pub fn ensure_output_dir(path: &Path) -> Result<(), String> {
@@ -276,6 +341,13 @@ pub struct Form {
     pub media_min_size: String,
     pub media_skip_efficient: bool,
     pub apple_platform: ApplePlatform,
+    pub whatsapp_platform: WhatsappPlatform,
+    pub whatsapp_key: String,
+    pub whatsapp_backup: String,
+    pub whatsapp_wa: String,
+    pub whatsapp_media: String,
+    pub whatsapp_db: String,
+    pub whatsapp_business: bool,
 }
 
 impl Default for Form {
@@ -305,6 +377,13 @@ impl Default for Form {
             media_min_size: "20M".into(),
             media_skip_efficient: true,
             apple_platform: ApplePlatform::default(),
+            whatsapp_platform: WhatsappPlatform::default(),
+            whatsapp_key: String::new(),
+            whatsapp_backup: String::new(),
+            whatsapp_wa: String::new(),
+            whatsapp_media: String::new(),
+            whatsapp_db: String::new(),
+            whatsapp_business: false,
         }
     }
 }
@@ -320,10 +399,12 @@ impl Form {
                 if exporter == Exporter::SmsBackupPlus {
                     args.push("convert".into());
                 }
-                required_single_path(&self.input, "Input", &mut errors);
+                if exporter != Exporter::Whatsapp {
+                    required_single_path(&self.input, "Input", &mut errors);
+                    push_pair(&mut args, "--input", &self.input);
+                }
                 required_text(&self.output, "Output", &mut errors);
 
-                push_pair(&mut args, "--input", &self.input);
                 push_pair(&mut args, "--output", &self.output);
                 push_optional_pair(&mut args, "--start-date", &self.start_date);
                 push_optional_pair(&mut args, "--end-date", &self.end_date);
@@ -357,6 +438,28 @@ impl Form {
                         push_optional_pair(&mut args, "--contacts", &self.contacts);
                         push_optional_pair(&mut args, "--timezone", &self.timezone);
                     }
+                    Exporter::Whatsapp => {
+                        push_pair(
+                            &mut args,
+                            "--platform",
+                            self.whatsapp_platform.as_cli_str(),
+                        );
+                        if self.whatsapp_platform == WhatsappPlatform::Ios
+                            && self.whatsapp_backup.trim().is_empty()
+                        {
+                            errors.push("Backup path is required for iOS.".into());
+                        }
+                        push_optional_pair(&mut args, "--backup", &self.whatsapp_backup);
+                        push_optional_pair(&mut args, "--wa", &self.whatsapp_wa);
+                        if self.whatsapp_platform == WhatsappPlatform::Android {
+                            push_optional_pair(&mut args, "--key", &self.whatsapp_key);
+                            push_optional_pair(&mut args, "--media", &self.whatsapp_media);
+                            push_optional_pair(&mut args, "--db", &self.whatsapp_db);
+                        }
+                        if self.whatsapp_business {
+                            args.push("--business".into());
+                        }
+                    }
                     _ => match self.contacts_kind {
                         ContactsKind::None => {}
                         ContactsKind::Csv => {
@@ -382,6 +485,7 @@ impl Form {
                         | Exporter::SmsBackupRestore
                         | Exporter::SmsBackupPlus
                         | Exporter::Imazing
+                        | Exporter::Whatsapp
                 ) {
                     self.push_media_args(&mut args, &mut errors);
                 }
@@ -626,11 +730,28 @@ mod tests {
     }
 
     #[test]
-    fn exporters_are_alphabetical_by_display_name() {
-        let names: Vec<_> = EXPORTERS.iter().map(|e| e.display_name()).collect();
-        let mut sorted = names.clone();
+    fn exporters_order_supported_then_experimental_alpha() {
+        assert_eq!(
+            &EXPORTERS[..3],
+            &[
+                Exporter::Imessage,
+                Exporter::SmsBackupRestore,
+                Exporter::Whatsapp,
+            ]
+        );
+        assert!(EXPORTERS[..3].iter().all(|e| e.is_supported()));
+        assert!(EXPORTERS[3..].iter().all(|e| !e.is_supported()));
+
+        let experimental: Vec<_> = EXPORTERS[3..].iter().map(|e| e.display_name()).collect();
+        let mut sorted = experimental.clone();
         sorted.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
-        assert_eq!(names, sorted);
+        assert_eq!(experimental, sorted);
+
+        assert_eq!(Exporter::Imessage.dropdown_label(), "iPhone backup");
+        assert_eq!(
+            Exporter::GoSmsPro.dropdown_label(),
+            "GO SMS Pro (experimental)"
+        );
     }
 
     #[test]
@@ -689,6 +810,53 @@ mod tests {
         let args = form.build_args(Exporter::OpenExtract).unwrap();
         assert!(args.windows(2).any(|w| w[0] == "--start-date" && w[1] == "2020-01-01"));
         assert!(args.windows(2).any(|w| w[0] == "--end-date" && w[1] == "2020-02-01"));
+    }
+
+    #[test]
+    fn whatsapp_passes_platform_and_media() {
+        let form = Form {
+            output: "out".into(),
+            whatsapp_platform: WhatsappPlatform::Android,
+            whatsapp_key: "abc123".into(),
+            whatsapp_backup: "/tmp/backup".into(),
+            whatsapp_media: "/tmp/media".into(),
+            whatsapp_business: true,
+            attachment_media: AttachmentMedia::Clone,
+            ..Form::default()
+        };
+        let args = form.build_args(Exporter::Whatsapp).unwrap();
+        assert!(!args.iter().any(|arg| arg == "--input"));
+        assert!(args.windows(2).any(|w| w[0] == "--platform" && w[1] == "android"));
+        assert!(args.windows(2).any(|w| w[0] == "--key" && w[1] == "abc123"));
+        assert!(args.windows(2).any(|w| w[0] == "--backup" && w[1] == "/tmp/backup"));
+        assert!(args.windows(2).any(|w| w[0] == "--media" && w[1] == "/tmp/media"));
+        assert!(args.iter().any(|arg| arg == "--business"));
+        assert!(args.windows(2).any(|w| w[0] == "--media-mode" && w[1] == "clone"));
+
+        let ios = Form {
+            output: "out".into(),
+            whatsapp_platform: WhatsappPlatform::Ios,
+            whatsapp_key: "abc123".into(),
+            whatsapp_media: "/tmp/media".into(),
+            whatsapp_db: "/tmp/db".into(),
+            whatsapp_backup: "/tmp/ios-backup".into(),
+            ..Form::default()
+        };
+        let ios_args = ios.build_args(Exporter::Whatsapp).unwrap();
+        assert!(!ios_args.iter().any(|arg| arg == "--input"));
+        assert!(ios_args.windows(2).any(|w| w[0] == "--platform" && w[1] == "ios"));
+        assert!(ios_args.windows(2).any(|w| w[0] == "--backup" && w[1] == "/tmp/ios-backup"));
+        assert!(!ios_args.iter().any(|arg| arg == "--key"));
+        assert!(!ios_args.iter().any(|arg| arg == "--media"));
+        assert!(!ios_args.iter().any(|arg| arg == "--db"));
+
+        let ios_missing = Form {
+            output: "out".into(),
+            whatsapp_platform: WhatsappPlatform::Ios,
+            ..Form::default()
+        };
+        let err = ios_missing.build_args(Exporter::Whatsapp).unwrap_err();
+        assert!(err.iter().any(|e| e.contains("Backup path is required for iOS")));
     }
 
     #[test]

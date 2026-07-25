@@ -1,0 +1,70 @@
+{
+  "15555550122@s.whatsapp.net": {
+    "name": "Sam Example",
+    "type": "ANDROID",
+    "messages": {
+      "AAA": {
+        "from_me": false,
+        "timestamp": 1609459200,
+        "time": "00:00",
+        "key_id": "AAA",
+        "data": "Hello from Sam",
+        "sender": null,
+        "media": false,
+        "mime": null,
+        "caption": null,
+        "sticker": false,
+        "reply": null,
+        "reactions": {}
+      },
+      "BBB": {
+        "from_me": true,
+        "timestamp": 1609545600,
+        "time": "00:00",
+        "key_id": "BBB",
+        "data": "Hi Sam",
+        "sender": null,
+        "media": false,
+        "mime": null,
+        "caption": null,
+        "sticker": false,
+        "reply": null,
+        "reactions": {}
+      }
+    }
+  },
+  "120363042111111111@g.us": {
+    "name": "Family Chat",
+    "type": "ANDROID",
+    "messages": {
+      "CCC": {
+        "from_me": false,
+        "timestamp": 1609632000,
+        "time": "00:00",
+        "key_id": "CCC",
+        "data": "Group hello",
+        "sender": "15555550133@s.whatsapp.net",
+        "media": false,
+        "mime": null,
+        "caption": null,
+        "sticker": false,
+        "reply": null,
+        "reactions": {}
+      },
+      "DDD": {
+        "from_me": true,
+        "timestamp": 1609718400,
+        "time": "00:00",
+        "key_id": "DDD",
+        "data": "Group reply",
+        "sender": null,
+        "media": false,
+        "mime": null,
+        "caption": null,
+        "sticker": false,
+        "reply": null,
+        "reactions": {}
+      }
+    }
+  }
+}

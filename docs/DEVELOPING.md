@@ -28,6 +28,8 @@ For each platform, these binaries are attached to the release:
 - `openextract-exporter`
 - `imazing-exporter`
 - `imessage-exporter`
+- `whatsapp-exporter`
+- `wtsexporter` / `wtsexporter.exe` (KnugiHK 0.13.0, for the WhatsApp bridge)
 
 | Platform | Runner | Asset name suffix |
 |----------|--------|-------------------|

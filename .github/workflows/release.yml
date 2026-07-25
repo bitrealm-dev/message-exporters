@@ -71,12 +71,38 @@ jobs:
             sms-backup-plus-exporter \
             openextract-exporter \
             imazing-exporter \
-            imessage-exporter
+            imessage-exporter \
+            whatsapp-exporter
           do
             src="target/release/${bin}${EXT}"
             dst="dist/${bin}-${SUFFIX}${EXT}"
             cp "$src" "$dst"
           done
+
+          # Bundle KnugiHK wtsexporter next to whatsapp-exporter (no Python required).
+          WTSEXPORTER_VERSION=0.13.0
+          case '${{ matrix.artifact_suffix }}' in
+            x86_64-unknown-linux-gnu)
+              WTS_ASSET="wtsexporter_linux_x64"
+              WTS_OUT="wtsexporter"
+              ;;
+            aarch64-apple-darwin)
+              WTS_ASSET="wtsexporter_macos_arm64"
+              WTS_OUT="wtsexporter"
+              ;;
+            x86_64-pc-windows-msvc)
+              WTS_ASSET="wtsexporter_win_x64.exe"
+              WTS_OUT="wtsexporter.exe"
+              ;;
+            *)
+              echo "No wtsexporter asset mapping for ${{ matrix.artifact_suffix }}"
+              exit 1
+              ;;
+          esac
+          curl -fsSL -o "dist/${WTS_OUT}" \
+            "https://github.com/KnugiHK/WhatsApp-Chat-Exporter/releases/download/${WTSEXPORTER_VERSION}/${WTS_ASSET}"
+          chmod +x "dist/${WTS_OUT}" || true
+
           ls -la dist
 
       - uses: actions/upload-artifact@v4
@@ -111,4 +137,4 @@ jobs:
 
           Binaries for Linux (x86_64-unknown-linux-gnu), Windows (x86_64-pc-windows-msvc), and macOS Apple Silicon (aarch64-apple-darwin).
 
-          Tools: go-sms-pro-exporter, sms-backup-restore-exporter, sms-backup-plus-exporter, openextract-exporter, imazing-exporter, imessage-exporter."
+          Tools: go-sms-pro-exporter, sms-backup-restore-exporter, sms-backup-plus-exporter, openextract-exporter, imazing-exporter, imessage-exporter, whatsapp-exporter (includes wtsexporter 0.13.0)."

@@ -9,6 +9,7 @@ pub use export_ini::{
 };
 pub use exporters::{
     contacts_kind_from_path, ensure_output_dir, ApplePlatform, AttachmentMedia, ContactsKind,
-    Exporter, Form, APPLE_PLATFORMS, ATTACHMENT_MEDIA, CONTACT_KINDS, EXPORTERS, MAX_RESOLUTIONS,
+    Exporter, Form, WhatsappPlatform, APPLE_PLATFORMS, ATTACHMENT_MEDIA, CONTACT_KINDS, EXPORTERS,
+    MAX_RESOLUTIONS, WHATSAPP_PLATFORMS,
 };
 pub use process::{resolve_binary, spawn, ProcessControl, ProcessEvent};

@@ -58,7 +58,7 @@ Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules a
 
 | Control | Widget | CLI mapping | Notes |
 |---------|--------|-------------|-------|
-| Backup source | labeled selector | which binary | Sorted alphabetically by display name |
+| Backup source | labeled selector | which binary | Supported first (iPhone backup, SMS Backup & Restore, WhatsApp), then experimental alphabetically with `(experimental)` suffix |
 | Obfuscate | checkbox (global) | `--obfuscate` | When enabled, show seed field |
 | Seed | text (exactly 8 hex) | `--obfuscate-seed` | Optional; blank = generate at run time |
 | Start date | text (global) | `--start-date` | Optional `YYYY-MM-DD`, inclusive |
@@ -71,22 +71,22 @@ Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules a
 
 ## Show / hide by backup source
 
-| Section | GO SMS Pro | Backup & Restore | SMS Backup+ | OpenExtract | iMazing | iPhone backup |
-|---------|:----------:|:----------------:|:-----------:|:-----------:|:-------:|:-------------:|
-| Global anon + dates | yes | yes | yes | yes | yes | yes |
-| Input / Output | yes | yes | yes | yes | yes | yes |
-| DB path / Platform | — | — | — | — | — | primary |
-| Your phone number(s) | required | required | required\* | — | — | — |
-| Your email address(es) | — | — | required\* | — | — | — |
-| Contacts VCF / iMazing CSV | yes | yes | yes | yes | — | — |
-| Contacts iMazing CSV | — | — | — | — | yes | — |
-| Contacts Apple AddressBook | — | — | — | — | — | advanced |
-| Timezone | — | — | — | — | yes | — |
-| Name mapping | — | — | advanced | — | — | — |
-| Verbose logging | — | — | always on | — | — | — |
-| Attachments (copy/convert/compress/do not copy) | yes | yes | yes | — | — | yes |
-| Compress options (resolution/fps/…) | when Compress | when Compress | when Compress | — | — | when Compress |
-| Advanced (attachment root, …) | — | — | name mapping | — | — | yes |
+| Section | GO SMS Pro | Backup & Restore | SMS Backup+ | OpenExtract | iMazing | WhatsApp | iPhone backup |
+|---------|:----------:|:----------------:|:-----------:|:-----------:|:-------:|:--------:|:-------------:|
+| Global anon + dates | yes | yes | yes | yes | yes | yes | yes |
+| Input / Output | yes | yes | yes | yes | yes | output only | yes |
+| DB path / Platform | — | — | — | — | — | platform (+ advanced) | primary |
+| Your phone number(s) | required | required | required\* | — | — | — | — |
+| Your email address(es) | — | — | required\* | — | — | — | — |
+| Contacts VCF / iMazing CSV | yes | yes | yes | yes | — | — (Contacts field) | — |
+| Contacts iMazing CSV | — | — | — | — | yes | — | — |
+| Contacts Apple AddressBook | — | — | — | — | — | — | advanced |
+| Timezone | — | — | — | — | yes | — | — |
+| Name mapping | — | — | advanced | — | — | — | — |
+| Verbose logging | — | — | always on | — | — | — | — |
+| Attachments (copy/convert/compress/do not copy) | yes | yes | yes | — | yes | yes | yes |
+| Compress options (resolution/fps/…) | when Compress | when Compress | when Compress | — | when Compress | when Compress | when Compress |
+| Advanced (attachment root, …) | — | — | name mapping | — | — | Android key / backup / wa / media / db / business | yes |
 
 Convert/Compress need `ffmpeg`/`ffprobe` on PATH. **Do not copy** skips writing attachment files (`--media-mode disabled` / iPhone `--copy-method disabled`).
 
@@ -167,6 +167,32 @@ Product: [iMazing](https://imazing.com/)
 | Timezone | IANA text | no | `--timezone` (default: host local) |
 
 Global Obfuscate and Start/End date apply. WhatsApp chats write as separate `…__whatsapp.csv` files. See [`crates/imazing-exporter/docs/DESIGN.md`](../crates/imazing-exporter/docs/DESIGN.md).
+
+### WhatsApp — `whatsapp-exporter`
+
+Product: [WhatsApp Chat Exporter](https://github.com/KnugiHK/WhatsApp-Chat-Exporter) (`wtsexporter`)
+
+Requires `wtsexporter` beside the GUI, on `PATH`, in `MESSAGE_EXPORTERS_BIN`, or via `WTSEXPORTER` (pip install or release-bundled binary).
+
+No Input directory and no Contacts file row in the GUI. `wtsexporter` runs with the GUI process working directory (the folder the GUI was launched from) for relative Android defaults.
+
+**iOS field order:** Platform → Backup path → Contacts → Output → Attachments → Advanced (WhatsApp Business).
+
+**Android field order:** Platform → Backup path → Contacts → Output → Attachments → Decryption key → Advanced (media folder, Message Database, WhatsApp Business).
+
+| Control | Type | Required | CLI |
+|---------|------|:--------:|-----|
+| Platform | Android / iOS | yes | `--platform` |
+| Backup path | folder (iOS) or crypt file (Android) | iOS yes / Android no | `--backup` |
+| Contacts | file (hint: Optional wa.db / Optional ContactsV2.sqlite) | no | `--wa` |
+| Decryption key | text (Android only; not saved) | no | `--key` |
+| Output | folder | yes | `--output` |
+| Attachments | enum | no | `--media-mode` |
+| Media folder | folder (advanced, Android only) | no | `--media` |
+| Message Database | file (advanced, Android only; hint: Optional msgstore.db override) | no | `--db` |
+| WhatsApp Business | checkbox (advanced) | no | `--business` |
+
+Global Obfuscate and Start/End date apply. Output files use the `__whatsapp` suffix. Optional CLI `--input` defaults to cwd and is not sent by the GUI.
 
 ### iPhone backup — `imessage-exporter`
 

@@ -13,18 +13,18 @@ All converters write **one CSV file per conversation**. Across the board:
 
 ## Capabilities
 
-| | GO SMS Pro | SMS Backup & Restore | SMS Backup+ | OpenExtract | iMazing | iMessage Exporter |
-|---|---|---|---|---|---|---|
-| **Output** | Per-chat CSV | Per-chat CSV | Per-chat CSV | Per-chat CSV | Per-chat CSV (`__whatsapp` for WA) | Per-chat CSV (also txt/html) |
-| **Peer phone** (`chat_identifier`) | yes | yes | yes (or `unknown`) | partial (name stem if unresolved) | partial (name stem if unresolved) | yes (Apple chat id) |
-| **Sender phone** (`sender_handle`, incoming) | yes | yes | yes | yes | yes | yes |
-| **Names** | yes (XML + contacts) | yes (XML + contacts) | yes (contacts + name-mapping) | partial (contacts critical) | yes (Contacts CSV) | yes (AddressBook / backup) |
-| **Direction** | yes | yes | yes | yes (`Is From Me` / Direction) | yes (`Type`) | yes (`is_from_me` in DB) |
-| **Groups** | partial (PDU MMS) | yes (MMS) | partial (flat multi-address) | no | partial (WhatsApp roster weak) | yes (full DB roster) |
-| **Attachments** | partial (PDU only; XML none) | yes (MMS) | yes (archive pairing heuristic) | no (flag only) | yes | yes |
-| **Media modes** (`clone`/`convert`/`compress`) | yes | yes | yes | no | yes | yes (`clone`/`basic`/`full`/`disabled`) |
-| **Contacts** | optional | optional | optional | recommended | recommended | optional |
-| **Owner phone CLI** | required | required | required (+ owner email) | no | no | no |
+| | GO SMS Pro | SMS Backup & Restore | SMS Backup+ | OpenExtract | iMazing | WhatsApp | iMessage Exporter |
+|---|---|---|---|---|---|---|---|
+| **Output** | Per-chat CSV | Per-chat CSV | Per-chat CSV | Per-chat CSV | Per-chat CSV (`__whatsapp` for WA) | Per-chat CSV (`__whatsapp`) | Per-chat CSV (also txt/html) |
+| **Peer phone** (`chat_identifier`) | yes | yes | yes (or `unknown`) | partial (name stem if unresolved) | partial (name stem if unresolved) | yes (JID → E.164) | yes (Apple chat id) |
+| **Sender phone** (`sender_handle`, incoming) | yes | yes | yes | yes | yes | yes (groups via sender JID) | yes |
+| **Names** | yes (XML + contacts) | yes (XML + contacts) | yes (contacts + name-mapping) | partial (contacts critical) | yes (Contacts CSV) | yes (`wa.db` via wtsexporter) | yes (AddressBook / backup) |
+| **Direction** | yes | yes | yes | yes (`Is From Me` / Direction) | yes (`Type`) | yes (`from_me`) | yes (`is_from_me` in DB) |
+| **Groups** | partial (PDU MMS) | yes (MMS) | partial (flat multi-address) | no | partial (WhatsApp roster weak) | yes (title + sender phones) | yes (full DB roster) |
+| **Attachments** | partial (PDU only; XML none) | yes (MMS) | yes (archive pairing heuristic) | no (flag only) | yes | yes (media paths via wtsexporter) | yes |
+| **Media modes** (`clone`/`convert`/`compress`) | yes | yes | yes | no | yes | yes | yes (`clone`/`basic`/`full`/`disabled`) |
+| **Contacts** | optional | optional | optional | recommended | recommended | via `--wa` / wtsexporter | optional |
+| **Owner phone CLI** | required | required | required (+ owner email) | no | no | no | no |
 
 ## Deficiencies
 
@@ -35,19 +35,20 @@ All converters write **one CSV file per conversation**. Across the board:
 | **SMS Backup+** | Offline `.eml` only (no IMAP); archive attachment→message pairing is guesswork; unresolved peers → `unknown.csv` |
 | **OpenExtract** | No media extraction; no groups; thin source format; name-only chats common without a good VCF |
 | **iMazing** | Outgoing sender identity blank (upstream); reactions/replies are free text; WhatsApp groups lack full roster; naive dates need `--timezone` |
+| **WhatsApp** | Requires external `wtsexporter` (pip or bundled binary); LID / non-phone JIDs stay raw; full group roster depends on upstream JSON |
 | **iMessage Exporter** | Outgoing `sender_handle` blank; no WhatsApp; GPL-3.0-or-later; needs Mac/`chat.db` access |
 
 ## Other dimensions
 
-| | GO SMS Pro | SMS Backup & Restore | SMS Backup+ | OpenExtract | iMazing | iMessage Exporter |
-|---|---|---|---|---|---|---|
-| **WhatsApp** | no | no | no | no | yes | no |
-| **`participants_json`** | no | no | no | no | no | yes |
-| **Reactions / tapbacks** | no | no | no | no | free-text `reactions` | structured `tapbacks_json` |
-| **Edits / replies** | no | no | no | no | raw dates / free-text | `edits_json` / thread GUIDs |
-| **Source extras** | `pdu_*`, `xml_fields_json` | `subject`, `message_kind`, `xml_fields_json` | `smssync_id`, `eml_path` | `openextract_has_attachments` | vendor date / status cols | `parts_json`, `app_json`, … |
-| **Timezone** | XML/PDU epoch | XML epoch | EML dates | vendor `Date` | naive + `--timezone` | DB epoch + offset |
-| **Skip diagnostics** | `skipped_*.csv` (invalid address, empty PDU, no party) | counters on stderr | counters on stderr | unresolved phone count | counters on stderr | upstream logging |
+| | GO SMS Pro | SMS Backup & Restore | SMS Backup+ | OpenExtract | iMazing | WhatsApp | iMessage Exporter |
+|---|---|---|---|---|---|---|---|
+| **WhatsApp** | no | no | no | no | yes (CSV) | yes (native DB) | no |
+| **`participants_json`** | no | no | no | no | no | no | yes |
+| **Reactions / tapbacks** | no | no | no | no | free-text `reactions` | `whatsapp_reactions_json` | structured `tapbacks_json` |
+| **Edits / replies** | no | no | no | no | raw dates / free-text | `whatsapp_reply_json` | `edits_json` / thread GUIDs |
+| **Source extras** | `pdu_*`, `xml_fields_json` | `subject`, `message_kind`, `xml_fields_json` | `smssync_id`, `eml_path` | `openextract_has_attachments` | vendor date / status cols | `whatsapp_jid`, `whatsapp_key_id` | `parts_json`, `app_json`, … |
+| **Timezone** | XML/PDU epoch | XML epoch | EML dates | vendor `Date` | naive + `--timezone` | epoch from wtsexporter | DB epoch + offset |
+| **Skip diagnostics** | `skipped_*.csv` (invalid address, empty PDU, no party) | counters on stderr | counters on stderr | unresolved phone count | counters on stderr | counters on stderr | upstream logging |
 
 ## Format docs
 
@@ -58,4 +59,5 @@ All converters write **one CSV file per conversation**. Across the board:
 | SMS Backup+ | [`crates/sms-backup-plus-exporter/docs/EML_CSV_MAPPING.md`](../crates/sms-backup-plus-exporter/docs/EML_CSV_MAPPING.md) |
 | OpenExtract | [`crates/openextract-exporter/README.md`](../crates/openextract-exporter/README.md) |
 | iMazing | [`crates/imazing-exporter/docs/DESIGN.md`](../crates/imazing-exporter/docs/DESIGN.md) |
+| WhatsApp | [`crates/whatsapp-exporter/README.md`](../crates/whatsapp-exporter/README.md) |
 | iMessage Exporter | [`crates/imessage-exporter/README.md`](../crates/imessage-exporter/README.md) |

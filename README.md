@@ -47,6 +47,7 @@ cargo run -p message-contacts --bin contacts-validate -- \
 | **SMS Backup+** email exports (`.eml` files) | [`sms-backup-plus-exporter`](crates/sms-backup-plus-exporter) | SMS Backup+ **1.5.11** | [How the email backup is structured](crates/sms-backup-plus-exporter/docs/FORMAT.md), [How messages become spreadsheet rows](crates/sms-backup-plus-exporter/docs/EML_CSV_MAPPING.md) |
 | **OpenExtract** conversation CSV + contacts `.vcf` | [`openextract-exporter`](crates/openextract-exporter) | OpenExtract **0.5.1** | [Converter README](crates/openextract-exporter/README.md), [example spreadsheet](crates/openextract-exporter/sample-output/+15555550122.csv) |
 | **iMazing** Messages / WhatsApp CSV + Contacts CSV | [`imazing-exporter`](crates/imazing-exporter) | iMazing **3.5.5** | [Converter README](crates/imazing-exporter/README.md), [Design & limitations](crates/imazing-exporter/docs/DESIGN.md), [example spreadsheet](crates/imazing-exporter/sample-output/+13212462167.csv) |
+| **WhatsApp** Android/iOS DB or crypt backup | [`whatsapp-exporter`](crates/whatsapp-exporter) | WhatsApp Chat Exporter **0.13.0** (`wtsexporter`) | [Converter README](crates/whatsapp-exporter/README.md) |
 | **Apple Messages** database on a Mac (`chat.db`) | [`imessage-exporter`](crates/imessage-exporter) | iMessage Exporter **4.2.0** | [Converter README](crates/imessage-exporter/README.md), [example spreadsheet](crates/imessage-exporter/sample-output/+15551212.csv) |
 
 Capability matrix: [`docs/EXPORTER_MATRIX.md`](docs/EXPORTER_MATRIX.md).
@@ -143,6 +144,21 @@ cargo run --release -p imazing-exporter -- \
 ```
 
 `--input` may be one Messages/WhatsApp CSV, a chat folder, `Messages/`, `WhatsApp/`, or a full device export root (recursive). WhatsApp chats write as separate `…__whatsapp.csv` files. Export from the **All backup** view when you want attachment filenames. `--contacts` is the iMazing Contacts CSV from the same backup (recommended; without it a warning is printed and phones are not resolved to names). Known limitations (silent group members, no WhatsApp roster, …): [`crates/imazing-exporter/docs/DESIGN.md`](crates/imazing-exporter/docs/DESIGN.md). Distinct from `imessage-exporter` (which reads `chat.db`).
+
+### WhatsApp (native DB / crypt backup via `wtsexporter`)
+
+```bash
+# Install helper once (or use the binary shipped in our GitHub Releases):
+pip install 'whatsapp-chat-exporter[android_backup,crypt15]'
+
+cargo run --release -p whatsapp-exporter -- \
+  --platform android \
+  --key /path/to/key-or-hex \
+  --backup msgstore.db.crypt15 \
+  --output ./staging/whatsapp
+```
+
+Shells out to KnugiHK [`wtsexporter`](https://github.com/KnugiHK/WhatsApp-Chat-Exporter), then converts JSON to per-chat CSV (`…__whatsapp.csv`). Optional `--input` defaults to the current working directory (the GUI omits it). Convert-only: `--json result.json` (no Python). See [`crates/whatsapp-exporter/README.md`](crates/whatsapp-exporter/README.md). Keep iMazing’s WhatsApp CSV path when you only have iMazing exports.
 
 ### Apple Messages (`chat.db` on a Mac)
 

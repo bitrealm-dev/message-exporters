@@ -1,0 +1,111 @@
+//! Load KnugiHK WhatsApp-Chat-Exporter single-file JSON (`ChatCollection.to_dict`).
+
+use anyhow::{Context, Result};
+use serde::Deserialize;
+use serde_json::Value;
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
+
+/// Top-level JSON: map of JID → chat.
+pub type ChatStoreFile = BTreeMap<String, ChatJson>;
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ChatJson {
+    pub name: Option<String>,
+    #[serde(rename = "type")]
+    pub device_type: Option<String>,
+    /// Prefix for relative media `data` paths (iOS often `AppDomainGroup-…/`).
+    #[serde(default)]
+    pub media_base: Option<String>,
+    #[serde(default)]
+    pub messages: BTreeMap<String, MessageJson>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct MessageJson {
+    #[serde(default)]
+    pub from_me: bool,
+    /// Unix seconds (or ms — normalized in emit).
+    pub timestamp: Option<f64>,
+    pub data: Option<Value>,
+    pub sender: Option<String>,
+    /// `false` or a media path string.
+    #[serde(default)]
+    pub media: Value,
+    pub mime: Option<String>,
+    pub caption: Option<String>,
+    #[serde(default)]
+    pub sticker: bool,
+    pub key_id: Option<Value>,
+    pub reply: Option<Value>,
+    #[serde(default)]
+    pub reactions: Value,
+}
+
+pub fn load_chat_store(path: &Path) -> Result<ChatStoreFile> {
+    let text = fs::read_to_string(path)
+        .with_context(|| format!("read {}", path.display()))?;
+    serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))
+}
+
+fn media_flag_true(msg: &MessageJson) -> bool {
+    matches!(&msg.media, Value::Bool(true))
+}
+
+fn is_missing_media_placeholder(s: &str) -> bool {
+    s.eq_ignore_ascii_case("The media is missing")
+}
+
+/// Body text from `data` (string) or caption.
+///
+/// When `media` is true, wtsexporter stores the file path in `data`, so only
+/// `caption` (if any) is treated as message text.
+pub fn message_text(msg: &MessageJson) -> String {
+    if media_flag_true(msg) {
+        return msg.caption.clone().unwrap_or_default();
+    }
+    let body = match &msg.data {
+        Some(Value::String(s)) => s.clone(),
+        Some(Value::Number(n)) => n.to_string(),
+        Some(Value::Bool(b)) => b.to_string(),
+        _ => String::new(),
+    };
+    if body.is_empty() {
+        msg.caption.clone().unwrap_or_default()
+    } else if let Some(cap) = msg.caption.as_deref().filter(|c| !c.is_empty()) {
+        if body.contains(cap) {
+            body
+        } else {
+            format!("{body}\n{cap}")
+        }
+    } else {
+        body
+    }
+}
+
+/// Path hint for an attachment.
+///
+/// Upstream sets `media: true` and puts the path in `data` (Android/iOS). Older
+/// or alternate dumps may put a path string directly in `media`.
+pub fn media_path(msg: &MessageJson) -> Option<&str> {
+    match &msg.media {
+        Value::String(s) if !s.is_empty() && !is_missing_media_placeholder(s) => Some(s.as_str()),
+        Value::Bool(true) => match &msg.data {
+            Some(Value::String(s)) if !s.is_empty() && !is_missing_media_placeholder(s) => {
+                Some(s.as_str())
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Normalize wtsexporter timestamp to Unix seconds.
+pub fn timestamp_secs(ts: f64) -> i64 {
+    if ts > 9_999_999_999.0 {
+        (ts / 1000.0) as i64
+    } else {
+        ts as i64
+    }
+}

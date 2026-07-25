@@ -8,7 +8,8 @@ use ini::Ini;
 use message_media::MaxResolution;
 
 use crate::exporters::{
-    contacts_kind_from_path, ApplePlatform, AttachmentMedia, Exporter, Form, EXPORTERS,
+    contacts_kind_from_path, ApplePlatform, AttachmentMedia, Exporter, Form, WhatsappPlatform,
+    EXPORTERS,
 };
 
 const COMMON: &str = "common";
@@ -26,6 +27,12 @@ pub struct ExporterSection {
     pub apple_contacts: String,
     pub attachment_root: String,
     pub conversation_filter: String,
+    pub whatsapp_platform: WhatsappPlatform,
+    pub whatsapp_backup: String,
+    pub whatsapp_wa: String,
+    pub whatsapp_media: String,
+    pub whatsapp_db: String,
+    pub whatsapp_business: bool,
 }
 
 /// In-memory export.ini plus the path used for load/save.
@@ -33,7 +40,7 @@ pub struct ExporterSection {
 pub struct ExportIniState {
     pub path: PathBuf,
     pub exporter: Exporter,
-    sections: [ExporterSection; 6],
+    sections: [ExporterSection; 7],
 }
 
 impl ExportIniState {
@@ -77,7 +84,7 @@ impl ExportIniState {
             .and_then(Exporter::from_ini_key)
             .unwrap_or_default();
 
-        let mut sections: [ExporterSection; 6] = Default::default();
+        let mut sections: [ExporterSection; 7] = Default::default();
         for (i, exp) in EXPORTERS.iter().copied().enumerate() {
             sections[i] = read_section(&ini, exp);
         }
@@ -112,6 +119,12 @@ impl ExportIniState {
         form.apple_contacts = section.apple_contacts.clone();
         form.attachment_root = section.attachment_root.clone();
         form.conversation_filter = section.conversation_filter.clone();
+        form.whatsapp_platform = section.whatsapp_platform;
+        form.whatsapp_backup = section.whatsapp_backup.clone();
+        form.whatsapp_wa = section.whatsapp_wa.clone();
+        form.whatsapp_media = section.whatsapp_media.clone();
+        form.whatsapp_db = section.whatsapp_db.clone();
+        form.whatsapp_business = section.whatsapp_business;
         form.contacts_kind = contacts_kind_from_path(&form.contacts);
     }
 
@@ -131,6 +144,12 @@ impl ExportIniState {
         section.apple_contacts = form.apple_contacts.clone();
         section.attachment_root = form.attachment_root.clone();
         section.conversation_filter = form.conversation_filter.clone();
+        section.whatsapp_platform = form.whatsapp_platform;
+        section.whatsapp_backup = form.whatsapp_backup.clone();
+        section.whatsapp_wa = form.whatsapp_wa.clone();
+        section.whatsapp_media = form.whatsapp_media.clone();
+        section.whatsapp_db = form.whatsapp_db.clone();
+        section.whatsapp_business = form.whatsapp_business;
     }
 
     /// Flush current section, switch exporter, apply the new section.
@@ -149,6 +168,7 @@ impl ExportIniState {
         *self.section_mut(self.exporter) = ExporterSection::default();
         self.apply_section_to_form(form);
         form.backup_password.clear();
+        form.whatsapp_key.clear();
         form.advanced = false;
     }
 
@@ -246,6 +266,13 @@ fn read_section(ini: &Ini, exporter: Exporter) -> ExporterSection {
         apple_contacts: get(ini, Some(name), "apple_contacts"),
         attachment_root: get(ini, Some(name), "attachment_root"),
         conversation_filter: get(ini, Some(name), "conversation_filter"),
+        whatsapp_platform: WhatsappPlatform::from_ini_str(&get(ini, Some(name), "platform"))
+            .unwrap_or_default(),
+        whatsapp_backup: get(ini, Some(name), "backup"),
+        whatsapp_wa: get(ini, Some(name), "wa"),
+        whatsapp_media: get(ini, Some(name), "media"),
+        whatsapp_db: get(ini, Some(name), "db"),
+        whatsapp_business: parse_bool(&get(ini, Some(name), "business"), false),
     }
 }
 
@@ -299,6 +326,15 @@ fn build_ini(state: &ExportIniState, form: &Form) -> Ini {
                         section.conversation_filter.trim(),
                     );
                 // backup_password intentionally omitted
+            }
+            Exporter::Whatsapp => {
+                s.set("platform", section.whatsapp_platform.as_ini_str())
+                    .set("backup", section.whatsapp_backup.trim())
+                    .set("wa", section.whatsapp_wa.trim())
+                    .set("media", section.whatsapp_media.trim())
+                    .set("db", section.whatsapp_db.trim())
+                    .set("business", bool_str(section.whatsapp_business));
+                // whatsapp_key intentionally omitted (crypt15 hex / key path)
             }
             _ => {}
         }

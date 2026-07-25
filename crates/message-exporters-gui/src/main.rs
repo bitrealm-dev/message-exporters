@@ -11,8 +11,8 @@ use eframe::egui;
 use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
 use message_exporters_core::{
     ensure_output_dir, resolve_binary, spawn, AttachmentMedia, ContactsKind, ExportIniState,
-    Exporter, Form, ProcessControl, ProcessEvent, APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS,
-    MAX_RESOLUTIONS,
+    Exporter, Form, ProcessControl, ProcessEvent, WhatsappPlatform, APPLE_PLATFORMS,
+    ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS, WHATSAPP_PLATFORMS,
 };
 use message_media::process_export_media;
 
@@ -496,16 +496,77 @@ impl App {
         self.ui_backup_source(ui);
         ui.add_space(8.0);
 
-        // Common fields (same order for every exporter).
-        self.ui_common_input(ui);
-        path_or_text(
-            ui,
-            "Output directory",
-            &mut self.form.output,
-            "Path",
-            false,
-            true,
-        );
+        if self.exporter == Exporter::Whatsapp {
+            combo_enum(
+                ui,
+                "Platform",
+                &mut self.form.whatsapp_platform,
+                &WHATSAPP_PLATFORMS,
+                PATH_W,
+            );
+        }
+
+        // Common fields. WhatsApp has no Input / Contacts file; its source fields
+        // come before Attachments (see below).
+        if self.exporter != Exporter::Whatsapp {
+            self.ui_common_input(ui);
+            path_or_text(
+                ui,
+                "Output directory",
+                &mut self.form.output,
+                "Path",
+                false,
+                true,
+            );
+        }
+
+        // WhatsApp: Platform → backup / contacts → Output → Attachments → Advanced.
+        if self.exporter == Exporter::Whatsapp {
+            if self.form.whatsapp_platform == WhatsappPlatform::Ios {
+                path_or_text(
+                    ui,
+                    "Backup path",
+                    &mut self.form.whatsapp_backup,
+                    "MobileSync Backup/DEVICE_ID folder",
+                    false,
+                    true,
+                );
+                path_or_text(
+                    ui,
+                    "Contacts",
+                    &mut self.form.whatsapp_wa,
+                    "Optional ContactsV2.sqlite",
+                    true,
+                    false,
+                );
+            } else {
+                path_or_text(
+                    ui,
+                    "Backup path",
+                    &mut self.form.whatsapp_backup,
+                    "msgstore.db.crypt12 / .crypt14 / .crypt15",
+                    true,
+                    true,
+                );
+                path_or_text(
+                    ui,
+                    "Contacts",
+                    &mut self.form.whatsapp_wa,
+                    "Optional wa.db",
+                    true,
+                    false,
+                );
+            }
+            path_or_text(
+                ui,
+                "Output directory",
+                &mut self.form.output,
+                "Path",
+                false,
+                true,
+            );
+        }
+
         let contacts_enabled = self.exporter != Exporter::Imessage;
         let attachments_enabled = matches!(
             self.exporter,
@@ -514,11 +575,14 @@ impl App {
                 | Exporter::SmsBackupPlus
                 | Exporter::Imazing
                 | Exporter::Imessage
+                | Exporter::Whatsapp
         );
         if self.exporter == Exporter::OpenExtract {
             self.form.attachment_media = AttachmentMedia::Disabled;
         }
-        self.ui_contacts(ui, contacts_enabled);
+        if self.exporter != Exporter::Whatsapp {
+            self.ui_contacts(ui, contacts_enabled);
+        }
         self.ui_attachment_media(ui, attachments_enabled);
 
         // Exporter-specific fields.
@@ -540,6 +604,57 @@ impl App {
             }
             Exporter::Imazing => {
                 self.ui_timezone(ui);
+            }
+            Exporter::Whatsapp => {
+                if self.form.whatsapp_platform == WhatsappPlatform::Android {
+                    labeled_text(
+                        ui,
+                        "Decryption key",
+                        &mut self.form.whatsapp_key,
+                        "Key file or crypt15 hex",
+                        PATH_W,
+                    );
+                }
+                ui.horizontal(|ui| {
+                    ui.allocate_exact_size(
+                        egui::vec2(LABEL_W, ui.spacing().interact_size.y),
+                        egui::Sense::hover(),
+                    );
+                    if ui
+                        .button(if self.form.advanced {
+                            "▾ Hide advanced options"
+                        } else {
+                            "▸ Show advanced options"
+                        })
+                        .clicked()
+                    {
+                        self.form.advanced = !self.form.advanced;
+                    }
+                });
+                if self.form.advanced {
+                    if self.form.whatsapp_platform == WhatsappPlatform::Android {
+                        path_or_text(
+                            ui,
+                            "Media folder",
+                            &mut self.form.whatsapp_media,
+                            "Optional WhatsApp media directory",
+                            false,
+                            true,
+                        );
+                        path_or_text(
+                            ui,
+                            "Message Database",
+                            &mut self.form.whatsapp_db,
+                            "Optional msgstore.db override",
+                            true,
+                            false,
+                        );
+                    }
+                    ui.horizontal(|ui| {
+                        form_label(ui, "WhatsApp Business");
+                        ui.checkbox(&mut self.form.whatsapp_business, "");
+                    });
+                }
             }
             Exporter::OpenExtract => {}
             Exporter::Imessage => {
@@ -640,16 +755,7 @@ impl App {
         );
         ui.horizontal(|ui| {
             form_label(ui, "Obfuscate");
-            let obfuscate_text = if self.form.obfuscate { "Yes" } else { "No" };
-            with_field_width(ui, PATH_W, |ui| {
-                egui::ComboBox::from_id_salt("obfuscate")
-                    .selected_text(obfuscate_text)
-                    .width(PATH_W)
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.form.obfuscate, false, "No");
-                        ui.selectable_value(&mut self.form.obfuscate, true, "Yes");
-                    });
-            });
+            ui.checkbox(&mut self.form.obfuscate, "");
         });
         if self.form.obfuscate || !self.form.obfuscate_seed.is_empty() {
             labeled_text(
@@ -685,14 +791,19 @@ impl App {
             form_label(ui, "Backup type");
             with_field_width(ui, PATH_W, |ui| {
                 egui::ComboBox::from_id_salt("exporter")
-                    .selected_text(self.exporter.display_name())
+                    .selected_text(self.exporter.dropdown_label())
                     .width(PATH_W)
                     .show_ui(ui, |ui| {
+                        let mut saw_experimental = false;
                         for exporter in EXPORTERS {
+                            if !exporter.is_supported() && !saw_experimental {
+                                ui.separator();
+                                saw_experimental = true;
+                            }
                             ui.selectable_value(
                                 &mut self.exporter,
                                 exporter,
-                                exporter.display_name(),
+                                exporter.dropdown_label(),
                             );
                         }
                     });
@@ -732,7 +843,7 @@ impl App {
             return;
         }
         let (file, folder) = match self.exporter {
-            Exporter::GoSmsPro | Exporter::Imazing => (false, true),
+            Exporter::GoSmsPro | Exporter::Imazing | Exporter::Whatsapp => (false, true),
             Exporter::SmsBackupRestore
             | Exporter::SmsBackupPlus
             | Exporter::OpenExtract => (true, true),
