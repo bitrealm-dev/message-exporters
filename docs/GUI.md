@@ -25,6 +25,8 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 - Backup-source titles link to the upstream product site.
 - **Global options** (Anonymize + Start/End date) above the per-source form (Export tab).
 
+Export options skeleton: [`export.example.ini`](../crates/message-exporters-gui/export.example.ini).
+
 Build all sibling executables, then run:
 
 ```bash
