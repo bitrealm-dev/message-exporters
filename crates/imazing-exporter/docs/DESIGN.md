@@ -74,8 +74,8 @@ Wide address-book CSV (`First Name`, `Mobile Phone`, …, `Notes`). Phones may a
   `attachment_info`, `delivered_date`, `read_date`, `edited_date`, `deleted_date`, `sent_date`.
 - Deduplication key includes attachment identity so same-time/text with different media are kept.
 - Attachments are recorded by CSV filename only in this version (no media copy / suffix join yet).
-- Very large group chat ids are written to short `group_{hash16}.csv` filenames on disk (Windows
-  path limits); the full `chat_identifier` cell is unchanged.
+- Untitled group files are `group_+A_+B_….csv` (max 10 phones; if more, append a 16-hex hash of
+  the full roster). WhatsApp adds `__whatsapp` before `.csv`. The `chat_identifier` cell is unchanged.
 
 ## Chat identity and participants
 

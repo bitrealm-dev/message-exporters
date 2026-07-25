@@ -5,11 +5,13 @@ use crate::contacts::{
     apply_name_mapping, enrich_display_names, fill_unknown_phone,
 };
 use crate::flat_eml::{is_archive_eml, is_flat_sms_eml, MailHeaders, parse_flat_eml_mail};
-use crate::identity::{chat_id_for, cover_identity, safe_stem, timestamp_ms};
+use crate::identity::{chat_id_for, cover_identity, timestamp_ms};
 use crate::types::{AttachmentBlob, ParsedMessage};
 use anyhow::{Context, Result, bail};
 use message_contacts::{ContactsBook, NameMapping};
-use message_csv::{format_local_ts, json_cell, stable_guid, AttachmentCell, DateRange};
+use message_csv::{
+    conversation_filename, format_local_ts, json_cell, stable_guid, AttachmentCell, DateRange,
+};
 use message_phone::{OwnerPhoneSet, to_e164};
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -100,14 +102,10 @@ struct PendingMessage {
 struct PendingConversation {
     conversation_type: String,
     group_title: Option<String>,
+    participant_e164s: Vec<String>,
     messages: Vec<PendingMessage>,
     /// Fingerprint → index in `messages` (online dedupe; keep earliest `sort_key`).
     by_identity: HashMap<String, usize>,
-}
-
-fn safe_filename(chat_id: &str) -> String {
-    // Plus stem rule (empty → unknown) differs from message_csv::safe_filename.
-    format!("{}.csv", safe_stem(chat_id))
 }
 
 fn relative_eml_path(eml_path: &Path, inputs: &[PathBuf], file_inputs: &HashSet<PathBuf>) -> String {
@@ -157,6 +155,7 @@ fn ensure_convo<'a>(
     chat_id: &str,
     conversation_type: &str,
     group_title: Option<String>,
+    participant_e164s: Vec<String>,
 ) -> &'a mut PendingConversation {
     // Avoid allocating a new String on every message for an existing chat.
     if !map.contains_key(chat_id) {
@@ -165,6 +164,7 @@ fn ensure_convo<'a>(
             PendingConversation {
                 conversation_type: conversation_type.to_string(),
                 group_title,
+                participant_e164s,
                 messages: Vec::new(),
                 by_identity: HashMap::new(),
             },
@@ -231,11 +231,18 @@ fn add_message(
     let chat_id = chat_id_for(&msg);
     let dedupe_key = cover_identity(&msg);
 
+    let peers: Vec<String> = msg
+        .participant_digits
+        .iter()
+        .map(|(d, _)| to_e164(d))
+        .filter(|d| !d.is_empty())
+        .collect();
     let convo = ensure_convo(
         conversations,
         &chat_id,
         &msg.conversation_type,
         msg.group_title.clone(),
+        peers,
     );
 
     report.messages_before_dedupe += 1;
@@ -284,7 +291,14 @@ fn write_conversation(
         return Ok(());
     }
 
-    let path = output_dir.join(safe_filename(chat_id));
+    let filename = conversation_filename(
+        &convo.conversation_type,
+        chat_id,
+        None,
+        &convo.participant_e164s,
+        None,
+    );
+    let path = output_dir.join(filename);
     let mut tmp_name = path
         .file_name()
         .map(|n| n.to_os_string())

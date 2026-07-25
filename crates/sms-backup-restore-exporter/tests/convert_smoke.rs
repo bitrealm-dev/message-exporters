@@ -115,7 +115,7 @@ fn dedupes_overlapping_xml_files() {
     assert_eq!(report.conversations, 1);
     assert_eq!(report.received, 1); // one row after dedupe
 
-    let chat = out.join("_15555550101.csv");
+    let chat = out.join("+15555550101.csv");
     let body = fs::read_to_string(&chat).unwrap();
     // header + one message row (duplicate dropped)
     assert_eq!(body.lines().count(), 2);

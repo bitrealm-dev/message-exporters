@@ -6,7 +6,8 @@ use anyhow::{bail, Context, Result};
 use chrono::{Local, TimeZone};
 use message_contacts::ContactsBook;
 use message_csv::{
-    format_local_ts, json_cell, safe_filename, stable_guid, AttachmentCell, DateRange,
+    conversation_filename, format_local_ts, json_cell, stable_guid, AttachmentCell,
+    DateRange,
 };
 use message_phone::{to_e164, OwnerPhoneSet};
 use sha2::{Digest, Sha256};
@@ -129,6 +130,8 @@ struct PendingMessage {
 struct PendingConversation {
     conversation_type: String,
     group_title: Option<String>,
+    /// Non-owner peer E.164s for untitled group filenames.
+    participant_e164s: Vec<String>,
     messages: Vec<PendingMessage>,
 }
 
@@ -204,11 +207,13 @@ fn ensure_convo<'a>(
     chat_id: &str,
     conversation_type: &str,
     group_title: Option<String>,
+    participant_e164s: Vec<String>,
 ) -> &'a mut PendingConversation {
     map.entry(chat_id.to_string())
         .or_insert_with(|| PendingConversation {
             conversation_type: conversation_type.to_string(),
             group_title,
+            participant_e164s,
             messages: Vec::new(),
         })
 }
@@ -219,7 +224,7 @@ fn add_xml_messages(
 ) {
     for msg in msgs {
         let chat_id = chat_id_individual(&msg.other_digits);
-        let convo = ensure_convo(conversations, &chat_id, "individual", None);
+        let convo = ensure_convo(conversations, &chat_id, "individual", None, Vec::new());
         let dedupe_key = format!(
             "{}|{}|{}|",
             msg.timestamp_secs as i64,
@@ -323,9 +328,15 @@ fn add_pdu_message(
         return;
     }
 
-    let targets: Vec<(String, String, Option<String>)> = if parsed.is_group {
+    let targets: Vec<(String, String, Option<String>, Vec<String>)> = if parsed.is_group {
         let (id, title) = chat_id_group(&parsed.participants, owners);
-        vec![(id, "group".to_string(), Some(title))]
+        let peers: Vec<String> = parsed
+            .participants
+            .iter()
+            .filter(|p| !p.is_empty() && !owners.is_owner(p))
+            .map(|d| to_e164(d))
+            .collect();
+        vec![(id, "group".to_string(), Some(title), peers)]
     } else {
         let others: Vec<_> = parsed
             .participants
@@ -349,6 +360,7 @@ fn add_pdu_message(
             chat_id_individual(other),
             "individual".to_string(),
             None,
+            Vec::new(),
         )]
     };
 
@@ -397,8 +409,14 @@ fn add_pdu_message(
         pdu_decode: parsed.decode_quality.to_string(),
     };
 
-    for (chat_id, conversation_type, group_title) in targets {
-        let convo = ensure_convo(conversations, &chat_id, &conversation_type, group_title);
+    for (chat_id, conversation_type, group_title, peers) in targets {
+        let convo = ensure_convo(
+            conversations,
+            &chat_id,
+            &conversation_type,
+            group_title,
+            peers,
+        );
         convo.messages.push(pending.clone());
     }
 }
@@ -443,7 +461,15 @@ fn write_conversation(
         return Ok(());
     }
 
-    let path = output_dir.join(safe_filename(chat_id));
+    // Synthetic Android group titles are not used for filenames.
+    let filename = conversation_filename(
+        &convo.conversation_type,
+        chat_id,
+        None,
+        &convo.participant_e164s,
+        None,
+    );
+    let path = output_dir.join(filename);
     let mut tmp_name = path
         .file_name()
         .map(|n| n.to_os_string())

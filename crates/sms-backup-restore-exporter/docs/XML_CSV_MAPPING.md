@@ -11,7 +11,7 @@ Attribute meanings: [FIELDS.md](FIELDS.md).
 
 ## Output
 
-One CSV file per conversation (header + one row per message), plus decoded MMS media under `attachments/`. Filenames use a sanitized stem of the chat id (`+` → `_`), for example `+15555550101` → `_15555550101.csv`.
+One CSV file per conversation (header + one row per message), plus decoded MMS media under `attachments/`. Filenames: 1:1 → `+15555550101.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). The `chat_identifier` column may still use `chat-group-…` for groups.
 
 ## Columns (imessage names where shared)
 

@@ -4,7 +4,7 @@ use crate::xml::{parse_xml_file, AttachmentBlob, ConvType, ParsedMessage};
 use anyhow::{bail, Context, Result};
 use message_contacts::ContactsBook;
 use message_csv::{
-    format_local_ts, json_cell, safe_filename, stable_guid, AttachmentCell, DateRange,
+    conversation_filename, format_local_ts, json_cell, stable_guid, AttachmentCell, DateRange,
 };
 use message_phone::{to_e164, OwnerPhoneSet};
 use std::collections::{BTreeMap, HashSet};
@@ -94,6 +94,7 @@ struct PendingMessage {
 struct PendingConversation {
     conversation_type: ConvType,
     group_title: Option<String>,
+    participant_e164s: Vec<String>,
     messages: Vec<PendingMessage>,
 }
 
@@ -135,11 +136,13 @@ fn ensure_convo<'a>(
     chat_id: &str,
     conversation_type: ConvType,
     group_title: Option<String>,
+    participant_e164s: Vec<String>,
 ) -> &'a mut PendingConversation {
     map.entry(chat_id.to_string())
         .or_insert_with(|| PendingConversation {
             conversation_type,
             group_title,
+            participant_e164s,
             messages: Vec::new(),
         })
 }
@@ -150,11 +153,18 @@ fn add_message(
     pending_atts: Vec<PendingAttachment>,
 ) {
     let chat_id = chat_id_for(&msg);
+    let peers: Vec<String> = msg
+        .participant_digits
+        .iter()
+        .map(|(d, _)| to_e164(d))
+        .filter(|d| !d.is_empty())
+        .collect();
     let convo = ensure_convo(
         conversations,
         &chat_id,
         msg.conversation_type,
         msg.group_title.clone(),
+        peers,
     );
     let att_names: Vec<_> = pending_atts.iter().map(|a| a.rel_path.clone()).collect();
     let dedupe_key = format!(
@@ -211,7 +221,18 @@ fn write_conversation(
         return Ok(());
     }
 
-    let path = output_dir.join(safe_filename(chat_id));
+    let conv_type = match convo.conversation_type {
+        ConvType::Group => "group",
+        ConvType::Individual => "individual",
+    };
+    let filename = conversation_filename(
+        conv_type,
+        chat_id,
+        None,
+        &convo.participant_e164s,
+        None,
+    );
+    let path = output_dir.join(filename);
     let mut tmp_name = path
         .file_name()
         .map(|n| n.to_os_string())

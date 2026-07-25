@@ -20,7 +20,7 @@ fn convert_all_conversations_with_vcf() {
     assert_eq!(report.messages, 2);
     assert_eq!(report.unresolved_chat_phone, 0);
 
-    let out = tmp.path().join("_15555550122.csv");
+    let out = tmp.path().join("+15555550122.csv");
     let body = fs::read_to_string(&out).expect("read csv");
     assert!(body.contains("chat_identifier"));
     assert!(body.contains("openextract"));

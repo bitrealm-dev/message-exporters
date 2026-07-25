@@ -217,7 +217,7 @@ fn name_stem(value: &str) -> String {
     let raw: String = value
         .chars()
         .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '+' {
                 c
             } else {
                 '_'
@@ -432,7 +432,7 @@ TEL;TYPE=CELL:+1-555-555-0122\nEND:VCARD\n",
         let report = convert_export(dir.path(), &out, &book, &DateRange::default()).unwrap();
         assert_eq!(report.conversations, 1);
         assert_eq!(report.unresolved_chat_phone, 0);
-        let csv_path = out.join("_15555550122.csv");
+        let csv_path = out.join("+15555550122.csv");
         let body = fs::read_to_string(&csv_path).unwrap();
         assert!(body.contains("Sam Example"));
         assert!(body.contains("openextract"));
@@ -482,7 +482,7 @@ TEL:+15555550999\nEND:VCARD\n",
         let report = convert_export(dir.path(), &out, &book, &range).unwrap();
         assert_eq!(report.skipped_out_of_range, 2);
         assert_eq!(report.messages, 1);
-        let body = fs::read_to_string(out.join("_15555550122.csv")).unwrap();
+        let body = fs::read_to_string(out.join("+15555550122.csv")).unwrap();
         assert!(body.contains("Keep"));
         assert!(!body.contains("Old"));
         assert!(!body.contains("New"));

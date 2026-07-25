@@ -160,7 +160,14 @@ impl Config {
     ///
     /// If it does not, use participant names. Failing that, use the chat
     /// identifier.
+    ///
+    /// CSV exports use the shared `message_csv::conversation_filename` rules:
+    /// `+E164` for 1:1, real group title when set, otherwise `group_+phones…`.
     pub fn filename(&self, chatroom: &Chat) -> String {
+        if matches!(self.options.export_type, Some(ExportType::Csv)) {
+            return self.csv_filename(chatroom);
+        }
+
         // Account for the export path so the full output path stays under the limit.
         let export_path_len = self.options.export_path.as_os_str().len();
         let max_len = MAX_LENGTH.saturating_sub(export_path_len + 1);
@@ -198,6 +205,41 @@ impl Config {
         }
 
         sanitize_filename(&filename)
+    }
+
+    /// CSV-only filename: phones / titled groups via [`message_csv::conversation_filename`].
+    fn csv_filename(&self, chatroom: &Chat) -> String {
+        let participants = self.chatroom_participants.get(&chatroom.rowid);
+        let count = participants.map(|p| p.len()).unwrap_or(0);
+        let conversation_type = if count > 1 { "group" } else { "individual" };
+
+        let peers: Vec<String> = participants
+            .map(|handles| {
+                handles
+                    .iter()
+                    .filter_map(|id| self.resolve_participant(*id))
+                    .map(|name| name.details.clone())
+                    .filter(|h| !h.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let group_title = if conversation_type == "group" {
+            chatroom
+                .display_name()
+                .map(str::trim)
+                .filter(|n| !n.is_empty())
+        } else {
+            None
+        };
+
+        message_csv::conversation_filename(
+            conversation_type,
+            &chatroom.chat_identifier,
+            group_title,
+            &peers,
+            None,
+        )
     }
 
     /// Build a filename from participant names, truncating when needed.

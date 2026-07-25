@@ -595,7 +595,7 @@ fn rename_chat_csv_files(output_dir: &Path) -> Result<()> {
         let safe: String = chat_id
             .chars()
             .map(|c| {
-                if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '+' {
                     c
                 } else {
                     '_'
@@ -1032,7 +1032,7 @@ mod tests {
     #[test]
     fn export_dir_smoke() {
         let dir = tempfile::tempdir().unwrap();
-        let csv_path = dir.path().join("_15555550100.csv");
+        let csv_path = dir.path().join("+15555550100.csv");
         let mut wtr = csv::Writer::from_path(&csv_path).unwrap();
         wtr.write_record([
             "chat_identifier",

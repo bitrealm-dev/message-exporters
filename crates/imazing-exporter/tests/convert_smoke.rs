@@ -30,7 +30,7 @@ fn convert_messages_with_imazing_contacts() {
     assert_eq!(report.whatsapp_files, 0);
     assert_eq!(report.unresolved_chat_phone, 0);
 
-    let out = tmp.path().join("_13212462167.csv");
+    let out = tmp.path().join("+13212462167.csv");
     let body = fs::read_to_string(&out).expect("read csv");
     assert!(body.contains("chat_identifier"));
     assert!(body.contains("imazing"));
@@ -61,7 +61,7 @@ fn convert_whatsapp_csv_direct() {
     assert_eq!(report.conversations, 1);
     assert_eq!(report.messages, 3);
     assert_eq!(report.whatsapp_files, 1);
-    let out = tmp.path().join("_13212462167__whatsapp.csv");
+    let out = tmp.path().join("+13212462167__whatsapp.csv");
     let body = fs::read_to_string(&out).expect("read csv");
     assert!(body.contains("WhatsApp"));
     assert!(body.contains("forwarded"));
@@ -88,8 +88,8 @@ fn convert_export_root_recursively_keeps_services_separate() {
     assert_eq!(report.messages_files, 2);
     assert_eq!(report.whatsapp_files, 1);
     assert!(report.conversations >= 3);
-    assert!(tmp.path().join("_13212462167.csv").is_file());
-    assert!(tmp.path().join("_13212462167__whatsapp.csv").is_file());
+    assert!(tmp.path().join("+13212462167.csv").is_file());
+    assert!(tmp.path().join("+13212462167__whatsapp.csv").is_file());
     // Silent Carol should be resolved into the group chat id via contacts.
     let group = fs::read_dir(tmp.path())
         .unwrap()

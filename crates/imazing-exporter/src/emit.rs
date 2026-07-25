@@ -5,17 +5,14 @@ use anyhow::{Context, Result};
 use chrono::{FixedOffset, Local, NaiveDateTime, TimeZone};
 use message_contacts::ContactsBook;
 use message_csv::{
-    format_local_ts, json_cell, parse_utc_offset, safe_filename, stable_guid, AttachmentCell,
-    DateRange,
+    conversation_filename, format_local_ts, json_cell, parse_utc_offset, stable_guid,
+    AttachmentCell, DateRange,
 };
 use message_phone::{sanitize_number, to_e164};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
-
-/// Windows path components max out at 255 chars; leave room for `__whatsapp.csv` / `.tmp`.
-const MAX_FILENAME_STEM: usize = 180;
 
 const HEADERS: &[&str] = &[
     "chat_identifier",
@@ -704,7 +701,7 @@ fn name_stem(value: &str) -> String {
     let raw: String = value
         .chars()
         .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '+' {
                 c
             } else {
                 '_'
@@ -718,35 +715,27 @@ fn name_stem(value: &str) -> String {
     }
 }
 
-fn conversation_filename(chat_id: &str, source_kind: Option<SourceKind>) -> String {
-    let mut stem = if chat_id == "unknown"
-        || (!chat_id.starts_with('+')
-            && !chat_id.contains(',')
-            && !chat_id.contains('@')
-            && sanitize_number(chat_id).is_none())
-    {
-        name_stem(chat_id)
-    } else if chat_id.contains(',') {
-        name_stem(chat_id)
+fn imazing_conversation_filename(
+    conversation_type: &str,
+    chat_id: &str,
+    source_kind: Option<SourceKind>,
+) -> String {
+    let peers: Vec<String> = if conversation_type.eq_ignore_ascii_case("group") {
+        chat_id
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
     } else {
-        // safe_filename appends .csv; strip it to work with optional WhatsApp suffix.
-        let with_ext = safe_filename(chat_id);
-        with_ext
-            .strip_suffix(".csv")
-            .unwrap_or(&with_ext)
-            .to_string()
+        Vec::new()
     };
-    if stem.len() > MAX_FILENAME_STEM {
-        let mut hasher = Sha256::new();
-        hasher.update(chat_id.as_bytes());
-        let digest = hex::encode(hasher.finalize());
-        stem = format!("group_{}", &digest[..16]);
-    }
-    if source_kind == Some(SourceKind::WhatsApp) {
-        format!("{stem}__whatsapp.csv")
+    let suffix = if source_kind == Some(SourceKind::WhatsApp) {
+        Some("__whatsapp")
     } else {
-        format!("{stem}.csv")
-    }
+        None
+    };
+    // Session strings are not real group titles — always use the phone pattern.
+    conversation_filename(conversation_type, chat_id, None, &peers, suffix)
 }
 
 fn mime_hint(attachment_type: &str, filename: &str) -> Option<String> {
@@ -799,7 +788,8 @@ fn write_conversation(
         return Ok(());
     }
 
-    let filename = conversation_filename(chat_id, convo.source_kind);
+    let filename =
+        imazing_conversation_filename(&convo.conversation_type, chat_id, convo.source_kind);
 
     let path = output_dir.join(filename);
     let mut tmp_name = path
@@ -925,7 +915,7 @@ Bob,,McRoy,+13212462167,\n",
         assert_eq!(report.conversations, 1);
         assert_eq!(report.unresolved_chat_phone, 0);
         assert_eq!(report.messages, 2);
-        let csv_path = out.join("_13212462167.csv");
+        let csv_path = out.join("+13212462167.csv");
         let body = fs::read_to_string(&csv_path).unwrap();
         assert!(body.contains("Bob McRoy"));
         assert!(body.contains("imazing"));
@@ -1026,7 +1016,10 @@ Carol,,Silent,+15555550133,\n",
         let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false).unwrap();
         assert_eq!(report.conversations, 1);
         assert_eq!(report.unresolved_group_participants, 0);
-        let body = fs::read_to_string(out.join("_15555550111__15555550122__15555550133.csv")).unwrap();
+        let body = fs::read_to_string(
+            out.join("group_+15555550111_+15555550122_+15555550133.csv"),
+        )
+        .unwrap();
         assert!(body.contains("+15555550133") || body.contains("15555550133"));
         assert!(body.contains("group"));
     }
@@ -1082,9 +1075,9 @@ Bob,,,+15555550100,\n",
         assert_eq!(report.conversations, 2);
         assert_eq!(report.messages_files, 1);
         assert_eq!(report.whatsapp_files, 1);
-        assert!(out.join("_15555550100.csv").is_file());
-        assert!(out.join("_15555550100__whatsapp.csv").is_file());
-        let wa = fs::read_to_string(out.join("_15555550100__whatsapp.csv")).unwrap();
+        assert!(out.join("+15555550100.csv").is_file());
+        assert!(out.join("+15555550100__whatsapp.csv").is_file());
+        let wa = fs::read_to_string(out.join("+15555550100__whatsapp.csv")).unwrap();
         assert!(wa.contains("WhatsApp"));
     }
 
@@ -1117,7 +1110,7 @@ Bob McRoy,2020-01-01 12:00:00,,,,,SMS,Incoming,+15555550100,Bob,Read,,,Hi,,image
         assert!(att_dir.is_dir());
         let count = fs::read_dir(&att_dir).unwrap().count();
         assert_eq!(count, 1);
-        let body = fs::read_to_string(out.join("_15555550100.csv")).unwrap();
+        let body = fs::read_to_string(out.join("+15555550100.csv")).unwrap();
         assert!(body.contains("attachments/"));
     }
 }

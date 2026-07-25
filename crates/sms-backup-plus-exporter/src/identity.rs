@@ -87,28 +87,6 @@ pub(crate) fn cover_identity_from_parts(
     )
 }
 
-/// Filesystem-safe chat filename stem (letters, digits, `-`, `_` only).
-///
-/// `+1555…` becomes `_1555…` (same rule as go-sms / SMS Backup & Restore).
-/// Strings that are empty or only underscores become `unknown`.
-pub(crate) fn safe_stem(value: &str) -> String {
-    let raw: String = value
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    if raw.is_empty() || raw.chars().all(|c| c == '_') {
-        "unknown".to_string()
-    } else {
-        raw
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,15 +159,8 @@ mod tests {
     }
 
     #[test]
-    fn safe_stem_maps_plus_to_leading_underscore() {
-        assert_eq!(safe_stem("+14075551234"), "_14075551234");
-        assert_eq!(safe_stem("___"), "unknown");
-    }
-
-    #[test]
-    fn unknown_chat_id_uses_unknown_stem() {
+    fn unknown_chat_id_for_empty_peer() {
         let msg = sample_msg("", 1_609_459_200.0, false, "hi");
         assert_eq!(chat_id_for(&msg), "unknown");
-        assert_eq!(safe_stem(&chat_id_for(&msg)), "unknown");
     }
 }
