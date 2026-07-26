@@ -4,6 +4,8 @@ Export conversations from Apple Messages into one spreadsheet file per chat, and
 
 **Targeted upstream:** iMessage Exporter **4.2.0** (`export_tool` / `export_tool_version` on every CSV row; matches `imessage-database` 4.2.0).
 
+CLI reference (man-page style): [`docs/MANPAGE.md`](docs/MANPAGE.md).
+
 ## What this is for
 
 On a Mac, Messages stores history in a database file commonly called `chat.db`. This converter reads that database and writes CSV files — plain tables you can open in Excel, Numbers, or Google Sheets.
@@ -39,13 +41,9 @@ Then export (default format is CSV; `-c clone` copies attachments into the outpu
 ./target/release/imessage-exporter -f csv -c clone -o ./staging/imessage
 ```
 
-Add `--obfuscate` (optional `--obfuscate-seed <hex>`) after a CSV export to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-obfuscate`](../message-obfuscate).
+Or: `cargo run --release -p imessage-exporter -- -f csv -c clone -o ./staging/imessage`.
 
-Or run without installing the binary first:
-
-```bash
-cargo run --release -p imessage-exporter -- -f csv -c clone -o ./staging/imessage
-```
+Full CLI (including `--obfuscate`): [`docs/MANPAGE.md`](docs/MANPAGE.md).
 
 ## License
 

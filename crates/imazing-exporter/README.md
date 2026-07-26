@@ -4,7 +4,8 @@ Convert [iMazing](https://imazing.com/) **Messages** and **WhatsApp** CSV export
 
 **Targeted upstream:** iMazing **3.5.5** (`export_tool` / `export_tool_version` on every output row).
 
-Design notes and known limitations: [`docs/DESIGN.md`](docs/DESIGN.md).
+Design notes and known limitations: [`docs/DESIGN.md`](docs/DESIGN.md).  
+CLI reference (man-page style): [`docs/MANPAGE.md`](docs/MANPAGE.md).
 
 ## What this is for
 
@@ -37,37 +38,18 @@ Individual message selections may omit attachment data — export the whole conv
 From the [message-exporters](../..) repository root:
 
 ```bash
-# Single Messages CSV
-cargo run --release -p imazing-exporter -- \
-  --input "/path/to/Messages - Bob McRoy.csv" \
-  --output ./staging/imazing \
-  --contacts "/path/to/Contacts - 2026-07-19.csv" \
-  --timezone UTC-05:00
-
-# Full device export root (Messages + WhatsApp, recursive)
 cargo run --release -p imazing-exporter -- \
   --input "/path/to/Device Export Root" \
   --output ./staging/imazing \
   --contacts "/path/to/Contacts - 2026-07-19.csv" \
   --timezone UTC-05:00
-
-# WhatsApp tree only
-cargo run --release -p imazing-exporter -- \
-  --input "/path/to/WhatsApp" \
-  --output ./staging/imazing-wa \
-  --contacts "/path/to/Contacts - 2026-07-19.csv" \
-  --timezone UTC-05:00
 ```
 
-`--input` may be one Messages/WhatsApp CSV or any folder under the export. Contacts CSVs and `*attachment*` filenames are skipped. Nested chat folders are walked recursively.
+`--input` may be one Messages/WhatsApp CSV or any folder under the export (recursive). Contacts CSVs and `*attachment*` filenames are skipped.
 
-`Message Date` values have no timezone. Pass `--timezone` as a fixed UTC offset (e.g. `UTC-05:00`) if the phone lived in a different zone than this machine; otherwise the host local zone is used. Offsets do not observe DST.
+`Message Date` has no timezone — pass `--timezone` as a fixed UTC offset (e.g. `UTC-05:00`) if the phone lived elsewhere; host local zone otherwise. Offsets do not observe DST.
 
-Optional `--start-date` / `--end-date` (`YYYY-MM-DD`) keep messages in `[start, end)` using midnight in that same timezone (end exclusive).
-
-Attachment media: `--media-mode disabled|clone|convert|compress` (default `clone`). Clone copies files from the export by suffix-matching the CSV Attachment name into `output/attachments/`. Convert/compress need `ffmpeg`/`ffprobe`. See [`message-media`](../message-media).
-
-Add `--obfuscate` (optional `--obfuscate-seed <hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-obfuscate`](../message-obfuscate).
+Full CLI (dates, media modes, obfuscate): [`docs/MANPAGE.md`](docs/MANPAGE.md).
 
 ## Important limitations
 

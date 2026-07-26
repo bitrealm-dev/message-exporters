@@ -4,6 +4,8 @@ Convert OpenExtract conversation CSV exports into one vault-shaped spreadsheet f
 
 **Targeted upstream:** OpenExtract **0.5.1** (`export_tool` / `export_tool_version` on every output row).
 
+CLI reference (man-page style): [`docs/MANPAGE.md`](docs/MANPAGE.md).
+
 ## What this is for
 
 OpenExtract writes thin CSV files such as:
@@ -37,9 +39,7 @@ cargo run --release -p openextract-exporter -- \
 
 `--input` may be a single `conversation_*.csv`, an `all_conversations.csv`, or a directory of those files. `*_attachments.csv` files are skipped automatically.
 
-Add `--obfuscate` (optional `--obfuscate-seed <hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-obfuscate`](../message-obfuscate).
-
-Optional `--start-date` / `--end-date` (`YYYY-MM-DD`) keep messages in `[start, end)` using host local midnight (end exclusive).
+Full CLI (dates, obfuscate): [`docs/MANPAGE.md`](docs/MANPAGE.md).
 
 ## License
 

@@ -4,6 +4,8 @@ Convert [SMS Backup+](https://github.com/jberkel/sms-backup-plus) email exports 
 
 **Targeted upstream:** SMS Backup+ **1.5.11** (`export_tool` / `export_tool_version` on every output row).
 
+CLI reference (man-page style): [`docs/MANPAGE.md`](docs/MANPAGE.md).
+
 ## What this is for
 
 SMS Backup+ can copy Android SMS and MMS into email (for example Gmail). People often download or archive those emails as `.eml` files — ordinary email files on disk. This converter reads a folder of those files. It does **not** sign in to email or talk to IMAP.
@@ -55,11 +57,7 @@ cargo run --release -p sms-backup-plus-exporter -- convert \
   --contacts /path/to/contacts.csv
 ```
 
-Replace the paths, phone number, and email with your own. `--input` is the folder of `.eml` files. `--output` is where the CSV files and `attachments/` folder are written. Use `--vcf` instead of `--contacts` if you have a VCF.
-
-Add `--obfuscate` (optional `--obfuscate-seed <hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-obfuscate`](../message-obfuscate).
-
-Attachment media: `--media-mode disabled|clone|convert|compress` (default `clone`). Convert/compress need `ffmpeg`/`ffprobe`. Compress options: `--media-max-resolution`, `--media-max-fps`, `--media-min-size`, `--media-skip-efficient`. See [`message-media`](../message-media).
+`--input` is the folder of `.eml` files. Full CLI (dates, media modes, obfuscate, `--vcf`): [`docs/MANPAGE.md`](docs/MANPAGE.md).
 
 ## License
 

@@ -4,6 +4,8 @@ Convert an Android **SMS Backup & Restore** backup into one spreadsheet file per
 
 **Targeted upstream:** SMS Backup & Restore **10.26.003** (`export_tool` / `export_tool_version` on every output row).
 
+CLI reference (man-page style): [`docs/MANPAGE.md`](docs/MANPAGE.md).
+
 ## What this is for
 
 [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/) (by SyncTech) writes a backup file whose name looks like `sms-20210328165031.xml`. That file holds SMS and MMS from the phone’s messaging database.
@@ -43,13 +45,7 @@ cargo run --release -p sms-backup-restore-exporter -- \
   --contacts /path/to/contacts.csv
 ```
 
-Add `--obfuscate` (optional `--obfuscate-seed <hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-obfuscate`](../message-obfuscate).
-
-Attachment media: `--media-mode disabled|clone|convert|compress` (default `clone`). Convert/compress need `ffmpeg`/`ffprobe`. Compress options: `--media-max-resolution`, `--media-max-fps`, `--media-min-size`, `--media-skip-efficient`. See [`message-media`](../message-media).
-
-Optional `--start-date` / `--end-date` (`YYYY-MM-DD`) keep messages in `[start, end)` using host local midnight (end exclusive).
-
-Replace the paths and phone number with your own. `--input` may be a single XML file or a directory of XML files. `--output` is where the CSV files and `attachments/` folder are written. Use `--vcf` instead of `--contacts` if you have a VCF.
+`--input` may be a single XML file or a directory of XML files. Full CLI (dates, media modes, obfuscate): [`docs/MANPAGE.md`](docs/MANPAGE.md).
 
 ## License
 

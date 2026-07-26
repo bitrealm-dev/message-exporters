@@ -2,6 +2,8 @@
 
 The `go-sms-pro-exporter` converter transforms a **GO SMS Pro** (GOMO / Jiubang) Android backup into `.csv` files, one file per conversation with any attachments found in that conversation.
 
+CLI reference (man-page style): [`docs/MANPAGE.md`](docs/MANPAGE.md).
+
 ## What this is for
 
 GO SMS Pro can save texts (both SMS and MMS) onto a phone in a backup folder. That folder usually contains:
@@ -46,20 +48,7 @@ cargo run --release -p go-sms-pro-exporter -- \
   --contacts /path/to/contacts.csv
 ```
 
-Replace the paths and phone number with your own. `--input` is the backup folder. `--output` is where the CSV files and `attachments/` folder are written. `--contacts` and `--vcf` both accept a validated contacts file; use whichever flag matches how you export contacts.
-
-Add `--obfuscate` (optional `--obfuscate-seed <hex>`) to rewrite names, numbers, text, and attachments for sharing structure without PII. See [`message-obfuscate`](../message-obfuscate).
-
-Optional `--start-date` / `--end-date` (`YYYY-MM-DD`) keep messages in `[start, end)` using host local midnight (end exclusive).
-
-Attachment media (after export; needs `ffmpeg` / `ffprobe` for convert/compress):
-
-- `--media-mode disabled` — do not write attachment files
-- `--media-mode clone` (default) — leave files as extracted
-- `--media-mode convert` — standardize to `.jpg` / `.mp4` / `.mp3`
-- `--media-mode compress` — re-encode; options `--media-max-resolution 720p|1080p|4k`, `--media-max-fps`, `--media-min-size`, `--media-skip-efficient true|false`
-
-See [`message-media`](../message-media).
+Replace the paths and phone number with your own. Full CLI (dates, media modes, obfuscate): [`docs/MANPAGE.md`](docs/MANPAGE.md).
 
 ## Thanks
 

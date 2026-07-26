@@ -4,6 +4,8 @@ Convert WhatsApp Android/iOS databases (via [KnugiHK WhatsApp-Chat-Exporter](htt
 
 This crate shells out to the `wtsexporter` CLI, then maps its JSON into CSV. It does **not** vendor or clone that project.
 
+CLI reference (man-page style): [`docs/MANPAGE.md`](docs/MANPAGE.md).
+
 ## Install `wtsexporter`
 
 **Developers (PyPI):**
@@ -17,28 +19,14 @@ pip install 'whatsapp-chat-exporter[android_backup,crypt15]'
 
 ## Usage
 
-`--input` is optional (defaults to the process cwd) and is only used to resolve relative defaults such as `msgstore.db` / `wa.db` / `WhatsApp/`. Extraction always runs in a temporary directory under `--output` (cleaned up after convert), so the launch directory is not polluted. The GUI omits `--input`.
+Extraction runs in a temp directory under `--output` (not the process cwd). Full flags, iOS/`--json` examples, and environment variables: [`docs/MANPAGE.md`](docs/MANPAGE.md).
 
 ```bash
-# Android crypt15 — run from the folder that contains the backup, or pass --input
 cargo run -p whatsapp-exporter -- \
   --platform android \
-  --key 133735053b5204b08e5c3823423399aa30ff061435ab89bc4e6713969cda1337 \
+  --key /path/to/key-or-hex \
   --backup msgstore.db.crypt15 \
-  --output ./staging/whatsapp
-
-# iOS backup (--backup required)
-cargo run -p whatsapp-exporter -- \
-  --platform ios \
-  --backup ~/Library/Application\ Support/MobileSync/Backup/DEVICE_ID \
-  --output ./staging/whatsapp
-
-# Convert-only (no Python) from an existing result.json
-cargo run -p whatsapp-exporter -- \
-  --json /path/to/result.json \
   --output ./staging/whatsapp
 ```
 
-Optional forwards: `--wa`, `--media`, `--db`, `--business`, `--input`. Shared flags: `--start-date` / `--end-date`, `--media-mode`, `--obfuscate` / `--obfuscate-seed`.
-
-Filenames use the shared `__whatsapp` suffix so they align with iMazing WhatsApp exports.
+Output chats use the `__whatsapp` filename suffix (same convention as iMazing WhatsApp CSV).
