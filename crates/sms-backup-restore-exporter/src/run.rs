@@ -1,30 +1,13 @@
 //! Full export pipeline (convert + media + obfuscate) for CLI and in-process GUI.
 
-use crate::cancel::CancelFlag;
 use crate::emit::{convert_export, ExportReport};
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use message_contacts::resolve_contacts_cli;
 use message_csv::DateRange;
-use message_media::{process_export_media, CompressOptions, MediaMode, MediaReport};
+use message_exporters_core::{ExporterConfig, SourceConfig};
+use message_media::{process_export_media, MediaReport};
 use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
-use std::path::{Path, PathBuf};
-
-/// Inputs for a full SMS Backup & Restore export run.
-#[derive(Debug, Clone)]
-pub struct ExportConfig {
-    pub input: PathBuf,
-    pub output: PathBuf,
-    pub owner_phones: Vec<String>,
-    pub contacts: Option<PathBuf>,
-    pub vcf: Option<PathBuf>,
-    pub date_range: DateRange,
-    pub media_mode: MediaMode,
-    pub compress: CompressOptions,
-    pub obfuscate: bool,
-    pub obfuscate_seed: Option<String>,
-    /// When set, convert checks this between XML files.
-    pub cancel: Option<CancelFlag>,
-}
+use std::path::Path;
 
 /// Result of [`run`]: convert report plus human-readable log lines.
 #[derive(Debug)]
@@ -34,29 +17,34 @@ pub struct RunResult {
 }
 
 /// Resolve contacts, convert, optionally process media and obfuscate.
-pub fn run(config: &ExportConfig) -> Result<RunResult> {
+pub fn run(config: &ExporterConfig) -> Result<RunResult> {
+    let SourceConfig::SmsBackupRestore(source) = &config.source else {
+        bail!("sms-backup-restore-exporter requires SourceConfig::SmsBackupRestore");
+    };
+    let input = config.require_input().map_err(anyhow::Error::msg)?;
     let mut messages = Vec::new();
-    let (contacts, _) = resolve_contacts_cli(config.contacts.clone(), config.vcf.clone())?;
+    let (contacts_path, vcf) = config.contacts_csv_vcf();
+    let (contacts, _) = resolve_contacts_cli(contacts_path, vcf)?;
     let report = convert_export(
-        &config.input,
+        input,
         &config.output,
-        &config.owner_phones,
+        &source.owner_phones,
         &contacts,
         &config.date_range,
-        config.media_mode.copies_attachments(),
+        config.media.mode.copies_attachments(),
         config.cancel.as_ref(),
     )?;
 
-    if config.media_mode.needs_tools() {
-        let media = process_export_media(&config.output, config.media_mode, &config.compress)?;
+    if config.media.mode.needs_tools() {
+        let media = process_export_media(&config.output, config.media.mode, &config.media.compress)?;
         messages.extend(media_report_lines(&media));
         if !media.errors.is_empty() && media.processed == 0 {
             anyhow::bail!("media processing failed for all candidate files");
         }
     }
 
-    if config.obfuscate || config.obfuscate_seed.is_some() {
-        let mut anon = resolve_obfuscator(config.obfuscate_seed.as_deref())?;
+    if config.obfuscate_active() {
+        let mut anon = resolve_obfuscator(config.obfuscate.seed.as_deref())?;
         let n = obfuscate_export_dir(&config.output, &mut anon)?;
         messages.push(format!(
             "Obfuscated {n} CSV file(s) under {}",

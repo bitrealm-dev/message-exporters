@@ -1,6 +1,6 @@
 //! SMS Backup+ (jberkel) EML → per-conversation CSV exporter.
 //!
-//! Library entrypoints: [`run`] with [`ExportConfig`] for the full pipeline
+//! Library entrypoints: [`run`] with [`ExporterConfig`] for the full pipeline
 //! (convert + media + obfuscate), or [`convert_export`] for convert-only.
 //! The `sms-backup-plus-exporter` binary is a thin CLI over [`run`].
 
@@ -16,7 +16,7 @@ pub(crate) mod types;
 
 pub use cancel::{is_cancelled, CancelFlag};
 pub use emit::{ExportReport, convert_export};
+pub use message_exporters_core::ExporterConfig;
 pub use run::{
-    parse_date_range, report_summary_lines, resolve_inputs, resolve_owner, run, ExportConfig,
-    RunResult,
+    parse_date_range, report_summary_lines, resolve_inputs, resolve_owner, run, RunResult,
 };

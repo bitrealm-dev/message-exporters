@@ -8,7 +8,7 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 ## Goals
 
 - One app for Linux, macOS, and Windows with a native look and feel.
-- Drive exporters via their Rust libraries in-process (`ExportConfig` + `run`); each crate also ships a thin standalone CLI with the same pipeline.
+- Drive exporters via their Rust libraries in-process (`ExporterConfig` + `run`); each crate also ships a thin standalone CLI with the same pipeline.
 - Show only the controls that apply to the selected backup source; validate before run.
 - Stream library log lines in the UI; support cancel (cooperative flags; WhatsApp’s external `wtsexporter` step is not killable mid-run).
 - Prefer plain-language labels and product site links over CLI jargon.
@@ -17,11 +17,11 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 
 - Pure Rust egui/eframe desktop app for Linux, macOS, and Windows.
 - Top tab panel: **Validate contacts** (default, first) | **Export**.
-- Typed forms and CLI argument builders for every backup source converter (`exporters.rs`).
+- Typed UI `Form` plus shared `ExporterConfig` / `SourceConfig` in `message-exporters-core` (`Form::to_config`).
 - Native file/folder dialogs through `rfd`.
 - Export converters are linked libraries (no sibling exporter binaries required for convert). `contacts-validate` and WhatsApp’s `wtsexporter` still resolve beside the GUI, via `MESSAGE_EXPORTERS_BIN`, or on `PATH`.
 - Live tagged log and cooperative cancellation (mpsc poll in `update`).
-- Exporter-specific validation before launch (`Form::build_args` rules, then library config).
+- Exporter-specific validation before launch (`Form::to_config`), then in-process `run(&ExporterConfig)`.
 - Backup-source titles link to the upstream product site.
 - **Global options** (Obfuscate + Start/End date) above the per-source form (Export tab).
 
@@ -227,8 +227,8 @@ Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox
 5. **Obfuscate seed:** if provided, must be exactly 8 hex characters; empty means generate.
 6. **Timezone (iMazing):** if set, must be a valid IANA name (or defer to converter error).
 7. **iPhone backup:** output directory is required; always passes `--use-caller-id`; obfuscate only applies to CSV.
-8. **SMS Backup+:** exactly one input path; GUI always prefixes `convert` and always passes `--verbose`.
-9. **Date range:** optional start/end `YYYY-MM-DD`; end is exclusive; blank means unbounded (CLI validates).
+8. **SMS Backup+:** exactly one input path; `SourceConfig::SmsBackupPlus` sets `verbose` / `include_summary`.
+9. **Date range:** optional start/end `YYYY-MM-DD`; end is exclusive; blank means unbounded (`DateRange` on `ExporterConfig`).
 10. **Media convert/compress:** require `ffmpeg` and `ffprobe` on PATH; Compress options validated (fps number, min size like `20M`).
 11. **Warn (non-blocking):** missing contacts → same warning language as CLIs (“phones will not be resolved to names”).
 
@@ -237,7 +237,8 @@ Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox
 ```text
 Tabs: Validate contacts | Export
   Validate → contacts file, USA checkbox → Check / Update / Cancel → shared log
-  Export → pick backup source → global Obfuscate/dates → per-source form → Run / Cancel → shared log
+  Export → pick backup source → global Obfuscate/dates → per-source form
+        → Form::to_config → ExporterConfig → library run / Cancel → shared log
 ```
 
 ## Known gaps
@@ -245,9 +246,8 @@ Tabs: Validate contacts | Export
 | Gap | Detail | Suggested fix |
 |-----|--------|---------------|
 | Plus `owner.toml` | Resolved via `CARGO_MANIFEST_DIR`, not user cwd | GUI collects phone/email/input explicitly |
-| iMessage flag style | Short flags (`-f`, `-c`, `-o`) vs long `--input` family | GUI abstracts; map to correct argv |
 | iMazing attachments | Filename-only; no media copy | Document in UI; optional future media join |
-| Encrypted backup password | Visible in process list if passed as argv | Prefer env/stdin if CLI grows support; warn in UI |
+| Encrypted backup password | Still held in memory on `AppleConfig` during run | Prefer env/stdin if CLI grows support; warn in UI |
 
 ## Next steps
 

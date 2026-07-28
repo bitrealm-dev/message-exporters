@@ -1,9 +1,15 @@
-use std::ffi::OsString;
 use std::fmt;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use message_csv::DateRange;
 use message_media::{MaxResolution, MediaMode};
+
+use crate::config::{
+    AppleConfig, ContactsConfig, ExporterConfig, GoSmsProConfig, ImazingConfig, MediaConfig,
+    ObfuscateConfig, OpenExtractConfig, SmsBackupPlusConfig, SmsBackupRestoreConfig, SourceConfig,
+    WhatsappConfig,
+};
 
 /// Supported exporters first, then experimental (alphabetical by display name).
 pub const EXPORTERS: [Exporter; 7] = [
@@ -389,231 +395,385 @@ impl Default for Form {
 }
 
 impl Form {
-    pub fn build_args(&self, exporter: Exporter) -> Result<Vec<OsString>, Vec<String>> {
+    /// Validate the form and build a typed [`ExporterConfig`] for `exporter`.
+    pub fn to_config(&self, exporter: Exporter) -> Result<ExporterConfig, Vec<String>> {
         let mut errors = Vec::new();
-        let mut args = Vec::<OsString>::new();
 
-        match exporter {
-            Exporter::Imessage => self.build_imessage(&mut args, &mut errors),
-            _ => {
-                if exporter == Exporter::SmsBackupPlus {
-                    args.push("convert".into());
-                }
-                if exporter != Exporter::Whatsapp {
-                    required_single_path(&self.input, "Input", &mut errors);
-                    push_pair(&mut args, "--input", &self.input);
-                }
-                required_text(&self.output, "Output", &mut errors);
+        let obfuscate_seed = validate_obfuscate_seed(&self.obfuscate_seed, &mut errors);
+        let obfuscate = ObfuscateConfig {
+            enabled: self.obfuscate,
+            seed: obfuscate_seed,
+        };
 
-                push_pair(&mut args, "--output", &self.output);
-                push_optional_pair(&mut args, "--start-date", &self.start_date);
-                push_optional_pair(&mut args, "--end-date", &self.end_date);
-
-                if matches!(
-                    exporter,
-                    Exporter::GoSmsPro | Exporter::SmsBackupRestore | Exporter::SmsBackupPlus
-                ) {
-                    let phones = values(&self.owner_phones);
-                    if phones.is_empty() {
-                        errors.push("At least one phone number is required.".into());
-                    }
-                    for phone in phones {
-                        push_pair(&mut args, "--owner-phone", phone);
-                    }
-                }
-                if exporter == Exporter::SmsBackupPlus {
-                    let emails = values(&self.owner_emails);
-                    if emails.is_empty() {
-                        errors.push("At least one email address is required.".into());
-                    }
-                    for email in emails {
-                        push_pair(&mut args, "--owner-email", email);
-                    }
-                    push_optional_pair(&mut args, "--name-mapping", &self.name_mapping);
-                    args.push("--verbose".into());
-                }
-
-                match exporter {
-                    Exporter::Imazing => {
-                        push_optional_pair(&mut args, "--contacts", &self.contacts);
-                        push_optional_pair(&mut args, "--timezone", &self.timezone);
-                    }
-                    Exporter::Whatsapp => {
-                        push_pair(
-                            &mut args,
-                            "--platform",
-                            self.whatsapp_platform.as_cli_str(),
-                        );
-                        if self.whatsapp_platform == WhatsappPlatform::Ios
-                            && self.whatsapp_backup.trim().is_empty()
-                        {
-                            errors.push("Backup path is required for iOS.".into());
-                        }
-                        push_optional_pair(&mut args, "--backup", &self.whatsapp_backup);
-                        push_optional_pair(&mut args, "--wa", &self.whatsapp_wa);
-                        if self.whatsapp_platform == WhatsappPlatform::Android {
-                            push_optional_pair(&mut args, "--key", &self.whatsapp_key);
-                            push_optional_pair(&mut args, "--media", &self.whatsapp_media);
-                            push_optional_pair(&mut args, "--db", &self.whatsapp_db);
-                        }
-                        if self.whatsapp_business {
-                            args.push("--business".into());
-                        }
-                    }
-                    _ => match self.contacts_kind {
-                        ContactsKind::None => {}
-                        ContactsKind::Csv => {
-                            if self.contacts.trim().is_empty() {
-                                errors.push("Choose a contacts CSV or select No contacts.".into());
-                            } else {
-                                push_pair(&mut args, "--contacts", &self.contacts);
-                            }
-                        }
-                        ContactsKind::Vcf => {
-                            if self.contacts.trim().is_empty() {
-                                errors.push("Choose a contacts VCF or select No contacts.".into());
-                            } else {
-                                push_pair(&mut args, "--vcf", &self.contacts);
-                            }
-                        }
-                    },
-                }
-
-                if matches!(
-                    exporter,
-                    Exporter::GoSmsPro
-                        | Exporter::SmsBackupRestore
-                        | Exporter::SmsBackupPlus
-                        | Exporter::Imazing
-                        | Exporter::Whatsapp
-                ) {
-                    self.push_media_args(&mut args, &mut errors);
-                }
-
-                if self.obfuscate {
-                    args.push("--obfuscate".into());
-                }
-                push_seed(&mut args, &self.obfuscate_seed, &mut errors);
-            }
-        }
+        let config = match exporter {
+            Exporter::Imessage => self.to_imessage_config(obfuscate, &mut errors),
+            Exporter::Whatsapp => self.to_whatsapp_config(obfuscate, &mut errors),
+            Exporter::Imazing => self.to_imazing_config(obfuscate, &mut errors),
+            Exporter::OpenExtract => self.to_openextract_config(obfuscate, &mut errors),
+            Exporter::GoSmsPro => self.to_go_sms_pro_config(obfuscate, &mut errors),
+            Exporter::SmsBackupRestore => self.to_sms_restore_config(obfuscate, &mut errors),
+            Exporter::SmsBackupPlus => self.to_sms_plus_config(obfuscate, &mut errors),
+        };
 
         if errors.is_empty() {
-            Ok(args)
+            Ok(config)
         } else {
             Err(errors)
         }
     }
 
-    fn push_media_args(&self, args: &mut Vec<OsString>, errors: &mut Vec<String>) {
-        let mode = self.attachment_media.media_mode();
-        if mode.needs_tools() && !message_media::ffmpeg_available() {
-            errors.push(
-                "Convert/Compress require ffmpeg and ffprobe on PATH.".into(),
-            );
+    fn to_imessage_config(
+        &self,
+        obfuscate: ObfuscateConfig,
+        errors: &mut Vec<String>,
+    ) -> ExporterConfig {
+        required_text(&self.output, "Output directory", errors);
+        if self.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available() {
+            errors.push("Convert/Compress require ffmpeg and ffprobe on PATH.".into());
         }
-        push_pair(args, "--media-mode", mode.as_str());
-        if matches!(mode, MediaMode::Compress) {
-            push_pair(
-                args,
-                "--media-max-resolution",
-                self.media_max_resolution.as_str(),
-            );
-            let fps = self.media_max_fps.trim();
-            if fps.is_empty() {
-                errors.push("Max fps is required for Compress.".into());
-            } else if fps.parse::<f32>().is_err() {
-                errors.push("Max fps must be a number.".into());
-            } else {
-                push_pair(args, "--media-max-fps", fps);
-            }
-            let min_size = self.media_min_size.trim();
-            if min_size.is_empty() {
-                errors.push("Min size is required for Compress.".into());
-            } else if message_media::parse_size(min_size).is_err() {
-                errors.push("Min size must look like 20M or 512k.".into());
-            } else {
-                push_pair(args, "--media-min-size", min_size);
-            }
-            args.push("--media-skip-efficient".into());
-            args.push(if self.media_skip_efficient {
-                "true".into()
-            } else {
-                "false".into()
-            });
+        let media = self.media_config_for(
+            matches!(self.attachment_media, AttachmentMedia::Compress),
+            errors,
+        );
+        // When convert/compress, GUI obfuscates after media post-process.
+        let obfuscate = if self.attachment_media.needs_ffmpeg() {
+            ObfuscateConfig::default()
+        } else {
+            obfuscate
+        };
+        let copy_method = match self.attachment_media {
+            AttachmentMedia::Disabled => "disabled".into(),
+            _ => "clone".into(),
+        };
+        let platform = match self.apple_platform {
+            ApplePlatform::Auto => None,
+            other => Some(other),
+        };
+        let inputs = non_empty(self.db_path.trim())
+            .map(|p| vec![PathBuf::from(p)])
+            .unwrap_or_default();
+        ExporterConfig {
+            inputs,
+            output: PathBuf::from(self.output.trim()),
+            date_range: DateRange::default(),
+            contacts: None,
+            obfuscate,
+            media,
+            cancel: None,
+            source: SourceConfig::Apple(AppleConfig {
+                platform,
+                attachment_root: non_empty(self.attachment_root.trim()).map(str::to_string),
+                copy_method,
+                apple_contacts: non_empty_path(&self.apple_contacts),
+                backup_password: non_empty(self.backup_password.trim()).map(str::to_string),
+                conversation_filter: non_empty(self.conversation_filter.trim()).map(str::to_string),
+                start_date: non_empty(self.start_date.trim()).map(str::to_string),
+                end_date: non_empty(self.end_date.trim()).map(str::to_string),
+                use_caller_id: true,
+                show_progress: false,
+                ignore_disk_space: false,
+            }),
         }
     }
 
-    fn build_imessage(&self, args: &mut Vec<OsString>, errors: &mut Vec<String>) {
-        required_text(&self.output, "Output directory", errors);
-        args.extend(["--format".into(), "csv".into()]);
-        let copy = match self.attachment_media {
-            AttachmentMedia::Disabled => "disabled",
-            _ => "clone",
+    fn to_whatsapp_config(
+        &self,
+        obfuscate: ObfuscateConfig,
+        errors: &mut Vec<String>,
+    ) -> ExporterConfig {
+        required_text(&self.output, "Output", errors);
+        if self.whatsapp_platform == WhatsappPlatform::Ios
+            && self.whatsapp_backup.trim().is_empty()
+        {
+            errors.push("Backup path is required for iOS.".into());
+        }
+        let media = self.validate_media(errors);
+        let date_range = parse_date_range_local(
+            non_empty(self.start_date.trim()),
+            non_empty(self.end_date.trim()),
+            errors,
+        );
+        ExporterConfig {
+            inputs: Vec::new(),
+            output: PathBuf::from(self.output.trim()),
+            date_range,
+            contacts: None,
+            obfuscate,
+            media,
+            cancel: None,
+            source: SourceConfig::Whatsapp(WhatsappConfig {
+                platform: Some(self.whatsapp_platform),
+                json: None,
+                key: non_empty(self.whatsapp_key.trim()).map(str::to_string),
+                backup: non_empty_path(&self.whatsapp_backup),
+                wa: non_empty_path(&self.whatsapp_wa),
+                media: non_empty_path(&self.whatsapp_media),
+                db: non_empty_path(&self.whatsapp_db),
+                business: self.whatsapp_business,
+            }),
+        }
+    }
+
+    fn to_imazing_config(
+        &self,
+        obfuscate: ObfuscateConfig,
+        errors: &mut Vec<String>,
+    ) -> ExporterConfig {
+        let input = require_single_existing_path(&self.input, "Input", errors);
+        required_text(&self.output, "Output", errors);
+        let media = self.validate_media(errors);
+        let timezone = non_empty(self.timezone.trim()).map(str::to_string);
+        let date_range = match DateRange::parse_optional_tz(
+            non_empty(self.start_date.trim()),
+            non_empty(self.end_date.trim()),
+            timezone.as_deref(),
+        ) {
+            Ok(range) => range,
+            Err(error) => {
+                errors.push(error);
+                DateRange::default()
+            }
         };
-        args.extend(["--copy-method".into(), copy.into()]);
-        if self.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available() {
-            errors.push(
-                "Convert/Compress require ffmpeg and ffprobe on PATH.".into(),
-            );
+        let contacts = non_empty_path(&self.contacts).map(|path| ContactsConfig {
+            path,
+            kind: ContactsKind::Csv,
+        });
+        ExporterConfig {
+            inputs: input.into_iter().collect(),
+            output: PathBuf::from(self.output.trim()),
+            date_range,
+            contacts,
+            obfuscate,
+            media,
+            cancel: None,
+            source: SourceConfig::Imazing(ImazingConfig { timezone }),
         }
-        if matches!(self.attachment_media, AttachmentMedia::Compress) {
-            if self.media_max_fps.trim().parse::<f32>().is_err() {
-                errors.push("Max fps must be a number.".into());
+    }
+
+    fn to_openextract_config(
+        &self,
+        obfuscate: ObfuscateConfig,
+        errors: &mut Vec<String>,
+    ) -> ExporterConfig {
+        let input = require_single_existing_path(&self.input, "Input", errors);
+        required_text(&self.output, "Output", errors);
+        let contacts = self.contacts_config(errors);
+        let date_range = parse_date_range_local(
+            non_empty(self.start_date.trim()),
+            non_empty(self.end_date.trim()),
+            errors,
+        );
+        ExporterConfig {
+            inputs: input.into_iter().collect(),
+            output: PathBuf::from(self.output.trim()),
+            date_range,
+            contacts,
+            obfuscate,
+            media: MediaConfig {
+                mode: MediaMode::Disabled,
+                compress: message_media::CompressOptions::default(),
+            },
+            cancel: None,
+            source: SourceConfig::OpenExtract(OpenExtractConfig {}),
+        }
+    }
+
+    fn to_go_sms_pro_config(
+        &self,
+        obfuscate: ObfuscateConfig,
+        errors: &mut Vec<String>,
+    ) -> ExporterConfig {
+        let (inputs, contacts, date_range, media, owner_phones) = self.android_common(errors);
+        ExporterConfig {
+            inputs,
+            output: PathBuf::from(self.output.trim()),
+            date_range,
+            contacts,
+            obfuscate,
+            media,
+            cancel: None,
+            source: SourceConfig::GoSmsPro(GoSmsProConfig { owner_phones }),
+        }
+    }
+
+    fn to_sms_restore_config(
+        &self,
+        obfuscate: ObfuscateConfig,
+        errors: &mut Vec<String>,
+    ) -> ExporterConfig {
+        let (inputs, contacts, date_range, media, owner_phones) = self.android_common(errors);
+        ExporterConfig {
+            inputs,
+            output: PathBuf::from(self.output.trim()),
+            date_range,
+            contacts,
+            obfuscate,
+            media,
+            cancel: None,
+            source: SourceConfig::SmsBackupRestore(SmsBackupRestoreConfig { owner_phones }),
+        }
+    }
+
+    fn to_sms_plus_config(
+        &self,
+        obfuscate: ObfuscateConfig,
+        errors: &mut Vec<String>,
+    ) -> ExporterConfig {
+        let (inputs, contacts, date_range, media, owner_phones) = self.android_common(errors);
+        let owner_emails: Vec<String> = values(&self.owner_emails)
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        if owner_emails.is_empty() {
+            errors.push("At least one email address is required.".into());
+        }
+        ExporterConfig {
+            inputs,
+            output: PathBuf::from(self.output.trim()),
+            date_range,
+            contacts,
+            obfuscate,
+            media,
+            cancel: None,
+            source: SourceConfig::SmsBackupPlus(SmsBackupPlusConfig {
+                owner_phones,
+                owner_emails,
+                name_mapping: non_empty_path(&self.name_mapping),
+                verbose: true,
+                include_summary: true,
+            }),
+        }
+    }
+
+    fn android_common(
+        &self,
+        errors: &mut Vec<String>,
+    ) -> (
+        Vec<PathBuf>,
+        Option<ContactsConfig>,
+        DateRange,
+        MediaConfig,
+        Vec<String>,
+    ) {
+        let input = require_single_existing_path(&self.input, "Input", errors);
+        required_text(&self.output, "Output", errors);
+        let owner_phones: Vec<String> = values(&self.owner_phones)
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        if owner_phones.is_empty() {
+            errors.push("At least one phone number is required.".into());
+        }
+        let contacts = self.contacts_config(errors);
+        let date_range = parse_date_range_local(
+            non_empty(self.start_date.trim()),
+            non_empty(self.end_date.trim()),
+            errors,
+        );
+        let media = self.validate_media(errors);
+        (
+            input.into_iter().collect(),
+            contacts,
+            date_range,
+            media,
+            owner_phones,
+        )
+    }
+
+    fn contacts_config(&self, errors: &mut Vec<String>) -> Option<ContactsConfig> {
+        match self.contacts_kind {
+            ContactsKind::None => None,
+            ContactsKind::Csv => {
+                if self.contacts.trim().is_empty() {
+                    errors.push("Choose a contacts CSV or select No contacts.".into());
+                    None
+                } else {
+                    Some(ContactsConfig {
+                        path: PathBuf::from(self.contacts.trim()),
+                        kind: ContactsKind::Csv,
+                    })
+                }
             }
-            if message_media::parse_size(self.media_min_size.trim()).is_err() {
-                errors.push("Min size must look like 20M or 512k.".into());
+            ContactsKind::Vcf => {
+                if self.contacts.trim().is_empty() {
+                    errors.push("Choose a contacts VCF or select No contacts.".into());
+                    None
+                } else {
+                    Some(ContactsConfig {
+                        path: PathBuf::from(self.contacts.trim()),
+                        kind: ContactsKind::Vcf,
+                    })
+                }
             }
         }
-        push_pair(args, "--export-path", &self.output);
-        push_optional_pair(args, "--db-path", &self.db_path);
-        push_optional_pair(args, "--attachment-root", &self.attachment_root);
-        push_optional_pair(args, "--start-date", &self.start_date);
-        push_optional_pair(args, "--end-date", &self.end_date);
-        push_optional_pair(args, "--conversation-filter", &self.conversation_filter);
-        push_optional_pair(args, "--contacts-path", &self.apple_contacts);
-        push_optional_pair(args, "--cleartext-password", &self.backup_password);
-        match self.apple_platform {
-            ApplePlatform::Auto => {}
-            ApplePlatform::MacOs => args.extend(["--platform".into(), "macOS".into()]),
-            ApplePlatform::Ios => args.extend(["--platform".into(), "iOS".into()]),
+    }
+
+    fn validate_media(&self, errors: &mut Vec<String>) -> MediaConfig {
+        let mode = self.attachment_media.media_mode();
+        if mode.needs_tools() && !message_media::ffmpeg_available() {
+            errors.push("Convert/Compress require ffmpeg and ffprobe on PATH.".into());
         }
-        args.push("--use-caller-id".into());
-        // When convert/compress, GUI obfuscates after media post-process.
-        if self.obfuscate && !self.attachment_media.needs_ffmpeg() {
-            args.push("--obfuscate".into());
-        }
-        push_seed(args, &self.obfuscate_seed, errors);
+        self.media_config_for(matches!(mode, MediaMode::Compress), errors)
+    }
+
+    fn media_config_for(&self, validate_compress: bool, errors: &mut Vec<String>) -> MediaConfig {
+        let mode = self.attachment_media.media_mode();
+        let compress = if validate_compress || matches!(mode, MediaMode::Compress) {
+            match self.compress_options() {
+                Ok(options) => options,
+                Err(error) => {
+                    errors.push(error);
+                    message_media::CompressOptions::default()
+                }
+            }
+        } else {
+            message_media::CompressOptions::default()
+        };
+        MediaConfig { mode, compress }
     }
 
     /// Compress options for GUI iMessage post-process (after exporter exits).
     pub fn compress_options(&self) -> Result<message_media::CompressOptions, String> {
+        let fps = self.media_max_fps.trim();
+        if fps.is_empty() {
+            return Err("Max fps is required for Compress.".into());
+        }
+        let fps: f32 = fps
+            .parse()
+            .map_err(|_| "Max fps must be a number.".to_string())?;
+        let min_size = self.media_min_size.trim();
+        if min_size.is_empty() {
+            return Err("Min size is required for Compress.".into());
+        }
         message_media::compress_options_from_cli(
             self.media_max_resolution,
-            self.media_max_fps
-                .trim()
-                .parse()
-                .map_err(|_| "Max fps must be a number.".to_string())?,
-            self.media_min_size.trim(),
+            fps,
+            min_size,
             self.media_skip_efficient,
         )
         .map_err(|e| e.to_string())
     }
 }
 
-fn required_single_path(value: &str, label: &str, errors: &mut Vec<String>) {
+fn require_single_existing_path(
+    value: &str,
+    label: &str,
+    errors: &mut Vec<String>,
+) -> Option<PathBuf> {
     let paths = lines(value);
     if paths.is_empty() {
         errors.push(format!("{label} is required."));
-        return;
+        return None;
     }
     if paths.len() > 1 {
         errors.push(format!("{label} must be a single file or folder."));
-        return;
+        return None;
     }
     let path = paths[0];
     if !Path::new(path).exists() {
         errors.push(format!("{label} path does not exist: {path}"));
     }
+    Some(PathBuf::from(path))
 }
 
 fn required_text(value: &str, label: &str, errors: &mut Vec<String>) {
@@ -622,27 +782,31 @@ fn required_text(value: &str, label: &str, errors: &mut Vec<String>) {
     }
 }
 
-fn push_seed(args: &mut Vec<OsString>, seed: &str, errors: &mut Vec<String>) {
+fn validate_obfuscate_seed(seed: &str, errors: &mut Vec<String>) -> Option<String> {
     let seed = seed.trim();
     if seed.is_empty() {
-        return;
+        return None;
     }
     if seed.len() != 8 || !seed.chars().all(|c| c.is_ascii_hexdigit()) {
         errors.push("Obfuscate seed must be exactly 8 hexadecimal characters.".into());
+        None
     } else {
-        push_pair(args, "--obfuscate-seed", seed);
+        Some(seed.to_string())
     }
 }
 
-fn push_optional_pair(args: &mut Vec<OsString>, flag: &str, value: &str) {
-    if !value.trim().is_empty() {
-        push_pair(args, flag, value);
+fn parse_date_range_local(
+    start: Option<&str>,
+    end: Option<&str>,
+    errors: &mut Vec<String>,
+) -> DateRange {
+    match DateRange::parse(start, end) {
+        Ok(range) => range,
+        Err(error) => {
+            errors.push(error);
+            DateRange::default()
+        }
     }
-}
-
-fn push_pair(args: &mut Vec<OsString>, flag: &str, value: &str) {
-    args.push(flag.into());
-    args.push(value.trim().into());
 }
 
 fn lines(value: &str) -> Vec<&str> {
@@ -661,6 +825,19 @@ fn values(value: &str) -> Vec<&str> {
         .collect()
 }
 
+fn non_empty(value: &str) -> Option<&str> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+fn non_empty_path(value: &str) -> Option<PathBuf> {
+    non_empty(value).map(PathBuf::from)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -673,8 +850,9 @@ mod tests {
             obfuscate: true,
             ..Form::default()
         };
-        let args = form.build_args(Exporter::Imazing).unwrap();
-        assert!(args.iter().any(|arg| arg == "--obfuscate"));
+        let config = form.to_config(Exporter::Imazing).unwrap();
+        assert!(config.obfuscate.enabled);
+        assert!(matches!(config.source, SourceConfig::Imazing(_)));
     }
 
     #[test]
@@ -685,7 +863,7 @@ mod tests {
             obfuscate_seed: "bad".into(),
             ..Form::default()
         };
-        assert!(form.build_args(Exporter::OpenExtract).is_err());
+        assert!(form.to_config(Exporter::OpenExtract).is_err());
         let form = Form {
             input: std::env::current_dir().unwrap().display().to_string(),
             output: "out".into(),
@@ -693,12 +871,12 @@ mod tests {
             obfuscate: true,
             ..Form::default()
         };
-        let args = form.build_args(Exporter::OpenExtract).unwrap();
-        assert!(args.iter().any(|arg| arg == "--obfuscate-seed"));
+        let config = form.to_config(Exporter::OpenExtract).unwrap();
+        assert_eq!(config.obfuscate.seed.as_deref(), Some("01234567"));
     }
 
     #[test]
-    fn plus_prefixes_convert_always_verbose_and_single_input() {
+    fn plus_verbose_and_owner_fields() {
         let cwd = std::env::current_dir().unwrap().display().to_string();
         let form = Form {
             input: cwd,
@@ -707,12 +885,14 @@ mod tests {
             owner_emails: "me@example.com".into(),
             ..Form::default()
         };
-        let args = form.build_args(Exporter::SmsBackupPlus).unwrap();
-        assert_eq!(args.first().unwrap(), "convert");
-        assert_eq!(args.iter().filter(|arg| *arg == "--owner-phone").count(), 2);
-        assert_eq!(args.iter().filter(|arg| *arg == "--input").count(), 1);
-        assert!(args.iter().any(|arg| arg == "--verbose"));
-        assert!(!args.iter().any(|arg| arg == "--no-summary"));
+        let config = form.to_config(Exporter::SmsBackupPlus).unwrap();
+        assert_eq!(config.inputs.len(), 1);
+        let SourceConfig::SmsBackupPlus(plus) = config.source else {
+            panic!("expected SmsBackupPlus");
+        };
+        assert_eq!(plus.owner_phones.len(), 2);
+        assert!(plus.verbose);
+        assert!(plus.include_summary);
     }
 
     #[test]
@@ -725,7 +905,7 @@ mod tests {
             owner_emails: "me@example.com".into(),
             ..Form::default()
         };
-        let err = form.build_args(Exporter::SmsBackupPlus).unwrap_err();
+        let err = form.to_config(Exporter::SmsBackupPlus).unwrap_err();
         assert!(err.iter().any(|e| e.contains("single file or folder")));
     }
 
@@ -755,24 +935,26 @@ mod tests {
     }
 
     #[test]
-    fn imessage_requires_output_and_always_uses_caller_id() {
+    fn imessage_requires_output_and_uses_caller_id() {
         let form = Form {
             output: String::new(),
             ..Form::default()
         };
-        assert!(form.build_args(Exporter::Imessage).is_err());
+        assert!(form.to_config(Exporter::Imessage).is_err());
 
         let form = Form {
             output: "out".into(),
             ..Form::default()
         };
-        let args = form.build_args(Exporter::Imessage).unwrap();
-        assert!(args.iter().any(|arg| arg == "--export-path"));
-        assert!(args.iter().any(|arg| arg == "--use-caller-id"));
-        assert!(args.windows(2).any(|w| w[0] == "--copy-method" && w[1] == "clone"));
-        assert!(!args.iter().any(|arg| arg == "--custom-name"));
-        assert!(!args.iter().any(|arg| arg == "--ignore-disk-warning"));
-        assert!(!args.iter().any(|arg| arg == "--diagnostics"));
+        let config = form.to_config(Exporter::Imessage).unwrap();
+        assert_eq!(config.output, PathBuf::from("out"));
+        let SourceConfig::Apple(apple) = config.source else {
+            panic!("expected Apple");
+        };
+        assert!(apple.use_caller_id);
+        assert_eq!(apple.copy_method, "clone");
+        assert!(!apple.ignore_disk_space);
+        assert!(!apple.show_progress);
     }
 
     #[test]
@@ -784,8 +966,8 @@ mod tests {
             attachment_media: AttachmentMedia::Clone,
             ..Form::default()
         };
-        let args = form.build_args(Exporter::GoSmsPro).unwrap();
-        assert!(args.windows(2).any(|w| w[0] == "--media-mode" && w[1] == "clone"));
+        let config = form.to_config(Exporter::GoSmsPro).unwrap();
+        assert_eq!(config.media.mode, MediaMode::Clone);
 
         let form = Form {
             input: std::env::current_dir().unwrap().display().to_string(),
@@ -794,8 +976,8 @@ mod tests {
             attachment_media: AttachmentMedia::Disabled,
             ..Form::default()
         };
-        let args = form.build_args(Exporter::GoSmsPro).unwrap();
-        assert!(args.windows(2).any(|w| w[0] == "--media-mode" && w[1] == "disabled"));
+        let config = form.to_config(Exporter::GoSmsPro).unwrap();
+        assert_eq!(config.media.mode, MediaMode::Disabled);
     }
 
     #[test]
@@ -807,9 +989,25 @@ mod tests {
             end_date: "2020-02-01".into(),
             ..Form::default()
         };
-        let args = form.build_args(Exporter::OpenExtract).unwrap();
-        assert!(args.windows(2).any(|w| w[0] == "--start-date" && w[1] == "2020-01-01"));
-        assert!(args.windows(2).any(|w| w[0] == "--end-date" && w[1] == "2020-02-01"));
+        let config = form.to_config(Exporter::OpenExtract).unwrap();
+        assert!(!config.date_range.is_unbounded());
+        assert!(matches!(config.source, SourceConfig::OpenExtract(_)));
+    }
+
+    #[test]
+    fn imazing_timezone_is_source_specific() {
+        let form = Form {
+            input: std::env::current_dir().unwrap().display().to_string(),
+            output: "out".into(),
+            timezone: "UTC-05:00".into(),
+            start_date: "2020-01-01".into(),
+            ..Form::default()
+        };
+        let config = form.to_config(Exporter::Imazing).unwrap();
+        let SourceConfig::Imazing(imazing) = &config.source else {
+            panic!("expected Imazing");
+        };
+        assert_eq!(imazing.timezone.as_deref(), Some("UTC-05:00"));
     }
 
     #[test]
@@ -824,38 +1022,38 @@ mod tests {
             attachment_media: AttachmentMedia::Clone,
             ..Form::default()
         };
-        let args = form.build_args(Exporter::Whatsapp).unwrap();
-        assert!(!args.iter().any(|arg| arg == "--input"));
-        assert!(args.windows(2).any(|w| w[0] == "--platform" && w[1] == "android"));
-        assert!(args.windows(2).any(|w| w[0] == "--key" && w[1] == "abc123"));
-        assert!(args.windows(2).any(|w| w[0] == "--backup" && w[1] == "/tmp/backup"));
-        assert!(args.windows(2).any(|w| w[0] == "--media" && w[1] == "/tmp/media"));
-        assert!(args.iter().any(|arg| arg == "--business"));
-        assert!(args.windows(2).any(|w| w[0] == "--media-mode" && w[1] == "clone"));
+        let config = form.to_config(Exporter::Whatsapp).unwrap();
+        assert!(config.inputs.is_empty());
+        assert_eq!(config.media.mode, MediaMode::Clone);
+        let SourceConfig::Whatsapp(wa) = config.source else {
+            panic!("expected Whatsapp");
+        };
+        assert_eq!(wa.platform, Some(WhatsappPlatform::Android));
+        assert_eq!(wa.key.as_deref(), Some("abc123"));
+        assert_eq!(wa.backup, Some(PathBuf::from("/tmp/backup")));
+        assert_eq!(wa.media, Some(PathBuf::from("/tmp/media")));
+        assert!(wa.business);
 
         let ios = Form {
             output: "out".into(),
             whatsapp_platform: WhatsappPlatform::Ios,
-            whatsapp_key: "abc123".into(),
-            whatsapp_media: "/tmp/media".into(),
-            whatsapp_db: "/tmp/db".into(),
             whatsapp_backup: "/tmp/ios-backup".into(),
             ..Form::default()
         };
-        let ios_args = ios.build_args(Exporter::Whatsapp).unwrap();
-        assert!(!ios_args.iter().any(|arg| arg == "--input"));
-        assert!(ios_args.windows(2).any(|w| w[0] == "--platform" && w[1] == "ios"));
-        assert!(ios_args.windows(2).any(|w| w[0] == "--backup" && w[1] == "/tmp/ios-backup"));
-        assert!(!ios_args.iter().any(|arg| arg == "--key"));
-        assert!(!ios_args.iter().any(|arg| arg == "--media"));
-        assert!(!ios_args.iter().any(|arg| arg == "--db"));
+        let ios_config = ios.to_config(Exporter::Whatsapp).unwrap();
+        let SourceConfig::Whatsapp(wa) = ios_config.source else {
+            panic!("expected Whatsapp");
+        };
+        assert_eq!(wa.platform, Some(WhatsappPlatform::Ios));
+        assert_eq!(wa.backup, Some(PathBuf::from("/tmp/ios-backup")));
+        assert!(wa.key.is_none());
 
         let ios_missing = Form {
             output: "out".into(),
             whatsapp_platform: WhatsappPlatform::Ios,
             ..Form::default()
         };
-        let err = ios_missing.build_args(Exporter::Whatsapp).unwrap_err();
+        let err = ios_missing.to_config(Exporter::Whatsapp).unwrap_err();
         assert!(err.iter().any(|e| e.contains("Backup path is required for iOS")));
     }
 

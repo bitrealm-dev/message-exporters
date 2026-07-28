@@ -2,8 +2,12 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
+use message_exporters_core::{
+    ExporterConfig, MediaConfig, ObfuscateConfig, SourceConfig, WhatsappConfig,
+    WhatsappPlatform,
+};
 use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
-use whatsapp_exporter::{parse_date_range, run, ExportConfig, Platform};
+use whatsapp_exporter::{parse_date_range, run};
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum CliPlatform {
@@ -11,11 +15,11 @@ enum CliPlatform {
     Ios,
 }
 
-impl From<CliPlatform> for Platform {
+impl From<CliPlatform> for WhatsappPlatform {
     fn from(value: CliPlatform) -> Self {
         match value {
-            CliPlatform::Android => Platform::Android,
-            CliPlatform::Ios => Platform::Ios,
+            CliPlatform::Android => WhatsappPlatform::Android,
+            CliPlatform::Ios => WhatsappPlatform::Ios,
         }
     }
 }
@@ -113,23 +117,30 @@ fn main() -> Result<()> {
         &cli.media_min_size,
         cli.media_skip_efficient,
     )?;
-    let result = run(&ExportConfig {
-        input: cli.input,
+    let result = run(&ExporterConfig {
+        inputs: cli.input.into_iter().collect(),
         output: cli.output,
-        platform: cli.platform.map(Into::into),
-        json: cli.json,
-        key: cli.key,
-        backup: cli.backup,
-        wa: cli.wa,
-        media: cli.media,
-        db: cli.db,
-        business: cli.business,
         date_range,
-        media_mode: cli.media_mode,
-        compress,
-        obfuscate: cli.obfuscate,
-        obfuscate_seed: cli.obfuscate_seed,
+        contacts: None,
+        obfuscate: ObfuscateConfig {
+            enabled: cli.obfuscate,
+            seed: cli.obfuscate_seed,
+        },
+        media: MediaConfig {
+            mode: cli.media_mode,
+            compress,
+        },
         cancel: None,
+        source: SourceConfig::Whatsapp(WhatsappConfig {
+            platform: cli.platform.map(Into::into),
+            json: cli.json,
+            key: cli.key,
+            backup: cli.backup,
+            wa: cli.wa,
+            media: cli.media,
+            db: cli.db,
+            business: cli.business,
+        }),
     })?;
 
     for line in &result.messages {

@@ -21,6 +21,7 @@ csv = "1.4.0"
 hex = "0.4.3"
 message-obfuscate = { path = "../message-obfuscate" }
 message-csv = { path = "../message-csv" }
+message-exporters-core = { path = "../message-exporters-core" }
 message-media = { path = "../message-media" }
 message-phone = { path = "../message-phone" }
 serde = { version = "1.0.228", features = ["derive"] }

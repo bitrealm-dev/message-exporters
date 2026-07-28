@@ -2,8 +2,12 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use message_exporters_core::{
+    ContactsConfig, ContactsKind, ExporterConfig, MediaConfig, ObfuscateConfig,
+    SmsBackupPlusConfig, SourceConfig,
+};
 use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
-use sms_backup_plus_exporter::{parse_date_range, run, ExportConfig};
+use sms_backup_plus_exporter::{parse_date_range, run};
 
 #[derive(Parser, Debug)]
 #[command(name = "sms-backup-plus-exporter")]
@@ -125,22 +129,38 @@ fn main() -> Result<()> {
                 &media_min_size,
                 media_skip_efficient,
             )?;
-            let result = run(&ExportConfig {
+            let contacts = match (contacts, vcf) {
+                (Some(path), _) => Some(ContactsConfig {
+                    path,
+                    kind: ContactsKind::Csv,
+                }),
+                (None, Some(path)) => Some(ContactsConfig {
+                    path,
+                    kind: ContactsKind::Vcf,
+                }),
+                (None, None) => None,
+            };
+            let result = run(&ExporterConfig {
                 inputs: input,
                 output,
-                owner_phones,
-                owner_emails,
-                contacts,
-                vcf,
-                name_mapping,
                 date_range,
-                media_mode,
-                compress,
-                obfuscate,
-                obfuscate_seed,
-                verbose: cli.verbose,
-                include_summary: !cli.no_summary,
+                contacts,
+                obfuscate: ObfuscateConfig {
+                    enabled: obfuscate,
+                    seed: obfuscate_seed,
+                },
+                media: MediaConfig {
+                    mode: media_mode,
+                    compress,
+                },
                 cancel: None,
+                source: SourceConfig::SmsBackupPlus(SmsBackupPlusConfig {
+                    owner_phones,
+                    owner_emails,
+                    name_mapping,
+                    verbose: cli.verbose,
+                    include_summary: !cli.no_summary,
+                }),
             })?;
 
             for line in &result.messages {

@@ -2,8 +2,12 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
+use message_exporters_core::{
+    ContactsConfig, ContactsKind, ExporterConfig, MediaConfig, ObfuscateConfig,
+    SmsBackupRestoreConfig, SourceConfig,
+};
 use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
-use sms_backup_restore_exporter::{parse_date_range, run, ExportConfig};
+use sms_backup_restore_exporter::{parse_date_range, run};
 
 #[derive(Parser, Debug)]
 #[command(name = "sms-backup-restore-exporter")]
@@ -77,18 +81,34 @@ fn main() -> Result<()> {
         &cli.media_min_size,
         cli.media_skip_efficient,
     )?;
-    let result = run(&ExportConfig {
-        input: cli.input,
+    let contacts = match (cli.contacts, cli.vcf) {
+        (Some(path), _) => Some(ContactsConfig {
+            path,
+            kind: ContactsKind::Csv,
+        }),
+        (None, Some(path)) => Some(ContactsConfig {
+            path,
+            kind: ContactsKind::Vcf,
+        }),
+        (None, None) => None,
+    };
+    let result = run(&ExporterConfig {
+        inputs: vec![cli.input],
         output: cli.output,
-        owner_phones: cli.owner_phones,
-        contacts: cli.contacts,
-        vcf: cli.vcf,
         date_range,
-        media_mode: cli.media_mode,
-        compress,
-        obfuscate: cli.obfuscate,
-        obfuscate_seed: cli.obfuscate_seed,
+        contacts,
+        obfuscate: ObfuscateConfig {
+            enabled: cli.obfuscate,
+            seed: cli.obfuscate_seed,
+        },
+        media: MediaConfig {
+            mode: cli.media_mode,
+            compress,
+        },
         cancel: None,
+        source: SourceConfig::SmsBackupRestore(SmsBackupRestoreConfig {
+            owner_phones: cli.owner_phones,
+        }),
     })?;
 
     for line in &result.messages {

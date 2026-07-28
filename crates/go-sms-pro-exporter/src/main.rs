@@ -2,7 +2,11 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
-use go_sms_pro_exporter::{parse_date_range, run, ExportConfig};
+use go_sms_pro_exporter::{parse_date_range, run};
+use message_exporters_core::{
+    ContactsConfig, ContactsKind, ExporterConfig, GoSmsProConfig, MediaConfig, ObfuscateConfig,
+    SourceConfig,
+};
 use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
 
 #[derive(Parser, Debug)]
@@ -78,18 +82,34 @@ fn main() -> Result<()> {
         &cli.media_min_size,
         cli.media_skip_efficient,
     )?;
-    let result = run(&ExportConfig {
-        input: cli.input,
+    let contacts = match (cli.contacts, cli.vcf) {
+        (Some(path), _) => Some(ContactsConfig {
+            path,
+            kind: ContactsKind::Csv,
+        }),
+        (None, Some(path)) => Some(ContactsConfig {
+            path,
+            kind: ContactsKind::Vcf,
+        }),
+        (None, None) => None,
+    };
+    let result = run(&ExporterConfig {
+        inputs: vec![cli.input],
         output: cli.output,
-        owner_phones: cli.owner_phones,
-        contacts: cli.contacts,
-        vcf: cli.vcf,
         date_range,
-        media_mode: cli.media_mode,
-        compress,
-        obfuscate: cli.obfuscate,
-        obfuscate_seed: cli.obfuscate_seed,
+        contacts,
+        obfuscate: ObfuscateConfig {
+            enabled: cli.obfuscate,
+            seed: cli.obfuscate_seed,
+        },
+        media: MediaConfig {
+            mode: cli.media_mode,
+            compress,
+        },
         cancel: None,
+        source: SourceConfig::GoSmsPro(GoSmsProConfig {
+            owner_phones: cli.owner_phones,
+        }),
     })?;
 
     for line in &result.messages {

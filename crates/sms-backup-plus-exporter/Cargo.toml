@@ -22,6 +22,7 @@ mailparse = "0.16.1"
 message-obfuscate = { path = "../message-obfuscate" }
 message-contacts = { path = "../message-contacts" }
 message-csv = { path = "../message-csv" }
+message-exporters-core = { path = "../message-exporters-core" }
 message-media = { path = "../message-media" }
 message-phone = { path = "../message-phone" }
 rayon = "1.12.0"

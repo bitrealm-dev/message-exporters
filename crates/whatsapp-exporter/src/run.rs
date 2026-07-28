@@ -1,41 +1,16 @@
 //! Full export pipeline (wtsexporter/JSON convert + media + obfuscate) for CLI and GUI.
 
-use crate::cancel::{check_cancel, CancelFlag};
+use crate::cancel::check_cancel;
 use crate::emit::{convert_json, ExportReport};
 use crate::wtsexporter::{resolve_wtsexporter, run_wtsexporter, Platform, WtsexporterArgs};
 use anyhow::{bail, Context, Result};
 use message_csv::DateRange;
-use message_media::{process_export_media, CompressOptions, MediaMode, MediaReport};
+use message_exporters_core::{ExporterConfig, SourceConfig, WhatsappPlatform as CorePlatform};
+use message_media::{process_export_media, MediaReport};
 use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
-
-/// Inputs for a full WhatsApp export run.
-#[derive(Debug, Clone)]
-pub struct ExportConfig {
-    /// Directory (or msgstore.db) used to resolve relative defaults. Defaults to cwd when unset.
-    pub input: Option<PathBuf>,
-    pub output: PathBuf,
-    /// Required unless [`Self::json`] is set.
-    pub platform: Option<Platform>,
-    /// Skip wtsexporter; convert an existing result.json.
-    pub json: Option<PathBuf>,
-    pub key: Option<String>,
-    pub backup: Option<PathBuf>,
-    pub wa: Option<PathBuf>,
-    pub media: Option<PathBuf>,
-    pub db: Option<PathBuf>,
-    pub business: bool,
-    pub date_range: DateRange,
-    pub media_mode: MediaMode,
-    pub compress: CompressOptions,
-    pub obfuscate: bool,
-    pub obfuscate_seed: Option<String>,
-    /// Cooperative cancel. Checked before/after wtsexporter and between chats in convert.
-    /// Mid-run kill of the external wtsexporter process is not implemented.
-    pub cancel: Option<CancelFlag>,
-}
+use std::path::Path;
 
 /// Result of [`run`]: convert report plus human-readable log lines.
 #[derive(Debug)]
@@ -45,17 +20,27 @@ pub struct RunResult {
 }
 
 /// Resolve JSON (via wtsexporter or `--json`), convert, optionally process media and obfuscate.
-pub fn run(config: &ExportConfig) -> Result<RunResult> {
+pub fn run(config: &ExporterConfig) -> Result<RunResult> {
+    let SourceConfig::Whatsapp(source) = &config.source else {
+        bail!("whatsapp-exporter requires SourceConfig::Whatsapp");
+    };
     check_cancel(config.cancel.as_ref())?;
     let mut messages = Vec::new();
 
-    let (json_path, media_roots, _work_keep_alive) = if let Some(json) = &config.json {
+    let platform = match source.platform {
+        Some(CorePlatform::Android) => Some(Platform::Android),
+        Some(CorePlatform::Ios) => Some(Platform::Ios),
+        None => None,
+    };
+    let input = config.primary_input().map(|p| p.to_path_buf());
+
+    let (json_path, media_roots, _work_keep_alive) = if let Some(json) = &source.json {
         let mut media_roots = Vec::new();
         if let Ok(cwd) = env::current_dir() {
             media_roots.push(cwd);
         }
-        if let Some(input) = &config.input {
-            media_roots.push(input.clone());
+        if let Some(path) = &input {
+            media_roots.push(path.clone());
         }
         if let Some(parent) = json.parent() {
             media_roots.push(parent.to_path_buf());
@@ -64,10 +49,9 @@ pub fn run(config: &ExportConfig) -> Result<RunResult> {
         media_roots.dedup();
         (json.clone(), media_roots, None)
     } else {
-        let platform = config
-            .platform
+        let platform = platform
             .ok_or_else(|| anyhow::anyhow!("platform is required unless json is set"))?;
-        let input = match config.input.clone() {
+        let input = match input {
             Some(path) => path,
             None => env::current_dir().context("resolve current working directory")?,
         };
@@ -83,7 +67,7 @@ pub fn run(config: &ExportConfig) -> Result<RunResult> {
             .tempdir_in(&config.output)
             .context("create temp dir for wtsexporter")?;
         let json_out = work.path().join("result.json");
-        let move_media = config.media_mode.copies_attachments() && config.media.is_some();
+        let move_media = config.media.mode.copies_attachments() && source.media.is_some();
 
         // Cooperative only: we check cancel before and after the external process.
         // Killing wtsexporter mid-run is not implemented.
@@ -94,12 +78,12 @@ pub fn run(config: &ExportConfig) -> Result<RunResult> {
                 platform,
                 input: input.clone(),
                 work_dir: work.path().to_path_buf(),
-                key: config.key.clone(),
-                backup: config.backup.clone(),
-                wa: config.wa.clone(),
-                media: config.media.clone(),
-                db: config.db.clone(),
-                business: config.business,
+                key: source.key.clone(),
+                backup: source.backup.clone(),
+                wa: source.wa.clone(),
+                media: source.media.clone(),
+                db: source.db.clone(),
+                business: source.business,
                 move_media,
             },
             &json_out,
@@ -133,25 +117,25 @@ pub fn run(config: &ExportConfig) -> Result<RunResult> {
         &json_path,
         &config.output,
         &config.date_range,
-        config.media_mode.copies_attachments(),
+        config.media.mode.copies_attachments(),
         &media_roots,
         config.cancel.as_ref(),
     )?;
     // Drop tempdir after convert (media files already copied).
     drop(_work_keep_alive);
 
-    if config.media_mode.needs_tools() {
+    if config.media.mode.needs_tools() {
         check_cancel(config.cancel.as_ref())?;
-        let media = process_export_media(&config.output, config.media_mode, &config.compress)?;
+        let media = process_export_media(&config.output, config.media.mode, &config.media.compress)?;
         messages.extend(media_report_lines(&media));
         if !media.errors.is_empty() && media.processed == 0 {
             bail!("media processing failed for all candidate files");
         }
     }
 
-    if config.obfuscate || config.obfuscate_seed.is_some() {
+    if config.obfuscate_active() {
         check_cancel(config.cancel.as_ref())?;
-        let mut anon = resolve_obfuscator(config.obfuscate_seed.as_deref())?;
+        let mut anon = resolve_obfuscator(config.obfuscate.seed.as_deref())?;
         let n = obfuscate_export_dir(&config.output, &mut anon)?;
         messages.push(format!(
             "Obfuscated {n} CSV file(s) under {}",

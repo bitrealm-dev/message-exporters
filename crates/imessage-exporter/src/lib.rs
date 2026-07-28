@@ -10,4 +10,5 @@ pub use app::options::Options;
 pub use app::runtime::Config;
 pub use cancel::{is_cancelled, CancelFlag};
 pub use exporters::{csv::CSV, html::HTML, txt::TXT};
-pub use run::{options_from_export_config, run, run_with_options, ExportConfig, RunResult};
+pub use message_exporters_core::ExporterConfig;
+pub use run::{options_from_export_config, run, run_with_options, RunResult};

@@ -4,7 +4,7 @@ Convert [SMS Backup+](https://github.com/jberkel/sms-backup-plus) email exports 
 
 **Targeted upstream:** SMS Backup+ **1.5.11** (`export_tool` / `export_tool_version` on every output row).
 
-Library (`ExportConfig` / `run`) for the GUI; thin CLI for standalone use. CLI reference: [`docs/MANPAGE.md`](docs/MANPAGE.md).
+Library (`ExporterConfig` / `run`) for the GUI; thin CLI for standalone use. CLI reference: [`docs/MANPAGE.md`](docs/MANPAGE.md).
 
 ## What this is for
 

@@ -12,6 +12,22 @@ use std::thread;
 /// Shared cancel flag for cooperative in-process jobs.
 pub type CancelFlag = Arc<AtomicBool>;
 
+/// Whether cancel has been requested.
+pub fn is_cancelled(cancel: Option<&CancelFlag>) -> bool {
+    cancel
+        .map(|flag| flag.load(Ordering::Relaxed))
+        .unwrap_or(false)
+}
+
+/// Err if cancel was requested.
+pub fn check_cancel(cancel: Option<&CancelFlag>) -> Result<(), &'static str> {
+    if is_cancelled(cancel) {
+        Err("cancelled")
+    } else {
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ProcessEvent {
     Started(String),

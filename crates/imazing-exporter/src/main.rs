@@ -2,7 +2,11 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
-use imazing_exporter::{parse_date_range, run, ExportConfig};
+use imazing_exporter::{parse_date_range, run};
+use message_exporters_core::{
+    ContactsConfig, ContactsKind, ExporterConfig, ImazingConfig, MediaConfig, ObfuscateConfig,
+    SourceConfig,
+};
 use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
 
 #[derive(Parser, Debug)]
@@ -76,17 +80,27 @@ fn main() -> Result<()> {
         &cli.media_min_size,
         cli.media_skip_efficient,
     )?;
-    let result = run(&ExportConfig {
-        input: cli.input,
+    let contacts = cli.contacts.map(|path| ContactsConfig {
+        path,
+        kind: ContactsKind::Csv,
+    });
+    let result = run(&ExporterConfig {
+        inputs: vec![cli.input],
         output: cli.output,
-        contacts: cli.contacts,
-        timezone: cli.timezone,
         date_range,
-        media_mode: cli.media_mode,
-        compress,
-        obfuscate: cli.obfuscate,
-        obfuscate_seed: cli.obfuscate_seed,
+        contacts,
+        obfuscate: ObfuscateConfig {
+            enabled: cli.obfuscate,
+            seed: cli.obfuscate_seed,
+        },
+        media: MediaConfig {
+            mode: cli.media_mode,
+            compress,
+        },
         cancel: None,
+        source: SourceConfig::Imazing(ImazingConfig {
+            timezone: cli.timezone,
+        }),
     })?;
 
     for line in &result.messages {

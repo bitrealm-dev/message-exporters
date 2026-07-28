@@ -1,26 +1,12 @@
 //! Full export pipeline (convert + obfuscate) for CLI and in-process GUI.
 
-use crate::cancel::CancelFlag;
 use crate::emit::{convert_export, ExportReport};
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use message_contacts::resolve_contacts_cli;
 use message_csv::DateRange;
+use message_exporters_core::{ExporterConfig, SourceConfig};
 use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
-use std::path::{Path, PathBuf};
-
-/// Inputs for a full OpenExtract export run.
-#[derive(Debug, Clone)]
-pub struct ExportConfig {
-    pub input: PathBuf,
-    pub output: PathBuf,
-    pub contacts: Option<PathBuf>,
-    pub vcf: Option<PathBuf>,
-    pub date_range: DateRange,
-    pub obfuscate: bool,
-    pub obfuscate_seed: Option<String>,
-    /// When set, convert checks this between CSV files.
-    pub cancel: Option<CancelFlag>,
-}
+use std::path::Path;
 
 /// Result of [`run`]: convert report plus human-readable log lines.
 #[derive(Debug)]
@@ -30,19 +16,24 @@ pub struct RunResult {
 }
 
 /// Resolve contacts, convert, optionally obfuscate.
-pub fn run(config: &ExportConfig) -> Result<RunResult> {
+pub fn run(config: &ExporterConfig) -> Result<RunResult> {
+    let SourceConfig::OpenExtract(_) = &config.source else {
+        bail!("openextract-exporter requires SourceConfig::OpenExtract");
+    };
+    let input = config.require_input().map_err(anyhow::Error::msg)?;
     let mut messages = Vec::new();
-    let (book, book_path) = resolve_contacts_cli(config.contacts.clone(), config.vcf.clone())?;
+    let (contacts_path, vcf) = config.contacts_csv_vcf();
+    let (book, book_path) = resolve_contacts_cli(contacts_path, vcf)?;
     let report = convert_export(
-        &config.input,
+        input,
         &config.output,
         &book,
         &config.date_range,
         config.cancel.as_ref(),
     )?;
 
-    if config.obfuscate || config.obfuscate_seed.is_some() {
-        let mut anon = resolve_obfuscator(config.obfuscate_seed.as_deref())?;
+    if config.obfuscate_active() {
+        let mut anon = resolve_obfuscator(config.obfuscate.seed.as_deref())?;
         let n = obfuscate_export_dir(&config.output, &mut anon)?;
         messages.push(format!(
             "Obfuscated {n} CSV file(s) under {}",

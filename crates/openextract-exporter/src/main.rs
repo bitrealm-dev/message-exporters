@@ -2,7 +2,12 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
-use openextract_exporter::{parse_date_range, run, ExportConfig};
+use message_exporters_core::{
+    ContactsConfig, ContactsKind, ExporterConfig, MediaConfig, ObfuscateConfig, OpenExtractConfig,
+    SourceConfig,
+};
+use message_media::MediaMode;
+use openextract_exporter::{parse_date_range, run};
 
 #[derive(Parser, Debug)]
 #[command(name = "openextract-exporter")]
@@ -44,15 +49,32 @@ struct Cli {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let date_range = parse_date_range(cli.start_date.as_deref(), cli.end_date.as_deref())?;
-    let result = run(&ExportConfig {
-        input: cli.input,
+    let contacts = match (cli.contacts, cli.vcf) {
+        (Some(path), _) => Some(ContactsConfig {
+            path,
+            kind: ContactsKind::Csv,
+        }),
+        (None, Some(path)) => Some(ContactsConfig {
+            path,
+            kind: ContactsKind::Vcf,
+        }),
+        (None, None) => None,
+    };
+    let result = run(&ExporterConfig {
+        inputs: vec![cli.input],
         output: cli.output,
-        contacts: cli.contacts,
-        vcf: cli.vcf,
         date_range,
-        obfuscate: cli.obfuscate,
-        obfuscate_seed: cli.obfuscate_seed,
+        contacts,
+        obfuscate: ObfuscateConfig {
+            enabled: cli.obfuscate,
+            seed: cli.obfuscate_seed,
+        },
+        media: MediaConfig {
+            mode: MediaMode::Disabled,
+            compress: Default::default(),
+        },
         cancel: None,
+        source: SourceConfig::OpenExtract(OpenExtractConfig {}),
     })?;
 
     for line in &result.messages {

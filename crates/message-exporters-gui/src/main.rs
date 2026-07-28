@@ -8,39 +8,20 @@ use std::time::Duration;
 
 use chrono::Local;
 use eframe::egui;
-use go_sms_pro_exporter::{
-    parse_date_range as parse_go_sms_date_range, run as run_go_sms_pro,
-    ExportConfig as GoSmsProConfig,
-};
-use imazing_exporter::{
-    parse_date_range as parse_imazing_date_range, run as run_imazing,
-    ExportConfig as ImazingConfig,
-};
-use imessage_exporter::{run as run_imessage, ExportConfig as ImessageConfig};
+use go_sms_pro_exporter::run as run_go_sms_pro;
+use imazing_exporter::run as run_imazing;
+use imessage_exporter::run as run_imessage;
 use message_exporters_core::{
-    ensure_output_dir, resolve_binary, spawn, spawn_job, ApplePlatform, AttachmentMedia,
-    ContactsKind, ExportIniState, Exporter, Form, ProcessControl, ProcessEvent,
-    WhatsappPlatform, APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS,
-    WHATSAPP_PLATFORMS,
+    ensure_output_dir, resolve_binary, spawn, spawn_job, AttachmentMedia, ContactsKind,
+    ExportIniState, Exporter, ExporterConfig, Form, ProcessControl, ProcessEvent, WhatsappPlatform,
+    APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS, WHATSAPP_PLATFORMS,
 };
-use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
 use message_media::process_export_media;
-use openextract_exporter::{
-    parse_date_range as parse_openextract_date_range, run as run_openextract,
-    ExportConfig as OpenextractConfig,
-};
-use sms_backup_plus_exporter::{
-    parse_date_range as parse_plus_date_range, run as run_sms_plus,
-    ExportConfig as SmsPlusConfig,
-};
-use sms_backup_restore_exporter::{
-    parse_date_range as parse_sbr_date_range, run as run_sms_restore,
-    ExportConfig as SmsRestoreConfig,
-};
-use whatsapp_exporter::{
-    parse_date_range as parse_whatsapp_date_range, run as run_whatsapp,
-    ExportConfig as WhatsappConfig, Platform as WhatsappLibPlatform,
-};
+use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
+use openextract_exporter::run as run_openextract;
+use sms_backup_plus_exporter::run as run_sms_plus;
+use sms_backup_restore_exporter::run as run_sms_restore;
+use whatsapp_exporter::run as run_whatsapp;
 
 const LABEL_W: f32 = 190.0;
 const PATH_W: f32 = 400.0;
@@ -273,11 +254,13 @@ impl App {
         self.sync_owner_emails();
         self.export_ini.exporter = self.exporter;
         let _ = self.export_ini.save(&self.form);
-        // Reuse CLI validation rules (paths, required phones, ffmpeg, etc.).
-        if let Err(errors) = self.form.build_args(self.exporter) {
-            self.errors = errors;
-            return;
-        }
+        let config = match self.form.to_config(self.exporter) {
+            Ok(config) => config,
+            Err(errors) => {
+                self.errors = errors;
+                return;
+            }
+        };
         let output = PathBuf::from(self.form.output.trim());
         if let Err(error) = ensure_output_dir(&output) {
             self.errors = vec![error.clone()];
@@ -288,13 +271,7 @@ impl App {
         }
 
         let label = format!("{} (library)", self.exporter.binary());
-        let job = match library_job_for_exporter(self.exporter, &self.form) {
-            Ok(job) => job,
-            Err(errors) => {
-                self.errors = errors;
-                return;
-            }
-        };
+        let job = library_job_for_exporter(self.exporter, config);
 
         self.errors.clear();
         self.running = true;
@@ -1481,73 +1458,52 @@ type LibraryJob = Box<
         + Send,
 >;
 
-/// Build an in-process export job after `Form::build_args` has validated the form.
-fn library_job_for_exporter(exporter: Exporter, form: &Form) -> Result<LibraryJob, Vec<String>> {
+/// Build an in-process export job from a validated [`ExporterConfig`].
+fn library_job_for_exporter(exporter: Exporter, config: ExporterConfig) -> LibraryJob {
     match exporter {
-        Exporter::GoSmsPro => {
-            let config = go_sms_pro_config_from_form(form)?;
-            Ok(Box::new(move |cancel, tx| {
-                let mut config = config;
-                config.cancel = Some(cancel);
-                run_and_log(run_go_sms_pro(&config), tx)
-            }))
-        }
-        Exporter::SmsBackupRestore => {
-            let config = sms_restore_config_from_form(form)?;
-            Ok(Box::new(move |cancel, tx| {
-                let mut config = config;
-                config.cancel = Some(cancel);
-                run_and_log(run_sms_restore(&config), tx)
-            }))
-        }
-        Exporter::SmsBackupPlus => {
-            let config = sms_plus_config_from_form(form)?;
-            Ok(Box::new(move |cancel, tx| {
-                let mut config = config;
-                config.cancel = Some(cancel);
-                run_and_log(run_sms_plus(&config), tx)
-            }))
-        }
-        Exporter::OpenExtract => {
-            let config = openextract_config_from_form(form)?;
-            Ok(Box::new(move |cancel, tx| {
-                let mut config = config;
-                config.cancel = Some(cancel);
-                run_and_log(run_openextract(&config), tx)
-            }))
-        }
-        Exporter::Imazing => {
-            let config = imazing_config_from_form(form)?;
-            Ok(Box::new(move |cancel, tx| {
-                let mut config = config;
-                config.cancel = Some(cancel);
-                run_and_log(run_imazing(&config), tx)
-            }))
-        }
-        Exporter::Whatsapp => {
-            let config = whatsapp_config_from_form(form)?;
-            Ok(Box::new(move |cancel, tx| {
-                let mut config = config;
-                config.cancel = Some(cancel);
-                run_and_log(run_whatsapp(&config), tx)
-            }))
-        }
-        Exporter::Imessage => {
-            let config = imessage_config_from_form(form)?;
-            Ok(Box::new(move |cancel, tx| {
-                let mut config = config;
-                config.cancel = Some(cancel);
-                match run_imessage(&config) {
-                    Ok(result) => {
-                        for line in result.messages {
-                            let _ = tx.send(ProcessEvent::Log(line));
-                        }
-                        Ok(())
+        Exporter::GoSmsPro => Box::new(move |cancel, tx| {
+            let mut config = config;
+            config.cancel = Some(cancel);
+            run_and_log(run_go_sms_pro(&config), tx)
+        }),
+        Exporter::SmsBackupRestore => Box::new(move |cancel, tx| {
+            let mut config = config;
+            config.cancel = Some(cancel);
+            run_and_log(run_sms_restore(&config), tx)
+        }),
+        Exporter::SmsBackupPlus => Box::new(move |cancel, tx| {
+            let mut config = config;
+            config.cancel = Some(cancel);
+            run_and_log(run_sms_plus(&config), tx)
+        }),
+        Exporter::OpenExtract => Box::new(move |cancel, tx| {
+            let mut config = config;
+            config.cancel = Some(cancel);
+            run_and_log(run_openextract(&config), tx)
+        }),
+        Exporter::Imazing => Box::new(move |cancel, tx| {
+            let mut config = config;
+            config.cancel = Some(cancel);
+            run_and_log(run_imazing(&config), tx)
+        }),
+        Exporter::Whatsapp => Box::new(move |cancel, tx| {
+            let mut config = config;
+            config.cancel = Some(cancel);
+            run_and_log(run_whatsapp(&config), tx)
+        }),
+        Exporter::Imessage => Box::new(move |cancel, tx| {
+            let mut config = config;
+            config.cancel = Some(cancel);
+            match run_imessage(&config) {
+                Ok(result) => {
+                    for line in result.messages {
+                        let _ = tx.send(ProcessEvent::Log(line));
                     }
-                    Err(error) => Err(error.to_string()),
+                    Ok(())
                 }
-            }))
-        }
+                Err(error) => Err(error.to_string()),
+            }
+        }),
     }
 }
 
@@ -1593,226 +1549,3 @@ impl_has_messages!(
     imazing_exporter::RunResult,
     whatsapp_exporter::RunResult,
 );
-
-fn shared_compress(form: &Form) -> Result<message_media::CompressOptions, Vec<String>> {
-    if matches!(
-        form.attachment_media.media_mode(),
-        message_media::MediaMode::Compress
-    ) {
-        form.compress_options().map_err(|error| vec![error])
-    } else {
-        Ok(message_media::CompressOptions::default())
-    }
-}
-
-fn contacts_paths(form: &Form) -> (Option<PathBuf>, Option<PathBuf>) {
-    match form.contacts_kind {
-        ContactsKind::None => (None, None),
-        ContactsKind::Csv => (non_empty_path(&form.contacts), None),
-        ContactsKind::Vcf => (None, non_empty_path(&form.contacts)),
-    }
-}
-
-fn owner_phones(form: &Form) -> Vec<String> {
-    form.owner_phones
-        .split(['\n', ',', ';'])
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
-        .collect()
-}
-
-fn owner_emails(form: &Form) -> Vec<String> {
-    form.owner_emails
-        .split(['\n', ',', ';'])
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
-        .collect()
-}
-
-fn go_sms_pro_config_from_form(form: &Form) -> Result<GoSmsProConfig, Vec<String>> {
-    let date_range = parse_go_sms_date_range(
-        non_empty(form.start_date.trim()),
-        non_empty(form.end_date.trim()),
-    )
-    .map_err(|error| vec![error.to_string()])?;
-    let (contacts, vcf) = contacts_paths(form);
-    Ok(GoSmsProConfig {
-        input: PathBuf::from(form.input.trim()),
-        output: PathBuf::from(form.output.trim()),
-        owner_phones: owner_phones(form),
-        contacts,
-        vcf,
-        date_range,
-        media_mode: form.attachment_media.media_mode(),
-        compress: shared_compress(form)?,
-        obfuscate: form.obfuscate,
-        obfuscate_seed: non_empty(form.obfuscate_seed.trim()).map(str::to_string),
-        cancel: None,
-    })
-}
-
-fn sms_restore_config_from_form(form: &Form) -> Result<SmsRestoreConfig, Vec<String>> {
-    let date_range = parse_sbr_date_range(
-        non_empty(form.start_date.trim()),
-        non_empty(form.end_date.trim()),
-    )
-    .map_err(|error| vec![error.to_string()])?;
-    let (contacts, vcf) = contacts_paths(form);
-    Ok(SmsRestoreConfig {
-        input: PathBuf::from(form.input.trim()),
-        output: PathBuf::from(form.output.trim()),
-        owner_phones: owner_phones(form),
-        contacts,
-        vcf,
-        date_range,
-        media_mode: form.attachment_media.media_mode(),
-        compress: shared_compress(form)?,
-        obfuscate: form.obfuscate,
-        obfuscate_seed: non_empty(form.obfuscate_seed.trim()).map(str::to_string),
-        cancel: None,
-    })
-}
-
-fn sms_plus_config_from_form(form: &Form) -> Result<SmsPlusConfig, Vec<String>> {
-    let date_range = parse_plus_date_range(
-        non_empty(form.start_date.trim()),
-        non_empty(form.end_date.trim()),
-    )
-    .map_err(|error| vec![error.to_string()])?;
-    let (contacts, vcf) = contacts_paths(form);
-    Ok(SmsPlusConfig {
-        inputs: vec![PathBuf::from(form.input.trim())],
-        output: PathBuf::from(form.output.trim()),
-        owner_phones: owner_phones(form),
-        owner_emails: owner_emails(form),
-        contacts,
-        vcf,
-        name_mapping: non_empty_path(&form.name_mapping),
-        date_range,
-        media_mode: form.attachment_media.media_mode(),
-        compress: shared_compress(form)?,
-        obfuscate: form.obfuscate,
-        obfuscate_seed: non_empty(form.obfuscate_seed.trim()).map(str::to_string),
-        verbose: true,
-        include_summary: true,
-        cancel: None,
-    })
-}
-
-fn openextract_config_from_form(form: &Form) -> Result<OpenextractConfig, Vec<String>> {
-    let date_range = parse_openextract_date_range(
-        non_empty(form.start_date.trim()),
-        non_empty(form.end_date.trim()),
-    )
-    .map_err(|error| vec![error.to_string()])?;
-    let (contacts, vcf) = contacts_paths(form);
-    Ok(OpenextractConfig {
-        input: PathBuf::from(form.input.trim()),
-        output: PathBuf::from(form.output.trim()),
-        contacts,
-        vcf,
-        date_range,
-        obfuscate: form.obfuscate,
-        obfuscate_seed: non_empty(form.obfuscate_seed.trim()).map(str::to_string),
-        cancel: None,
-    })
-}
-
-fn imazing_config_from_form(form: &Form) -> Result<ImazingConfig, Vec<String>> {
-    let timezone = non_empty(form.timezone.trim()).map(str::to_string);
-    let date_range = parse_imazing_date_range(
-        non_empty(form.start_date.trim()),
-        non_empty(form.end_date.trim()),
-        timezone.as_deref(),
-    )
-    .map_err(|error| vec![error.to_string()])?;
-    Ok(ImazingConfig {
-        input: PathBuf::from(form.input.trim()),
-        output: PathBuf::from(form.output.trim()),
-        contacts: non_empty_path(&form.contacts),
-        timezone,
-        date_range,
-        media_mode: form.attachment_media.media_mode(),
-        compress: shared_compress(form)?,
-        obfuscate: form.obfuscate,
-        obfuscate_seed: non_empty(form.obfuscate_seed.trim()).map(str::to_string),
-        cancel: None,
-    })
-}
-
-fn whatsapp_config_from_form(form: &Form) -> Result<WhatsappConfig, Vec<String>> {
-    let date_range = parse_whatsapp_date_range(
-        non_empty(form.start_date.trim()),
-        non_empty(form.end_date.trim()),
-    )
-    .map_err(|error| vec![error.to_string()])?;
-    let platform = match form.whatsapp_platform {
-        WhatsappPlatform::Android => WhatsappLibPlatform::Android,
-        WhatsappPlatform::Ios => WhatsappLibPlatform::Ios,
-    };
-    Ok(WhatsappConfig {
-        input: None,
-        output: PathBuf::from(form.output.trim()),
-        platform: Some(platform),
-        json: None,
-        key: non_empty(form.whatsapp_key.trim()).map(str::to_string),
-        backup: non_empty_path(&form.whatsapp_backup),
-        wa: non_empty_path(&form.whatsapp_wa),
-        media: non_empty_path(&form.whatsapp_media),
-        db: non_empty_path(&form.whatsapp_db),
-        business: form.whatsapp_business,
-        date_range,
-        media_mode: form.attachment_media.media_mode(),
-        compress: shared_compress(form)?,
-        obfuscate: form.obfuscate,
-        obfuscate_seed: non_empty(form.obfuscate_seed.trim()).map(str::to_string),
-        cancel: None,
-    })
-}
-
-fn imessage_config_from_form(form: &Form) -> Result<ImessageConfig, Vec<String>> {
-    let copy_method = match form.attachment_media {
-        AttachmentMedia::Disabled => "disabled".to_string(),
-        _ => "clone".to_string(),
-    };
-    // Convert/compress: obfuscate runs in GUI after media post-process.
-    let obfuscate = form.obfuscate && !form.attachment_media.needs_ffmpeg();
-    let platform = match form.apple_platform {
-        ApplePlatform::Auto => None,
-        ApplePlatform::MacOs => Some("macOS".to_string()),
-        ApplePlatform::Ios => Some("iOS".to_string()),
-    };
-    Ok(ImessageConfig {
-        db_path: non_empty_path(&form.db_path).unwrap_or_default(),
-        export_path: PathBuf::from(form.output.trim()),
-        platform,
-        attachment_root: non_empty(form.attachment_root.trim()).map(str::to_string),
-        copy_method,
-        start_date: non_empty(form.start_date.trim()).map(str::to_string),
-        end_date: non_empty(form.end_date.trim()).map(str::to_string),
-        conversation_filter: non_empty(form.conversation_filter.trim()).map(str::to_string),
-        contacts_path: non_empty_path(&form.apple_contacts),
-        cleartext_password: non_empty(form.backup_password.trim()).map(str::to_string),
-        use_caller_id: true,
-        obfuscate,
-        obfuscate_seed: non_empty(form.obfuscate_seed.trim()).map(str::to_string),
-        cancel: None,
-        show_progress: false,
-        ignore_disk_space: false,
-    })
-}
-
-fn non_empty(value: &str) -> Option<&str> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed)
-    }
-}
-
-fn non_empty_path(value: &str) -> Option<PathBuf> {
-    non_empty(value).map(PathBuf::from)
-}

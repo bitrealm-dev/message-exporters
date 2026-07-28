@@ -1,37 +1,15 @@
 //! Full export pipeline (convert + media + obfuscate) for CLI and in-process GUI.
 
-use crate::cancel::CancelFlag;
 use crate::emit::{convert_export, ExportReport};
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use message_contacts::{resolve_contacts_cli, NameMapping};
 use message_csv::DateRange;
-use message_media::{process_export_media, CompressOptions, MediaMode, MediaReport};
+use message_exporters_core::{ExporterConfig, SourceConfig};
+use message_media::{process_export_media, MediaReport};
 use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
-
-/// Inputs for a full SMS Backup+ export run.
-#[derive(Debug, Clone)]
-pub struct ExportConfig {
-    pub inputs: Vec<PathBuf>,
-    pub output: PathBuf,
-    pub owner_phones: Vec<String>,
-    pub owner_emails: Vec<String>,
-    pub contacts: Option<PathBuf>,
-    pub vcf: Option<PathBuf>,
-    pub name_mapping: Option<PathBuf>,
-    pub date_range: DateRange,
-    pub media_mode: MediaMode,
-    pub compress: CompressOptions,
-    pub obfuscate: bool,
-    pub obfuscate_seed: Option<String>,
-    pub verbose: bool,
-    /// When false, summary lines are omitted from [`RunResult::messages`].
-    pub include_summary: bool,
-    /// When set, convert checks this during EML walk / merge loops.
-    pub cancel: Option<CancelFlag>,
-}
 
 /// Result of [`run`]: convert report plus human-readable log lines.
 #[derive(Debug)]
@@ -126,23 +104,26 @@ pub fn resolve_inputs(cli_inputs: Vec<PathBuf>, defaults: Vec<PathBuf>) -> Resul
 }
 
 /// Resolve owner/contacts/name-mapping, convert, optionally process media and obfuscate.
-pub fn run(config: &ExportConfig) -> Result<RunResult> {
+pub fn run(config: &ExporterConfig) -> Result<RunResult> {
+    let SourceConfig::SmsBackupPlus(source) = &config.source else {
+        bail!("sms-backup-plus-exporter requires SourceConfig::SmsBackupPlus");
+    };
     let mut messages = Vec::new();
 
     let (owner_phones, owner_emails, default_inputs) = resolve_owner(
-        config.owner_phones.clone(),
-        config.owner_emails.clone(),
+        source.owner_phones.clone(),
+        source.owner_emails.clone(),
     )?;
     let inputs = resolve_inputs(config.inputs.clone(), default_inputs)?;
 
-    let (contacts_book, contacts_path) =
-        resolve_contacts_cli(config.contacts.clone(), config.vcf.clone())?;
+    let (contacts_path, vcf) = config.contacts_csv_vcf();
+    let (contacts_book, contacts_resolved) = resolve_contacts_cli(contacts_path, vcf)?;
     let name_mapping_path =
-        resolve_optional_config(config.name_mapping.clone(), "name-mapping.csv");
+        resolve_optional_config(source.name_mapping.clone(), "name-mapping.csv");
     let (name_mapping, _) = NameMapping::load_optional(name_mapping_path.as_deref())?;
 
-    if config.verbose {
-        match contacts_path.as_ref() {
+    if source.verbose {
+        match contacts_resolved.as_ref() {
             Some(path) => eprintln!("contacts: {}", path.display()),
             None => eprintln!("contacts: (none)"),
         }
@@ -156,21 +137,21 @@ pub fn run(config: &ExportConfig) -> Result<RunResult> {
         &contacts_book,
         &name_mapping,
         &config.date_range,
-        config.verbose,
-        config.media_mode.copies_attachments(),
+        source.verbose,
+        config.media.mode.copies_attachments(),
         config.cancel.as_ref(),
     )?;
 
-    if config.media_mode.needs_tools() {
-        let media = process_export_media(&config.output, config.media_mode, &config.compress)?;
+    if config.media.mode.needs_tools() {
+        let media = process_export_media(&config.output, config.media.mode, &config.media.compress)?;
         messages.extend(media_report_lines(&media));
         if !media.errors.is_empty() && media.processed == 0 {
             anyhow::bail!("media processing failed for all candidate files");
         }
     }
 
-    if config.obfuscate || config.obfuscate_seed.is_some() {
-        let mut anon = resolve_obfuscator(config.obfuscate_seed.as_deref())?;
+    if config.obfuscate_active() {
+        let mut anon = resolve_obfuscator(config.obfuscate.seed.as_deref())?;
         let n = obfuscate_export_dir(&config.output, &mut anon)?;
         messages.push(format!(
             "Obfuscated {n} CSV file(s) under {}",
@@ -178,7 +159,7 @@ pub fn run(config: &ExportConfig) -> Result<RunResult> {
         ));
     }
 
-    if config.include_summary {
+    if source.include_summary {
         messages.extend(report_summary_lines(&report, &config.output));
     }
     Ok(RunResult { report, messages })
