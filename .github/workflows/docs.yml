@@ -30,6 +30,13 @@ jobs:
         with:
           mdbook-version: "0.4.52"
 
+      - name: Install mdbook-mermaid
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: mdbook-mermaid
+          # 0.15.x is the last line compatible with mdbook 0.4; 0.16+ needs mdbook 0.5
+          version: "0.15.0"
+
       - name: Build book
         run: mdbook build
         working-directory: docs

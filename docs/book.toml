@@ -1,6 +1,6 @@
 [book]
 title = "message-exporters"
-description = "Turn phone message backups into per-conversation CSV"
+description = "Turn phone message backups into per-conversation JSON, CSV, EML, MBOX, or XML"
 authors = ["bitrealm-dev"]
 language = "en"
 src = "src"
@@ -13,3 +13,7 @@ create-missing = false
 site-url = "/message-exporters/"
 git-repository-url = "https://github.com/bitrealm-dev/message-exporters"
 edit-url-template = "https://github.com/bitrealm-dev/message-exporters/edit/main/docs/{path}"
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
