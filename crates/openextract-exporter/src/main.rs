@@ -11,15 +11,19 @@ use openextract_exporter::{parse_date_range, run};
 
 #[derive(Parser, Debug)]
 #[command(name = "openextract-exporter")]
-#[command(about = "Convert OpenExtract conversation CSV (+ VCF) to per-conversation CSV")]
+#[command(about = "Convert OpenExtract conversation CSV (+ VCF) to per-conversation CSV or EML")]
 struct Cli {
     /// OpenExtract CSV file or directory of conversation_*.csv / all_conversations.csv
     #[arg(long)]
     input: PathBuf,
 
-    /// Output directory for per-conversation CSV files
+    /// Output directory for per-conversation CSV or EML archive
     #[arg(long)]
     output: PathBuf,
+
+    /// Output format: `csv` (default), `eml` (mail folders), or `mbox`
+    #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
+    format: String,
 
     /// Contacts VCF from the OpenExtract export (phone ↔ name)
     #[arg(long)]
@@ -49,6 +53,7 @@ struct Cli {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let date_range = parse_date_range(cli.start_date.as_deref(), cli.end_date.as_deref())?;
+    let output_format = OutputFormat::parse(&cli.format).map_err(anyhow::Error::msg)?;
     let contacts = match (cli.contacts, cli.vcf) {
         (Some(path), _) => Some(ContactsConfig {
             path,
@@ -74,7 +79,7 @@ fn main() -> Result<()> {
             compress: Default::default(),
         },
         cancel: None,
-        output_format: OutputFormat::Csv,
+        output_format,
         source: SourceConfig::OpenExtract(OpenExtractConfig {}),
     })?;
 

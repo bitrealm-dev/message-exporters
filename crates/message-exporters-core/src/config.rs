@@ -60,12 +60,15 @@ impl OutputFormat {
     }
 }
 
-/// Values shown in the GUI for SMS Backup & Restore (CSV / EML).
+/// Values shown in the GUI for exporters that support CSV / EML (no MBOX).
 pub const OUTPUT_FORMATS: [OutputFormat; 2] = [OutputFormat::Csv, OutputFormat::Eml];
 
-/// Values shown in the GUI for iPhone backup (CSV / EML / MBOX).
-pub const OUTPUT_FORMATS_IMESSAGE: [OutputFormat; 3] =
+/// Values shown in the GUI when EML and MBOX are both available (all mail exporters).
+pub const OUTPUT_FORMATS_MAIL: [OutputFormat; 3] =
     [OutputFormat::Csv, OutputFormat::Eml, OutputFormat::Mbox];
+
+/// Alias kept for iPhone backup UI (same as [`OUTPUT_FORMATS_MAIL`]).
+pub const OUTPUT_FORMATS_IMESSAGE: [OutputFormat; 3] = OUTPUT_FORMATS_MAIL;
 
 /// Shared export inputs. Source-specific fields are in [`Self::source`].
 #[derive(Debug, Clone)]
@@ -79,7 +82,7 @@ pub struct ExporterConfig {
     /// OpenExtract uses [`MediaMode::Disabled`].
     pub media: MediaConfig,
     pub cancel: Option<CancelFlag>,
-    /// Packaging format. SBR honors EML; iMessage mail honors EML/MBOX.
+    /// Packaging format (`csv` / `eml` / `mbox`). All GUI exporters honor mail archives.
     pub output_format: OutputFormat,
     pub source: SourceConfig,
 }

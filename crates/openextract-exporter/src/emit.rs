@@ -1,4 +1,4 @@
-//! Convert OpenExtract rows → per-conversation vault-shaped CSV.
+//! Convert OpenExtract rows → per-conversation vault-shaped CSV, EML, or MBOX.
 
 use crate::cancel::{check_cancel, CancelFlag};
 use crate::parse::{discover_csv_files, parse_csv_file, RawRow, SourceKind};
@@ -7,6 +7,11 @@ use chrono::DateTime;
 use message_contacts::ContactsBook;
 use message_csv::{
     format_local_ts, json_cell, safe_filename, stable_guid, AttachmentCell, DateRange,
+};
+use message_exporters_core::OutputFormat;
+use message_mail::{
+    clean_previous_mail_output, write_mail_package, Direction as MailDirection, MailMessage,
+    MailPackage, Participant, SmsMailFields,
 };
 use message_phone::{sanitize_number, to_e164};
 use std::collections::BTreeMap;
@@ -80,10 +85,11 @@ pub fn convert_export(
     output: &Path,
     book: &ContactsBook,
     date_range: &DateRange,
+    output_format: OutputFormat,
     cancel: Option<&CancelFlag>,
 ) -> Result<ExportReport> {
     fs::create_dir_all(output).with_context(|| format!("create {}", output.display()))?;
-    clean_previous_csv(output)?;
+    clean_previous_output(output)?;
 
     let files = discover_csv_files(input)?;
     let mut report = ExportReport::default();
@@ -160,22 +166,69 @@ pub fn convert_export(
     check_cancel(cancel)?;
 
     for (chat_id, mut convo) in conversations {
-        write_conversation(output, &chat_id, &mut convo, &mut report)?;
+        if !prepare_conversation(&mut convo, &mut report) {
+            continue;
+        }
+        match output_format {
+            OutputFormat::Csv => {
+                write_conversation_csv(output, &chat_id, &convo, &mut report)?;
+            }
+            OutputFormat::Eml => {
+                write_conversation_mail(
+                    output,
+                    &chat_id,
+                    &convo,
+                    MailPackage::EmlFolders,
+                    &mut report,
+                )?;
+            }
+            OutputFormat::Mbox => {
+                write_conversation_mail(
+                    output,
+                    &chat_id,
+                    &convo,
+                    MailPackage::Mbox,
+                    &mut report,
+                )?;
+            }
+        }
+        report.conversations += 1;
     }
 
     Ok(report)
 }
 
-fn clean_previous_csv(output_dir: &Path) -> Result<()> {
+fn clean_previous_output(output_dir: &Path) -> Result<()> {
     for entry in fs::read_dir(output_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) == Some("csv") {
+        if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("csv") {
             fs::remove_file(&path)
                 .with_context(|| format!("remove previous {}", path.display()))?;
         }
     }
+    clean_previous_mail_output(output_dir)?;
     Ok(())
+}
+
+fn prepare_conversation(convo: &mut PendingConversation, report: &mut ExportReport) -> bool {
+    if convo.messages.is_empty() {
+        return false;
+    }
+    convo.messages.sort_by(|a, b| {
+        a.sort_key
+            .partial_cmp(&b.sort_key)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    convo.messages.retain(|m| {
+        if format_local_ts(m.sort_key as i64).is_some() {
+            true
+        } else {
+            report.skipped_invalid_date += 1;
+            false
+        }
+    });
+    !convo.messages.is_empty()
 }
 
 fn is_me(s: &str) -> bool {
@@ -310,32 +363,85 @@ fn parse_timestamp(raw: &str) -> Option<(i64, String)> {
     None
 }
 
-fn write_conversation(
+fn pending_to_mail_messages(
+    chat_id: &str,
+    convo: &PendingConversation,
+    report: &mut ExportReport,
+) -> Vec<MailMessage> {
+    let participants = vec![Participant {
+        handle: chat_id.to_string(),
+        display_name: convo
+            .messages
+            .iter()
+            .map(|m| m.contact_name.trim())
+            .find(|n| !n.is_empty())
+            .map(str::to_string),
+    }];
+    let mut out = Vec::with_capacity(convo.messages.len());
+    for msg in &convo.messages {
+        if msg.is_from_me {
+            report.sent += 1;
+        } else {
+            report.received += 1;
+        }
+        report.messages += 1;
+        let secs = msg.sort_key as i64;
+        let (ts_local, _, _) = format_local_ts(secs).expect("timestamp validated above");
+        let guid = stable_guid(chat_id, &ts_local, msg.is_from_me, &msg.text, &[]);
+        let timestamp_unix_ms = msg
+            .date_ms
+            .parse::<i64>()
+            .unwrap_or_else(|_| secs.saturating_mul(1000));
+        let source_fields_json = if msg.has_attachments {
+            Some(r#"{"has_attachments":true}"#.to_string())
+        } else {
+            None
+        };
+        out.push(MailMessage::sms(SmsMailFields {
+            chat_identifier: chat_id.to_string(),
+            conversation_type: "individual".into(),
+            group_title: None,
+            participants: participants.clone(),
+            guid,
+            timestamp_unix_ms,
+            direction: if msg.is_from_me {
+                MailDirection::Outgoing
+            } else {
+                MailDirection::Incoming
+            },
+            service: "SMS".into(),
+            message_kind: "sms".into(),
+            sender_handle: if msg.is_from_me || msg.sender_handle.is_empty() {
+                None
+            } else {
+                Some(msg.sender_handle.clone())
+            },
+            sender_display_name: if msg.sender_display_name.is_empty() {
+                None
+            } else {
+                Some(msg.sender_display_name.clone())
+            },
+            owner_handle: String::new(),
+            subject: None,
+            text: msg.text.clone(),
+            android_type: None,
+            source_fields_json,
+            export_source: EXPORT_SOURCE.into(),
+            export_tool: EXPORT_TOOL.into(),
+            export_tool_version: EXPORT_TOOL_VERSION.into(),
+            attachments: Vec::new(),
+            filename_suffix: None,
+        }));
+    }
+    out
+}
+
+fn write_conversation_csv(
     output_dir: &Path,
     chat_id: &str,
-    convo: &mut PendingConversation,
+    convo: &PendingConversation,
     report: &mut ExportReport,
 ) -> Result<()> {
-    if convo.messages.is_empty() {
-        return Ok(());
-    }
-    convo.messages.sort_by(|a, b| {
-        a.sort_key
-            .partial_cmp(&b.sort_key)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    convo.messages.retain(|m| {
-        if format_local_ts(m.sort_key as i64).is_some() {
-            true
-        } else {
-            report.skipped_invalid_date += 1;
-            false
-        }
-    });
-    if convo.messages.is_empty() {
-        return Ok(());
-    }
-
     let filename = if chat_id == "unknown" || !chat_id.starts_with('+') && sanitize_number(chat_id).is_none() {
         format!("{}.csv", name_stem(chat_id))
     } else {
@@ -401,7 +507,18 @@ fn write_conversation(
     drop(wtr);
     fs::rename(&tmp_path, &path)
         .with_context(|| format!("rename {} → {}", tmp_path.display(), path.display()))?;
-    report.conversations += 1;
+    Ok(())
+}
+
+fn write_conversation_mail(
+    output_dir: &Path,
+    chat_id: &str,
+    convo: &PendingConversation,
+    package: MailPackage,
+    report: &mut ExportReport,
+) -> Result<()> {
+    let messages = pending_to_mail_messages(chat_id, convo, report);
+    write_mail_package(output_dir, package, &messages)?;
     Ok(())
 }
 
@@ -437,7 +554,15 @@ TEL;TYPE=CELL:+1-555-555-0122\nEND:VCARD\n",
         );
         let book = ContactsBook::load_vcf(&vcf).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, &DateRange::default(), None).unwrap();
+        let report = convert_export(
+            dir.path(),
+            &out,
+            &book,
+            &DateRange::default(),
+            OutputFormat::Csv,
+            None,
+        )
+        .unwrap();
         assert_eq!(report.conversations, 1);
         assert_eq!(report.unresolved_chat_phone, 0);
         let csv_path = out.join("+15555550122.csv");
@@ -464,7 +589,15 @@ TEL:+15555550999\nEND:VCARD\n",
         );
         let book = ContactsBook::load_vcf(&vcf).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, &DateRange::default(), None).unwrap();
+        let report = convert_export(
+            dir.path(),
+            &out,
+            &book,
+            &DateRange::default(),
+            OutputFormat::Csv,
+            None,
+        )
+        .unwrap();
         assert!(report.unresolved_chat_phone >= 1);
         assert_eq!(report.conversations, 1);
         let csv_path = out.join("Cathy_Arp.csv");
@@ -487,7 +620,8 @@ TEL:+15555550999\nEND:VCARD\n",
         let range =
             DateRange::parse_optional_tz(Some("2020-01-01"), Some("2020-01-02"), Some("UTC"))
                 .unwrap();
-        let report = convert_export(dir.path(), &out, &book, &range, None).unwrap();
+        let report =
+            convert_export(dir.path(), &out, &book, &range, OutputFormat::Csv, None).unwrap();
         assert_eq!(report.skipped_out_of_range, 2);
         assert_eq!(report.messages, 1);
         let body = fs::read_to_string(out.join("+15555550122.csv")).unwrap();

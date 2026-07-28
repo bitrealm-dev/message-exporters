@@ -1,6 +1,7 @@
 use go_sms_pro_exporter::convert_export;
 use message_contacts::ContactsBook;
 use message_csv::DateRange;
+use message_exporters_core::OutputFormat;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -26,6 +27,7 @@ fn convert_smoke_writes_csv_not_json() {
         &contacts,
         &DateRange::default(),
         true,
+        OutputFormat::Csv,
         None,
     )
     .expect("convert_export should succeed");

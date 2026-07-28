@@ -9,8 +9,8 @@ use message_csv::{
 };
 use message_exporters_core::OutputFormat;
 use message_mail::{
-    write_conversation as write_mail_conversation, Direction as MailDirection, MailAttachment,
-    MailMessage, Participant,
+    clean_previous_mail_output, write_mail_package, Direction as MailDirection, MailAttachment,
+    MailMessage, MailPackage, Participant, SmsMailFields,
 };
 use message_phone::{to_e164, OwnerPhoneSet};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -427,7 +427,7 @@ fn pending_to_mail_messages(
             })
             .collect();
 
-        out.push(MailMessage {
+        out.push(MailMessage::sms(SmsMailFields {
             chat_identifier: chat_id.to_string(),
             conversation_type: conv_type.to_string(),
             group_title: convo.group_title.clone(),
@@ -444,7 +444,6 @@ fn pending_to_mail_messages(
             sender_handle,
             sender_display_name,
             owner_handle: owner_handle.to_string(),
-            owner_display_name: None,
             subject: if msg.subject.is_empty() {
                 None
             } else {
@@ -465,40 +464,22 @@ fn pending_to_mail_messages(
             export_tool: EXPORT_TOOL.into(),
             export_tool_version: EXPORT_TOOL_VERSION.into(),
             attachments,
-            is_reply: false,
-            in_reply_to_guid: None,
-            thread_originator_part: None,
-            num_replies: None,
-            is_deleted: false,
-            send_effect: None,
-            shared_location: None,
-            announcement: None,
-            read_receipt_rfc3339: None,
-            parts_json: None,
-            edits_json: None,
-            app_json: None,
-            balloon_bundle_id: None,
-            balloon_kind: None,
-            tapbacks_json: None,
-            associated_guid: None,
-            associated_part: None,
-            tapback_kind: None,
-            tapback_emoji: None,
-            tapback_action: None,
-        });
+            filename_suffix: None,
+        }));
     }
     Ok(out)
 }
 
-fn write_conversation_eml(
+fn write_conversation_mail(
     output_dir: &Path,
     chat_id: &str,
     convo: &PendingConversation,
     owner_handle: &str,
+    package: MailPackage,
     report: &mut ExportReport,
 ) -> Result<()> {
     let messages = pending_to_mail_messages(chat_id, convo, owner_handle, report)?;
-    write_mail_conversation(output_dir, &messages)?;
+    write_mail_package(output_dir, package, &messages)?;
     Ok(())
 }
 
@@ -510,17 +491,9 @@ fn clean_previous_output(output_dir: &Path) -> Result<()> {
             && (name.ends_with(".csv") || name.ends_with(".csv.tmp") || name.ends_with(".json"))
         {
             let _ = fs::remove_file(&path);
-            continue;
-        }
-        if path.is_dir() && name != "attachments" {
-            let has_eml = fs::read_dir(&path)?
-                .filter_map(|e| e.ok())
-                .any(|e| e.path().extension().and_then(|x| x.to_str()) == Some("eml"));
-            if has_eml {
-                let _ = fs::remove_dir_all(&path);
-            }
         }
     }
+    clean_previous_mail_output(output_dir)?;
     Ok(())
 }
 
@@ -565,7 +538,7 @@ fn enrich_pending_names(book: &ContactsBook, chat_id: &str, msg: &mut PendingMes
     }
 }
 
-/// Convert SMS Backup & Restore XML into per-conversation CSV or EML archive.
+/// Convert SMS Backup & Restore XML into per-conversation CSV, EML, or MBOX.
 ///
 /// When `cancel` is set, cooperative cancellation is checked between XML files
 /// and before writing. Cancelled runs return an error with message `cancelled`.
@@ -641,18 +614,24 @@ pub fn convert_export(
                 write_conversation_csv(output_dir, &chat_id, &convo, &mut report)?;
             }
             OutputFormat::Eml => {
-                write_conversation_eml(
+                write_conversation_mail(
                     output_dir,
                     &chat_id,
                     &convo,
                     &owner_handle,
+                    MailPackage::EmlFolders,
                     &mut report,
                 )?;
             }
             OutputFormat::Mbox => {
-                anyhow::bail!(
-                    "OutputFormat::Mbox is not supported by sms-backup-restore-exporter yet"
-                );
+                write_conversation_mail(
+                    output_dir,
+                    &chat_id,
+                    &convo,
+                    &owner_handle,
+                    MailPackage::Mbox,
+                    &mut report,
+                )?;
             }
         }
         report.conversations += 1;

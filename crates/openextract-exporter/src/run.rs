@@ -4,7 +4,7 @@ use crate::emit::{convert_export, ExportReport};
 use anyhow::{bail, Context, Result};
 use message_contacts::resolve_contacts_cli;
 use message_csv::DateRange;
-use message_exporters_core::{ExporterConfig, SourceConfig};
+use message_exporters_core::{ExporterConfig, OutputFormat, SourceConfig};
 use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
 use std::path::Path;
 
@@ -29,10 +29,12 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
         &config.output,
         &book,
         &config.date_range,
+        config.output_format,
         config.cancel.as_ref(),
     )?;
 
-    if config.obfuscate_active() {
+    // CSV obfuscation applies to CSV output only.
+    if config.output_format == OutputFormat::Csv && config.obfuscate_active() {
         let mut anon = resolve_obfuscator(config.obfuscate.seed.as_deref())?;
         let n = obfuscate_export_dir(&config.output, &mut anon)?;
         messages.push(format!(

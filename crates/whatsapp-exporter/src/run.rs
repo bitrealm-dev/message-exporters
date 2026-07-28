@@ -5,7 +5,9 @@ use crate::emit::{convert_json, ExportReport};
 use crate::wtsexporter::{resolve_wtsexporter, run_wtsexporter, Platform, WtsexporterArgs};
 use anyhow::{bail, Context, Result};
 use message_csv::DateRange;
-use message_exporters_core::{ExporterConfig, SourceConfig, WhatsappPlatform as CorePlatform};
+use message_exporters_core::{
+    ExporterConfig, OutputFormat, SourceConfig, WhatsappPlatform as CorePlatform,
+};
 use message_media::{process_export_media, MediaReport};
 use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
 use std::env;
@@ -119,28 +121,33 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
         &config.date_range,
         config.media.mode.copies_attachments(),
         &media_roots,
+        config.output_format,
         config.cancel.as_ref(),
     )?;
     // Drop tempdir after convert (media files already copied).
     drop(_work_keep_alive);
 
-    if config.media.mode.needs_tools() {
-        check_cancel(config.cancel.as_ref())?;
-        let media = process_export_media(&config.output, config.media.mode, &config.media.compress)?;
-        messages.extend(media_report_lines(&media));
-        if !media.errors.is_empty() && media.processed == 0 {
-            bail!("media processing failed for all candidate files");
+    // Media convert/compress and CSV obfuscation apply to CSV output only.
+    if config.output_format == OutputFormat::Csv {
+        if config.media.mode.needs_tools() {
+            check_cancel(config.cancel.as_ref())?;
+            let media =
+                process_export_media(&config.output, config.media.mode, &config.media.compress)?;
+            messages.extend(media_report_lines(&media));
+            if !media.errors.is_empty() && media.processed == 0 {
+                bail!("media processing failed for all candidate files");
+            }
         }
-    }
 
-    if config.obfuscate_active() {
-        check_cancel(config.cancel.as_ref())?;
-        let mut anon = resolve_obfuscator(config.obfuscate.seed.as_deref())?;
-        let n = obfuscate_export_dir(&config.output, &mut anon)?;
-        messages.push(format!(
-            "Obfuscated {n} CSV file(s) under {}",
-            config.output.display()
-        ));
+        if config.obfuscate_active() {
+            check_cancel(config.cancel.as_ref())?;
+            let mut anon = resolve_obfuscator(config.obfuscate.seed.as_deref())?;
+            let n = obfuscate_export_dir(&config.output, &mut anon)?;
+            messages.push(format!(
+                "Obfuscated {n} CSV file(s) under {}",
+                config.output.display()
+            ));
+        }
     }
 
     messages.extend(report_summary_lines(&report, &config.output));

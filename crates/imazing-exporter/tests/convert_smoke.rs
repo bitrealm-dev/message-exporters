@@ -1,6 +1,7 @@
 use imazing_exporter::convert_export;
 use message_contacts::ContactsBook;
 use message_csv::DateRange;
+use message_exporters_core::OutputFormat;
 use std::fs;
 use std::path::PathBuf;
 
@@ -21,6 +22,7 @@ fn convert_messages_with_imazing_contacts() {
         Some("UTC"),
         &DateRange::default(),
         false,
+        OutputFormat::Csv,
         None,
     )
     .expect("convert");
@@ -56,6 +58,7 @@ fn convert_whatsapp_csv_direct() {
         Some("UTC"),
         &DateRange::default(),
         false,
+        OutputFormat::Csv,
         None,
     )
     .expect("convert");
@@ -84,6 +87,7 @@ fn convert_export_root_recursively_keeps_services_separate() {
         Some("UTC"),
         &DateRange::default(),
         false,
+        OutputFormat::Csv,
         None,
     )
     .expect("convert");

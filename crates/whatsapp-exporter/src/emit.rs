@@ -1,4 +1,4 @@
-//! Convert wtsexporter JSON → per-conversation vault-shaped CSV.
+//! Convert wtsexporter JSON → per-conversation vault-shaped CSV, EML, or MBOX.
 
 use crate::cancel::{check_cancel, CancelFlag};
 use crate::jid::{chat_id_from_jid, is_group_jid, jid_to_e164};
@@ -8,6 +8,11 @@ use crate::parse::{
 use anyhow::{Context, Result};
 use message_csv::{
     conversation_filename, format_local_ts, json_cell, stable_guid, AttachmentCell, DateRange,
+};
+use message_exporters_core::OutputFormat;
+use message_mail::{
+    clean_previous_mail_output, write_mail_package, Direction as MailDirection, MailAttachment,
+    MailMessage, MailPackage, Participant, SmsMailFields,
 };
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -98,10 +103,11 @@ pub fn convert_json(
     date_range: &DateRange,
     copy_attachments: bool,
     media_search_roots: &[PathBuf],
+    output_format: OutputFormat,
     cancel: Option<&CancelFlag>,
 ) -> Result<ExportReport> {
     fs::create_dir_all(output).with_context(|| format!("create {}", output.display()))?;
-    clean_previous_csv(output)?;
+    clean_previous_output(output)?;
     if copy_attachments {
         fs::create_dir_all(output.join("attachments"))?;
     }
@@ -135,7 +141,33 @@ pub fn convert_json(
 
     for (chat_id, mut convo) in conversations {
         check_cancel(cancel)?;
-        write_conversation(output, &chat_id, &mut convo, &mut report)?;
+        if !prepare_conversation(&mut convo, &mut report) {
+            continue;
+        }
+        match output_format {
+            OutputFormat::Csv => {
+                write_conversation_csv(output, &chat_id, &convo, &mut report)?;
+            }
+            OutputFormat::Eml => {
+                write_conversation_mail(
+                    output,
+                    &chat_id,
+                    &convo,
+                    MailPackage::EmlFolders,
+                    &mut report,
+                )?;
+            }
+            OutputFormat::Mbox => {
+                write_conversation_mail(
+                    output,
+                    &chat_id,
+                    &convo,
+                    MailPackage::Mbox,
+                    &mut report,
+                )?;
+            }
+        }
+        report.conversations += 1;
     }
 
     Ok(report)
@@ -436,24 +468,20 @@ fn reactions_json(v: &serde_json::Value) -> String {
     }
 }
 
-fn clean_previous_csv(output_dir: &Path) -> Result<()> {
+fn clean_previous_output(output_dir: &Path) -> Result<()> {
     for entry in fs::read_dir(output_dir)? {
         let path = entry?.path();
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if name.ends_with(".csv") || name.ends_with(".csv.tmp") {
+        if path.is_file() && (name.ends_with(".csv") || name.ends_with(".csv.tmp")) {
             fs::remove_file(&path)
                 .with_context(|| format!("remove previous {}", path.display()))?;
         }
     }
+    clean_previous_mail_output(output_dir)?;
     Ok(())
 }
 
-fn write_conversation(
-    output_dir: &Path,
-    chat_id: &str,
-    convo: &mut PendingConversation,
-    report: &mut ExportReport,
-) -> Result<()> {
+fn prepare_conversation(convo: &mut PendingConversation, report: &mut ExportReport) -> bool {
     convo.messages.sort_by(|a, b| {
         a.sort_key
             .partial_cmp(&b.sort_key)
@@ -467,10 +495,133 @@ fn write_conversation(
             false
         }
     });
-    if convo.messages.is_empty() {
-        return Ok(());
-    }
+    !convo.messages.is_empty()
+}
 
+fn pending_to_mail_messages(
+    output_dir: &Path,
+    chat_id: &str,
+    convo: &PendingConversation,
+    report: &mut ExportReport,
+) -> Result<Vec<MailMessage>> {
+    let participants: Vec<Participant> = convo
+        .participant_e164s
+        .iter()
+        .filter(|h| !h.is_empty())
+        .map(|h| Participant {
+            handle: h.clone(),
+            display_name: None,
+        })
+        .collect();
+
+    let mut out = Vec::with_capacity(convo.messages.len());
+    for msg in &convo.messages {
+        report.messages += 1;
+        if msg.is_from_me {
+            report.sent += 1;
+        } else {
+            report.received += 1;
+        }
+        let secs = msg.sort_key as i64;
+        let (ts_local, _, _) = format_local_ts(secs).expect("timestamp validated above");
+        let digests: Vec<String> = msg.attachments.iter().map(|a| a.digest_hex.clone()).collect();
+        let guid = stable_guid(chat_id, &ts_local, msg.is_from_me, &msg.text, &digests);
+        let attachments: Vec<MailAttachment> = msg
+            .attachments
+            .iter()
+            .map(|a| {
+                MailAttachment::read_file(
+                    &output_dir.join(&a.rel_path),
+                    a.original_name.clone(),
+                    a.mime_type.clone(),
+                    Some(a.digest_hex.clone()),
+                    a.is_sticker,
+                )
+            })
+            .collect::<Result<_>>()?;
+        let message_kind = if msg.attachments.is_empty() {
+            "sms"
+        } else {
+            "mms"
+        };
+        let mut source = serde_json::Map::new();
+        if !convo.whatsapp_jid.is_empty() {
+            source.insert(
+                "whatsapp_jid".into(),
+                serde_json::Value::String(convo.whatsapp_jid.clone()),
+            );
+        }
+        if !msg.key_id.is_empty() {
+            source.insert(
+                "whatsapp_key_id".into(),
+                serde_json::Value::String(msg.key_id.clone()),
+            );
+        }
+        if !msg.reply_json.is_empty() {
+            source.insert(
+                "reply_json".into(),
+                serde_json::from_str(&msg.reply_json)
+                    .unwrap_or_else(|_| serde_json::Value::String(msg.reply_json.clone())),
+            );
+        }
+        if !msg.reactions_json.is_empty() {
+            source.insert(
+                "reactions_json".into(),
+                serde_json::from_str(&msg.reactions_json)
+                    .unwrap_or_else(|_| serde_json::Value::String(msg.reactions_json.clone())),
+            );
+        }
+        let source_fields_json = if source.is_empty() {
+            None
+        } else {
+            Some(serde_json::Value::Object(source).to_string())
+        };
+
+        out.push(MailMessage::sms(SmsMailFields {
+            chat_identifier: chat_id.to_string(),
+            conversation_type: convo.conversation_type.clone(),
+            group_title: convo.group_title.clone(),
+            participants: participants.clone(),
+            guid,
+            timestamp_unix_ms: secs.saturating_mul(1000),
+            direction: if msg.is_from_me {
+                MailDirection::Outgoing
+            } else {
+                MailDirection::Incoming
+            },
+            service: "WhatsApp".into(),
+            message_kind: message_kind.into(),
+            sender_handle: if msg.is_from_me || msg.sender_handle.is_empty() {
+                None
+            } else {
+                Some(msg.sender_handle.clone())
+            },
+            sender_display_name: if msg.sender_display_name.is_empty() {
+                None
+            } else {
+                Some(msg.sender_display_name.clone())
+            },
+            owner_handle: String::new(),
+            subject: None,
+            text: msg.text.clone(),
+            android_type: None,
+            source_fields_json,
+            export_source: EXPORT_SOURCE.into(),
+            export_tool: EXPORT_TOOL.into(),
+            export_tool_version: EXPORT_TOOL_VERSION.into(),
+            attachments,
+            filename_suffix: Some("__whatsapp".into()),
+        }));
+    }
+    Ok(out)
+}
+
+fn write_conversation_csv(
+    output_dir: &Path,
+    chat_id: &str,
+    convo: &PendingConversation,
+    report: &mut ExportReport,
+) -> Result<()> {
     let filename = conversation_filename(
         &convo.conversation_type,
         chat_id,
@@ -556,6 +707,17 @@ fn write_conversation(
     drop(wtr);
     fs::rename(&tmp_path, &path)
         .with_context(|| format!("rename {} → {}", tmp_path.display(), path.display()))?;
-    report.conversations += 1;
+    Ok(())
+}
+
+fn write_conversation_mail(
+    output_dir: &Path,
+    chat_id: &str,
+    convo: &PendingConversation,
+    package: MailPackage,
+    report: &mut ExportReport,
+) -> Result<()> {
+    let messages = pending_to_mail_messages(output_dir, chat_id, convo, report)?;
+    write_mail_package(output_dir, package, &messages)?;
     Ok(())
 }

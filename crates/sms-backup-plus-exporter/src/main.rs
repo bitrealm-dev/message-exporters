@@ -11,7 +11,7 @@ use sms_backup_plus_exporter::{parse_date_range, run};
 
 #[derive(Parser, Debug)]
 #[command(name = "sms-backup-plus-exporter")]
-#[command(about = "Convert SMS Backup+ EML exports to per-conversation CSV")]
+#[command(about = "Convert SMS Backup+ EML exports to per-conversation CSV or EML")]
 struct Cli {
     /// Log progress to stderr (inputs, scan/write progress, dedupe summary)
     #[arg(short = 'v', long, global = true)]
@@ -27,7 +27,7 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Convert EML tree to per-conversation CSV
+    /// Convert EML tree to per-conversation CSV, EML, or MBOX
     Convert {
         /// Path to a .eml file or directory tree of EMLs (Archive/, Sent/, …).
         /// Repeat for multiple roots; trees are merged and path-deduped.
@@ -35,9 +35,13 @@ enum Commands {
         #[arg(long = "input")]
         input: Vec<PathBuf>,
 
-        /// Output directory for CSV + attachments/
+        /// Output directory for CSV or EML archive + attachments/
         #[arg(long)]
         output: PathBuf,
+
+        /// Output format: `csv` (default), `eml` (mail folders), or `mbox`
+        #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
+        format: String,
 
         /// Owner phone (E.164 or digits). Repeat for multiple owner numbers.
         /// Default: `phones` in config/owner.toml
@@ -107,6 +111,7 @@ fn main() -> Result<()> {
         Commands::Convert {
             input,
             output,
+            format,
             owner_phones,
             owner_emails,
             contacts,
@@ -123,6 +128,7 @@ fn main() -> Result<()> {
             media_skip_efficient,
         } => {
             let date_range = parse_date_range(start_date.as_deref(), end_date.as_deref())?;
+            let output_format = OutputFormat::parse(&format).map_err(anyhow::Error::msg)?;
             let compress = compress_options_from_cli(
                 media_max_resolution,
                 media_max_fps,
@@ -154,7 +160,7 @@ fn main() -> Result<()> {
                     compress,
                 },
                 cancel: None,
-                output_format: OutputFormat::Csv,
+                output_format,
                 source: SourceConfig::SmsBackupPlus(SmsBackupPlusConfig {
                     owner_phones,
                     owner_emails,

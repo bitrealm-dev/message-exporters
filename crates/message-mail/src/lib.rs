@@ -61,6 +61,68 @@ pub struct MailAttachment {
     pub sticker_effect: Option<String>,
 }
 
+impl MailAttachment {
+    /// Read attachment bytes from disk for embedding in MIME.
+    pub fn read_file(
+        path: &Path,
+        original_name: Option<String>,
+        mime_type: Option<String>,
+        digest_sha256: Option<String>,
+        is_sticker: bool,
+    ) -> Result<Self> {
+        let bytes = if path.is_file() {
+            fs::read(path).with_context(|| format!("read attachment {}", path.display()))?
+        } else {
+            Vec::new()
+        };
+        Ok(Self {
+            bytes,
+            original_name,
+            mime_type,
+            digest_sha256,
+            is_sticker,
+            transcription: None,
+            sticker_effect: None,
+        })
+    }
+}
+
+/// How to package a conversation for mail-archive export.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MailPackage {
+    /// One folder of `.eml` files per conversation.
+    EmlFolders,
+    /// One `.mbox` (mboxrd) file per conversation.
+    Mbox,
+}
+
+/// Core SMS/MMS fields for [`MailMessage::sms`] (iMessage extensions left unset).
+#[derive(Debug, Clone)]
+pub struct SmsMailFields {
+    pub chat_identifier: String,
+    pub conversation_type: String,
+    pub group_title: Option<String>,
+    pub participants: Vec<Participant>,
+    pub guid: String,
+    pub timestamp_unix_ms: i64,
+    pub direction: Direction,
+    pub service: String,
+    pub message_kind: String,
+    pub sender_handle: Option<String>,
+    pub sender_display_name: Option<String>,
+    pub owner_handle: String,
+    pub subject: Option<String>,
+    pub text: String,
+    pub android_type: Option<String>,
+    pub source_fields_json: Option<String>,
+    pub export_source: String,
+    pub export_tool: String,
+    pub export_tool_version: String,
+    pub attachments: Vec<MailAttachment>,
+    /// Optional stem suffix (e.g. `"__whatsapp"`) for conversation folder / mbox names.
+    pub filename_suffix: Option<String>,
+}
+
 /// One message ready to serialize as a single `.eml`.
 #[derive(Debug, Clone)]
 pub struct MailMessage {
@@ -89,6 +151,8 @@ pub struct MailMessage {
     pub export_tool: String,
     pub export_tool_version: String,
     pub attachments: Vec<MailAttachment>,
+    /// Optional stem suffix (e.g. `"__whatsapp"`) for conversation folder / mbox names.
+    pub filename_suffix: Option<String>,
     // --- iMessage extensions (SMS leaves these unset) ---
     pub is_reply: bool,
     pub in_reply_to_guid: Option<String>,
@@ -110,6 +174,107 @@ pub struct MailMessage {
     pub tapback_kind: Option<String>,
     pub tapback_emoji: Option<String>,
     pub tapback_action: Option<String>,
+}
+
+impl MailMessage {
+    /// SMS/MMS-shaped message with all iMessage extension fields cleared.
+    pub fn sms(fields: SmsMailFields) -> Self {
+        Self {
+            chat_identifier: fields.chat_identifier,
+            conversation_type: fields.conversation_type,
+            group_title: fields.group_title,
+            participants: fields.participants,
+            guid: fields.guid,
+            timestamp_unix_ms: fields.timestamp_unix_ms,
+            direction: fields.direction,
+            service: fields.service,
+            message_kind: fields.message_kind,
+            sender_handle: fields.sender_handle,
+            sender_display_name: fields.sender_display_name,
+            owner_handle: fields.owner_handle,
+            owner_display_name: None,
+            subject: fields.subject,
+            text: fields.text,
+            android_type: fields.android_type,
+            source_fields_json: fields.source_fields_json,
+            export_source: fields.export_source,
+            export_tool: fields.export_tool,
+            export_tool_version: fields.export_tool_version,
+            attachments: fields.attachments,
+            filename_suffix: fields.filename_suffix,
+            is_reply: false,
+            in_reply_to_guid: None,
+            thread_originator_part: None,
+            num_replies: None,
+            is_deleted: false,
+            send_effect: None,
+            shared_location: None,
+            announcement: None,
+            read_receipt_rfc3339: None,
+            parts_json: None,
+            edits_json: None,
+            app_json: None,
+            balloon_bundle_id: None,
+            balloon_kind: None,
+            tapbacks_json: None,
+            associated_guid: None,
+            associated_part: None,
+            tapback_kind: None,
+            tapback_emoji: None,
+            tapback_action: None,
+        }
+    }
+}
+
+/// Remove prior mail-archive artifacts under `output_dir` (`.mbox` files and
+/// directories that contain `.eml`). Leaves `attachments/` alone.
+pub fn clean_previous_mail_output(output_dir: &Path) -> Result<()> {
+    if !output_dir.is_dir() {
+        return Ok(());
+    }
+    for entry in fs::read_dir(output_dir)
+        .with_context(|| format!("read {}", output_dir.display()))?
+    {
+        let path = entry?.path();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if path.is_file()
+            && path
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("mbox"))
+        {
+            fs::remove_file(&path)
+                .with_context(|| format!("remove {}", path.display()))?;
+            continue;
+        }
+        if path.is_dir() && name != "attachments" {
+            let has_eml = fs::read_dir(&path)?
+                .filter_map(|e| e.ok())
+                .any(|e| {
+                    e.path()
+                        .extension()
+                        .and_then(|x| x.to_str())
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("eml"))
+                });
+            if has_eml {
+                fs::remove_dir_all(&path)
+                    .with_context(|| format!("remove {}", path.display()))?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Write one conversation as EML folders or a single mboxrd file.
+pub fn write_mail_package(
+    output_root: &Path,
+    package: MailPackage,
+    messages: &[MailMessage],
+) -> Result<PathBuf> {
+    match package {
+        MailPackage::EmlFolders => write_conversation(output_root, messages),
+        MailPackage::Mbox => write_conversation_mbox(output_root, messages),
+    }
 }
 
 #[derive(Serialize)]
@@ -135,7 +300,7 @@ pub fn conversation_stem(msg: &MailMessage) -> String {
         &msg.chat_identifier,
         msg.group_title.as_deref(),
         &participant_handles,
-        None,
+        msg.filename_suffix.as_deref(),
     );
     csv_name
         .strip_suffix(".csv")
@@ -746,6 +911,7 @@ mod tests {
             export_tool: "SMS Backup & Restore".into(),
             export_tool_version: "10.26.003".into(),
             attachments: vec![],
+            filename_suffix: None,
             is_reply: false,
             in_reply_to_guid: None,
             thread_originator_part: None,

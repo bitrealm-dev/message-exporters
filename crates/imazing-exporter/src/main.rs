@@ -11,15 +11,19 @@ use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
 
 #[derive(Parser, Debug)]
 #[command(name = "imazing-exporter")]
-#[command(about = "Convert iMazing Messages / WhatsApp CSV exports to per-conversation CSV")]
+#[command(about = "Convert iMazing Messages / WhatsApp CSV exports to per-conversation CSV or EML")]
 struct Cli {
     /// Messages/WhatsApp export directory (or a single CSV for CLI convenience)
     #[arg(long)]
     input: PathBuf,
 
-    /// Output directory for per-conversation CSV files
+    /// Output directory for per-conversation CSV or EML archive
     #[arg(long)]
     output: PathBuf,
+
+    /// Output format: `csv` (default), `eml` (mail folders), or `mbox`
+    #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
+    format: String,
 
     /// iMazing Contacts CSV from the same backup export.
     /// Optional; without it phone numbers are not resolved to names.
@@ -74,6 +78,7 @@ fn main() -> Result<()> {
         cli.end_date.as_deref(),
         cli.timezone.as_deref(),
     )?;
+    let output_format = OutputFormat::parse(&cli.format).map_err(anyhow::Error::msg)?;
     let compress = compress_options_from_cli(
         cli.media_max_resolution,
         cli.media_max_fps,
@@ -98,7 +103,7 @@ fn main() -> Result<()> {
             compress,
         },
         cancel: None,
-        output_format: OutputFormat::Csv,
+        output_format,
         source: SourceConfig::Imazing(ImazingConfig {
             timezone: cli.timezone,
         }),

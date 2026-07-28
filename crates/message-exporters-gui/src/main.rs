@@ -16,7 +16,7 @@ use message_exporters_core::{
     ensure_output_dir, resolve_binary, spawn, spawn_job, AttachmentMedia, ContactsKind,
     ExportIniState, Exporter, ExporterConfig, Form, OutputFormat, ProcessControl, ProcessEvent,
     WhatsappPlatform, APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS,
-    OUTPUT_FORMATS, OUTPUT_FORMATS_IMESSAGE, WHATSAPP_PLATFORMS,
+    OUTPUT_FORMATS_MAIL, WHATSAPP_PLATFORMS,
 };
 use message_media::process_export_media;
 use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
@@ -592,12 +592,10 @@ impl App {
         if self.exporter != Exporter::Whatsapp {
             self.ui_contacts(ui, contacts_enabled);
         }
-        if matches!(
-            self.exporter,
-            Exporter::SmsBackupRestore | Exporter::Imessage
-        ) {
-            self.ui_output_format(ui);
-        }
+        self.ui_output_format(ui);
+        // Convert/compress only apply to CSV; mail embeds (or skips) at export time.
+        let attachments_enabled =
+            attachments_enabled && self.form.output_format == OutputFormat::Csv;
         self.ui_attachment_media(ui, attachments_enabled);
 
         // Exporter-specific fields.
@@ -768,19 +766,21 @@ impl App {
             "YYYY-MM-DD (exclusive)",
             PATH_W,
         );
-        ui.horizontal(|ui| {
-            form_label(ui, "Obfuscate");
-            ui.checkbox(&mut self.form.obfuscate, "");
+        ui.add_enabled_ui(self.form.output_format == OutputFormat::Csv, |ui| {
+            ui.horizontal(|ui| {
+                form_label(ui, "Obfuscate");
+                ui.checkbox(&mut self.form.obfuscate, "");
+            });
+            if self.form.obfuscate || !self.form.obfuscate_seed.is_empty() {
+                labeled_text(
+                    ui,
+                    "Seed",
+                    &mut self.form.obfuscate_seed,
+                    "Optional 8-hex seed",
+                    PATH_W,
+                );
+            }
         });
-        if self.form.obfuscate || !self.form.obfuscate_seed.is_empty() {
-            labeled_text(
-                ui,
-                "Seed",
-                &mut self.form.obfuscate_seed,
-                "Optional 8-hex seed",
-                PATH_W,
-            );
-        }
         ui.add_space(10.0);
         ui.horizontal(|ui| {
             let run = ui.add_enabled(!self.running, egui::Button::new("Run exporter"));
@@ -1069,20 +1069,11 @@ impl App {
     }
 
     fn ui_output_format(&mut self, ui: &mut egui::Ui) {
-        let formats: &[OutputFormat] = if self.exporter == Exporter::Imessage {
-            &OUTPUT_FORMATS_IMESSAGE
-        } else {
-            &OUTPUT_FORMATS
-        };
-        // Drop MBOX if switching away from iMessage while it was selected.
-        if !formats.contains(&self.form.output_format) {
-            self.form.output_format = OutputFormat::Csv;
-        }
         combo_enum(
             ui,
             "Output format",
             &mut self.form.output_format,
-            formats,
+            &OUTPUT_FORMATS_MAIL,
             PATH_W,
         );
     }

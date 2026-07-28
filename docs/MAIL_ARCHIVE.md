@@ -2,7 +2,7 @@
 
 Design for a human-viewable export: **one folder per conversation**, **one `.eml` per message**, with structured `X-ME-*` headers for machine fidelity. Intended as an archive / interchange path before vault exists. Mail clients can open individual messages; translators can recover SMS, group MMS, and (later) iMessage semantics without relying on CSV.
 
-**Status:** Writer in [`message-mail`](../crates/message-mail/). Wired for SMS Backup & Restore (`--format eml`) and iMessage via [`imessage-mail-exporter`](../crates/imessage-mail-exporter/) (GUI **EML** / **MBOX**; uses `imessage-database`, not `imessage-exporter`). CSV remains the default (`imessage-exporter` for iPhone CSV). iMessage mail emits extension headers (replies, tapbacks, parts, edits, balloons, send effects, announcements, location, deleted); handwriting attaches SVG (`image/svg+xml`). See also [csv-output.md](src/csv-output.md).
+**Status:** Writer in [`message-mail`](../crates/message-mail/). All GUI exporters support `--format eml` / `mbox` (and GUI **Output format**). iMessage uses [`imessage-mail-exporter`](../crates/imessage-mail-exporter/) (`imessage-database`, not `imessage-exporter`); others map pending conversation rows → `MailMessage`. CSV remains the default. iMessage mail emits extension headers (replies, tapbacks, parts, edits, balloons, send effects, announcements, location, deleted); handwriting attaches SVG (`image/svg+xml`). See also [csv-output.md](src/csv-output.md).
 
 ## Goals
 
@@ -16,9 +16,8 @@ Design for a human-viewable export: **one folder per conversation**, **one `.eml
 
 - Vault import/export
 - Replacing CSV as the default exporter output
-- GUI format switch for exporters other than SBR / iMessage (those have Output format CSV/EML)
 - IMAP sync or SMS Backup+ wire compatibility
-- Writing `.mbox` as the canonical form (optional derived export later)
+- Writing `.mbox` as the canonical form (derived export is available; folders of `.eml` remain canonical)
 - Replaying send-effect animations or handwriting ink in clients
 
 ## Packaging
@@ -333,9 +332,9 @@ Normal sticker sends: image MIME part + `X-ME-Attachment-Meta` (`is_sticker`, `s
 
 ## Implementation notes
 
-1. Crate [`message-mail`](../crates/message-mail/) emits one `.eml` per message into the conversation directory (including iMessage extension headers when set).
-2. **SMS Backup & Restore** maps pending rows → `MailMessage` (`--format eml`).
-3. **iMessage** EML/MBOX is [`imessage-mail-exporter`](../crates/imessage-mail-exporter/) (`imessage-database` → `MailMessage`; mboxrd via `append_message_mbox`). CSV stays on [`imessage-exporter`](../crates/imessage-exporter/).
+1. Crate [`message-mail`](../crates/message-mail/) emits one `.eml` / mboxrd record per message (`write_mail_package`).
+2. **Android / OpenExtract / iMazing / WhatsApp** exporters map pending rows → `MailMessage` (`--format eml|mbox`).
+3. **iMessage** EML/MBOX is [`imessage-mail-exporter`](../crates/imessage-mail-exporter/) (`imessage-database` → `MailMessage`). CSV stays on [`imessage-exporter`](../crates/imessage-exporter/).
 4. Deferred: Digital Touch animation, translations UI, HEIC convert / obfuscate inside MIME, Askama HTML bodies.
 
 ## Related docs

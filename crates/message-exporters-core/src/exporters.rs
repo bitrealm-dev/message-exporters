@@ -505,7 +505,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
-            output_format: OutputFormat::Csv,
+            output_format: self.output_format,
             source: SourceConfig::Whatsapp(WhatsappConfig {
                 platform: Some(self.whatsapp_platform),
                 json: None,
@@ -551,7 +551,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
-            output_format: OutputFormat::Csv,
+            output_format: self.output_format,
             source: SourceConfig::Imazing(ImazingConfig { timezone }),
         }
     }
@@ -580,7 +580,7 @@ impl Form {
                 compress: message_media::CompressOptions::default(),
             },
             cancel: None,
-            output_format: OutputFormat::Csv,
+            output_format: self.output_format,
             source: SourceConfig::OpenExtract(OpenExtractConfig {}),
         }
     }
@@ -599,7 +599,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
-            output_format: OutputFormat::Csv,
+            output_format: self.output_format,
             source: SourceConfig::GoSmsPro(GoSmsProConfig { owner_phones }),
         }
     }
@@ -644,7 +644,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
-            output_format: OutputFormat::Csv,
+            output_format: self.output_format,
             source: SourceConfig::SmsBackupPlus(SmsBackupPlusConfig {
                 owner_phones,
                 owner_emails,
@@ -980,7 +980,7 @@ mod tests {
         assert_eq!(config.output_format, OutputFormat::Eml);
 
         let go = form.to_config(Exporter::GoSmsPro).unwrap();
-        assert_eq!(go.output_format, OutputFormat::Csv);
+        assert_eq!(go.output_format, OutputFormat::Eml);
     }
 
     #[test]

@@ -1,4 +1,4 @@
-//! Convert GO SMS Pro export → per-conversation CSV.
+//! Convert GO SMS Pro export → per-conversation CSV, EML, or MBOX.
 
 use crate::pdu::{parse_pdu_file, ParsedPdu};
 use crate::cancel::{check_cancel, CancelFlag};
@@ -10,9 +10,14 @@ use message_csv::{
     conversation_filename, format_local_ts, json_cell, stable_guid, AttachmentCell,
     DateRange,
 };
+use message_exporters_core::OutputFormat;
+use message_mail::{
+    clean_previous_mail_output, write_mail_package, Direction as MailDirection, MailAttachment,
+    MailMessage, MailPackage, Participant, SmsMailFields,
+};
 use message_phone::{to_e164, OwnerPhoneSet};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
@@ -432,23 +437,21 @@ fn dedupe_messages(messages: &mut Vec<PendingMessage>) {
     messages.retain(|m| seen.insert(m.dedupe_key.clone()));
 }
 
-fn clean_previous_csv(output_dir: &Path) -> Result<()> {
+fn clean_previous_output(output_dir: &Path) -> Result<()> {
     for entry in fs::read_dir(output_dir)? {
         let path = entry?.path();
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if name.ends_with(".csv") || name.ends_with(".csv.tmp") || name.ends_with(".json") {
+        if path.is_file()
+            && (name.ends_with(".csv") || name.ends_with(".csv.tmp") || name.ends_with(".json"))
+        {
             let _ = fs::remove_file(&path);
         }
     }
+    clean_previous_mail_output(output_dir)?;
     Ok(())
 }
 
-fn write_conversation(
-    output_dir: &Path,
-    chat_id: &str,
-    convo: &mut PendingConversation,
-    report: &mut ExportReport,
-) -> Result<()> {
+fn prepare_conversation(convo: &mut PendingConversation, report: &mut ExportReport) -> bool {
     dedupe_messages(&mut convo.messages);
     convo.messages.retain(|m| {
         if format_local_ts(m.sort_key as i64).is_some() {
@@ -458,10 +461,179 @@ fn write_conversation(
             false
         }
     });
-    if convo.messages.is_empty() {
-        return Ok(());
+    !convo.messages.is_empty()
+}
+
+fn display_names_for_handles(convo: &PendingConversation) -> HashMap<String, String> {
+    let mut names = HashMap::new();
+    for msg in &convo.messages {
+        if let Some(digits) = &msg.sender_digits {
+            let handle = to_e164(digits);
+            if let Some(name) = msg
+                .sender_display_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|n| !n.is_empty())
+            {
+                names.entry(handle).or_insert_with(|| name.to_string());
+            }
+        }
+        if convo.conversation_type == "individual" {
+            let name = msg.contact_name.trim();
+            if !name.is_empty() {
+                for peer in &convo.participant_e164s {
+                    names.entry(peer.clone()).or_insert_with(|| name.to_string());
+                }
+            }
+        }
+    }
+    names
+}
+
+fn pending_to_mail_messages(
+    output_dir: &Path,
+    chat_id: &str,
+    convo: &PendingConversation,
+    owner_handle: &str,
+    report: &mut ExportReport,
+) -> Result<Vec<MailMessage>> {
+    let name_by_handle = display_names_for_handles(convo);
+    let mut participants: Vec<Participant> = convo
+        .participant_e164s
+        .iter()
+        .filter(|h| !h.is_empty())
+        .map(|h| Participant {
+            handle: h.clone(),
+            display_name: name_by_handle.get(h).cloned(),
+        })
+        .collect();
+    if participants.is_empty() && convo.conversation_type == "individual" && !chat_id.is_empty() {
+        participants.push(Participant {
+            handle: chat_id.to_string(),
+            display_name: name_by_handle.get(chat_id).cloned().or_else(|| {
+                convo
+                    .messages
+                    .iter()
+                    .map(|m| m.contact_name.trim())
+                    .find(|n| !n.is_empty())
+                    .map(str::to_string)
+            }),
+        });
     }
 
+    let mut out = Vec::with_capacity(convo.messages.len());
+    for msg in &convo.messages {
+        if msg.is_from_me {
+            report.sent += 1;
+        } else {
+            report.received += 1;
+        }
+        let secs = msg.sort_key as i64;
+        let (ts_local, _, _) = format_local_ts(secs).expect("timestamp validated above");
+        let digests: Vec<String> = msg.attachments.iter().map(|a| a.digest_hex.clone()).collect();
+        let guid = stable_guid(chat_id, &ts_local, msg.is_from_me, &msg.text, &digests);
+        let timestamp_unix_ms = msg
+            .date_ms
+            .parse::<i64>()
+            .unwrap_or_else(|_| secs.saturating_mul(1000));
+        let (sender_handle, sender_display_name) = if msg.is_from_me {
+            (None, None)
+        } else {
+            (
+                msg.sender_digits.as_ref().map(|d| to_e164(d)),
+                msg.sender_display_name.clone(),
+            )
+        };
+        let attachments: Vec<MailAttachment> = msg
+            .attachments
+            .iter()
+            .map(|a| {
+                MailAttachment::read_file(
+                    &output_dir.join(&a.rel_path),
+                    a.original_name.clone(),
+                    a.mime_type.clone(),
+                    Some(a.digest_hex.clone()),
+                    false,
+                )
+            })
+            .collect::<Result<_>>()?;
+        let message_kind = if msg.attachments.is_empty() {
+            "sms"
+        } else {
+            "mms"
+        };
+        let mut source = serde_json::Map::new();
+        if !msg.source_kind.is_empty() {
+            source.insert(
+                "source_kind".into(),
+                serde_json::Value::String(msg.source_kind.to_string()),
+            );
+        }
+        if !msg.pdu_filename.is_empty() {
+            source.insert(
+                "pdu_filename".into(),
+                serde_json::Value::String(msg.pdu_filename.clone()),
+            );
+        }
+        if !msg.xml_fields.is_empty() {
+            source.insert(
+                "xml_fields".into(),
+                serde_json::to_value(&msg.xml_fields).unwrap_or(serde_json::Value::Null),
+            );
+        }
+        if !msg.pdu_fields.is_empty() {
+            source.insert(
+                "pdu_fields".into(),
+                serde_json::to_value(&msg.pdu_fields).unwrap_or(serde_json::Value::Null),
+            );
+        }
+        let source_fields_json = if source.is_empty() {
+            None
+        } else {
+            Some(serde_json::Value::Object(source).to_string())
+        };
+
+        out.push(MailMessage::sms(SmsMailFields {
+            chat_identifier: chat_id.to_string(),
+            conversation_type: convo.conversation_type.clone(),
+            group_title: convo.group_title.clone(),
+            participants: participants.clone(),
+            guid,
+            timestamp_unix_ms,
+            direction: if msg.is_from_me {
+                MailDirection::Outgoing
+            } else {
+                MailDirection::Incoming
+            },
+            service: "SMS".into(),
+            message_kind: message_kind.into(),
+            sender_handle,
+            sender_display_name,
+            owner_handle: owner_handle.to_string(),
+            subject: None,
+            text: msg.text.clone(),
+            android_type: if msg.android_type.is_empty() {
+                None
+            } else {
+                Some(msg.android_type.clone())
+            },
+            source_fields_json,
+            export_source: EXPORT_SOURCE.into(),
+            export_tool: EXPORT_TOOL.into(),
+            export_tool_version: EXPORT_TOOL_VERSION.into(),
+            attachments,
+            filename_suffix: None,
+        }));
+    }
+    Ok(out)
+}
+
+fn write_conversation_csv(
+    output_dir: &Path,
+    chat_id: &str,
+    convo: &PendingConversation,
+    report: &mut ExportReport,
+) -> Result<()> {
     // Synthetic Android group titles are not used for filenames.
     let filename = conversation_filename(
         &convo.conversation_type,
@@ -567,7 +739,19 @@ fn write_conversation(
     drop(wtr);
     fs::rename(&tmp_path, &path)
         .with_context(|| format!("rename {} → {}", tmp_path.display(), path.display()))?;
-    report.conversations += 1;
+    Ok(())
+}
+
+fn write_conversation_mail(
+    output_dir: &Path,
+    chat_id: &str,
+    convo: &PendingConversation,
+    owner_handle: &str,
+    package: MailPackage,
+    report: &mut ExportReport,
+) -> Result<()> {
+    let messages = pending_to_mail_messages(output_dir, chat_id, convo, owner_handle, report)?;
+    write_mail_package(output_dir, package, &messages)?;
     Ok(())
 }
 
@@ -589,7 +773,7 @@ fn enrich_pending_names(book: &ContactsBook, chat_id: &str, msg: &mut PendingMes
     }
 }
 
-/// Convert a GO SMS Pro export directory into per-conversation CSV.
+/// Convert a GO SMS Pro export directory into per-conversation CSV, EML, or MBOX.
 ///
 /// When `cancel` is set, cooperative cancellation is checked between XML files
 /// and between PDU files. Cancelled runs return an error with message `cancelled`.
@@ -600,6 +784,7 @@ pub fn convert_export(
     contacts: &ContactsBook,
     date_range: &DateRange,
     copy_attachments: bool,
+    output_format: OutputFormat,
     cancel: Option<&CancelFlag>,
 ) -> Result<ExportReport> {
     if !input_dir.is_dir() {
@@ -607,12 +792,13 @@ pub fn convert_export(
     }
 
     let owners = OwnerPhoneSet::new(owner_phones)?;
+    let owner_handle = to_e164(&owners.primary_digits);
     let mut report = ExportReport::default();
     let mut conversations: BTreeMap<String, PendingConversation> = BTreeMap::new();
 
-    // Clean previous CSV (keep attachments if re-run; rewrite as needed).
+    // Clean previous CSV / mail artifacts (keep attachments if re-run; rewrite as needed).
     fs::create_dir_all(output_dir)?;
-    clean_previous_csv(output_dir)?;
+    clean_previous_output(output_dir)?;
     let attachments_dir = output_dir.join("attachments");
     if copy_attachments {
         fs::create_dir_all(&attachments_dir)?;
@@ -712,7 +898,35 @@ pub fn convert_export(
         for msg in &mut convo.messages {
             enrich_pending_names(contacts, &chat_id, msg);
         }
-        write_conversation(output_dir, &chat_id, &mut convo, &mut report)?;
+        if !prepare_conversation(&mut convo, &mut report) {
+            continue;
+        }
+        match output_format {
+            OutputFormat::Csv => {
+                write_conversation_csv(output_dir, &chat_id, &convo, &mut report)?;
+            }
+            OutputFormat::Eml => {
+                write_conversation_mail(
+                    output_dir,
+                    &chat_id,
+                    &convo,
+                    &owner_handle,
+                    MailPackage::EmlFolders,
+                    &mut report,
+                )?;
+            }
+            OutputFormat::Mbox => {
+                write_conversation_mail(
+                    output_dir,
+                    &chat_id,
+                    &convo,
+                    &owner_handle,
+                    MailPackage::Mbox,
+                    &mut report,
+                )?;
+            }
+        }
+        report.conversations += 1;
     }
 
     write_skipped_invalid_address_csv(output_dir, &report.skipped_unknown_address_details)?;

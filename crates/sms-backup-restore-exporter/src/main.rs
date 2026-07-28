@@ -21,7 +21,7 @@ struct Cli {
     #[arg(long)]
     output: PathBuf,
 
-    /// Output format: `csv` (default) or `eml` (per-conversation folder of .eml files)
+    /// Output format: `csv` (default), `eml` (mail folders), or `mbox`
     #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
     format: String,
 

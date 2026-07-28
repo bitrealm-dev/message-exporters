@@ -604,6 +604,7 @@ fn build_mail_message(
         export_tool: EXPORT_TOOL.into(),
         export_tool_version: env!("CARGO_PKG_VERSION").into(),
         attachments: mail_attachments,
+        filename_suffix: None,
         is_reply,
         in_reply_to_guid,
         thread_originator_part,

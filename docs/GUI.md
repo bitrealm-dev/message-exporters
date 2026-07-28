@@ -84,7 +84,7 @@ Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules a
 | Timezone | — | — | — | — | yes | — | — |
 | Name mapping | — | — | advanced | — | — | — | — |
 | Verbose logging | — | — | always on | — | — | — | — |
-| Output format (CSV / EML) | — | yes | — | — | — | — | yes |
+| Output format (CSV / EML / MBOX) | yes | yes | yes | yes | yes | yes | yes |
 | Attachments (copy/convert/compress/do not copy) | yes | yes | yes | — | yes | yes | yes |
 | Compress options (resolution/fps/…) | when Compress | when Compress | when Compress | — | when Compress | when Compress | when Compress |
 | Advanced (attachment root, …) | — | — | name mapping | — | — | Android key / backup / wa / media / db / business | yes |
@@ -108,10 +108,11 @@ In-process via `go_sms_pro_exporter::run`. Cancel is cooperative (between XML/PD
 | Your phone numbers | multi-value text | yes | `--owner-phone` (repeat) |
 | Contacts CSV | file | no† | `--contacts` |
 | Contacts VCF | file | no† | `--vcf` |
-| Attachments | enum | no | `--media-mode` (`clone` / `convert` / `compress` / `disabled`) |
+| Output format | enum | no | `--format` (`csv` / `eml` / `mbox`) |
+| Attachments | enum | no | `--media-mode` (`clone` / `convert` / `compress` / `disabled`); CSV only |
 | Max resolution / fps / min size / skip efficient | when Compress | no | `--media-max-resolution`, `--media-max-fps`, `--media-min-size`, `--media-skip-efficient` |
 
-† At most one of `--contacts` / `--vcf`. Global Obfuscate and Start/End date apply (see Shared / global controls). Convert → `.jpg`/`.mp4`/`.mp3`; Compress re-encodes (needs ffmpeg).
+† At most one of `--contacts` / `--vcf`. Global Obfuscate and Start/End date apply for CSV (see Shared / global controls). Convert → `.jpg`/`.mp4`/`.mp3`; Compress re-encodes (needs ffmpeg). Mail formats skip convert/compress/obfuscate.
 
 ### SMS Backup & Restore — `sms-backup-restore-exporter`
 
@@ -121,12 +122,12 @@ Product: [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/)
 |---------|------|:--------:|-----|
 | Input | XML file or folder of XML | yes | `--input` |
 | Output | folder | yes | `--output` |
-| Output format | enum | no | `--format` (`csv` default, `eml`) |
+| Output format | enum | no | `--format` (`csv` / `eml` / `mbox`) |
 | Your phone numbers | multi-value text | yes | `--owner-phone` |
 | Contacts CSV / VCF | file | no† | `--contacts` / `--vcf` |
-| Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro) |
+| Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro); CSV only |
 
-Encrypted ZIP backups must be unlocked/extracted before selecting input. Global Obfuscate and Start/End date apply for CSV; convert/compress and obfuscate are skipped for EML.
+Encrypted ZIP backups must be unlocked/extracted before selecting input. Global Obfuscate and Start/End date apply for CSV; convert/compress and obfuscate are skipped for EML/MBOX.
 
 ### SMS Backup+ — `sms-backup-plus-exporter convert`
 
@@ -138,14 +139,15 @@ GUI always runs the `convert` subcommand and always passes `--verbose`.
 |---------|------|:--------:|-----|
 | Input | one EML file or folder | yes | `--input` |
 | Output | folder | yes | `--output` |
+| Output format | enum | no | `--format` (`csv` / `eml` / `mbox`) |
 | Your phone numbers | multi-value text | yes\* | `--owner-phone` |
 | Your email addresses | multi-value text | yes\* | `--owner-email` |
 | Contacts CSV / VCF | file | no† | `--contacts` / `--vcf` |
 | Name mapping CSV | file | no | `--name-mapping` (`Phone,Incorrect Name`) |
 | Verbose | — | always | `--verbose` |
-| Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro) |
+| Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro); CSV only |
 
-\* Or from crate-relative `config/owner.toml` — GUI does not rely on that; collect explicitly. Global Obfuscate and Start/End date apply.
+\* Or from crate-relative `config/owner.toml` — GUI does not rely on that; collect explicitly. Global Obfuscate and Start/End date apply for CSV; skipped for EML/MBOX.
 
 ### OpenExtract — `openextract-exporter`
 
@@ -155,9 +157,10 @@ Product: [OpenExtract](https://www.openextract.app/)
 |---------|------|:--------:|-----|
 | Input | CSV file or folder | yes | `--input` |
 | Output | folder | yes | `--output` |
+| Output format | enum | no | `--format` (`csv` / `eml` / `mbox`) |
 | Contacts VCF / iMazing CSV | file | no† | `--vcf` / `--contacts` |
 
-Global Obfuscate and Start/End date apply.
+Global Obfuscate and Start/End date apply for CSV; skipped for EML/MBOX. Mail is text-only (no media in source).
 
 ### iMazing — `imazing-exporter`
 
@@ -167,10 +170,11 @@ Product: [iMazing](https://imazing.com/)
 |---------|------|:--------:|-----|
 | Input | Messages/WhatsApp CSV, chat folder, `Messages/`, `WhatsApp/`, or device export root | yes | `--input` |
 | Output | folder | yes | `--output` |
+| Output format | enum | no | `--format` (`csv` / `eml` / `mbox`) |
 | Contacts | iMazing Contacts CSV only | no | `--contacts` |
 | Timezone | IANA text | no | `--timezone` (default: host local) |
 
-Global Obfuscate and Start/End date apply. WhatsApp chats write as separate `…__whatsapp.csv` files. See [`crates/imazing-exporter/docs/DESIGN.md`](../crates/imazing-exporter/docs/DESIGN.md).
+Global Obfuscate and Start/End date apply for CSV; skipped for EML/MBOX. WhatsApp chats use the `__whatsapp` stem suffix (CSV or mail). See [`crates/imazing-exporter/docs/DESIGN.md`](../crates/imazing-exporter/docs/DESIGN.md).
 
 ### WhatsApp — `whatsapp-exporter`
 
@@ -191,12 +195,13 @@ No Input directory and no Contacts file row in the GUI. `wtsexporter` runs in a 
 | Contacts | file (hint: Optional wa.db / Optional ContactsV2.sqlite) | no | `--wa` |
 | Decryption key | text (Android only; not saved) | no | `--key` |
 | Output | folder | yes | `--output` |
-| Attachments | enum | no | `--media-mode` |
+| Output format | enum | no | `--format` (`csv` / `eml` / `mbox`) |
+| Attachments | enum | no | `--media-mode`; CSV only |
 | Media folder | folder (advanced, Android only) | no | `--media` |
 | Message Database | file (advanced, Android only; hint: Optional msgstore.db override) | no | `--db` |
 | WhatsApp Business | checkbox (advanced) | no | `--business` |
 
-Global Obfuscate and Start/End date apply. Output files use the `__whatsapp` suffix. Optional CLI `--input` (defaults to cwd for resolving `msgstore.db` / media folders) is not sent by the GUI; extraction always uses a temp dir under Output.
+Global Obfuscate and Start/End date apply for CSV; skipped for EML/MBOX. Output stems use the `__whatsapp` suffix. Optional CLI `--input` (defaults to cwd for resolving `msgstore.db` / media folders) is not sent by the GUI; extraction always uses a temp dir under Output.
 
 ### iPhone backup — `imessage-exporter` / `imessage-mail-exporter`
 
@@ -229,7 +234,7 @@ Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox
 4. **Path existence:** input must exist; output folder may be created on run.
 5. **Obfuscate seed:** if provided, must be exactly 8 hex characters; empty means generate.
 6. **Timezone (iMazing):** if set, must be a valid IANA name (or defer to converter error).
-7. **iPhone backup:** output directory is required; always passes `--use-caller-id`; obfuscate only applies to CSV.
+7. **iPhone backup:** output directory is required; always passes `--use-caller-id`; obfuscate / convert / compress only apply to CSV (all exporters).
 8. **SMS Backup+:** exactly one input path; `SourceConfig::SmsBackupPlus` sets `verbose` / `include_summary`.
 9. **Date range:** optional start/end `YYYY-MM-DD`; end is exclusive; blank means unbounded (`DateRange` on `ExporterConfig`).
 10. **Media convert/compress:** require `ffmpeg` and `ffprobe` on PATH; Compress options validated (fps number, min size like `20M`).

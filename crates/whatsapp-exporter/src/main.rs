@@ -26,7 +26,7 @@ impl From<CliPlatform> for WhatsappPlatform {
 
 #[derive(Parser, Debug)]
 #[command(name = "whatsapp-exporter")]
-#[command(about = "Convert WhatsApp DB/backup (via wtsexporter) to per-conversation CSV")]
+#[command(about = "Convert WhatsApp DB/backup (via wtsexporter) to per-conversation CSV or EML")]
 struct Cli {
     /// Directory (or msgstore.db file) used to resolve relative defaults such as
     /// `msgstore.db` / `wa.db` / `WhatsApp/`. Defaults to the process cwd.
@@ -35,9 +35,13 @@ struct Cli {
     #[arg(long)]
     input: Option<PathBuf>,
 
-    /// Output directory for per-conversation CSV (+ attachments/)
+    /// Output directory for per-conversation CSV or EML archive (+ attachments/)
     #[arg(long)]
     output: PathBuf,
+
+    /// Output format: `csv` (default), `eml` (mail folders), or `mbox`
+    #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
+    format: String,
 
     /// Android or iOS (required unless --json)
     #[arg(long, value_enum)]
@@ -111,6 +115,7 @@ struct Cli {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let date_range = parse_date_range(cli.start_date.as_deref(), cli.end_date.as_deref())?;
+    let output_format = OutputFormat::parse(&cli.format).map_err(anyhow::Error::msg)?;
     let compress = compress_options_from_cli(
         cli.media_max_resolution,
         cli.media_max_fps,
@@ -131,7 +136,7 @@ fn main() -> Result<()> {
             compress,
         },
         cancel: None,
-        output_format: OutputFormat::Csv,
+        output_format,
         source: SourceConfig::Whatsapp(WhatsappConfig {
             platform: cli.platform.map(Into::into),
             json: cli.json,

@@ -11,15 +11,19 @@ use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
 
 #[derive(Parser, Debug)]
 #[command(name = "go-sms-pro-exporter")]
-#[command(about = "Convert GO SMS Pro XML+PDU backups to per-conversation CSV")]
+#[command(about = "Convert GO SMS Pro XML+PDU backups to per-conversation CSV or EML")]
 struct Cli {
     /// Directory containing gosms_sys*.xml and I_*.pdu files
     #[arg(long)]
     input: PathBuf,
 
-    /// Output directory for CSV + attachments/
+    /// Output directory for CSV or EML archive + attachments/
     #[arg(long)]
     output: PathBuf,
+
+    /// Output format: `csv` (default), `eml` (mail folders), or `mbox`
+    #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
+    format: String,
 
     /// Owner phone (E.164 or digits). Repeat for multiple owner numbers.
     /// Required — there is no demo default (wrong owner flips PDU direction).
@@ -76,6 +80,7 @@ struct Cli {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let date_range = parse_date_range(cli.start_date.as_deref(), cli.end_date.as_deref())?;
+    let output_format = OutputFormat::parse(&cli.format).map_err(anyhow::Error::msg)?;
     let compress = compress_options_from_cli(
         cli.media_max_resolution,
         cli.media_max_fps,
@@ -107,7 +112,7 @@ fn main() -> Result<()> {
             compress,
         },
         cancel: None,
-        output_format: OutputFormat::Csv,
+        output_format,
         source: SourceConfig::GoSmsPro(GoSmsProConfig {
             owner_phones: cli.owner_phones,
         }),
