@@ -186,9 +186,9 @@ Requires `wtsexporter` beside the GUI, on `PATH`, in `MESSAGE_EXPORTERS_BIN`, or
 
 No Input directory and no Contacts file row in the GUI. `wtsexporter` runs in a temporary directory under the Output folder (so extract junk is not written into the GUI launch directory).
 
-**iOS field order:** Platform → Backup path → Contacts → Output → Attachments → Advanced (WhatsApp Business).
+**iOS field order:** Backup type → Output format → Platform → Backup path → Contacts → Output → Attachments → Advanced (WhatsApp Business).
 
-**Android field order:** Platform → Backup path → Contacts → Output → Attachments → Decryption key → Advanced (media folder, Message Database, WhatsApp Business).
+**Android field order:** Backup type → Output format → Platform → Backup path → Contacts → Output → Attachments → Decryption key → Advanced (media folder, Message Database, WhatsApp Business).
 
 | Control | Type | Required | CLI |
 |---------|------|:--------:|-----|

@@ -502,6 +502,7 @@ impl App {
         ui.add_space(8.0);
 
         self.ui_backup_source(ui);
+        self.ui_output_format(ui);
         ui.add_space(8.0);
 
         if self.exporter == Exporter::Whatsapp {
@@ -528,7 +529,7 @@ impl App {
             );
         }
 
-        // WhatsApp: Platform → backup / contacts → Output → Attachments → Advanced.
+        // WhatsApp: Output format → Platform → backup / contacts → Output → Attachments → Advanced.
         if self.exporter == Exporter::Whatsapp {
             if self.form.whatsapp_platform == WhatsappPlatform::Ios {
                 path_or_text(
@@ -591,7 +592,6 @@ impl App {
         if self.exporter != Exporter::Whatsapp {
             self.ui_contacts(ui, contacts_enabled);
         }
-        self.ui_output_format(ui);
         // Convert/compress only apply to CSV; mail embeds (or skips) at export time.
         let attachments_enabled =
             attachments_enabled && self.form.output_format == OutputFormat::Csv;
