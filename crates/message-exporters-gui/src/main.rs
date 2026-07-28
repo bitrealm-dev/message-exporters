@@ -95,6 +95,7 @@ enum AppMode {
     ValidateContacts,
     Export,
     Reexport,
+    Log,
 }
 
 struct App {
@@ -113,8 +114,6 @@ struct App {
     logs: Vec<String>,
     /// Selectable display buffer for the full-window log view (synced from `logs`).
     log_text: String,
-    /// When true, central panel shows the scrollable log instead of the form.
-    show_log: bool,
     /// Basename shown in the log header (no directory).
     session_log_name: Option<String>,
     session_log_path: Option<PathBuf>,
@@ -141,7 +140,6 @@ impl Default for App {
             control: ProcessControl::default(),
             logs: Vec::new(),
             log_text: LOG_PLACEHOLDER.to_string(),
-            show_log: false,
             session_log_name: None,
             session_log_path: None,
             errors: Vec::new(),
@@ -295,10 +293,7 @@ impl App {
 
         let output_path = PathBuf::from(&output);
         if let Err(error) = ensure_output_dir(&output_path) {
-            self.errors = vec![error.clone()];
-            self.begin_session_log();
-            self.push_log(format!("Error: {error}"));
-            self.show_log = true;
+            self.errors = vec![error];
             return;
         }
 
@@ -330,7 +325,7 @@ impl App {
         self.errors.clear();
         self.running = true;
         self.begin_session_log();
-        self.show_log = true;
+        self.mode = AppMode::Log;
         let (tx, rx) = mpsc::channel();
         self.rx = Some(rx);
         spawn_job(self.control.clone(), tx, label, job);
@@ -353,10 +348,7 @@ impl App {
         };
         let output = PathBuf::from(self.form.output.trim());
         if let Err(error) = ensure_output_dir(&output) {
-            self.errors = vec![error.clone()];
-            self.begin_session_log();
-            self.push_log(format!("Error: {error}"));
-            self.show_log = true;
+            self.errors = vec![error];
             return;
         }
 
@@ -366,7 +358,7 @@ impl App {
         self.errors.clear();
         self.running = true;
         self.begin_session_log();
-        self.show_log = true;
+        self.mode = AppMode::Log;
         let (tx, rx) = mpsc::channel();
         self.rx = Some(rx);
         spawn_job(self.control.clone(), tx, label, job);
@@ -410,7 +402,7 @@ impl App {
         self.errors.clear();
         self.running = true;
         self.begin_session_log();
-        self.show_log = true;
+        self.mode = AppMode::Log;
         let (tx, rx) = mpsc::channel();
         self.rx = Some(rx);
         spawn(program, args, self.control.clone(), tx);
@@ -419,35 +411,21 @@ impl App {
     fn cancel(&mut self) {
         match self.control.cancel() {
             Ok(()) => self.push_log("Cancellation requested…".into()),
-            Err(error) => self.errors = vec![error],
+            Err(error) => {
+                self.errors = vec![error.clone()];
+                self.push_log(format!("Could not request cancellation: {error}"));
+            }
         }
     }
 
     fn ui_tabs(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.add_enabled_ui(!self.running, |ui| {
-                if ui
-                    .selectable_value(&mut self.mode, AppMode::ValidateContacts, "Contacts")
-                    .clicked()
-                {
-                    self.show_log = false;
-                }
-                if ui
-                    .selectable_value(&mut self.mode, AppMode::Export, "Message")
-                    .clicked()
-                {
-                    self.show_log = false;
-                }
-                if ui
-                    .selectable_value(&mut self.mode, AppMode::Reexport, "Re-export")
-                    .clicked()
-                {
-                    self.show_log = false;
-                }
+                ui.selectable_value(&mut self.mode, AppMode::ValidateContacts, "Contacts");
+                ui.selectable_value(&mut self.mode, AppMode::Export, "Message");
+                ui.selectable_value(&mut self.mode, AppMode::Reexport, "Re-export");
             });
-            if ui.selectable_label(self.show_log, "Log").clicked() {
-                self.show_log = !self.show_log;
-            }
+            ui.selectable_value(&mut self.mode, AppMode::Log, "Log");
         });
     }
 
@@ -519,14 +497,17 @@ impl App {
                     if update.clicked() {
                         self.start_validate(false);
                     }
-                    if self.running && ui.button("Cancel").clicked() {
-                        self.cancel();
-                    }
                 });
             });
     }
 
     fn ui_export(&mut self, ui: &mut egui::Ui) {
+        egui::Frame::NONE
+            .inner_margin(egui::Margin::same(18))
+            .show(ui, |ui| self.ui_export_content(ui));
+    }
+
+    fn ui_export_content(&mut self, ui: &mut egui::Ui) {
         ui.heading("Export");
         ui.add_space(8.0);
 
@@ -1302,14 +1283,21 @@ impl App {
         ui.horizontal(|ui| {
             let name = self.session_log_name.as_deref().unwrap_or("(log)");
             ui.label(egui::RichText::new(name).strong());
-            if !self.logs.is_empty() {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if self.running {
+                ui.spinner();
+                ui.label("Running…");
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if self.running && ui.button("Cancel").clicked() {
+                    self.cancel();
+                }
+                if !self.logs.is_empty() {
                     if ui.small_button("Clear").clicked() {
                         self.logs.clear();
                         self.sync_log_text();
                     }
-                });
-            }
+                }
+            });
         });
 
         ui.add_space(4.0);
@@ -1357,17 +1345,22 @@ impl eframe::App for App {
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            if self.show_log {
-                ui.set_min_size(ui.available_size());
-                self.ui_log_panel(ui);
-            } else {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    match self.mode {
-                        AppMode::ValidateContacts => self.ui_validate(ui),
-                        AppMode::Export => self.ui_export(ui),
-                        AppMode::Reexport => self.ui_reexport(ui),
-                    }
-                });
+            let mode = self.mode;
+            match mode {
+                AppMode::Log => {
+                    ui.set_min_size(ui.available_size());
+                    self.ui_log_panel(ui);
+                }
+                AppMode::ValidateContacts | AppMode::Export | AppMode::Reexport => {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        ui.add_enabled_ui(!self.running, |ui| match mode {
+                            AppMode::ValidateContacts => self.ui_validate(ui),
+                            AppMode::Export => self.ui_export(ui),
+                            AppMode::Reexport => self.ui_reexport(ui),
+                            AppMode::Log => unreachable!(),
+                        });
+                    });
+                }
             }
         });
     }
