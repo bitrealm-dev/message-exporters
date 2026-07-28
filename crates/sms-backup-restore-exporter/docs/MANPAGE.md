@@ -1,12 +1,12 @@
 # NAME
 
-sms-backup-restore-exporter - convert SMS Backup & Restore XML via canonical IR to CSV/EML/MBOX/JSON
+sms-backup-restore-exporter - convert SMS Backup & Restore XML via common message to JSON/CSV/EML/MBOX/JSONL/XML
 
 # SYNOPSIS
 
 ```text
 sms-backup-restore-exporter --input <PATH> --output <DIR> --owner-phone <PHONE>...
-    [--format csv|eml|mbox|json]
+    [--format json|jsonl|csv|eml|mbox|xml]
     [--contacts <PATH> | --vcf <PATH>]
     [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD]
     [--media-mode disabled|clone|convert|compress]
@@ -17,9 +17,9 @@ sms-backup-restore-exporter --input <PATH> --output <DIR> --owner-phone <PHONE>.
 
 # DESCRIPTION
 
-Converts SyncTech **SMS Backup & Restore** XML into a canonical IR document per conversation, then projects to CSV (default), EML, MBOX, or JSON (`--format`). See [MESSAGE_IR.md](../../../docs/MESSAGE_IR.md) and [MAIL_ARCHIVE.md](../../../docs/MAIL_ARCHIVE.md). MMS media is written under `attachments/` when enabled; for EML/MBOX, attachment bytes are embedded.
+Converts SyncTech **SMS Backup & Restore** XML into a common message per conversation, then projects JSON (default), JSONL, CSV, EML, MBOX, or SyncTech XML (`--format`). See [common-message.md](../../../docs/src/common-message.md), [MESSAGE_IR.md](../../../docs/MESSAGE_IR.md), and [MAIL_ARCHIVE.md](../../../docs/MAIL_ARCHIVE.md). MMS media is written under `attachments/` when enabled; for EML/MBOX, attachment bytes are embedded.
 
-Owner phone(s) are required so MMS chat keys and direction resolve correctly. Encrypted ZIP backups must be unlocked/extracted before use. Media convert/compress and obfuscation apply to CSV output only.
+Owner phone(s) are required so MMS chat keys and direction resolve correctly. Encrypted ZIP backups must be unlocked/extracted before use. Media convert/compress and obfuscation apply through FormatSink for every format.
 
 # OPTIONS
 
@@ -27,10 +27,10 @@ Owner phone(s) are required so MMS chat keys and direction resolve correctly. En
 : An `sms-*.xml` file, or a directory of `.xml` files.
 
 **--output** *DIR*
-: Destination for per-conversation CSV (or EML folders) and `attachments/`.
+: Destination for packaging output and `attachments/`.
 
-**--format** *csv|eml|mbox|json*
-: Output packaging from IR. `csv` (default) one CSV per conversation; `eml` / `mbox` mail archives; `json` canonical IR file per conversation.
+**--format** *json|jsonl|csv|eml|mbox|xml*
+: Output packaging from the common message. `json` (default) one common-message file per conversation; `jsonl` lines; `csv` one CSV per conversation; `eml` / `mbox` mail archives; `xml` one `smses.xml`.
 
 **--owner-phone** *PHONE*
 : Owner number (E.164 or digits). Repeat for multiple. Required.
@@ -78,7 +78,7 @@ Exits non-zero on invalid arguments, missing input, convert failure, or total me
 : SyncTech XML with embedded or referenced MMS parts.
 
 **Output**
-: With `--format csv` (default): one `*.csv` per conversation; `attachments/` for copied MMS media. With `--format eml`: one directory per conversation of `*.eml` files; `attachments/` still used when media copy is enabled.
+: With `--format json` (default): one `*.json` per conversation; `attachments/` for copied MMS media. With `--format csv`: one `*.csv` per conversation. With `--format eml`: one directory per conversation of `*.eml` files.
 
 # ENVIRONMENT
 
@@ -98,9 +98,3 @@ sms-backup-restore-exporter \
 # NOTES
 
 Supported exporter (documented XML schema). Call logs, drafts, failed, and queued messages are skipped. See [FIELDS.md](FIELDS.md) and [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md).
-
-# SEE ALSO
-
-[README.md](../README.md), [FIELDS.md](FIELDS.md), [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md),
-[message-contacts](../../message-contacts), [message-media](../../message-media),
-[message-obfuscate](../../message-obfuscate)

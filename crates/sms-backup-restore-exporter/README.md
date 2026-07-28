@@ -1,6 +1,6 @@
-# SMS Backup & Restore → CSV
+# SMS Backup & Restore → common message → packaging
 
-Convert an Android **SMS Backup & Restore** backup into one spreadsheet file per conversation, plus decoded MMS photos and other media.
+Convert an Android **SMS Backup & Restore** backup into the [common message](../../docs/src/common-message.md), then package as JSON (default), CSV, EML, MBOX, JSONL, or SyncTech XML.
 
 **Targeted upstream:** SMS Backup & Restore **10.26.003** (`export_tool` / `export_tool_version` on every output row).
 
@@ -10,18 +10,16 @@ Library (`ExporterConfig` / `run`) for the GUI; thin CLI for standalone use. CLI
 
 [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/) (by SyncTech) writes a backup file whose name looks like `sms-20210328165031.xml`. That file holds SMS and MMS from the phone’s messaging database.
 
-This converter reads that XML and writes one CSV file per conversation. A CSV is a plain table you can open in Excel, Numbers, or Google Sheets.
+This converter reads that XML into a common message per conversation, then writes the format you pick (`--format`; default `json`). CSV is one packaging option for spreadsheets.
 
 - What the backup XML contains: [docs/FIELDS.md](docs/FIELDS.md)
 - How each message becomes a spreadsheet row: [docs/XML_CSV_MAPPING.md](docs/XML_CSV_MAPPING.md)
 
 ## What you get
 
-- One CSV file per conversation
-- An `attachments/` folder for pictures and other media that were inside MMS messages
-- Each row is one message: who it was with, when it was sent or received, the text, and whether media was attached
-
-Shared CSV columns: [`docs/src/csv-output.md`](../../docs/src/csv-output.md).
+- One file (or mail folder) per conversation in the chosen format (default JSON)
+- An `attachments/` folder for pictures and other media that were inside MMS messages when media copy is enabled
+- For CSV packaging: each row is one message (shared columns: [`docs/src/csv-output.md`](../../docs/src/csv-output.md))
 
 ## What you need
 

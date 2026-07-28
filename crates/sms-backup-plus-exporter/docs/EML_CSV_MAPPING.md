@@ -1,19 +1,19 @@
-# SMS Backup+ EML → IR / CSV mapping
+# SMS Backup+ EML → common message / CSV mapping
 
-How flat and archive `.eml` messages map into canonical IR and the shared CSV projector written by `sms-backup-plus-exporter`.
+How flat and archive `.eml` messages map into the common message and the shared CSV projector written by `sms-backup-plus-exporter` (`--format csv`).
 
-Deeper EML format notes: [`FORMAT.md`](FORMAT.md). Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). IR overview: [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
+Deeper EML format notes: [`FORMAT.md`](FORMAT.md). Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). Common message: [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
 
 ## Goal / non-goal
 
-- **Goal:** Document how Backup+ EML fields fill shared IR/CSV cells (and the vendor bag).
-- **Non-goal:** A private per-exporter CSV header, or omitting unused Apple columns. All IR exporters write the full [`CSV_HEADERS`](../../message-ir/src/lib.rs); Apple-only cells are empty for this source.
+- **Goal:** Document how Backup+ EML fields fill shared common-message / CSV cells (and the vendor bag).
+- **Non-goal:** A private per-exporter CSV header, or omitting unused Apple columns. All exporters write the full [`CSV_HEADERS`](../../message-ir/src/lib.rs); Apple-only cells are empty for this source.
 
 ## Pipeline / output
 
-Source EML → `ConversationDocument` → [`message_ir::FormatSink`](../../message-ir/src/format_sink.rs) (`--format csv|eml|mbox|json|jsonl|xml`).
+Source EML → `ConversationDocument` → [`message_ir::FormatSink`](../../message-ir/src/format_sink.rs) (`--format json|jsonl|csv|eml|mbox|xml`; default `json`).
 
-Default CSV: one file per conversation (header + one row per message after dedupe) plus `<stem>.meta.json`. MIME attachments under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). Peers with no usable phone number are written to `unknown.csv`. `--format xml` writes a single SyncTech `smses.xml`.
+With `--format csv`: one file per conversation (header + one row per message after dedupe) plus `<stem>.meta.json`. MIME attachments under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). Peers with no usable phone number are written to `unknown.csv`. `--format xml` writes a single SyncTech `smses.xml`.
 
 ## EML shapes
 
@@ -27,7 +27,7 @@ Typical headers: `X-smssync-type`, `X-smssync-address`, `X-smssync-date`, `X-sms
 
 ## Source → shared cells
 
-| CSV / IR cell | EML source |
+| CSV / common-message cell | EML source |
 |---------------|------------|
 | `chat_identifier` | Peer E.164 or `chat-group-…` |
 | `conversation_type` | `individual` / `group` from address list |

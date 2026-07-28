@@ -1,4 +1,4 @@
-//! Convert wtsexporter JSON → canonical IR → per-conversation CSV, EML, MBOX, or JSON.
+//! Convert wtsexporter JSON → common message → packaging via FormatSink.
 
 use crate::cancel::{check_cancel, CancelFlag};
 use crate::jid::{chat_id_from_jid, is_group_jid, jid_to_e164};

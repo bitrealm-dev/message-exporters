@@ -1,12 +1,13 @@
 # NAME
 
-sms-backup-plus-exporter - convert SMS Backup+ EML exports to per-conversation CSV
+sms-backup-plus-exporter - convert SMS Backup+ EML exports via common message to JSON/CSV/EML/MBOX/JSONL/XML
 
 # SYNOPSIS
 
 ```text
 sms-backup-plus-exporter [-v|--verbose] [--no-summary] convert
     --output <DIR>
+    [--format json|jsonl|csv|eml|mbox|xml]
     [--input <PATH>]...
     [--owner-phone <PHONE>]... [--owner-email <EMAIL>]...
     [--contacts <PATH> | --vcf <PATH>] [--name-mapping <PATH>]
@@ -19,7 +20,7 @@ sms-backup-plus-exporter [-v|--verbose] [--no-summary] convert
 
 # DESCRIPTION
 
-Converts offline **SMS Backup+** `.eml` trees (IMAP-style `Archive/`, `Sent/`, …) into vault-shaped per-conversation CSV. Multiple `--input` roots are merged and path-deduped.
+Converts offline **SMS Backup+** `.eml` trees (IMAP-style `Archive/`, `Sent/`, …) into a common message per conversation, then projects JSON (default) or another `--format`. Multiple `--input` roots are merged and path-deduped.
 
 Owner phone and email may come from flags or `config/owner.toml` beside the crate. The GUI always runs the `convert` subcommand with `--verbose`.
 
@@ -39,7 +40,10 @@ Owner phone and email may come from flags or `config/owner.toml` beside the crat
 : An `.eml` file or directory of EMLs. Repeatable. Default: `source_dirs` from `config/owner.toml` when set. Exactly one path is required by the GUI.
 
 **--output** *DIR*
-: Destination for CSV and `attachments/`.
+: Destination for packaging output and `attachments/`.
+
+**--format** *json|jsonl|csv|eml|mbox|xml*
+: Output packaging from the common message (`json` default).
 
 **--owner-phone** *PHONE*
 : Owner number(s). Default: `phones` in `config/owner.toml`.

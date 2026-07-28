@@ -11,18 +11,18 @@ use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
 
 #[derive(Parser, Debug)]
 #[command(name = "imazing-exporter")]
-#[command(about = "Convert iMazing Messages / WhatsApp CSV exports to per-conversation CSV or EML")]
+#[command(about = "Convert iMazing Messages / WhatsApp CSV exports via common message to JSON/CSV/EML/MBOX/JSONL/XML")]
 struct Cli {
     /// Messages/WhatsApp export directory (or a single CSV for CLI convenience)
     #[arg(long)]
     input: PathBuf,
 
-    /// Output directory for per-conversation CSV or EML archive
+    /// Output directory for packaging + attachments/
     #[arg(long)]
     output: PathBuf,
 
-    /// Output format: `csv` (default), `eml` (mail folders), `mbox`, `json`, `jsonl`, or `xml`
-    #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
+    /// Output format: `json` (default), `jsonl`, `csv`, `eml`, `mbox`, or `xml`
+    #[arg(long = "format", default_value = "json", value_name = "FORMAT")]
     format: String,
 
     /// iMazing Contacts CSV from the same backup export.

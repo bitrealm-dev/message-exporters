@@ -4,17 +4,19 @@ Message Exporters turns phone message backups into plain files a spreadsheet, ma
 
 The app does not replace the tools that pull data off a phone. Use those tools (or a vendor backup) first, then run Message Exporters to normalize the result into a format that is easy to archive, search, or move elsewhere.
 
+Every export builds a shared per-conversation **[common message](common-message.md)**, then packages it as the format you pick (default **JSON**). One Run is enough; Re-export is only for converting an existing output folder.
+
 ## Output formats
 
 | Format | Best for |
 |--------|----------|
+| **JSON** / **JSON Lines** | Default packaging; machine-readable archives and later conversion |
 | **CSV** | Spreadsheets, scripts, and vault-style import |
 | **EML** | Reading threads in a mail client (one folder per chat) |
 | **MBOX** | One mailbox file per chat |
-| **JSON** / **JSON Lines** | Machine-readable archives and round-trips |
 | **XML** | One SyncTech `smses.xml` backup for restore-oriented workflows |
 
-See [Choose an output format](formats.md) for guidance.
+See [Common message](common-message.md) and [Choose an output format](formats.md).
 
 ## Supported backups
 

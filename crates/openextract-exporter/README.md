@@ -1,6 +1,6 @@
-# OpenExtract → CSV
+# OpenExtract → common message → packaging
 
-Convert OpenExtract conversation CSV exports into one vault-shaped spreadsheet file per conversation, enriching phone numbers and names from the contacts `.vcf` that ships with the export.
+Convert OpenExtract conversation CSV exports into the [common message](../../docs/src/common-message.md), then package as JSON (default), CSV, EML, MBOX, JSONL, or XML. Enriches phone numbers and names from the contacts `.vcf` that ships with the export.
 
 **Targeted upstream:** OpenExtract **0.5.1** (`export_tool` / `export_tool_version` on every output row).
 

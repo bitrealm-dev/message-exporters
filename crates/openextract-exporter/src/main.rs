@@ -11,18 +11,18 @@ use openextract_exporter::{parse_date_range, run};
 
 #[derive(Parser, Debug)]
 #[command(name = "openextract-exporter")]
-#[command(about = "Convert OpenExtract conversation CSV (+ VCF) to per-conversation CSV or EML")]
+#[command(about = "Convert OpenExtract conversation CSV (+ VCF) via common message to JSON/CSV/EML/MBOX/JSONL/XML")]
 struct Cli {
     /// OpenExtract CSV file or directory of conversation_*.csv / all_conversations.csv
     #[arg(long)]
     input: PathBuf,
 
-    /// Output directory for per-conversation CSV or EML archive
+    /// Output directory for packaging + attachments/
     #[arg(long)]
     output: PathBuf,
 
-    /// Output format: `csv` (default), `eml`, `mbox`, `json`, `jsonl`, or `xml` (SMS Backup & Restore)
-    #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
+    /// Output format: `json` (default), `jsonl`, `csv`, `eml`, `mbox`, or `xml`
+    #[arg(long = "format", default_value = "json", value_name = "FORMAT")]
     format: String,
 
     /// Contacts VCF from the OpenExtract export (phone ↔ name)

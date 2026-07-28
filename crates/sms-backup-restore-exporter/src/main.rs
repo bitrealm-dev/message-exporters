@@ -11,18 +11,18 @@ use sms_backup_restore_exporter::{parse_date_range, run};
 
 #[derive(Parser, Debug)]
 #[command(name = "sms-backup-restore-exporter")]
-#[command(about = "Convert SMS Backup & Restore XML to per-conversation CSV or EML")]
+#[command(about = "Convert SMS Backup & Restore XML via common message to JSON/CSV/EML/MBOX/JSONL/XML")]
 struct Cli {
     /// Path to sms-*.xml file, or a directory of .xml files
     #[arg(long)]
     input: PathBuf,
 
-    /// Output directory for CSV or EML archive + attachments/
+    /// Output directory for packaging + attachments/
     #[arg(long)]
     output: PathBuf,
 
-    /// Output format: `csv` (default), `eml`, `mbox`, `json`, `jsonl`, or `xml` (SMS Backup & Restore)
-    #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
+    /// Output format: `json` (default), `jsonl`, `csv`, `eml`, `mbox`, or `xml`
+    #[arg(long = "format", default_value = "json", value_name = "FORMAT")]
     format: String,
 
     /// Owner phone (E.164 or digits). Repeat for multiple owner numbers.

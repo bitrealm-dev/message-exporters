@@ -1,4 +1,4 @@
-//! Convert SMS Backup & Restore XML → canonical IR → CSV / EML / MBOX / JSON / XML.
+//! Convert SMS Backup & Restore XML → common message → packaging via FormatSink.
 
 use crate::cancel::{check_cancel, CancelFlag};
 use crate::xml::{parse_xml_file, AttachmentBlob, ConvType, ParsedMessage};

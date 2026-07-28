@@ -2,7 +2,7 @@
 
 Design for a human-viewable export: **one folder per conversation**, **one `.eml` per message**, with structured `X-ME-*` headers for machine fidelity. Intended as an archive / interchange path before vault exists. Mail clients can open individual messages; translators can recover SMS, group MMS, and (later) iMessage semantics without relying on CSV.
 
-**Status:** Writer in [`message-mail`](../crates/message-mail/). All GUI exporters support `--format eml` / `mbox`. All exporters (including iMessage via [`imessage-ir-exporter`](../crates/imessage-ir-exporter/)) go pending → [`message-ir`](../crates/message-ir/) → EML/MBOX/CSV/JSON/JSONL (see [MESSAGE_IR.md](MESSAGE_IR.md)). CSV remains the default. iMessage emits extension headers; handwriting attaches SVG. See also [csv-output.md](src/csv-output.md).
+**Status:** Writer in [`message-mail`](../crates/message-mail/). All GUI exporters support `--format eml` / `mbox`. All exporters (including iMessage via [`imessage-ir-exporter`](../crates/imessage-ir-exporter/)) go backup → [common message](src/common-message.md) ([`message-ir`](../crates/message-ir/)) → packaging (see [MESSAGE_IR.md](MESSAGE_IR.md)). JSON is the default packaging. iMessage emits extension headers; handwriting attaches SVG. See also [csv-output.md](src/csv-output.md).
 
 ## Goals
 
@@ -106,9 +106,9 @@ Browse-oriented so mail-client **Correspondents** / Subject columns stay readabl
 
 **Group outgoing:** `From` = `Me <owner>`; `To` = same conversation address; roster in `X-ME-Participants`.
 
-Empty owner handle falls back to `me@sms.local` with display name `Me`. Outgoing rows set `X-ME-Sender-*` from owner identity (same as IR/CSV). Owner is always mirrored in `X-ME-Owner-*` when known.
+Empty owner handle falls back to `me@sms.local` with display name `Me`. Outgoing rows set `X-ME-Sender-*` from owner identity (same as common message / CSV). Owner is always mirrored in `X-ME-Owner-*` when known.
 
-Reverse import (EML/MBOX → IR JSON) is available via [`message-ir`](../crates/message-ir/) (`read_conversation_eml_dir` / `read_conversation_mbox`).
+Reverse import (EML/MBOX → common-message JSON) is available via [`message-ir`](../crates/message-ir/) (`read_conversation_eml_dir` / `read_conversation_mbox`).
 
 ## Core `X-ME-*` headers (SMS / MMS / shared)
 
@@ -125,7 +125,7 @@ Prefix: **`X-ME-`** (Message Exporters). JSON header values are compact single-l
 | `X-ME-Sender-Display-Name` | string | |
 | `X-ME-Owner-Handle` | string | Export owner handle |
 | `X-ME-Owner-Display-Name` | string | Export owner display (caller-id / `"Me"`) |
-| `X-ME-Service` | lowercase IR vocabulary preferred (`sms` / `imessage` / …) | Older exports may use `SMS` / `iMessage` |
+| `X-ME-Service` | lowercase common-message vocabulary preferred (`sms` / `imessage` / …) | Older exports may use `SMS` / `iMessage` |
 | `X-ME-Message-Kind` | see taxonomy below | |
 | `X-ME-Timestamp-Unix-Ms` | integer string | Authoritative epoch ms (UTC) |
 | `X-ME-Timestamp-Display-TZ` | optional offset/name | When export used a non-host timezone |
@@ -338,7 +338,7 @@ Normal sticker sends: image MIME part + `X-ME-Attachment-Meta` (`is_sticker`, `s
 
 1. Crate [`message-mail`](../crates/message-mail/) emits one `.eml` / mboxrd record per message (`write_mail_package`).
 2. **Android / OpenExtract / iMazing / WhatsApp** exporters map pending rows → `MailMessage` (`--format eml|mbox`).
-3. **iMessage** is [`imessage-ir-exporter`](../crates/imessage-ir-exporter/) (`imessage-database` → IR → CSV/EML/MBOX/JSON).
+3. **iMessage** is [`imessage-ir-exporter`](../crates/imessage-ir-exporter/) (`imessage-database` → common message → packaging).
 4. Deferred: Digital Touch animation, translations UI, HEIC convert / obfuscate inside MIME, Askama HTML bodies.
 
 ## Related docs
@@ -346,4 +346,4 @@ Normal sticker sends: image MIME part + `X-ME-Attachment-Meta` (`is_sticker`, `s
 - [CSV output conventions](src/csv-output.md)
 - [Exporter capability matrix](EXPORTER_MATRIX.md)
 - [SMS Backup+ EML input notes](../crates/sms-backup-plus-exporter/docs/FORMAT.md)
-- [SBR XML → CSV mapping](../crates/sms-backup-restore-exporter/docs/XML_CSV_MAPPING.md)
+- [SBR XML → common message / CSV mapping](../crates/sms-backup-restore-exporter/docs/XML_CSV_MAPPING.md)

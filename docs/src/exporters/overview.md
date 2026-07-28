@@ -1,6 +1,6 @@
 # Export overview
 
-Use the Message tab to export from a phone backup, then pick an [output format](../formats.md).
+Use the Message tab to export from a phone backup: the app builds a [common message](../common-message.md) per conversation, then writes your [output format](../formats.md) (default JSON).
 
 ## Supported
 

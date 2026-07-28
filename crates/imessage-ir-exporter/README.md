@@ -12,7 +12,7 @@ cargo run -p imessage-ir-exporter -- \
   --format json
 ```
 
-Formats: `csv` (default), `eml`, `mbox`, `json`, `jsonl` (schema v3 IR).
+Formats: `json` (default), `jsonl`, `csv`, `eml`, `mbox`, `xml` (common message schema v3).
 
 ## Library
 
@@ -27,7 +27,7 @@ Requires `SourceConfig::Apple`.
 
 ## GUI
 
-**iPhone backup** dispatches here for all output formats. Convert / compress / obfuscate remain CSV post-steps.
+**iPhone backup** dispatches here for all output formats. Media modes and obfuscate apply through `FormatSink` for every format.
 
 ## License
 

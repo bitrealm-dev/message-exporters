@@ -1,4 +1,4 @@
-//! Convert SMS Backup+ `.eml` trees into canonical IR → per-conversation CSV, EML, MBOX, or JSON.
+//! Convert SMS Backup+ `.eml` trees into the common message → packaging via FormatSink.
 
 use crate::archive::parse_archive_eml_mail;
 use crate::cancel::{check_cancel, CancelFlag};

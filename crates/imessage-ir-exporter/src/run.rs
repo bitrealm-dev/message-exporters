@@ -1,4 +1,4 @@
-//! Library entrypoint: [`ExporterConfig`] → CSV / EML / MBOX / JSON export.
+//! Library entrypoint: [`ExporterConfig`] → common message → packaging.
 
 use std::path::PathBuf;
 

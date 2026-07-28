@@ -2,17 +2,17 @@
 
 ## Name
 
-imessage-ir-exporter - export Apple Messages (chat.db) to CSV, EML, MBOX, or JSON IR
+imessage-ir-exporter - export Apple Messages (chat.db) via common message to JSON/CSV/EML/MBOX/JSONL/XML
 
 ## Synopsis
 
 ```text
-imessage-ir-exporter --output <DIR> [--format csv|eml|mbox|json] [options]
+imessage-ir-exporter --output <DIR> [--format json|jsonl|csv|eml|mbox|xml] [options]
 ```
 
 ## Description
 
-Reads Apple Messages from a macOS `chat.db` or an iOS backup, builds canonical [`message-ir`](../../../docs/MESSAGE_IR.md) documents, and projects per-conversation CSV / EML / MBOX / JSON.
+Reads Apple Messages from a macOS `chat.db` or an iOS backup, builds a [common message](../../../docs/src/common-message.md) ([`message-ir`](../../../docs/MESSAGE_IR.md)) per conversation, and projects JSON (default) / JSONL / CSV / EML / MBOX / XML.
 
 ## Options
 
@@ -20,7 +20,7 @@ Reads Apple Messages from a macOS `chat.db` or an iOS backup, builds canonical [
 |------|-------------|
 | `--input <PATH>` | `chat.db` (macOS) or iOS backup root (default: system Messages DB) |
 | `--output <DIR>` | Output directory |
-| `--format <FORMAT>` | `csv` (default), `eml`, `mbox`, or `json` |
+| `--format <FORMAT>` | `json` (default), `jsonl`, `csv`, `eml`, `mbox`, or `xml` |
 | `--platform <P>` | `macOS`, `iOS`, or `auto` |
 | `--copy-method <M>` | `clone` (default), `basic`, `full`, or `disabled` |
 | `--attachment-root <PATH>` | Custom attachment root (macOS) |
@@ -33,11 +33,7 @@ Reads Apple Messages from a macOS `chat.db` or an iOS backup, builds canonical [
 ## Examples
 
 ```bash
-imessage-ir-exporter --format json --output ./staging/imessage
+imessage-ir-exporter --output ./staging/imessage
 imessage-ir-exporter --format csv --copy-method clone --output ./staging/imessage
 imessage-ir-exporter --format eml --platform iOS --input ~/Library/Application\ Support/MobileSync/Backup/<id> --output ./out
 ```
-
-## See also
-
-[MESSAGE_IR.md](../../../docs/MESSAGE_IR.md), [MAIL_ARCHIVE.md](../../../docs/MAIL_ARCHIVE.md)

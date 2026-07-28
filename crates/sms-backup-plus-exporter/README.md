@@ -1,6 +1,6 @@
-# SMS Backup+ → CSV
+# SMS Backup+ → common message → packaging
 
-Convert [SMS Backup+](https://github.com/jberkel/sms-backup-plus) email exports into one spreadsheet file per conversation, plus any photos or other media stored in those emails.
+Convert [SMS Backup+](https://github.com/jberkel/sms-backup-plus) email exports into the [common message](../../docs/src/common-message.md), then package as JSON (default), CSV, EML, MBOX, JSONL, or XML, plus any photos or other media stored in those emails.
 
 **Targeted upstream:** SMS Backup+ **1.5.11** (`export_tool` / `export_tool_version` on every output row).
 

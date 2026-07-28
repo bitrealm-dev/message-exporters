@@ -11,7 +11,7 @@ use sms_backup_plus_exporter::{parse_date_range, run};
 
 #[derive(Parser, Debug)]
 #[command(name = "sms-backup-plus-exporter")]
-#[command(about = "Convert SMS Backup+ EML exports to per-conversation CSV or EML")]
+#[command(about = "Convert SMS Backup+ EML exports via common message to JSON/CSV/EML/MBOX/JSONL/XML")]
 struct Cli {
     /// Log progress to stderr (inputs, scan/write progress, dedupe summary)
     #[arg(short = 'v', long, global = true)]
@@ -27,7 +27,7 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Convert EML tree to per-conversation CSV, EML, or MBOX
+    /// Convert EML tree via common message to the chosen packaging format
     Convert {
         /// Path to a .eml file or directory tree of EMLs (Archive/, Sent/, …).
         /// Repeat for multiple roots; trees are merged and path-deduped.
@@ -35,12 +35,12 @@ enum Commands {
         #[arg(long = "input")]
         input: Vec<PathBuf>,
 
-        /// Output directory for CSV or EML archive + attachments/
+        /// Output directory for packaging + attachments/
         #[arg(long)]
         output: PathBuf,
 
-        /// Output format: `csv` (default), `eml` (mail folders), `mbox`, `json`, `jsonl`, or `xml`
-        #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
+        /// Output format: `json` (default), `jsonl`, `csv`, `eml`, `mbox`, or `xml`
+        #[arg(long = "format", default_value = "json", value_name = "FORMAT")]
         format: String,
 
         /// Owner phone (E.164 or digits). Repeat for multiple owner numbers.

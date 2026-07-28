@@ -7,7 +7,7 @@ Living design notes for [`imazing-exporter`](../). Append dated findings; do not
 ## Goals
 
 - Accept either one iMazing Messages/WhatsApp CSV **or** a folder at any level of a device export tree.
-- Emit canonical IR → shared [`CSV_HEADERS`](../../message-ir/src/lib.rs) (and other formats via `FormatSink`), with WhatsApp kept separate from SMS/iMessage.
+- Emit the common message → packaging via `FormatSink` (CSV uses shared [`CSV_HEADERS`](../../message-ir/src/lib.rs); default JSON), with WhatsApp kept separate from SMS/iMessage.
 - Resolve phones/names through an optional iMazing Contacts CSV.
 - Document export limitations that cannot be fixed in the converter.
 
@@ -139,4 +139,4 @@ These are upstream/export constraints, not converter bugs:
 
 - Converter README: [`../README.md`](../README.md)
 - Contacts helper: [`../../message-contacts/README.md`](../../message-contacts/README.md)
-- IR / CSV contract: [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md), [`docs/src/csv-output.md`](../../../docs/src/csv-output.md)
+- Common message / CSV contract: [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md), [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/src/csv-output.md`](../../../docs/src/csv-output.md)

@@ -1,6 +1,6 @@
 # SMS Backup & Restore XML output
 
-Exporters can project canonical IR into a **single** SyncTech-style backup file:
+Exporters can project the common message into a **single** SyncTech-style backup file:
 
 `{output}/smses.xml`
 
@@ -21,7 +21,7 @@ This is the same family of files that [SMS Backup & Restore](https://www.synctec
 | Piece | Crate / API |
 |-------|-------------|
 | Codec (write elements, finalize `count`) | [`message-sbr`](../crates/message-sbr/) |
-| IR → SBR mapping + export sink | [`message_ir::FormatSink`](../crates/message-ir/) (XML path uses `SbrBackupSession` internally) |
+| Common message → SBR mapping + export sink | [`message_ir::FormatSink`](../crates/message-ir/) (XML path uses `SbrBackupSession` internally) |
 | CLI / GUI | `--format xml` / `OutputFormat::Xml` |
 
 Exporters use `FormatSink::open` → `write_document` per conversation → `finish`. Do **not** call `write_format(..., Xml, …)` (returns an error — a single shared file cannot be safely rewritten per chat).
@@ -30,10 +30,11 @@ Exporters use `FormatSink::open` → `write_document` per conversation → `fini
 
 - **SMS** when 1:1 and no attachments: `<sms>` with `type` `1`/`2`, `date` = `timestamp_unix_ms`, `body` = text.
 - **MMS** when group and/or attachments (or `message_kind=mms`): `<mms>` with `<parts>` / `<addrs>`; attachment bytes base64 in `data` when available on disk or in memory.
-- If `source.fields` has `kind: "sms"|"mms"` (as produced by the SBR importer), attrs / parts / addrs are preferred and overlaid with IR date/direction/body.
+- If `source.fields` has `kind: "sms"|"mms"` (as produced by the SBR importer), attrs / parts / addrs are preferred and overlaid with common-message date/direction/body.
 - **Dropped:** entire `imessage` bag (tapbacks, replies, balloons, send effects, edits, announcements, …). Text and media still export as SMS/MMS.
 
 ## Related
 
-- [MESSAGE_IR.md](MESSAGE_IR.md) — IR projectors overview
-- [XML_CSV_MAPPING.md](../crates/sms-backup-restore-exporter/docs/XML_CSV_MAPPING.md) — XML → CSV/IR (import direction)
+- [MESSAGE_IR.md](MESSAGE_IR.md) — common message / projectors overview
+- [common-message.md](src/common-message.md) — end-user workflow
+- [XML_CSV_MAPPING.md](../crates/sms-backup-restore-exporter/docs/XML_CSV_MAPPING.md) — XML → common message / CSV (import direction)

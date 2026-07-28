@@ -1,6 +1,8 @@
 # Re-export between formats
 
-Convert a prior Message Exporters output folder to another packaging format without re-reading the phone backup. Use this to escape format lock-in (for example CSV → EML, or JSON → XML).
+Convert a prior Message Exporters output folder to another packaging format without re-reading the phone backup. The tool reads conversations back into the [common message](common-message.md), then writes the format you pick.
+
+Use Re-export only when you already have an export folder (for example CSV → EML, or JSON → XML). A first export from a phone backup can write the target format in one Run.
 
 ## Before starting
 
@@ -37,9 +39,9 @@ The tool inspects the top level of the input folder and requires **exactly one**
 | Signal | Detected format |
 |--------|-----------------|
 | `smses.xml` | XML |
-| IR `.json` files (`schema_version` 3) | JSON |
-| IR `.jsonl` files | JSONL |
-| Unified IR `.csv` files | CSV |
+| Common-message `.json` files (`schema_version` 3) | JSON |
+| Common-message `.jsonl` files | JSONL |
+| Unified common-message `.csv` files | CSV |
 | `.mbox` files | MBOX |
 | Subfolders containing `.eml` | EML |
 
@@ -52,8 +54,8 @@ The output directory holds the new packaging. The log reports the detected input
 ## If it fails
 
 - **Mixed formats** — remove extra format classes from the input folder, or re-export from a clean single-format export.
-- **Unsupported input** — the folder is not a Message Exporters IR layout.
+- **Unsupported input** — the folder is not a Message Exporters common-message layout.
 - **Same path** — choose a distinct output directory.
 - **XML owner issues** — outgoing MMS owner is inferred when possible; SMS-only backups usually still load.
 
-XML re-export can drop Apple-only fields. Prefer JSON or CSV as the intermediate when preserving iMessage detail matters. See [Choose an output format](formats.md).
+XML re-export can drop Apple-only fields. Prefer JSON when preserving iMessage detail matters. See [Common message](common-message.md) and [Choose an output format](formats.md).

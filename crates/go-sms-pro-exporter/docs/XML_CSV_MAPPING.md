@@ -1,19 +1,19 @@
-# GO SMS Pro XML / PDU → IR / CSV mapping
+# GO SMS Pro XML / PDU → common message / CSV mapping
 
-How `gosms_sys*.xml` `<SMS>` elements and `I_*.pdu` MMS files map into canonical IR and the shared CSV projector written by `go-sms-pro-exporter`.
+How `gosms_sys*.xml` `<SMS>` elements and `I_*.pdu` MMS files map into the common message and the shared CSV projector written by `go-sms-pro-exporter` (`--format csv`).
 
-Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). IR overview: [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
+Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). Common message: [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
 
 ## Goal / non-goal
 
-- **Goal:** Document how GO SMS Pro fields fill shared IR/CSV cells (and the vendor bag).
-- **Non-goal:** A private per-exporter CSV header. All IR exporters use one header; Apple-only cells are empty for this source.
+- **Goal:** Document how GO SMS Pro fields fill shared common-message / CSV cells (and the vendor bag).
+- **Non-goal:** A private per-exporter CSV header. All exporters use one CSV header; Apple-only cells are empty for this source.
 
 ## Pipeline / output
 
-Source XML/PDU → `ConversationDocument` → [`message_ir::FormatSink`](../../message-ir/src/format_sink.rs) (`--format csv|eml|mbox|json|jsonl|xml`).
+Source XML/PDU → `ConversationDocument` → [`message_ir::FormatSink`](../../message-ir/src/format_sink.rs) (`--format json|jsonl|csv|eml|mbox|xml`; default `json`).
 
-Default CSV: one file per conversation plus `<stem>.meta.json`. PDU media under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). `--format xml` writes a single SyncTech `smses.xml`.
+With `--format csv`: one file per conversation plus `<stem>.meta.json`. PDU media under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). `--format xml` writes a single SyncTech `smses.xml`.
 
 Diagnostic skip lists (`skipped_invalid_address.csv`, `skipped_empty_pdu.csv`, `skipped_no_party.csv`) are **not** conversation CSVs; they use their own small headers (see [Skip counters](#skip-counters-cli-summary)).
 
@@ -33,11 +33,11 @@ Diagnostic skip lists (`skipped_invalid_address.csv`, `skipped_empty_pdu.csv`, `
 </GoSms>
 ```
 
-Each `<SMS>` becomes one IR message / CSV data row. The `chat_identifier` cell holds the peer’s E.164 handle.
+Each `<SMS>` becomes one common-message / CSV data row. The `chat_identifier` cell holds the peer’s E.164 handle.
 
 ## Known XML children → shared cells
 
-| XML child | CSV / IR cell(s) | Notes |
+| XML child | CSV / common-message cell(s) | Notes |
 |-----------|------------------|--------|
 | `<address>` | `chat_identifier`, `sender_handle` | Digits sanitized then E.164. For sent (`type=2`), address is the peer (not the sender). For received (`type=1`), address is also `sender_handle` unless Google Voice voicemail parsing overrides it from `<body>`. |
 | `<contactName>` | `sender_display_name` | Display name filled for incoming when present. |
@@ -48,7 +48,7 @@ Each `<SMS>` becomes one IR message / CSV data row. The `chat_identifier` cell h
 
 ## Other shared cells
 
-| CSV / IR cell | Source |
+| CSV / common-message cell | Source |
 |---------------|--------|
 | `conversation_type` | Always `individual` for XML SMS; `group` from PDU PLMN lists |
 | `group_title` | Derived for PDU groups; empty for XML |
@@ -102,7 +102,7 @@ Printed only when non-zero:
 
 MMS from `I_<unix>_*.pdu` files use the same conversation CSV header. Differences:
 
-| CSV / IR cell | PDU behavior |
+| CSV / common-message cell | PDU behavior |
 |---------------|--------------|
 | `chat_identifier` / `conversation_type` / `group_title` | From PLMN participants; groups use `chat-group-…` ids |
 | `timestamp*` / `timestamp_unix_ms` | MMS `Date` header when present; else filename `I_<unix>_` (seconds). Filename still required to accept the file. |

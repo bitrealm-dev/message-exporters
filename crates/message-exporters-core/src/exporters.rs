@@ -343,7 +343,7 @@ pub struct Form {
     pub conversation_filter: String,
     pub apple_contacts: String,
     pub backup_password: String,
-    /// Packaging format. Honored by SMS Backup & Restore and iMessage; others always write CSV.
+    /// Packaging format projected from the common message (`json` default).
     pub output_format: OutputFormat,
     pub attachment_media: AttachmentMedia,
     pub media_max_resolution: MaxResolution,

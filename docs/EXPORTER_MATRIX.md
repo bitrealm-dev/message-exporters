@@ -4,7 +4,7 @@ What each converter writes (and where it falls short). Marks: **yes** / **partia
 
 ## Shared model
 
-All converters write **one CSV file per conversation** from IR v3 ([`CSV_HEADERS`](../crates/message-ir/src/lib.rs)). Across the board:
+All converters build a **common message** per conversation (`ConversationDocument`, schema v3 in [`message-ir`](../crates/message-ir/)), then project the user-picked format via `FormatSink` (default **JSON**). When packaging is CSV, columns follow [`CSV_HEADERS`](../crates/message-ir/src/lib.rs). Across the board:
 
 - The peer is `chat_identifier` — there is **no** dedicated receiver-phone column
 - Direction is `direction` (`incoming` / `outgoing`) — there is **no** `is_from_me` column
@@ -62,6 +62,6 @@ All converters write **one CSV file per conversation** from IR v3 ([`CSV_HEADERS
 | WhatsApp | [`crates/whatsapp-exporter/README.md`](../crates/whatsapp-exporter/README.md) |
 | iMessage | [`crates/imessage-ir-exporter/README.md`](../crates/imessage-ir-exporter/README.md) |
 
-**Canonical IR:** [`MESSAGE_IR.md`](MESSAGE_IR.md) (`message-ir`, schema v3). All exporters parse to `ConversationDocument` then project via `message_ir::FormatSink` (per-chat CSV/EML/MBOX/JSON/JSONL, or one SyncTech `smses.xml` with `--format xml`). Mail packaging: [`MAIL_ARCHIVE.md`](MAIL_ARCHIVE.md). SBR XML: [`SBR_XML.md`](SBR_XML.md). Pick the output format that fits the job. Attachment modes (none / copy / convert / compress) and obfuscate apply through `FormatSink` for every format.
+**Common message:** end-user [common-message.md](src/common-message.md); schema [`MESSAGE_IR.md`](MESSAGE_IR.md) (`message-ir`, schema v3). All exporters parse to `ConversationDocument` then project via `message_ir::FormatSink` (per-chat JSON/JSONL/CSV/EML/MBOX, or one SyncTech `smses.xml` with `--format xml`). Mail packaging: [`MAIL_ARCHIVE.md`](MAIL_ARCHIVE.md). SBR XML: [`SBR_XML.md`](SBR_XML.md). Attachment modes (none / copy / convert / compress) and obfuscate apply through `FormatSink` for every format.
 
-**Re-export:** [`message-reexporter`](../crates/message-reexporter/) converts an existing Message Exporters output directory to another IR format (auto-detect input; GUI **Re-export** tab). Not a vendor backup source.
+**Re-export:** [`message-reexporter`](../crates/message-reexporter/) converts an existing Message Exporters output directory to another format (auto-detect input; GUI **Re-export** tab). Not a vendor backup source.

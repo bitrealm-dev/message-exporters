@@ -12,19 +12,19 @@ use message_media::{CompressOptions, MediaMode};
 use crate::exporters::{ApplePlatform, ContactsKind, Exporter, WhatsappPlatform};
 use crate::process::CancelFlag;
 
-/// Output packaging for exporters that support more than CSV.
+/// Output packaging projected from the common message.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum OutputFormat {
-    /// Per-conversation CSV (default).
-    #[default]
+    /// Per-conversation CSV.
     Csv,
     /// Per-conversation folder of `.eml` files (see docs/MAIL_ARCHIVE.md).
     Eml,
     /// Per-conversation `.mbox` (mboxrd) mailbox file.
     Mbox,
-    /// Per-conversation canonical IR JSON (see docs/MESSAGE_IR.md).
+    /// Per-conversation common message JSON (default; see docs/MESSAGE_IR.md).
+    #[default]
     Json,
-    /// Per-conversation IR as JSON Lines (header + one message per line).
+    /// Per-conversation common message as JSON Lines (header + one message per line).
     Jsonl,
     /// Single SMS Backup & Restore XML backup (`smses.xml`).
     Xml,
@@ -36,8 +36,8 @@ impl fmt::Display for OutputFormat {
             Self::Csv => "CSV (per conversation)",
             Self::Eml => "EML archive (mail folders)",
             Self::Mbox => "MBOX (per conversation)",
-            Self::Json => "JSON (canonical IR)",
-            Self::Jsonl => "JSONL (canonical IR lines)",
+            Self::Json => "JSON (common message)",
+            Self::Jsonl => "JSONL (common message lines)",
             Self::Xml => "XML (SMS Backup & Restore)",
         })
     }
@@ -80,13 +80,13 @@ impl OutputFormat {
     }
 }
 
-/// Values shown in the GUI for full packaging choices.
+/// Values shown in the GUI for full packaging choices (JSON first = default).
 pub const OUTPUT_FORMATS_MAIL: [OutputFormat; 6] = [
+    OutputFormat::Json,
+    OutputFormat::Jsonl,
     OutputFormat::Csv,
     OutputFormat::Eml,
     OutputFormat::Mbox,
-    OutputFormat::Json,
-    OutputFormat::Jsonl,
     OutputFormat::Xml,
 ];
 

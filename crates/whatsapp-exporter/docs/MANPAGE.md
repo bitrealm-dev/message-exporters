@@ -1,11 +1,12 @@
 # NAME
 
-whatsapp-exporter - convert WhatsApp DB/backup (via wtsexporter) to per-conversation CSV
+whatsapp-exporter - convert WhatsApp DB/backup (via wtsexporter) via common message to JSON/CSV/EML/MBOX/JSONL/XML
 
 # SYNOPSIS
 
 ```text
 whatsapp-exporter --output <DIR> --platform android|ios
+    [--format json|jsonl|csv|eml|mbox|xml]
     [--input <PATH>] [--json <PATH>]
     [--key <KEY|PATH>] [--backup <PATH>] [--wa <PATH>] [--media <PATH>] [--db <PATH>]
     [--business]
@@ -18,14 +19,17 @@ whatsapp-exporter --output <DIR> --platform android|ios
 
 # DESCRIPTION
 
-Shells out to KnugiHK **wtsexporter**, then maps its JSON into vault-shaped per-conversation CSV (`*__whatsapp.csv`). Extraction runs in a temporary directory under `--output` (removed after convert) so the process launch directory is not polluted.
+Shells out to KnugiHK **wtsexporter**, then maps its JSON into the common message and projects JSON (default) or another `--format` (stems use `__whatsapp`). Extraction runs in a temporary directory under `--output` (removed after convert) so the process launch directory is not polluted.
 
 `--platform` is required unless `--json` is used (convert-only, no Python). The GUI does not pass `--input`.
 
 # OPTIONS
 
 **--output** *DIR*
-: Destination for CSV, `attachments/`, and `wtsexporter_result.json`.
+: Destination for packaging output, `attachments/`, and `wtsexporter_result.json`.
+
+**--format** *json|jsonl|csv|eml|mbox|xml*
+: Output packaging from the common message (`json` default).
 
 **--platform** *android|ios*
 : Target platform for wtsexporter (`-a` / `-i`). Required unless `--json`.

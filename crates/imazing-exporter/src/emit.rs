@@ -1,4 +1,4 @@
-//! Convert iMazing Messages / WhatsApp rows → canonical IR → per-conversation CSV, EML, MBOX, or JSON.
+//! Convert iMazing Messages / WhatsApp rows → common message → packaging via FormatSink.
 
 use crate::cancel::{check_cancel, CancelFlag};
 use crate::parse::{discover_csv_files, parse_csv_file, RawRow, SourceKind};

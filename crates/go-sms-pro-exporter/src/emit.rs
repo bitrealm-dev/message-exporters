@@ -1,4 +1,4 @@
-//! Convert GO SMS Pro export → canonical IR → per-conversation CSV, EML, MBOX, or JSON.
+//! Convert GO SMS Pro export → common message → packaging via FormatSink.
 
 use crate::pdu::{parse_pdu_file, ParsedPdu};
 use crate::cancel::{check_cancel, CancelFlag};

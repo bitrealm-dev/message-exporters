@@ -1,23 +1,23 @@
-# SMS Backup & Restore XML → IR / CSV mapping
+# SMS Backup & Restore XML → common message / CSV mapping
 
-How SyncTech `<sms>` / `<mms>` elements map into canonical IR (`ConversationDocument`) and the shared CSV projector written by `sms-backup-restore-exporter`.
+How SyncTech `<sms>` / `<mms>` elements map into the common message (`ConversationDocument`) and the shared CSV projector written by `sms-backup-restore-exporter` (`--format csv`).
 
-Attribute meanings (SyncTech **input** reference): [FIELDS.md](FIELDS.md). Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). IR overview: [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
+Attribute meanings (SyncTech **input** reference): [FIELDS.md](FIELDS.md). Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). Common message: [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
 
 ## Goal / non-goal
 
-- **Goal:** Document how SyncTech fields fill shared IR/CSV cells (and the vendor bag).
-- **Non-goal:** A private per-exporter CSV header. All IR exporters use one header; Apple-only cells are empty for this source.
+- **Goal:** Document how SyncTech fields fill shared common-message / CSV cells (and the vendor bag).
+- **Non-goal:** A private per-exporter CSV header. All exporters use one CSV header; Apple-only cells are empty for this source.
 
 ## Pipeline / output
 
-Source XML → `ConversationDocument` → [`message_ir::FormatSink`](../../message-ir/src/format_sink.rs) (`--format csv|eml|mbox|json|jsonl|xml`).
+Source XML → `ConversationDocument` → [`message_ir::FormatSink`](../../message-ir/src/format_sink.rs) (`--format json|jsonl|csv|eml|mbox|xml`; default `json`).
 
-Default CSV: one file per conversation (header + one row per message) plus `<stem>.meta.json`. Decoded MMS media under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). The `chat_identifier` cell may still use `chat-group-…` for groups. `--format xml` writes a single SyncTech `smses.xml` ([`docs/SBR_XML.md`](../../../docs/SBR_XML.md)).
+With `--format csv`: one file per conversation (header + one row per message) plus `<stem>.meta.json`. Decoded MMS media under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). The `chat_identifier` cell may still use `chat-group-…` for groups. `--format xml` writes a single SyncTech `smses.xml` ([`docs/SBR_XML.md`](../../../docs/SBR_XML.md)).
 
 ## Source → shared cells
 
-| CSV / IR cell | SMS / MMS source |
+| CSV / common-message cell | SMS / MMS source |
 |---------------|------------------|
 | `chat_identifier` | Peer E.164, or `chat-group-…` for groups |
 | `conversation_type` | `individual` / `group` |

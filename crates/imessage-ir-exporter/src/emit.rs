@@ -1,4 +1,4 @@
-//! Stream messages → [`MailMessage`] → canonical IR → CSV / EML / MBOX / JSON / JSONL / XML.
+//! Stream messages → [`MailMessage`] → common message → packaging via FormatSink.
 //!
 //! Every message is built once via [`build_mail_message`] (unchanged Apple →
 //! `MailMessage` mapping), converted to [`IrMessage`] (core fields + a nested

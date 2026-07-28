@@ -58,7 +58,7 @@ Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules a
 
 ### Re-export — `message-reexporter`
 
-Top tab (not a Message backup type). Converts a prior Message Exporters output folder to another IR format.
+Top tab (not a Message backup type). Converts a prior Message Exporters output folder to another packaging format (via the common message).
 
 | Control | Type | Required | CLI |
 |---------|------|:--------:|-----|
@@ -100,7 +100,7 @@ Persists under `[message-reexport]` in `export.ini`. Mixed or unrecognized input
 | Timezone | — | — | — | — | yes | — | — |
 | Name mapping | — | — | advanced | — | — | — | — |
 | Verbose logging | — | — | always on | — | — | — | — |
-| Output format (CSV / EML / MBOX / JSON / JSONL‡) | yes | yes | yes | yes | yes | yes | yes |
+| Output format (JSON / JSONL / CSV / EML / MBOX / XML‡) | yes | yes | yes | yes | yes | yes | yes |
 | Attachments (copy/convert/compress/do not copy) | yes | yes | yes | yes†† | yes | yes | yes |
 | Compress options (resolution/fps/…) | when Compress | when Compress | when Compress | — | when Compress | when Compress | when Compress |
 | Advanced (attachment root, …) | — | — | name mapping | — | — | Android key / backup / wa / media / db / business | yes |
@@ -109,7 +109,7 @@ Convert/Compress need `ffmpeg`/`ffprobe` on PATH. **Do not copy** skips writing 
 
 \* Required unless filled from Plus `config/owner.toml` (source-relative today); GUI collects fields explicitly.
 
-‡ JSON / JSONL IR (schema v3) for all exporters, including iMessage (`imessage-ir-exporter`). See [MESSAGE_IR.md](MESSAGE_IR.md). Attachment modes and obfuscate apply to every output format via `FormatSink` (not CSV-only).
+‡ Default packaging is **JSON** (common message). Schema v3 for all exporters, including iMessage (`imessage-ir-exporter`). See [common-message.md](src/common-message.md) and [MESSAGE_IR.md](MESSAGE_IR.md). Attachment modes and obfuscate apply to every output format via `FormatSink`.
 
 †† OpenExtract has no media in its source CSVs yet, so attachment modes are a no-op for files; the control is still shown.
 
@@ -128,7 +128,7 @@ In-process via `go_sms_pro_exporter::run`. Cancel is cooperative (between XML/PD
 | Your phone numbers | multi-value text | yes | `--owner-phone` (repeat) |
 | Contacts CSV | file | no† | `--contacts` |
 | Contacts VCF | file | no† | `--vcf` |
-| Output format | enum | no | `--format` (`csv` / `eml` / `mbox` / `json` / `jsonl`) |
+| Output format | enum | no | `--format` (`json` / `jsonl` / `csv` / `eml` / `mbox` / `xml`; default `json`) |
 | Attachments | enum | no | `--media-mode` (`clone` / `convert` / `compress` / `disabled`); all formats via FormatSink |
 | Max resolution / fps / min size / skip efficient | when Compress | no | `--media-max-resolution`, `--media-max-fps`, `--media-min-size`, `--media-skip-efficient` |
 
@@ -142,12 +142,12 @@ Product: [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/)
 |---------|------|:--------:|-----|
 | Input | XML file or folder of XML | yes | `--input` |
 | Output | folder | yes | `--output` |
-| Output format | enum | no | `--format` (`csv` / `eml` / `mbox` / `json` / `jsonl`) |
+| Output format | enum | no | `--format` (`json` / `jsonl` / `csv` / `eml` / `mbox` / `xml`; default `json`) |
 | Your phone numbers | multi-value text | yes | `--owner-phone` |
 | Contacts CSV / VCF | file | no† | `--contacts` / `--vcf` |
 | Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro); all formats |
 
-Encrypted ZIP backups must be unlocked/extracted before selecting input. Builds [canonical IR](MESSAGE_IR.md) then projects the chosen format. Media modes and obfuscate apply through FormatSink for every format.
+Encrypted ZIP backups must be unlocked/extracted before selecting input. Builds a [common message](src/common-message.md) then projects the chosen format. Media modes and obfuscate apply through FormatSink for every format.
 
 ### SMS Backup+ — `sms-backup-plus-exporter convert`
 
@@ -227,7 +227,7 @@ Media modes and obfuscate apply through FormatSink for every format. Output stem
 
 Form link label: **imessage-ir-exporter** → [imessage-ir-exporter](https://github.com/bitrealm-dev/message-exporters/tree/main/crates/imessage-ir-exporter). Dropdown stays **iPhone backup**.
 
-GUI defaults: CSV, `--copy-method clone` (or `disabled`), always `--use-caller-id`. All formats (`csv` / `eml` / `mbox` / `json` / `jsonl` / `xml`) run `imessage-ir-exporter` (`chat.db` → IR → projectors). Honors dates, conversation filter, contacts, attachment embed, and caller-id on From. Convert/Compress/obfuscate apply through FormatSink for every format (same as other exporters).
+GUI defaults: JSON, `--copy-method clone` (or `disabled`), always `--use-caller-id`. All formats (`json` / `jsonl` / `csv` / `eml` / `mbox` / `xml`) run `imessage-ir-exporter` (`chat.db` → common message → projectors). Honors dates, conversation filter, contacts, attachment embed, and caller-id on From. Convert/Compress/obfuscate apply through FormatSink for every format (same as other exporters).
 
 | Control | Type | Required | CLI |
 |---------|------|:--------:|-----|
@@ -235,7 +235,7 @@ GUI defaults: CSV, `--copy-method clone` (or `disabled`), always `--use-caller-i
 | Backup password | password | no | `--backup-password` |
 | Platform | macOS / iOS / auto | no | `--platform` |
 | Output / export path | folder | yes | `--output` |
-| Output format | enum | no | `--format` (`csv` / `eml` / `mbox` / `json` / `jsonl` / `xml`) |
+| Output format | enum | no | `--format` (`json` / `jsonl` / `csv` / `eml` / `mbox` / `xml`; default `json`) |
 | Attachments | enum | no | `--copy-method` / media mode via FormatSink |
 | Max resolution / fps / min size / skip efficient | when Compress | no | compress options on FormatSink |
 | Attachment root | folder | no | `--attachment-root` (advanced) |

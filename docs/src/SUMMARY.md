@@ -1,6 +1,7 @@
 # Summary
 
 [Introduction](introduction.md)
+[Common message](common-message.md)
 [Install](install.md)
 [Use the desktop app](desktop-app.md)
 [Choose an output format](formats.md)

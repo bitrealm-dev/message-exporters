@@ -12,7 +12,7 @@ message-reexporter --input <DIR> --output <DIR> [--format FORMAT]
 |--------|---------|
 | `--input` | Prior export directory (format auto-detected) |
 | `--output` | Destination directory (must differ from input) |
-| `--format` | `csv` (default), `eml`, `mbox`, `json`, `jsonl`, or `xml` |
+| `--format` | `json` (default), `jsonl`, `csv`, `eml`, `mbox`, or `xml` |
 | `--media-mode` | `disabled`, `clone`, `convert`, or `compress` |
 | `--obfuscate` | Rewrite PII for sharing |
 | `--obfuscate-seed` | Optional 8-hex seed (implies obfuscate) |

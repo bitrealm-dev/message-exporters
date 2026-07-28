@@ -11,18 +11,18 @@ use message_exporters_core::{
 
 #[derive(Parser, Debug)]
 #[command(name = "imessage-ir-exporter")]
-#[command(about = "Export Apple Messages (chat.db) to per-conversation CSV, EML, MBOX, or JSON IR")]
+#[command(about = "Export Apple Messages (chat.db) via common message to JSON/CSV/EML/MBOX/JSONL/XML")]
 struct Cli {
     /// Path to chat.db (macOS) or iOS backup root (default: system Messages DB)
     #[arg(long)]
     input: Option<PathBuf>,
 
-    /// Output directory for per-conversation files + attachments/
+    /// Output directory for packaging + attachments/
     #[arg(long)]
     output: PathBuf,
 
-    /// Output format: `csv` (default), `eml`, `mbox`, `json`, `jsonl`, or `xml` (SMS Backup & Restore)
-    #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
+    /// Output format: `json` (default), `jsonl`, `csv`, `eml`, `mbox`, or `xml`
+    #[arg(long = "format", default_value = "json", value_name = "FORMAT")]
     format: String,
 
     /// Platform: `macOS`, `iOS`, or omit to auto-detect

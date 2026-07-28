@@ -2,12 +2,12 @@
 
 Phone backups are easy to make. Reading the messages later is harder.
 
-This project turns vendor backups into plain files that a spreadsheet, mail program, or other tool can open. Pick the output format that fits the job—one size does not fit all:
+This project turns vendor backups into a shared [common message](docs/src/common-message.md) per conversation, then packages the format you pick (default **JSON**)—one size does not fit all:
 
+- **JSON** / **JSON Lines** — default packaging; machine-readable archives
 - **CSV** — one spreadsheet file per conversation
 - **EML** — one email folder per conversation
 - **MBOX** — one mailbox file per conversation
-- **JSON** / **JSON Lines** — machine-readable archives
 - **XML** — one SyncTech `smses.xml` backup
 
 Photos and other media are saved next to those files when the format needs them.

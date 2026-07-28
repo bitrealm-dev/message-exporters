@@ -1,11 +1,12 @@
 # NAME
 
-imazing-exporter - convert iMazing Messages / WhatsApp CSV exports to per-conversation CSV
+imazing-exporter - convert iMazing Messages / WhatsApp CSV exports via common message to JSON/CSV/EML/MBOX/JSONL/XML
 
 # SYNOPSIS
 
 ```text
 imazing-exporter --input <PATH> --output <DIR>
+    [--format json|jsonl|csv|eml|mbox|xml]
     [--contacts <PATH>] [--timezone <OFFSET>]
     [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD]
     [--media-mode disabled|clone|convert|compress]
@@ -16,7 +17,7 @@ imazing-exporter --input <PATH> --output <DIR>
 
 # DESCRIPTION
 
-Normalizes iMazing-exported Messages and/or WhatsApp CSV into vault-shaped per-conversation files. WhatsApp chats are written with the `__whatsapp` filename suffix. Prefer exporting from iMazing’s **All backup** view when attachment filenames matter.
+Normalizes iMazing-exported Messages and/or WhatsApp CSV into a common message per conversation, then projects JSON (default) or another `--format`. WhatsApp chats use the `__whatsapp` filename suffix. Prefer exporting from iMazing’s **All backup** view when attachment filenames matter.
 
 Distinct from `imessage-ir-exporter`, which reads Apple `chat.db` directly.
 
@@ -26,7 +27,10 @@ Distinct from `imessage-ir-exporter`, which reads Apple `chat.db` directly.
 : Messages/WhatsApp CSV, chat folder, `Messages/`, `WhatsApp/`, or a full device export root (recursive).
 
 **--output** *DIR*
-: Destination for per-conversation CSV and media.
+: Destination for packaging output and media.
+
+**--format** *json|jsonl|csv|eml|mbox|xml*
+: Output packaging from the common message (`json` default).
 
 **--contacts** *PATH*
 : iMazing Contacts CSV from the same backup. Optional; without it phones are not resolved to names.

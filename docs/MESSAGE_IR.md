@@ -1,19 +1,21 @@
-# Canonical message IR (JSON / JSONL)
+# Common message (schema / JSON / JSONL)
 
-**Intermediate representation** after source parse and before CSV / EML / MBOX / JSON / JSONL packaging.
+**Common message** is the shared per-conversation shape after source parse and before packaging (CSV / EML / MBOX / JSON / JSONL / XML). End-user overview: [`docs/src/common-message.md`](src/common-message.md).
 
-Typed model: [`crates/message-ir/`](../crates/message-ir/). On-disk forms:
+Typed model: [`crates/message-ir/`](../crates/message-ir/) (crate name still `message-ir`; type `ConversationDocument`). On-disk forms:
 
-- **JSON** — one pretty-printed `<conversation-stem>.json` per chat (`ConversationDocument`)
+- **JSON** (CLI/GUI default) — one pretty-printed `<conversation-stem>.json` per chat
 - **JSONL** — one `<conversation-stem>.jsonl` per chat: header line, then one `IrMessage` per line
 
 Stem rules match CSV filenames. Packaging-only suffixes (e.g. `__whatsapp`) affect the on-disk stem but are **not** serialized in the JSON body.
 
+Pipeline: `backup → common message → FormatSink → user-picked format`.
+
 ## Status
 
-- **IR-backed** (`ConversationDocument` → `message_ir::FormatSink`, `--format csv|eml|mbox|json|jsonl|xml`): all exporters, including iMessage (`imessage-ir-exporter`). Per-chat formats also accept `write_format`; XML uses a single `smses.xml` via the sink.
+- **Common-message path** (`ConversationDocument` → `message_ir::FormatSink`, `--format json|jsonl|csv|eml|mbox|xml`): all exporters, including iMessage (`imessage-ir-exporter`). Per-chat formats also accept `write_format`; XML uses a single `smses.xml` via the sink.
 - **Media + obfuscate** run inside `FormatSink::finish` for every format (`ExportTransforms`: none / copy / convert / compress, plus optional obfuscate). Exporters pass transforms from `ExporterConfig.media` / `.obfuscate`; there is no CSV-only post-step.
-- **Schema version 3 only** (breaking). Typed enums/bags, filled outgoing identity, conversation stats, stable null/`[]` keys. Older IR is not read — regenerate exports after schema changes.
+- **Schema version 3 only** (breaking). Typed enums/bags, filled outgoing identity, conversation stats, stable null/`[]` keys. Older common-message JSON is not read — regenerate exports after schema changes.
 
 ## Document shape (`schema_version: 3`)
 
@@ -110,7 +112,7 @@ Line 1 is the header (includes `conversation.stats`; no `messages` array). Each 
 | JSON | pretty-printed `ConversationDocument` | `read_conversation_json` |
 | JSONL | header + one message per line | `read_conversation_jsonl` |
 | CSV | unified [`CSV_HEADERS`](../crates/message-ir/src/lib.rs) + `<stem>.meta.json` | `read_conversation_csv` |
-| EML / MBOX | IR → `MailMessage` → [`message-mail`](../crates/message-mail/) | `read_conversation_eml_dir` / `read_conversation_mbox` |
+| EML / MBOX | common message → `MailMessage` → [`message-mail`](../crates/message-mail/) | `read_conversation_eml_dir` / `read_conversation_mbox` |
 | XML | single `smses.xml` via [`FormatSink`](../crates/message-ir/) + [`message-sbr`](../crates/message-sbr/) | `sms_backup_restore_exporter::load_documents_from_xml` (owner inferred when omitted) |
 
 **Directory convert:** [`message-reexporter`](../crates/message-reexporter/) auto-detects one format in an export folder and writes another via `FormatSink` (GUI **Re-export** tab / CLI).
@@ -125,7 +127,7 @@ Library APIs support content-preserving cycles:
 
 Use [`message-reexporter`](../crates/message-reexporter/) to convert a whole export directory between formats.
 
-XML is **lossy** for non-Android IR (Apple bags omitted). SBR-origin `source.fields` can restore many SyncTech attrs on write-back.
+XML is **lossy** for non-Android common messages (Apple bags omitted). SBR-origin `source.fields` can restore many SyncTech attrs on write-back.
 
 After `normalize_document_for_compare`:
 

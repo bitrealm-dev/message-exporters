@@ -1,6 +1,6 @@
-# iMazing → CSV
+# iMazing → common message → packaging
 
-Convert [iMazing](https://imazing.com/) **Messages** and **WhatsApp** CSV exports into one vault-shaped spreadsheet file per conversation, enriching chat ids and display names from an iMazing **Contacts** CSV.
+Convert [iMazing](https://imazing.com/) **Messages** and **WhatsApp** CSV exports into the [common message](../../docs/src/common-message.md), then package as JSON (default), CSV, EML, MBOX, JSONL, or XML. Enriches chat ids and display names from an iMazing **Contacts** CSV.
 
 **Targeted upstream:** iMazing **3.5.5** (`export_tool` / `export_tool_version` on every output row).
 

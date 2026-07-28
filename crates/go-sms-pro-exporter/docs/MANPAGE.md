@@ -1,11 +1,12 @@
 # NAME
 
-go-sms-pro-exporter - convert GO SMS Pro XML+PDU backups to per-conversation CSV
+go-sms-pro-exporter - convert GO SMS Pro XML+PDU backups via common message to JSON/CSV/EML/MBOX/JSONL/XML
 
 # SYNOPSIS
 
 ```text
 go-sms-pro-exporter --input <DIR> --output <DIR> --owner-phone <PHONE>...
+    [--format json|jsonl|csv|eml|mbox|xml]
     [--contacts <PATH> | --vcf <PATH>]
     [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD]
     [--media-mode disabled|clone|convert|compress]
@@ -16,7 +17,7 @@ go-sms-pro-exporter --input <DIR> --output <DIR> --owner-phone <PHONE>...
 
 # DESCRIPTION
 
-Reads a GO SMS Pro local backup folder (`gosms_sys*.xml` plus `I_*.pdu` files) and writes one vault-shaped CSV file per conversation under `--output`, with optional media under `attachments/`.
+Reads a GO SMS Pro local backup folder (`gosms_sys*.xml` plus `I_*.pdu` files), builds a common message per conversation, and projects JSON (default) or another `--format` under `--output`, with optional media under `attachments/`.
 
 This binary is a thin CLI over the `go-sms-pro-exporter` library (`ExporterConfig` + `run`). The desktop GUI calls that library in-process; this command remains for standalone use.
 
@@ -28,7 +29,10 @@ Owner phone(s) are required: they determine message direction for PDU MMS. Wrong
 : Backup folder containing XML and PDU files.
 
 **--output** *DIR*
-: Destination for per-conversation CSV and `attachments/`.
+: Destination for packaging output and `attachments/`.
+
+**--format** *json|jsonl|csv|eml|mbox|xml*
+: Output packaging from the common message (`json` default).
 
 **--owner-phone** *PHONE*
 : Owner number (E.164 or digits). Repeat for multiple owner numbers. Required.

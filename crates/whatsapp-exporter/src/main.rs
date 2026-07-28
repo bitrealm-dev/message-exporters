@@ -26,7 +26,7 @@ impl From<CliPlatform> for WhatsappPlatform {
 
 #[derive(Parser, Debug)]
 #[command(name = "whatsapp-exporter")]
-#[command(about = "Convert WhatsApp DB/backup (via wtsexporter) to per-conversation CSV or EML")]
+#[command(about = "Convert WhatsApp DB/backup (via wtsexporter) via common message to JSON/CSV/EML/MBOX/JSONL/XML")]
 struct Cli {
     /// Directory (or msgstore.db file) used to resolve relative defaults such as
     /// `msgstore.db` / `wa.db` / `WhatsApp/`. Defaults to the process cwd.
@@ -35,12 +35,12 @@ struct Cli {
     #[arg(long)]
     input: Option<PathBuf>,
 
-    /// Output directory for per-conversation CSV or EML archive (+ attachments/)
+    /// Output directory for packaging + attachments/
     #[arg(long)]
     output: PathBuf,
 
-    /// Output format: `csv` (default), `eml`, `mbox`, `json`, `jsonl`, or `xml` (SMS Backup & Restore)
-    #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
+    /// Output format: `json` (default), `jsonl`, `csv`, `eml`, `mbox`, or `xml`
+    #[arg(long = "format", default_value = "json", value_name = "FORMAT")]
     format: String,
 
     /// Android or iOS (required unless --json)

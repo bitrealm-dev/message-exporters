@@ -1,6 +1,6 @@
 # Use the desktop app
 
-The desktop app exports phone message backups to CSV, EML, MBOX, JSON, JSON Lines, or SyncTech XML, and can re-export a prior output folder to another format.
+The desktop app exports phone message backups through the [common message](common-message.md) to JSON (default), JSON Lines, CSV, EML, MBOX, or SyncTech XML, and can re-export a prior output folder to another format.
 
 ## Tabs
 
@@ -15,7 +15,7 @@ The desktop app exports phone message backups to CSV, EML, MBOX, JSON, JSON Line
 
 1. Open **Message**.
 2. Select **Backup type** (iPhone backup, SMS Backup & Restore, or WhatsApp for supported paths).
-3. Select **Output format**.
+3. Select **Output format** (default **JSON**).
 4. Choose input paths required for that source (backup folder, XML, database, and so on).
 5. Choose an **Output directory**. Create a new empty folder for the first run.
 6. Optionally set **Attachments**, date range, and **Obfuscate**.

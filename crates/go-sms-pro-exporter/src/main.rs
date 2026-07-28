@@ -11,18 +11,18 @@ use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
 
 #[derive(Parser, Debug)]
 #[command(name = "go-sms-pro-exporter")]
-#[command(about = "Convert GO SMS Pro XML+PDU backups to per-conversation CSV or EML")]
+#[command(about = "Convert GO SMS Pro XML+PDU backups via common message to JSON/CSV/EML/MBOX/JSONL/XML")]
 struct Cli {
     /// Directory containing gosms_sys*.xml and I_*.pdu files
     #[arg(long)]
     input: PathBuf,
 
-    /// Output directory for CSV or EML archive + attachments/
+    /// Output directory for packaging + attachments/
     #[arg(long)]
     output: PathBuf,
 
-    /// Output format: `csv` (default), `eml`, `mbox`, `json`, `jsonl`, or `xml` (SMS Backup & Restore)
-    #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
+    /// Output format: `json` (default), `jsonl`, `csv`, `eml`, `mbox`, or `xml`
+    #[arg(long = "format", default_value = "json", value_name = "FORMAT")]
     format: String,
 
     /// Owner phone (E.164 or digits). Repeat for multiple owner numbers.

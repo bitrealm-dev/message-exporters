@@ -1,8 +1,8 @@
 # whatsapp-exporter
 
-Convert WhatsApp Android/iOS databases (via [KnugiHK WhatsApp-Chat-Exporter](https://github.com/KnugiHK/WhatsApp-Chat-Exporter) `wtsexporter`) into this repo’s per-chat vault CSV layout.
+Convert WhatsApp Android/iOS databases (via [KnugiHK WhatsApp-Chat-Exporter](https://github.com/KnugiHK/WhatsApp-Chat-Exporter) `wtsexporter`) into the [common message](../../docs/src/common-message.md), then package as JSON (default), CSV, EML, MBOX, JSONL, or XML.
 
-This crate shells out to the `wtsexporter` CLI, then maps its JSON into CSV. It does **not** vendor or clone that project.
+This crate shells out to the `wtsexporter` CLI, then maps its JSON into the common message. It does **not** vendor or clone that project.
 
 Library (`ExporterConfig` / `run`) for the GUI; thin CLI for standalone use. Still shells out to `wtsexporter` for extract. CLI reference: [`docs/MANPAGE.md`](docs/MANPAGE.md).
 

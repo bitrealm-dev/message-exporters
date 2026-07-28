@@ -1,11 +1,12 @@
 # NAME
 
-openextract-exporter - convert OpenExtract conversation CSV (+ VCF) to per-conversation CSV
+openextract-exporter - convert OpenExtract conversation CSV (+ VCF) via common message to JSON/CSV/EML/MBOX/JSONL/XML
 
 # SYNOPSIS
 
 ```text
 openextract-exporter --input <PATH> --output <DIR>
+    [--format json|jsonl|csv|eml|mbox|xml]
     [--vcf <PATH> | --contacts <PATH>]
     [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD]
     [--obfuscate] [--obfuscate-seed <8-hex>]
@@ -13,7 +14,7 @@ openextract-exporter --input <PATH> --output <DIR>
 
 # DESCRIPTION
 
-Reads OpenExtract conversation CSV (`all_conversations.csv` or `conversation_*.csv`, file or directory) and writes vault-shaped per-conversation CSV. Contacts (`--vcf` or `--contacts`) are recommended so names and phones resolve; without them export still runs with a warning.
+Reads OpenExtract conversation CSV (`all_conversations.csv` or `conversation_*.csv`, file or directory), builds a common message per conversation, and projects JSON (default) or another `--format`. Contacts (`--vcf` or `--contacts`) are recommended so names and phones resolve; without them export still runs with a warning.
 
 This converter does not extract binary media attachments.
 
@@ -23,7 +24,10 @@ This converter does not extract binary media attachments.
 : Conversation CSV file or directory of OpenExtract CSVs.
 
 **--output** *DIR*
-: Destination for per-conversation CSV files.
+: Destination for packaging output.
+
+**--format** *json|jsonl|csv|eml|mbox|xml*
+: Output packaging from the common message (`json` default).
 
 **--vcf** *PATH*
 : Contacts VCF from the OpenExtract export.

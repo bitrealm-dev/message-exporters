@@ -21,8 +21,8 @@ struct Cli {
     #[arg(long)]
     output: PathBuf,
 
-    /// Output format: csv, eml, mbox, json, jsonl, or xml
-    #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
+    /// Output format: `json` (default), `jsonl`, `csv`, `eml`, `mbox`, or `xml`
+    #[arg(long = "format", default_value = "json", value_name = "FORMAT")]
     format: String,
 
     /// Rewrite output with stable fake names/numbers/text and placeholder media

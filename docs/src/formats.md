@@ -1,16 +1,16 @@
 # Choose an output format
 
-Pick the packaging that matches the next tool in the workflow. Every Message-tab exporter and the Re-export tab can write the same set of formats.
+Pick the packaging that matches the next tool. Every format is projected from the same [common message](common-message.md). The Message tab and Re-export tab share this set; CLI default is **JSON**.
 
 ## Quick chooser
 
 | Need | Format |
 |------|--------|
+| Keep a faithful machine archive for later conversion (default) | **JSON** or **JSON Lines** |
 | Open chats in Excel, Numbers, or Google Sheets | **CSV** |
 | Import into a vault or custom script that expects rows | **CSV** |
 | Read threads in Apple Mail, Thunderbird, or Outlook | **EML** |
 | One mailbox file per chat | **MBOX** |
-| Keep a faithful machine archive for later conversion | **JSON** or **JSON Lines** |
 | Produce a SyncTech-style `smses.xml` backup | **XML** |
 
 ## Formats in detail
@@ -35,9 +35,9 @@ Use MBOX when a single mailbox file per chat is easier to archive or import than
 
 ### JSON
 
-Writes one pretty-printed `.json` document per conversation (canonical IR). Attachment bytes live under `attachments/`, not inside the JSON.
+Writes one pretty-printed `.json` document per conversation — the common message on disk. Attachment bytes live under `attachments/`, not inside the JSON.
 
-Use JSON for round-trips and tooling that prefers a structured document per chat.
+Use JSON as the default archive and for later re-packaging. See [Common message](common-message.md).
 
 ### JSON Lines (JSONL)
 
@@ -53,7 +53,7 @@ Use XML when the next step expects that backup format. Apple-only fields are dro
 
 ## Change format later
 
-Export once, then use [Re-export between formats](reexport.md) to produce another packaging from the same output folder without re-reading the phone backup.
+If you already have an export folder, use [Re-export between formats](reexport.md) to produce another packaging without re-reading the phone backup. A first export can write the target format directly—no Re-export step required.
 
 ## Next steps
 
