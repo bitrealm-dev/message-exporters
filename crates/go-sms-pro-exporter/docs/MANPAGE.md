@@ -18,6 +18,8 @@ go-sms-pro-exporter --input <DIR> --output <DIR> --owner-phone <PHONE>...
 
 Reads a GO SMS Pro local backup folder (`gosms_sys*.xml` plus `I_*.pdu` files) and writes one vault-shaped CSV file per conversation under `--output`, with optional media under `attachments/`.
 
+This binary is a thin CLI over the `go-sms-pro-exporter` library (`ExportConfig` + `run`). The desktop GUI calls that library in-process; this command remains for standalone use.
+
 Owner phone(s) are required: they determine message direction for PDU MMS. Wrong owner values flip sent/received.
 
 # OPTIONS

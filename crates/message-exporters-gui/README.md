@@ -1,10 +1,10 @@
 # Message Exporters GUI
 
-Cross-platform [egui](https://github.com/emilk/egui) / [eframe](https://github.com/emilk/egui/tree/master/crates/eframe) desktop interface for the exporter binaries in this workspace.
+Cross-platform [egui](https://github.com/emilk/egui) / [eframe](https://github.com/emilk/egui/tree/master/crates/eframe) desktop interface for the exporters in this workspace. Most sources spawn sibling CLI binaries; **GO SMS Pro** runs via the linked `go-sms-pro-exporter` library.
 
 ## Run in development
 
-Build the exporters and GUI in the same profile so the GUI can find sibling executables:
+Build the exporters and GUI in the same profile so the GUI can find sibling executables (still needed for non–GO SMS Pro sources and contacts-validate):
 
 ```bash
 cargo build --workspace
@@ -33,7 +33,7 @@ The GUI searches for tool binaries beside its own executable, then in
 - Forms for GO SMS Pro, SMS Backup & Restore, SMS Backup+, OpenExtract, iMazing, and iPhone backup
 - Native file/folder dialogs
 - OS-appropriate default output folders under Documents/`message-exporters`
-- Exporter-specific validation and CLI argument generation
+- Exporter-specific validation; CLI args for spawned tools; in-process library run for GO SMS Pro
 - Shared run log with cancel
 
 See [`../../docs/GUI.md`](../../docs/GUI.md) for the full option matrix and architecture notes.

@@ -1,8 +1,8 @@
 # GO SMS Pro → CSV
 
-The `go-sms-pro-exporter` converter transforms a **GO SMS Pro** (GOMO / Jiubang) Android backup into `.csv` files, one file per conversation with any attachments found in that conversation.
+The `go-sms-pro-exporter` crate transforms a **GO SMS Pro** (GOMO / Jiubang) Android backup into `.csv` files, one file per conversation with any attachments found in that conversation.
 
-CLI reference (man-page style): [`docs/MANPAGE.md`](docs/MANPAGE.md).
+It is both a **library** (`go_sms_pro_exporter::run` / `convert_export`) used by the desktop GUI and a **standalone CLI** binary of the same name. CLI reference (man-page style): [`docs/MANPAGE.md`](docs/MANPAGE.md).
 
 ## What this is for
 

@@ -8,9 +8,9 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 ## Goals
 
 - One app for Linux, macOS, and Windows with a native look and feel.
-- Spawn the existing CLI exporters; do not reimplement conversion logic in the UI.
+- Drive exporters without reimplementing conversion in the UI: most sources spawn their CLI binary; **GO SMS Pro** calls the `go-sms-pro-exporter` library in-process (same pipeline as the standalone CLI).
 - Show only the controls that apply to the selected backup source; validate before run.
-- Stream converter stdout/stderr in the UI; support cancel.
+- Stream converter stdout/stderr (or library log lines) in the UI; support cancel.
 - Prefer plain-language labels and product site links over CLI jargon.
 
 ## Current implementation
@@ -19,8 +19,8 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 - Top tab panel: **Validate contacts** (default, first) | **Export**.
 - Typed forms and CLI argument builders for every backup source converter (`exporters.rs`).
 - Native file/folder dialogs through `rfd`.
-- Exporter / tool discovery beside the GUI executable, in `MESSAGE_EXPORTERS_BIN`, then on `PATH`.
-- Live tagged stdout/stderr log and process cancellation (mpsc poll in `update`).
+- Exporter / tool discovery beside the GUI executable, in `MESSAGE_EXPORTERS_BIN`, then on `PATH` (not required for GO SMS Pro).
+- Live tagged log and cancellation (mpsc poll in `update`): kill for spawned CLIs; cooperative cancel flag for in-process GO SMS Pro.
 - Exporter-specific validation before launch.
 - Backup-source titles link to the upstream product site.
 - **Global options** (Obfuscate + Start/End date) above the per-source form (Export tab).
@@ -94,11 +94,13 @@ Convert/Compress need `ffmpeg`/`ffprobe` on PATH. **Do not copy** skips writing 
 
 ## Per-exporter options
 
-### GO SMS Pro — `go-sms-pro-exporter`
+### GO SMS Pro — library (`go-sms-pro-exporter`)
 
 Product: [GO SMS Pro](https://play.google.com/store/apps/details?id=com.jb.gosms)
 
-| Control | Type | Required | CLI |
+Runs **in-process** via `go_sms_pro_exporter::run` (no sibling `go-sms-pro-exporter` binary required). The same crate still ships a standalone CLI for non-GUI users. Cancel is cooperative (checked between XML/PDU files).
+
+| Control | Type | Required | Library / CLI equivalent |
 |---------|------|:--------:|-----|
 | Input | folder (backup root with XML + PDU) | yes | `--input` |
 | Output | folder | yes | `--output` |

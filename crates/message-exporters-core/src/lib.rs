@@ -12,4 +12,6 @@ pub use exporters::{
     Exporter, Form, WhatsappPlatform, APPLE_PLATFORMS, ATTACHMENT_MEDIA, CONTACT_KINDS, EXPORTERS,
     MAX_RESOLUTIONS, WHATSAPP_PLATFORMS,
 };
-pub use process::{resolve_binary, spawn, ProcessControl, ProcessEvent};
+pub use process::{
+    resolve_binary, spawn, spawn_job, CancelFlag, ProcessControl, ProcessEvent,
+};

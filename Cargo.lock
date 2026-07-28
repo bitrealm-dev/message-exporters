@@ -2564,6 +2564,7 @@ dependencies = [
  "chrono",
  "eframe",
  "egui",
+ "go-sms-pro-exporter",
  "message-contacts",
  "message-exporters-core",
  "message-media",

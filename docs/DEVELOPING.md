@@ -22,7 +22,7 @@ You need write access to the repository (to run workflows that create releases a
 
 For each platform, these binaries are attached to the release:
 
-- `go-sms-pro-exporter`
+- `go-sms-pro-exporter` (standalone CLI; the GUI links this crate as a library and does not need the sibling binary for GO SMS Pro)
 - `sms-backup-restore-exporter`
 - `sms-backup-plus-exporter`
 - `openextract-exporter`

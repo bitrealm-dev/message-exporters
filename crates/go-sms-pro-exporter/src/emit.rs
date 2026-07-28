@@ -1,6 +1,7 @@
 //! Convert GO SMS Pro export → per-conversation CSV.
 
 use crate::pdu::{parse_pdu_file, ParsedPdu};
+use crate::cancel::{check_cancel, CancelFlag};
 use crate::xml::{parse_xml_file, SkippedBadAddrDetail, XmlMessage};
 use anyhow::{bail, Context, Result};
 use chrono::{Local, TimeZone};
@@ -589,6 +590,9 @@ fn enrich_pending_names(book: &ContactsBook, chat_id: &str, msg: &mut PendingMes
 }
 
 /// Convert a GO SMS Pro export directory into per-conversation CSV.
+///
+/// When `cancel` is set, cooperative cancellation is checked between XML files
+/// and between PDU files. Cancelled runs return an error with message `cancelled`.
 pub fn convert_export(
     input_dir: &Path,
     output_dir: &Path,
@@ -596,6 +600,7 @@ pub fn convert_export(
     contacts: &ContactsBook,
     date_range: &DateRange,
     copy_attachments: bool,
+    cancel: Option<&CancelFlag>,
 ) -> Result<ExportReport> {
     if !input_dir.is_dir() {
         bail!("input is not a directory: {}", input_dir.display());
@@ -625,6 +630,7 @@ pub fn convert_export(
     xml_paths.sort();
 
     for xml_path in xml_paths {
+        check_cancel(cancel)?;
         match parse_xml_file(&xml_path) {
             Ok((msgs, stats)) => {
                 report.xml_messages_seen += stats.messages;
@@ -663,6 +669,7 @@ pub fn convert_export(
     pdu_paths.sort();
 
     for pdu_path in pdu_paths {
+        check_cancel(cancel)?;
         match parse_pdu_file(&pdu_path, &owners.all_digits, &owners.primary_digits) {
             Ok(None) => {
                 report.skipped_unparseable_pdu += 1;
@@ -698,6 +705,8 @@ pub fn convert_export(
             Err(err) => report.errors.push(format!("{}: {err:#}", pdu_path.display())),
         }
     }
+
+    check_cancel(cancel)?;
 
     for (chat_id, mut convo) in conversations {
         for msg in &mut convo.messages {

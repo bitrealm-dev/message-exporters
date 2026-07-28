@@ -9,10 +9,11 @@ use std::time::Duration;
 use chrono::Local;
 use eframe::egui;
 use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
+use go_sms_pro_exporter::{parse_date_range, run as run_go_sms_pro, ExportConfig as GoSmsProConfig};
 use message_exporters_core::{
-    ensure_output_dir, resolve_binary, spawn, AttachmentMedia, ContactsKind, ExportIniState,
-    Exporter, Form, ProcessControl, ProcessEvent, WhatsappPlatform, APPLE_PLATFORMS,
-    ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS, WHATSAPP_PLATFORMS,
+    ensure_output_dir, resolve_binary, spawn, spawn_job, AttachmentMedia, ContactsKind,
+    ExportIniState, Exporter, Form, ProcessControl, ProcessEvent, WhatsappPlatform,
+    APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS, WHATSAPP_PLATFORMS,
 };
 use message_media::process_export_media;
 
@@ -262,6 +263,42 @@ impl App {
             self.show_log = true;
             return;
         }
+
+        if self.exporter == Exporter::GoSmsPro {
+            let config = match go_sms_pro_config_from_form(&self.form) {
+                Ok(config) => config,
+                Err(errors) => {
+                    self.errors = errors;
+                    return;
+                }
+            };
+            self.errors.clear();
+            self.running = true;
+            self.begin_session_log();
+            self.show_log = true;
+            let (tx, rx) = mpsc::channel();
+            self.rx = Some(rx);
+            spawn_job(
+                self.control.clone(),
+                tx,
+                "go-sms-pro-exporter (library)".into(),
+                move |cancel, tx| {
+                    let mut config = config;
+                    config.cancel = Some(cancel);
+                    match run_go_sms_pro(&config) {
+                        Ok(result) => {
+                            for line in result.messages {
+                                let _ = tx.send(ProcessEvent::Log(line));
+                            }
+                            Ok(())
+                        }
+                        Err(error) => Err(format!("{error:#}")),
+                    }
+                },
+            );
+            return;
+        }
+
         let program = match resolve_binary(self.exporter.binary()) {
             Ok(program) => program,
             Err(error) => {
@@ -1444,4 +1481,63 @@ fn combo_enum<T: Copy + PartialEq + std::fmt::Display>(
                 });
         });
     });
+}
+
+/// Build library config after `Form::build_args` has already validated the form.
+fn go_sms_pro_config_from_form(form: &Form) -> Result<GoSmsProConfig, Vec<String>> {
+    let date_range = parse_date_range(
+        non_empty(form.start_date.trim()),
+        non_empty(form.end_date.trim()),
+    )
+    .map_err(|error| vec![error.to_string()])?;
+
+    let compress = if matches!(
+        form.attachment_media.media_mode(),
+        message_media::MediaMode::Compress
+    ) {
+        form.compress_options().map_err(|error| vec![error])?
+    } else {
+        message_media::CompressOptions::default()
+    };
+
+    let owner_phones: Vec<String> = form
+        .owner_phones
+        .split(['\n', ',', ';'])
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect();
+
+    let (contacts, vcf) = match form.contacts_kind {
+        ContactsKind::None => (None, None),
+        ContactsKind::Csv => (non_empty_path(&form.contacts), None),
+        ContactsKind::Vcf => (None, non_empty_path(&form.contacts)),
+    };
+
+    Ok(GoSmsProConfig {
+        input: PathBuf::from(form.input.trim()),
+        output: PathBuf::from(form.output.trim()),
+        owner_phones,
+        contacts,
+        vcf,
+        date_range,
+        media_mode: form.attachment_media.media_mode(),
+        compress,
+        obfuscate: form.obfuscate,
+        obfuscate_seed: non_empty(form.obfuscate_seed.trim()).map(str::to_string),
+        cancel: None,
+    })
+}
+
+fn non_empty(value: &str) -> Option<&str> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+fn non_empty_path(value: &str) -> Option<PathBuf> {
+    non_empty(value).map(PathBuf::from)
 }

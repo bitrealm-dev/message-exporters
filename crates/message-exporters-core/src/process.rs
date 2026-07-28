@@ -1,11 +1,16 @@
 //! Spawn exporter / contacts-validate CLIs and stream output via mpsc.
+//! Also runs in-process jobs (e.g. GO SMS Pro library) on a background thread.
 
 use std::ffi::OsString;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
+
+/// Shared cancel flag for cooperative in-process jobs.
+pub type CancelFlag = Arc<AtomicBool>;
 
 #[derive(Debug, Clone)]
 pub enum ProcessEvent {
@@ -15,26 +20,48 @@ pub enum ProcessEvent {
     Error(String),
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ProcessControl {
     child: Arc<Mutex<Option<Child>>>,
+    cancel: CancelFlag,
+}
+
+impl Default for ProcessControl {
+    fn default() -> Self {
+        Self {
+            child: Arc::new(Mutex::new(None)),
+            cancel: Arc::new(AtomicBool::new(false)),
+        }
+    }
 }
 
 impl ProcessControl {
+    /// Shared cancel flag for in-process jobs. Reset when a new job starts.
+    pub fn cancel_flag(&self) -> CancelFlag {
+        Arc::clone(&self.cancel)
+    }
+
     pub fn cancel(&self) -> Result<(), String> {
+        self.cancel.store(true, Ordering::Relaxed);
         let mut guard = self.child.lock().map_err(|_| "process lock poisoned")?;
-        let Some(child) = guard.as_mut() else {
-            return Err("No process is running.".into());
-        };
-        child
-            .kill()
-            .map_err(|error| format!("Could not cancel process: {error}"))
+        if let Some(child) = guard.as_mut() {
+            child
+                .kill()
+                .map_err(|error| format!("Could not cancel process: {error}"))?;
+            return Ok(());
+        }
+        // In-process job: flag is enough.
+        Ok(())
     }
 
     fn clear(&self) {
         if let Ok(mut child) = self.child.lock() {
             *child = None;
         }
+    }
+
+    fn begin_job(&self) {
+        self.cancel.store(false, Ordering::Relaxed);
     }
 }
 
@@ -87,6 +114,7 @@ pub fn spawn(
     control: ProcessControl,
     tx: mpsc::Sender<ProcessEvent>,
 ) {
+    control.begin_job();
     thread::spawn(move || {
         let command_display = format_command(&program, &args);
         let mut command = Command::new(&program);
@@ -197,6 +225,36 @@ pub fn spawn(
     });
 }
 
+/// Run an in-process job on a background thread; send events on `tx`.
+///
+/// The job receives the shared cancel flag and a log sender. On success it should
+/// return `Ok(())`; on failure `Err(message)`. Cancelled jobs typically return
+/// an error containing `"cancelled"`.
+pub fn spawn_job<F>(control: ProcessControl, tx: mpsc::Sender<ProcessEvent>, label: String, job: F)
+where
+    F: FnOnce(CancelFlag, mpsc::Sender<ProcessEvent>) -> Result<(), String> + Send + 'static,
+{
+    control.begin_job();
+    let cancel = control.cancel_flag();
+    thread::spawn(move || {
+        let _ = tx.send(ProcessEvent::Started(label));
+        match job(cancel, tx.clone()) {
+            Ok(()) => {
+                let _ = tx.send(ProcessEvent::Finished(
+                    "Completed successfully.".to_string(),
+                ));
+            }
+            Err(error) => {
+                if error.to_ascii_lowercase().contains("cancelled") {
+                    let _ = tx.send(ProcessEvent::Finished("Cancelled.".to_string()));
+                } else {
+                    let _ = tx.send(ProcessEvent::Error(error));
+                }
+            }
+        }
+    });
+}
+
 fn executable_name(name: &str) -> String {
     if cfg!(windows) {
         format!("{name}.exe")
@@ -253,5 +311,13 @@ mod tests {
         );
         assert_eq!(text, "tool --cleartext-password \"[redacted]\"");
         assert!(!text.contains("secret value"));
+    }
+
+    #[test]
+    fn cancel_sets_flag_without_child() {
+        let control = ProcessControl::default();
+        assert!(!control.cancel_flag().load(Ordering::Relaxed));
+        control.cancel().unwrap();
+        assert!(control.cancel_flag().load(Ordering::Relaxed));
     }
 }

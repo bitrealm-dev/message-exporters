@@ -26,6 +26,7 @@ fn convert_smoke_writes_csv_not_json() {
         &contacts,
         &DateRange::default(),
         true,
+        None,
     )
     .expect("convert_export should succeed");
     assert!(report.conversations >= 1);

@@ -8,6 +8,7 @@ description = "Cross-platform egui GUI for message-exporters"
 chrono = "0.4.44"
 eframe = "0.31"
 egui = "0.31"
+go-sms-pro-exporter = { path = "../go-sms-pro-exporter", default-features = false }
 message-obfuscate = { path = "../message-obfuscate" }
 message-contacts = { path = "../message-contacts" }
 message-exporters-core = { path = "../message-exporters-core" }
