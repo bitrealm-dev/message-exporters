@@ -1,8 +1,8 @@
 # CSV output
 
-All converters write **one CSV file per conversation**, plus an `attachments/` directory when media is copied.
+All converters write **one CSV file per conversation**, plus an `attachments/` directory when media is copied, and a `<stem>.meta.json` sidecar for conversation/export header.
 
-CSV is projected from [canonical IR](../MESSAGE_IR.md) (`schema_version` 3) via `message_ir::write_format`. A **mail archive** path is specified in [`MAIL_ARCHIVE.md`](../MAIL_ARCHIVE.md).
+CSV is projected from [canonical IR](../MESSAGE_IR.md) (`schema_version` 3) via `message_ir::write_format`. Reverse import: `message_ir::read_conversation_csv`. A **mail archive** path is specified in [`MAIL_ARCHIVE.md`](../MAIL_ARCHIVE.md).
 
 ## Shared conventions
 
@@ -11,6 +11,29 @@ CSV is projected from [canonical IR](../MESSAGE_IR.md) (`schema_version` 3) via 
 - Outgoing rows fill `sender_handle` / `sender_display_name` from `owner_handle` / `owner_display_name` (display defaults to `"Me"` when a handle is known).
 - Every row includes `export_source`, `export_tool`, `export_tool_version`, and owner columns.
 - All exporters share one header set ([`CSV_HEADERS`](../../crates/message-ir/src/lib.rs)). Apple-only cells are empty for non-iMessage sources.
+
+## Nested bag cells
+
+`source_fields_json`, `parts_json`, `edits_json`, `tapbacks_json`, `app_json`:
+
+- **Absent** → empty string (never the literal `null`)
+- **Present** → compact JSON
+
+Booleans (`is_deleted`, `is_reply`, `is_announcement`) are always `"true"` / `"false"`.
+
+## Meta sidecar
+
+Alongside `<stem>.csv`, writers emit `<stem>.meta.json` with the same shape as a JSONL header:
+
+```json
+{
+  "schema_version": 3,
+  "export": { … },
+  "conversation": { … }
+}
+```
+
+Readers prefer the sidecar; if missing, they reconstruct from the first data row.
 
 ## Column contract
 
@@ -33,7 +56,7 @@ CSV is projected from [canonical IR](../MESSAGE_IR.md) (`schema_version` 3) via 
 | `owner_handle` / `owner_display_name` | Export owner identity |
 | `android_type` | Android Telephony type as integer string, else empty |
 | `source_fields_json` | Vendor leftover object (replaces `xml_fields_json`) |
-| `read_receipt` … `app_json` | iMessage extensions; empty / `null` JSON for SMS |
+| `read_receipt` … `tapback_action` | iMessage extensions; empty cells for SMS |
 
 Removed legacy columns: `date_ms`, `contact_name`, `xml_fields_json`.
 

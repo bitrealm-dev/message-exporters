@@ -106,7 +106,9 @@ Browse-oriented so mail-client **Correspondents** / Subject columns stay readabl
 
 **Group outgoing:** `From` = `Me <owner>`; `To` = same conversation address; roster in `X-ME-Participants`.
 
-Empty owner handle falls back to `me@sms.local` with display name `Me`. Outgoing `X-ME-Sender-Handle` is empty/absent (same convention as CSV).
+Empty owner handle falls back to `me@sms.local` with display name `Me`. Outgoing rows set `X-ME-Sender-*` from owner identity (same as IR/CSV). Owner is always mirrored in `X-ME-Owner-*` when known.
+
+Reverse import (EML/MBOX → IR JSON) is available via [`message-ir`](../crates/message-ir/) (`read_conversation_eml_dir` / `read_conversation_mbox`).
 
 ## Core `X-ME-*` headers (SMS / MMS / shared)
 
@@ -119,9 +121,11 @@ Prefix: **`X-ME-`** (Message Exporters). JSON header values are compact single-l
 | `X-ME-Group-Title` | string | Empty/absent for 1:1 |
 | `X-ME-Participants` | JSON `[{ "handle", "display_name" }]` | **Required for groups**; E.164 preferred for phones |
 | `X-ME-Direction` | `incoming` \| `outgoing` | |
-| `X-ME-Sender-Handle` | string | Empty when outgoing |
+| `X-ME-Sender-Handle` | string | Peer or owner (outgoing); omit when unknown |
 | `X-ME-Sender-Display-Name` | string | |
-| `X-ME-Service` | `SMS` \| `iMessage` \| `RCS` | Android SMS path uses `SMS` even for MMS |
+| `X-ME-Owner-Handle` | string | Export owner handle |
+| `X-ME-Owner-Display-Name` | string | Export owner display (caller-id / `"Me"`) |
+| `X-ME-Service` | lowercase IR vocabulary preferred (`sms` / `imessage` / …) | Older exports may use `SMS` / `iMessage` |
 | `X-ME-Message-Kind` | see taxonomy below | |
 | `X-ME-Timestamp-Unix-Ms` | integer string | Authoritative epoch ms (UTC) |
 | `X-ME-Timestamp-Display-TZ` | optional offset/name | When export used a non-host timezone |

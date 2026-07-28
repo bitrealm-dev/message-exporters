@@ -1,12 +1,23 @@
 //! Canonical conversation intermediate representation (IR).
 //!
 //! Source exporters parse vendor formats into [`ConversationDocument`], then
-//! project with [`write_format`] to CSV, EML, MBOX, JSON, or JSONL. See
+//! project with [`write_format`] to CSV, EML, MBOX, JSON, or JSONL. Reverse
+//! projectors (`read_conversation_*`) restore IR for content round-trips. See
 //! [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
 //!
 //! Schema version 3 is a typed, stable JSON shape: enums for service/kind,
 //! struct bags for `imessage` / `source`, filled outgoing identity, conversation
 //! stats, and packaging stem suffixes kept out of serialized JSON.
+
+mod normalize;
+mod read_csv;
+mod read_mail;
+
+pub use normalize::normalize_document_for_compare;
+pub use read_csv::read_conversation_csv;
+pub use read_mail::{
+    document_from_mail_messages, read_conversation_eml_dir, read_conversation_mbox,
+};
 
 use anyhow::{bail, Context, Result};
 use message_csv::{
@@ -69,6 +80,13 @@ pub const CSV_HEADERS: &[&str] = &[
     "edits_json",
     "tapbacks_json",
     "app_json",
+    "balloon_bundle_id",
+    "balloon_kind",
+    "associated_guid",
+    "associated_part",
+    "tapback_kind",
+    "tapback_emoji",
+    "tapback_action",
 ];
 
 /// Alias kept for callers that still name the Apple header set.
@@ -457,12 +475,22 @@ pub fn write_conversation_json(output_dir: &Path, doc: &ConversationDocument) ->
     Ok(path)
 }
 
-/// JSONL header line (schema + export + conversation; no messages).
+/// JSONL header / CSV `<stem>.meta.json` (schema + export + conversation; no messages).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct JsonlHeader {
-    schema_version: u32,
-    export: ExportMeta,
-    conversation: ConversationMeta,
+pub struct ConversationHeader {
+    pub schema_version: u32,
+    pub export: ExportMeta,
+    pub conversation: ConversationMeta,
+}
+
+impl ConversationHeader {
+    pub fn from_document(doc: &ConversationDocument) -> Self {
+        Self {
+            schema_version: doc.schema_version,
+            export: doc.export.clone(),
+            conversation: doc.conversation.clone(),
+        }
+    }
 }
 
 /// Per-conversation JSON Lines (`<stem>.jsonl`): header object, then one
@@ -476,11 +504,7 @@ pub fn write_conversation_jsonl(output_dir: &Path, doc: &ConversationDocument) -
     {
         let mut file =
             File::create(&tmp).with_context(|| format!("create {}", tmp.display()))?;
-        let header = JsonlHeader {
-            schema_version: doc.schema_version,
-            export: doc.export.clone(),
-            conversation: doc.conversation.clone(),
-        };
+        let header = ConversationHeader::from_document(doc);
         serde_json::to_writer(&mut file, &header).context("serialize JSONL header")?;
         file.write_all(b"\n")?;
         for msg in &doc.messages {
@@ -497,9 +521,12 @@ fn stem_suffix(doc: &ConversationDocument) -> Option<&str> {
     doc.packaging_stem_suffix.as_deref()
 }
 
+/// Compact JSON for nested bags; empty string when absent (never the literal `null`).
 fn value_cell(v: Option<&Value>) -> String {
-    v.map(|v| serde_json::to_string(v).unwrap_or_else(|_| "null".into()))
-        .unwrap_or_else(|| "null".into())
+    v.filter(|v| !v.is_null())
+        .map(|v| serde_json::to_string(v).unwrap_or_default())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_default()
 }
 
 fn value_as_string(v: Option<&Value>) -> Option<String> {
@@ -597,18 +624,13 @@ pub fn write_conversation_csv(output_dir: &Path, doc: &ConversationDocument) -> 
         let is_announcement = msg.message_kind == IrMessageKind::Announcement;
         let announcement = im.and_then(|i| i.announcement.as_deref()).unwrap_or("");
         let is_reply = im.map(|i| i.is_reply).unwrap_or(false);
-        let thread_originator_guid = if is_reply {
-            im.and_then(|i| i.in_reply_to_guid.as_deref()).unwrap_or("")
-        } else {
-            ""
-        };
-        let thread_originator_part = if is_reply {
-            im.and_then(|i| i.thread_originator_part)
-                .unwrap_or(0)
-                .to_string()
-        } else {
-            String::new()
-        };
+        let thread_originator_guid = im
+            .and_then(|i| i.in_reply_to_guid.as_deref())
+            .unwrap_or("");
+        let thread_originator_part = im
+            .and_then(|i| i.thread_originator_part)
+            .map(|n| n.to_string())
+            .unwrap_or_default();
         let num_replies = im
             .and_then(|i| i.num_replies)
             .map(|n| n.to_string())
@@ -617,6 +639,16 @@ pub fn write_conversation_csv(output_dir: &Path, doc: &ConversationDocument) -> 
         let edits_json = value_cell(im.and_then(|i| i.edits.as_ref()));
         let tapbacks_json = value_cell(im.and_then(|i| i.tapbacks.as_ref()));
         let app_json = value_cell(im.and_then(|i| i.app.as_ref()));
+        let balloon_bundle_id = im.and_then(|i| i.balloon_bundle_id.as_deref()).unwrap_or("");
+        let balloon_kind = im.and_then(|i| i.balloon_kind.as_deref()).unwrap_or("");
+        let associated_guid = im.and_then(|i| i.associated_guid.as_deref()).unwrap_or("");
+        let associated_part = im
+            .and_then(|i| i.associated_part)
+            .map(|n| n.to_string())
+            .unwrap_or_default();
+        let tapback_kind = im.and_then(|i| i.tapback_kind.as_deref()).unwrap_or("");
+        let tapback_emoji = im.and_then(|i| i.tapback_emoji.as_deref()).unwrap_or("");
+        let tapback_action = im.and_then(|i| i.tapback_action.as_deref()).unwrap_or("");
 
         wtr.write_record([
             doc.conversation.chat_identifier.as_str(),
@@ -657,6 +689,13 @@ pub fn write_conversation_csv(output_dir: &Path, doc: &ConversationDocument) -> 
             edits_json.as_str(),
             tapbacks_json.as_str(),
             app_json.as_str(),
+            balloon_bundle_id,
+            balloon_kind,
+            associated_guid,
+            associated_part.as_str(),
+            tapback_kind,
+            tapback_emoji,
+            tapback_action,
         ])
         .with_context(|| format!("write row {}", path.display()))?;
     }
@@ -665,6 +704,23 @@ pub fn write_conversation_csv(output_dir: &Path, doc: &ConversationDocument) -> 
     drop(wtr);
     fs::rename(&tmp_path, &path)
         .with_context(|| format!("rename {} → {}", tmp_path.display(), path.display()))?;
+
+    let meta_path = path.with_extension("meta.json");
+    let meta = ConversationHeader::from_document(doc);
+    let meta_json =
+        serde_json::to_vec_pretty(&meta).context("serialize conversation meta sidecar")?;
+    let mut meta_tmp = meta_path.clone();
+    meta_tmp.set_extension("meta.json.tmp");
+    {
+        let mut file =
+            File::create(&meta_tmp).with_context(|| format!("create {}", meta_tmp.display()))?;
+        file.write_all(&meta_json)
+            .with_context(|| format!("write {}", meta_tmp.display()))?;
+        file.write_all(b"\n")?;
+    }
+    fs::rename(&meta_tmp, &meta_path)
+        .with_context(|| format!("rename {} → {}", meta_tmp.display(), meta_path.display()))?;
+
     Ok(path)
 }
 
@@ -1065,5 +1121,81 @@ mod tests {
         let raw = fs::read_to_string(&path).unwrap();
         assert!(!raw.contains("filename_suffix"));
         assert!(!raw.contains("__whatsapp"));
+    }
+
+    fn assert_docs_equal_after_normalize(mut a: ConversationDocument, mut b: ConversationDocument) {
+        normalize_document_for_compare(&mut a);
+        normalize_document_for_compare(&mut b);
+        let va = serde_json::to_value(&a).unwrap();
+        let vb = serde_json::to_value(&b).unwrap();
+        assert_eq!(va, vb);
+    }
+
+    #[test]
+    fn roundtrip_csv_sms_and_imessage() {
+        for doc in [sample_doc(), sample_imessage_doc()] {
+            let tmp = tempfile::tempdir().unwrap();
+            let csv_path = write_conversation_csv(tmp.path(), &doc).unwrap();
+            let csv = fs::read_to_string(&csv_path).unwrap();
+            // Nested bag cells are empty strings, never the literal `null`.
+            let header = csv.lines().next().unwrap();
+            let cols: Vec<&str> = header.split(',').collect();
+            let bag_names = [
+                "source_fields_json",
+                "parts_json",
+                "edits_json",
+                "tapbacks_json",
+                "app_json",
+            ];
+            for line in csv.lines().skip(1) {
+                let mut rdr = csv::ReaderBuilder::new()
+                    .has_headers(false)
+                    .from_reader(line.as_bytes());
+                let record = rdr.records().next().unwrap().unwrap();
+                for name in bag_names {
+                    let idx = cols.iter().position(|c| *c == name).unwrap();
+                    assert_ne!(
+                        record.get(idx),
+                        Some("null"),
+                        "column {name} must not be literal null"
+                    );
+                }
+            }
+            assert!(csv_path.with_extension("meta.json").is_file());
+
+            let back = read_conversation_csv(&csv_path).unwrap();
+            assert_docs_equal_after_normalize(doc, back);
+        }
+    }
+
+    #[test]
+    fn roundtrip_eml_and_mbox() {
+        for doc in [sample_doc(), sample_imessage_doc()] {
+            let tmp = tempfile::tempdir().unwrap();
+            let _ = clean_previous_mail_output(tmp.path());
+            let eml_dir = write_format(tmp.path(), OutputFormat::Eml, &doc).unwrap();
+            let back_eml = read_conversation_eml_dir(&eml_dir).unwrap();
+            // Outgoing EML must carry sender + owner identity headers.
+            let outgoing_eml = fs::read_dir(&eml_dir)
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .find(|p| {
+                    let bytes = fs::read(p).unwrap();
+                    let text = String::from_utf8_lossy(&bytes);
+                    text.contains("X-ME-Direction: outgoing")
+                })
+                .expect("outgoing eml");
+            let outgoing_text = fs::read_to_string(&outgoing_eml).unwrap();
+            assert!(outgoing_text.contains("X-ME-Sender-Handle:"));
+            assert!(outgoing_text.contains("X-ME-Owner-Handle:"));
+
+            assert_docs_equal_after_normalize(doc.clone(), back_eml);
+
+            let _ = clean_previous_mail_output(tmp.path());
+            let mbox_path = write_format(tmp.path(), OutputFormat::Mbox, &doc).unwrap();
+            let back_mbox = read_conversation_mbox(&mbox_path).unwrap();
+            assert_docs_equal_after_normalize(doc, back_mbox);
+        }
     }
 }

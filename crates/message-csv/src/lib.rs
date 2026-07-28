@@ -7,17 +7,18 @@ pub use date_range::DateRange;
 pub use utc_offset::parse_utc_offset;
 
 use chrono::{Local, TimeZone, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 /// One attachment object written into `attachments_json`.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AttachmentCell {
     pub path: Option<String>,
     pub original_name: Option<String>,
     pub mime_type: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub digest_sha256: Option<String>,
+    #[serde(default)]
     pub is_sticker: bool,
     pub transcription: Option<String>,
     pub sticker_effect: Option<String>,

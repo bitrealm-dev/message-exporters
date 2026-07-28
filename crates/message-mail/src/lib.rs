@@ -6,6 +6,8 @@
 //! SMS/MMS fill the core fields; iMessage exporters also set reply / tapback /
 //! balloon / parts / edits extension fields.
 
+mod parse;
+
 use anyhow::{bail, Context, Result};
 use chrono::{Local, TimeZone, Utc};
 use mail_builder::headers::address::Address;
@@ -13,10 +15,12 @@ use mail_builder::headers::date::Date;
 use mail_builder::headers::text::Text;
 use mail_builder::MessageBuilder;
 use message_csv::conversation_filename;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
+
+pub use parse::{mail_message_from_eml_bytes, mail_messages_from_mbox};
 
 const MESSAGE_ID_DOMAIN_DEFAULT: &str = "message-exporters.local";
 const MESSAGE_ID_DOMAIN_IMESSAGE: &str = "imessage.local";
@@ -42,10 +46,10 @@ impl Direction {
 }
 
 /// One participant in a conversation roster.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Participant {
     pub handle: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
 }
 
@@ -714,13 +718,20 @@ fn build_eml(msg: &MailMessage) -> Result<Vec<u8>> {
         builder = builder.header("X-ME-Participants", Text::new(participants_json));
     }
 
-    if msg.direction == Direction::Incoming {
-        if let Some(h) = msg.sender_handle.as_deref().filter(|s| !s.is_empty()) {
-            builder = builder.header("X-ME-Sender-Handle", Text::new(h.to_string()));
-        }
-        if let Some(n) = msg.sender_display_name.as_deref().filter(|s| !s.is_empty()) {
-            builder = builder.header("X-ME-Sender-Display-Name", Text::new(n.to_string()));
-        }
+    if let Some(h) = msg.sender_handle.as_deref().filter(|s| !s.is_empty()) {
+        builder = builder.header("X-ME-Sender-Handle", Text::new(h.to_string()));
+    }
+    if let Some(n) = msg.sender_display_name.as_deref().filter(|s| !s.is_empty()) {
+        builder = builder.header("X-ME-Sender-Display-Name", Text::new(n.to_string()));
+    }
+    if !msg.owner_handle.trim().is_empty() {
+        builder = builder.header(
+            "X-ME-Owner-Handle",
+            Text::new(msg.owner_handle.trim().to_string()),
+        );
+    }
+    if let Some(n) = msg.owner_display_name.as_deref().filter(|s| !s.is_empty()) {
+        builder = builder.header("X-ME-Owner-Display-Name", Text::new(n.to_string()));
     }
 
     if let Some(subj) = msg.subject.as_deref().filter(|s| !s.is_empty()) {
@@ -1118,8 +1129,8 @@ mod tests {
     fn outgoing_uses_me_and_stable_subject() {
         let mut msg = base_sms();
         msg.direction = Direction::Outgoing;
-        msg.sender_handle = None;
-        msg.sender_display_name = None;
+        msg.sender_handle = Some("+15555550100".into());
+        msg.sender_display_name = Some("Me".into());
         msg.text = "body must not become subject".into();
 
         let tmp = tempfile::tempdir().unwrap();
@@ -1139,14 +1150,26 @@ mod tests {
             .get_first_value("Subject")
             .unwrap()
             .contains("body must not"));
+        assert_eq!(
+            headers.get_first_value("X-ME-Sender-Handle").as_deref(),
+            Some("+15555550100")
+        );
+        assert_eq!(
+            headers.get_first_value("X-ME-Owner-Handle").as_deref(),
+            Some("+15555550100")
+        );
+        assert_eq!(
+            headers.get_first_value("X-ME-Owner-Display-Name").as_deref(),
+            None // unset on base_sms unless set
+        );
     }
 
     #[test]
     fn caller_id_owner_display_and_imessage_extension_headers() {
         let mut msg = base_sms();
         msg.direction = Direction::Outgoing;
-        msg.sender_handle = None;
-        msg.sender_display_name = None;
+        msg.sender_handle = Some("+15555550100".into());
+        msg.sender_display_name = Some("+15555550100".into());
         msg.owner_display_name = Some("+15555550100".into());
         msg.export_source = "imessage".into();
         msg.message_kind = "imessage".into();
@@ -1168,6 +1191,14 @@ mod tests {
         let from = headers.get_first_value("From").unwrap();
         assert!(from.contains("+15555550100"), "From was {from}");
         assert!(!from.contains("Me <"), "From was {from}");
+        assert_eq!(
+            headers.get_first_value("X-ME-Sender-Handle").as_deref(),
+            Some("+15555550100")
+        );
+        assert_eq!(
+            headers.get_first_value("X-ME-Owner-Display-Name").as_deref(),
+            Some("+15555550100")
+        );
         assert_eq!(
             headers.get_first_value("X-ME-Is-Reply").as_deref(),
             Some("true")

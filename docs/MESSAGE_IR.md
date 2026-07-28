@@ -104,12 +104,30 @@ Line 1 is the header (includes `conversation.stats`; no `messages` array). Each 
 
 ## Projectors
 
-| Format | Writer |
-|--------|--------|
-| JSON | pretty-printed `ConversationDocument` |
-| JSONL | header + one message per line |
-| CSV | unified [`CSV_HEADERS`](../crates/message-ir/src/lib.rs) for all sources; nested bags stringified into `source_fields_json` / `parts_json` / … cells (Apple cells empty for SMS) |
-| EML / MBOX | IR → `MailMessage` → [`message-mail`](../crates/message-mail/) |
+| Format | Writer | Reader |
+|--------|--------|--------|
+| JSON | pretty-printed `ConversationDocument` | `serde_json` |
+| JSONL | header + one message per line | line-oriented parse |
+| CSV | unified [`CSV_HEADERS`](../crates/message-ir/src/lib.rs) + `<stem>.meta.json` | `read_conversation_csv` |
+| EML / MBOX | IR → `MailMessage` → [`message-mail`](../crates/message-mail/) | `read_conversation_eml_dir` / `read_conversation_mbox` |
+
+## Content round-trip
+
+Library APIs support content-preserving cycles:
+
+`ConversationDocument` → CSV \| EML \| MBOX → `ConversationDocument` → JSON
+
+After `normalize_document_for_compare`:
+
+- Recomputes `conversation.stats`
+- Collapses empty `source` / `imessage` to `null`
+- Clears packaging stem suffix and attachment bytes (not part of JSON content)
+
+**Preserved:** messages, attachment metadata (path/digest/mime when present in the format), `source`, `imessage`, export + conversation identity.
+
+**Not required:** filename stem / pretty-print identity, packaging suffix in the JSON body, embedding attachment bytes in JSON. EML `X-ME-Attachment-Meta` currently omits on-disk `path` (bytes may still round-trip in memory for re-export).
+
+CSV nested bags use empty string when absent (never literal `null`). See [csv-output.md](src/csv-output.md).
 
 ## Related
 
