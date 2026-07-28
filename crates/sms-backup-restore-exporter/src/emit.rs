@@ -7,11 +7,10 @@ use message_contacts::ContactsBook;
 use message_csv::{format_local_ts, json_cell, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    owner_sender, parse_android_type, parse_json_value, write_format, ConversationDocument,
-    ConversationMeta, ConversationStats, ExportMeta, IrAttachment, IrConversationType, IrDirection,
-    IrMessage, IrMessageKind, IrParticipant, IrService, IrSource, SbrBackupSession, SCHEMA_VERSION,
+    clean_previous_ir_output, owner_sender, parse_android_type, parse_json_value, ConversationDocument,
+    ConversationMeta, ConversationStats, ExportMeta, FormatSink, IrAttachment, IrConversationType,
+    IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION,
 };
-use message_mail::clean_previous_mail_output;
 use message_phone::{to_e164, OwnerPhoneSet};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
@@ -354,28 +353,6 @@ fn pending_to_document(
     })
 }
 
-fn clean_previous_output(output_dir: &Path) -> Result<()> {
-    for entry in fs::read_dir(output_dir)? {
-        let path = entry?.path();
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if path.is_file()
-            && (name.ends_with(".csv")
-                || name.ends_with(".csv.tmp")
-                || name.ends_with(".json")
-                || name.ends_with(".json.tmp")
-                || name.ends_with(".jsonl")
-                || name.ends_with(".jsonl.tmp")
-                || name == "smses.xml"
-                || name.ends_with(".xml.tmp")
-                || name.ends_with(".xml.sbrbody"))
-        {
-            let _ = fs::remove_file(&path);
-        }
-    }
-    clean_previous_mail_output(output_dir)?;
-    Ok(())
-}
-
 fn collect_xml_paths(input: &Path) -> Result<Vec<PathBuf>> {
     if input.is_file() {
         return Ok(vec![input.to_path_buf()]);
@@ -438,16 +415,12 @@ pub fn convert_export(
     let mut conversations: BTreeMap<String, PendingConversation> = BTreeMap::new();
 
     fs::create_dir_all(output_dir)?;
-    clean_previous_output(output_dir)?;
+    clean_previous_ir_output(output_dir)?;
     let attachments_dir = output_dir.join("attachments");
     if copy_attachments {
         fs::create_dir_all(&attachments_dir)?;
     }
-    let mut sbr = if output_format.is_sbr_xml() {
-        Some(SbrBackupSession::create(output_dir)?)
-    } else {
-        None
-    };
+    let mut sink = FormatSink::open(output_dir, output_format)?;
 
     for xml_path in collect_xml_paths(input)? {
         check_cancel(cancel)?;
@@ -494,17 +467,10 @@ pub fn convert_export(
             continue;
         }
         let doc = pending_to_document(&chat_id, &convo, &owner_handle, &mut report)?;
-        if let Some(session) = sbr.as_mut() {
-            session.append_document(&doc)?;
-        } else {
-            write_format(output_dir, output_format, &doc)?;
-        }
+        sink.write_document(&doc)?;
         report.conversations += 1;
     }
 
-    if let Some(session) = sbr {
-        session.finish()?;
-    }
-
+    sink.finish()?;
     Ok(report)
 }

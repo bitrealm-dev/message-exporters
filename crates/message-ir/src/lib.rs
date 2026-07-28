@@ -1,25 +1,31 @@
 //! Canonical conversation intermediate representation (IR).
 //!
 //! Source exporters parse vendor formats into [`ConversationDocument`], then
-//! project with [`write_format`] to CSV, EML, MBOX, JSON, or JSONL. Reverse
-//! projectors (`read_conversation_*`) restore IR for content round-trips. See
-//! [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
+//! project with [`FormatSink`] (or [`write_format`] for a single non-XML
+//! conversation). XML backups use a session inside [`FormatSink`] → `smses.xml`.
+//! Reverse projectors (`read_conversation_*`) restore IR for content round-trips.
+//! See [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
 //!
 //! Schema version 3 is a typed, stable JSON shape: enums for service/kind,
 //! struct bags for `imessage` / `source`, filled outgoing identity, conversation
 //! stats, and packaging stem suffixes kept out of serialized JSON.
 
+mod clean;
+mod format_sink;
 mod normalize;
 mod read_csv;
 mod read_mail;
+mod util;
 mod write_sbr;
 
+pub use clean::clean_previous_ir_output;
+pub use format_sink::FormatSink;
 pub use normalize::normalize_document_for_compare;
 pub use read_csv::read_conversation_csv;
 pub use read_mail::{
     document_from_mail_messages, read_conversation_eml_dir, read_conversation_mbox,
 };
-pub use write_sbr::{document_to_sbr_messages, SbrBackupSession};
+pub use write_sbr::SbrBackupSession;
 
 use anyhow::{bail, Context, Result};
 use message_csv::{
@@ -90,9 +96,6 @@ pub const CSV_HEADERS: &[&str] = &[
     "tapback_emoji",
     "tapback_action",
 ];
-
-/// Alias kept for callers that still name the Apple header set.
-pub const IMESSAGE_CSV_HEADERS: &[&str] = CSV_HEADERS;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationDocument {
@@ -440,7 +443,10 @@ pub fn parse_json_value(s: &str) -> Value {
     serde_json::from_str(s).unwrap_or_else(|_| json!(s))
 }
 
-/// Write one conversation in the requested packaging format.
+/// Write one conversation in a per-chat packaging format.
+///
+/// For multi-chat exports (including XML `smses.xml`), use [`FormatSink`] instead.
+/// [`OutputFormat::Xml`] returns an error here.
 pub fn write_format(
     output_dir: &Path,
     format: OutputFormat,

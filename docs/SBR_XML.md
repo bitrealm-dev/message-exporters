@@ -21,10 +21,10 @@ This is the same family of files that [SMS Backup & Restore](https://www.synctec
 | Piece | Crate / API |
 |-------|-------------|
 | Codec (write elements, finalize `count`) | [`message-sbr`](../crates/message-sbr/) |
-| IR → SBR mapping + session | [`message_ir::SbrBackupSession`](../crates/message-ir/) |
+| IR → SBR mapping + export sink | [`message_ir::FormatSink`](../crates/message-ir/) (XML path uses `SbrBackupSession` internally) |
 | CLI / GUI | `--format xml` / `OutputFormat::Xml` |
 
-Exporters open one session, `append_document` per conversation, then `finish`. Do **not** call `write_format(..., Xml, …)` (returns an error — a single shared file cannot be safely rewritten per chat).
+Exporters use `FormatSink::open` → `write_document` per conversation → `finish`. Do **not** call `write_format(..., Xml, …)` (returns an error — a single shared file cannot be safely rewritten per chat).
 
 ## Mapping rules
 

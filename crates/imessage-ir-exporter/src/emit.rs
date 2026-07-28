@@ -1,10 +1,10 @@
-//! Stream messages → [`MailMessage`] → canonical IR → CSV / EML / MBOX / JSON / JSONL.
+//! Stream messages → [`MailMessage`] → canonical IR → CSV / EML / MBOX / JSON / JSONL / XML.
 //!
 //! Every message is built once via [`build_mail_message`] (unchanged Apple →
 //! `MailMessage` mapping), converted to [`IrMessage`] (core fields + a nested
 //! `imessage` extension bag), and accumulated per conversation.
-//! After the DB stream ends, each conversation is written once via
-//! [`message_ir::write_format`] (see [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md)).
+//! After the DB stream ends, conversations are written via
+//! [`message_ir::FormatSink`] (see [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md)).
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -29,9 +29,9 @@ use imessage_database::{
 };
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    owner_sender, parse_json_value, write_format, ConversationDocument, ConversationMeta,
-    ExportMeta, IrAttachment, IrConversationType, IrDirection, IrImessage, IrMessage,
-    IrMessageKind, IrParticipant, IrService, SbrBackupSession, SCHEMA_VERSION,
+    owner_sender, parse_json_value, ConversationDocument, ConversationMeta, ExportMeta,
+    FormatSink, IrAttachment, IrConversationType, IrDirection, IrImessage, IrMessage,
+    IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION,
 };
 use message_mail::{Direction as MailDirection, MailAttachment, MailMessage, Participant};
 use sha2::{Digest, Sha256};
@@ -136,15 +136,9 @@ pub fn run_export(session: &MailSession) -> Result<(), RuntimeError> {
 
     let total_conversations = conversations.len() as u64;
     eprintln!("Writing {total_conversations} conversation file(s)...");
-    let mut sbr = if format.is_sbr_xml() {
-        Some(
-            SbrBackupSession::create(&session.options.export_path).map_err(|e| {
-                RuntimeError::InvalidOptions(format!("create smses.xml session: {e:#}"))
-            })?,
-        )
-    } else {
-        None
-    };
+    let mut sink = FormatSink::open(&session.options.export_path, format).map_err(|e| {
+        RuntimeError::InvalidOptions(format!("open export sink: {e:#}"))
+    })?;
     let mut written = 0u64;
     for (chat_identifier, convo) in conversations {
         written += 1;
@@ -188,31 +182,20 @@ pub fn run_export(session: &MailSession) -> Result<(), RuntimeError> {
             messages,
             packaging_stem_suffix: None,
         };
-        if let Some(session_xml) = sbr.as_mut() {
-            session_xml.append_document(&doc).map_err(|e| {
-                RuntimeError::InvalidOptions(format!(
-                    "append xml for {}: {e:#}",
-                    doc.conversation.chat_identifier
-                ))
-            })?;
-        } else {
-            write_format(&session.options.export_path, format, &doc).map_err(|e| {
-                RuntimeError::InvalidOptions(format!(
-                    "write {} for {}: {e:#}",
-                    format.as_str(),
-                    doc.conversation.chat_identifier
-                ))
-            })?;
-        }
+        sink.write_document(&doc).map_err(|e| {
+            RuntimeError::InvalidOptions(format!(
+                "write {} for {}: {e:#}",
+                format.as_str(),
+                doc.conversation.chat_identifier
+            ))
+        })?;
         if written.is_multiple_of(50) || written == total_conversations {
             eprintln!("  wrote {written}/{total_conversations} conversations");
         }
     }
-    if let Some(session_xml) = sbr {
-        session_xml.finish().map_err(|e| {
-            RuntimeError::InvalidOptions(format!("finish smses.xml: {e:#}"))
-        })?;
-    }
+    sink.finish().map_err(|e| {
+        RuntimeError::InvalidOptions(format!("finish export sink: {e:#}"))
+    })?;
 
     Ok(())
 }
@@ -259,7 +242,7 @@ fn collect_one(
 
 /// Convert a built [`MailMessage`] into [`IrMessage`] (core fields + `imessage` bag).
 ///
-/// For CSV / JSON / JSONL, non-empty attachment bytes are persisted under
+/// For CSV / JSON / JSONL / XML, non-empty attachment bytes are persisted under
 /// `attachments/` and referenced by `path`. For EML / MBOX, bytes stay in
 /// memory for [`message_ir::document_to_mail_messages`] to embed directly.
 fn mail_message_to_ir(

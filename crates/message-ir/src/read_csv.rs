@@ -50,7 +50,10 @@ pub fn read_conversation_csv(path: &Path) -> Result<ConversationDocument> {
     }
 
     let header = load_meta_or_from_row(path, &headers, &rows[0])?;
-    let packaging_stem_suffix = packaging_suffix_from_stem(path);
+    let packaging_stem_suffix = path
+        .file_stem()
+        .and_then(|n| n.to_str())
+        .and_then(crate::util::packaging_suffix_from_stem);
 
     let mut messages = Vec::with_capacity(rows.len());
     for (i, record) in rows.iter().enumerate() {
@@ -69,15 +72,6 @@ pub fn read_conversation_csv(path: &Path) -> Result<ConversationDocument> {
     };
     doc.finalize_stats();
     Ok(doc)
-}
-
-fn packaging_suffix_from_stem(path: &Path) -> Option<String> {
-    let stem = path.file_stem()?.to_str()?;
-    if stem.ends_with("__whatsapp") {
-        Some("__whatsapp".into())
-    } else {
-        None
-    }
 }
 
 fn load_meta_or_from_row(

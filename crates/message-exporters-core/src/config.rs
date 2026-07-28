@@ -74,14 +74,11 @@ impl OutputFormat {
         matches!(self, Self::Eml | Self::Mbox)
     }
 
-    /// True when export writes a single SyncTech `smses.xml` (use [`message_ir::SbrBackupSession`]).
+    /// True when export writes a single SyncTech `smses.xml` (use [`message_ir::FormatSink`]).
     pub fn is_sbr_xml(self) -> bool {
         matches!(self, Self::Xml)
     }
 }
-
-/// Values shown in the GUI for exporters that support CSV / EML (no MBOX).
-pub const OUTPUT_FORMATS: [OutputFormat; 2] = [OutputFormat::Csv, OutputFormat::Eml];
 
 /// Values shown in the GUI for full packaging choices.
 pub const OUTPUT_FORMATS_MAIL: [OutputFormat; 6] = [
@@ -92,9 +89,6 @@ pub const OUTPUT_FORMATS_MAIL: [OutputFormat; 6] = [
     OutputFormat::Jsonl,
     OutputFormat::Xml,
 ];
-
-/// Alias kept for iPhone backup UI (same as [`OUTPUT_FORMATS_MAIL`]).
-pub const OUTPUT_FORMATS_IMESSAGE: [OutputFormat; 6] = OUTPUT_FORMATS_MAIL;
 
 /// Shared export inputs. Source-specific fields are in [`Self::source`].
 #[derive(Debug, Clone)]

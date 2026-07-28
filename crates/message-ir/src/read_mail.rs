@@ -46,7 +46,7 @@ pub fn read_conversation_eml_dir(dir: &Path) -> Result<ConversationDocument> {
             .then_with(|| a.guid.cmp(&b.guid))
     });
 
-    let packaging = packaging_suffix_from_stem(
+    let packaging = crate::util::packaging_suffix_from_stem(
         dir.file_name()
             .and_then(|n| n.to_str())
             .unwrap_or_default(),
@@ -65,20 +65,12 @@ pub fn read_conversation_mbox(path: &Path) -> Result<ConversationDocument> {
             .cmp(&b.timestamp_unix_ms)
             .then_with(|| a.guid.cmp(&b.guid))
     });
-    let packaging = packaging_suffix_from_stem(
+    let packaging = crate::util::packaging_suffix_from_stem(
         path.file_stem()
             .and_then(|n| n.to_str())
             .unwrap_or_default(),
     );
     document_from_mail_messages(&mail_messages, packaging)
-}
-
-fn packaging_suffix_from_stem(stem: &str) -> Option<String> {
-    if stem.ends_with("__whatsapp") {
-        Some("__whatsapp".into())
-    } else {
-        None
-    }
 }
 
 /// Map [`MailMessage`] list (same conversation) into a [`ConversationDocument`].

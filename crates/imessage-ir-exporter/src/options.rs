@@ -122,7 +122,10 @@ pub fn validate_export_path(
                         OutputFormat::Xml => {
                             let name =
                                 path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                            if name == "smses.xml" {
+                            if name == "smses.xml"
+                                || name.ends_with(".xml.tmp")
+                                || name.ends_with(".xml.sbrbody")
+                            {
                                 return Err(RuntimeError::InvalidOptions(format!(
                                     "Specified export path {} contains existing \"xml\" export data!",
                                     resolved.display()

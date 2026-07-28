@@ -9,11 +9,10 @@ use message_contacts::ContactsBook;
 use message_csv::{format_local_ts, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    owner_sender, parse_android_type, write_format, ConversationDocument, ConversationMeta,
-    ConversationStats, ExportMeta, IrAttachment, IrConversationType, IrDirection, IrMessage,
-    IrMessageKind, IrParticipant, IrService, IrSource, SbrBackupSession, SCHEMA_VERSION,
+    clean_previous_ir_output, owner_sender, parse_android_type, ConversationDocument,
+    ConversationMeta, ConversationStats, ExportMeta, FormatSink, IrAttachment, IrConversationType,
+    IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION,
 };
-use message_mail::clean_previous_mail_output;
 use message_phone::{to_e164, OwnerPhoneSet};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -406,28 +405,6 @@ fn dedupe_messages(messages: &mut Vec<PendingMessage>) {
     messages.retain(|m| seen.insert(m.dedupe_key.clone()));
 }
 
-fn clean_previous_output(output_dir: &Path) -> Result<()> {
-    for entry in fs::read_dir(output_dir)? {
-        let path = entry?.path();
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if path.is_file()
-            && (name.ends_with(".csv")
-                || name.ends_with(".csv.tmp")
-                || name.ends_with(".json")
-                || name.ends_with(".json.tmp")
-                || name.ends_with(".jsonl")
-                || name.ends_with(".jsonl.tmp")
-                || name == "smses.xml"
-                || name.ends_with(".xml.tmp")
-                || name.ends_with(".xml.sbrbody"))
-        {
-            let _ = fs::remove_file(&path);
-        }
-    }
-    clean_previous_mail_output(output_dir)?;
-    Ok(())
-}
-
 fn prepare_conversation(convo: &mut PendingConversation, report: &mut ExportReport) -> bool {
     dedupe_messages(&mut convo.messages);
     convo.messages.retain(|m| {
@@ -669,16 +646,15 @@ pub fn convert_export(
 
     // Clean previous CSV / mail artifacts (keep attachments if re-run; rewrite as needed).
     fs::create_dir_all(output_dir)?;
-    clean_previous_output(output_dir)?;
+    clean_previous_ir_output(output_dir)?;
+    // Mail/XML need attachment files on disk for MIME / base64 embedding.
+    let copy_attachments =
+        copy_attachments || output_format.is_mail_archive() || output_format.is_sbr_xml();
     let attachments_dir = output_dir.join("attachments");
     if copy_attachments {
         fs::create_dir_all(&attachments_dir)?;
     }
-    let mut sbr = if output_format.is_sbr_xml() {
-        Some(SbrBackupSession::create(output_dir)?)
-    } else {
-        None
-    };
+    let mut sink = FormatSink::open(output_dir, output_format)?;
 
     let mut xml_paths: Vec<PathBuf> = fs::read_dir(input_dir)?
         .filter_map(|e| e.ok())
@@ -778,17 +754,11 @@ pub fn convert_export(
             continue;
         }
         let doc = pending_to_document(&chat_id, &convo, &owner_handle, &mut report)?;
-        if let Some(session) = sbr.as_mut() {
-            session.append_document(&doc)?;
-        } else {
-            write_format(output_dir, output_format, &doc)?;
-        }
+        sink.write_document(&doc)?;
         report.conversations += 1;
     }
 
-    if let Some(session) = sbr {
-        session.finish()?;
-    }
+    sink.finish()?;
 
     write_skipped_invalid_address_csv(output_dir, &report.skipped_unknown_address_details)?;
     write_skipped_empty_pdu_csv(output_dir, &report.skipped_empty_pdu_details)?;

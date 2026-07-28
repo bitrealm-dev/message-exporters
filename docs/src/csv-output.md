@@ -2,7 +2,7 @@
 
 All converters write **one CSV file per conversation**, plus an `attachments/` directory when media is copied, and a `<stem>.meta.json` sidecar for conversation/export header.
 
-CSV is projected from [canonical IR](../MESSAGE_IR.md) (`schema_version` 3) via `message_ir::write_format`. Reverse import: `message_ir::read_conversation_csv`. A **mail archive** path is specified in [`MAIL_ARCHIVE.md`](../MAIL_ARCHIVE.md).
+CSV is projected from [canonical IR](../MESSAGE_IR.md) (`schema_version` 3) via `message_ir::FormatSink` / `write_format`. Reverse import: `message_ir::read_conversation_csv`. A **mail archive** path is specified in [`MAIL_ARCHIVE.md`](../MAIL_ARCHIVE.md).
 
 ## Shared conventions
 

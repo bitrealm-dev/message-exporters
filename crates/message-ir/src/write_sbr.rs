@@ -53,7 +53,7 @@ impl SbrBackupSession {
 }
 
 /// Map one conversation's messages into SBR XML elements (lossy for iMessage).
-pub fn document_to_sbr_messages(
+pub(crate) fn document_to_sbr_messages(
     doc: &ConversationDocument,
     output_dir: &Path,
 ) -> Result<Vec<SbrMessage>> {
@@ -448,10 +448,10 @@ fn json_array_of_objects(v: Option<&Value>) -> Option<Vec<BTreeMap<String, Strin
     Some(out)
 }
 
-/// `write_format` must not stream multi-chat XML; use [`SbrBackupSession`].
-pub fn write_format_xml_unsupported() -> Result<PathBuf> {
+/// `write_format` must not stream multi-chat XML; use [`crate::FormatSink`].
+pub(crate) fn write_format_xml_unsupported() -> Result<PathBuf> {
     bail!(
-        "OutputFormat::Xml writes a single smses.xml backup; use SbrBackupSession \
-         (create → append_document → finish) instead of write_format"
+        "OutputFormat::Xml writes a single smses.xml backup; use FormatSink \
+         (open → write_document → finish) instead of write_format"
     )
 }

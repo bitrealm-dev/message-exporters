@@ -2,7 +2,7 @@
 
 Export Apple Messages (`chat.db` / iOS backup) to **per-conversation CSV, EML, MBOX, JSON, or JSONL** via [`imessage-database`](https://crates.io/crates/imessage-database) and [`message-ir`](../message-ir/).
 
-Pipeline: `chat.db` → `MailMessage` → `ConversationDocument` → `message_ir::write_format`.
+Pipeline: `chat.db` → `MailMessage` → `ConversationDocument` → `message_ir::FormatSink`.
 
 ## CLI
 

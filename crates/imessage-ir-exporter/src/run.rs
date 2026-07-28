@@ -119,7 +119,7 @@ fn options_from_export_config(config: &ExporterConfig) -> Result<MailOptions, Ru
         }
     }
 
-    let attachment_embed = match source.copy_method.to_ascii_lowercase().as_str() {
+    let mut attachment_embed = match source.copy_method.to_ascii_lowercase().as_str() {
         "disabled" => AttachmentEmbed::Disabled,
         "clone" | "basic" | "full" => AttachmentEmbed::Embed,
         other => {
@@ -128,6 +128,10 @@ fn options_from_export_config(config: &ExporterConfig) -> Result<MailOptions, Ru
             )));
         }
     };
+    // Mail archives and SyncTech XML need attachment bytes (inline or on-disk).
+    if config.output_format.is_mail_archive() || config.output_format.is_sbr_xml() {
+        attachment_embed = AttachmentEmbed::Embed;
+    }
 
     let export_path = validate_export_path(&config.output, config.output_format)?;
     std::fs::create_dir_all(&export_path)?;

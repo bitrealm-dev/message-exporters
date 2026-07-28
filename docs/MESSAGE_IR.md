@@ -11,7 +11,7 @@ Stem rules match CSV filenames. Packaging-only suffixes (e.g. `__whatsapp`) affe
 
 ## Status
 
-- **IR-backed** (`ConversationDocument` → `message_ir::write_format`, `--format csv|eml|mbox|json|jsonl`): all exporters, including iMessage (`imessage-ir-exporter`).
+- **IR-backed** (`ConversationDocument` → `message_ir::FormatSink`, `--format csv|eml|mbox|json|jsonl|xml`): all exporters, including iMessage (`imessage-ir-exporter`). Per-chat formats also accept `write_format`; XML uses a single `smses.xml` via the sink.
 - **Schema version 3 only** (breaking). Typed enums/bags, filled outgoing identity, conversation stats, stable null/`[]` keys. Older IR is not read — regenerate exports after schema changes.
 
 ## Document shape (`schema_version: 3`)
@@ -110,7 +110,7 @@ Line 1 is the header (includes `conversation.stats`; no `messages` array). Each 
 | JSONL | header + one message per line | line-oriented parse |
 | CSV | unified [`CSV_HEADERS`](../crates/message-ir/src/lib.rs) + `<stem>.meta.json` | `read_conversation_csv` |
 | EML / MBOX | IR → `MailMessage` → [`message-mail`](../crates/message-mail/) | `read_conversation_eml_dir` / `read_conversation_mbox` |
-| XML | single `smses.xml` via [`SbrBackupSession`](../crates/message-ir/) + [`message-sbr`](../crates/message-sbr/) | SBR importer (`sms-backup-restore-exporter`); not an IR reverse projector yet |
+| XML | single `smses.xml` via [`FormatSink`](../crates/message-ir/) + [`message-sbr`](../crates/message-sbr/) | SBR importer (`sms-backup-restore-exporter`); not an IR reverse projector yet |
 
 **XML packaging differs:** one SyncTech backup for the whole export (not per conversation). iMessage-only fields are dropped. See [SBR_XML.md](SBR_XML.md).
 
