@@ -413,19 +413,12 @@ fn source_string(source: Option<&Value>, key: &str) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-/// Serialize `source.fields` (v2) for the CSV `xml_fields_json` cell.
-/// Also accepts legacy `xml_fields` / string `xml_fields_json` during migration.
+/// Serialize nested `source.fields` for the CSV `xml_fields_json` cell.
 fn source_fields_for_csv(source: Option<&Value>) -> String {
-    let Some(source) = source else {
-        return String::new();
-    };
-    if let Some(fields) = source.get("fields") {
-        return serde_json::to_string(fields).unwrap_or_default();
-    }
-    if let Some(fields) = source.get("xml_fields") {
-        return serde_json::to_string(fields).unwrap_or_default();
-    }
-    source_string(Some(source), "xml_fields_json").unwrap_or_default()
+    source
+        .and_then(|s| s.get("fields"))
+        .map(|fields| serde_json::to_string(fields).unwrap_or_default())
+        .unwrap_or_default()
 }
 
 fn imessage_str(imessage: Option<&Value>, key: &str) -> Option<String> {
@@ -450,24 +443,21 @@ fn imessage_u32(imessage: Option<&Value>, key: &str) -> Option<u32> {
         .and_then(|n| u32::try_from(n).ok())
 }
 
-/// Stringify a nested iMessage bag value (v2 `parts` / `edits` / …) for CSV/mail.
-/// Falls back to legacy string keys (`parts_json`, …).
-fn imessage_json_cell(imessage: Option<&Value>, nested_key: &str, legacy_key: &str) -> String {
-    if let Some(v) = imessage.and_then(|b| b.get(nested_key)) {
-        return serde_json::to_string(v).unwrap_or_else(|_| "null".into());
-    }
-    imessage_str(imessage, legacy_key).unwrap_or_else(|| "null".into())
+/// Stringify a nested iMessage bag value (`parts` / `edits` / …) for CSV/mail.
+fn imessage_json_cell(imessage: Option<&Value>, nested_key: &str) -> String {
+    imessage
+        .and_then(|b| b.get(nested_key))
+        .map(|v| serde_json::to_string(v).unwrap_or_else(|_| "null".into()))
+        .unwrap_or_else(|| "null".into())
 }
 
-/// Prefer nested object/array; else parse a legacy JSON string; else None.
-fn imessage_nested_as_string(imessage: &Value, nested_key: &str, legacy_key: &str) -> Option<String> {
-    if let Some(v) = imessage.get(nested_key) {
-        if v.is_null() {
-            return None;
-        }
-        return Some(serde_json::to_string(v).unwrap_or_default()).filter(|s| !s.is_empty());
+/// Stringify a nested object/array from the iMessage bag for mail headers.
+fn imessage_nested_as_string(imessage: &Value, nested_key: &str) -> Option<String> {
+    let v = imessage.get(nested_key)?;
+    if v.is_null() {
+        return None;
     }
-    imessage_str(Some(imessage), legacy_key)
+    Some(serde_json::to_string(v).unwrap_or_default()).filter(|s| !s.is_empty())
 }
 
 /// Parse a JSON string into a [`Value`], or return the string as a JSON string value.
@@ -549,10 +539,10 @@ fn write_conversation_csv_imessage(output_dir: &Path, doc: &ConversationDocument
             String::new()
         };
         let num_replies = imessage_u32(imessage, "num_replies").unwrap_or(0).to_string();
-        let parts_json = imessage_json_cell(imessage, "parts", "parts_json");
-        let edits_json = imessage_json_cell(imessage, "edits", "edits_json");
-        let tapbacks_json = imessage_json_cell(imessage, "tapbacks", "tapbacks_json");
-        let app_json = imessage_json_cell(imessage, "app", "app_json");
+        let parts_json = imessage_json_cell(imessage, "parts");
+        let edits_json = imessage_json_cell(imessage, "edits");
+        let tapbacks_json = imessage_json_cell(imessage, "tapbacks");
+        let app_json = imessage_json_cell(imessage, "app");
 
         let attachment_cells: Vec<AttachmentCell> = msg
             .attachments
@@ -730,12 +720,12 @@ pub fn apply_imessage_fields(mail: &mut MailMessage, imessage: &Value) {
     mail.shared_location = imessage_str(bag, "shared_location");
     mail.announcement = imessage_str(bag, "announcement");
     mail.read_receipt_rfc3339 = imessage_str(bag, "read_receipt_rfc3339");
-    mail.parts_json = imessage_nested_as_string(imessage, "parts", "parts_json");
-    mail.edits_json = imessage_nested_as_string(imessage, "edits", "edits_json");
-    mail.app_json = imessage_nested_as_string(imessage, "app", "app_json");
+    mail.parts_json = imessage_nested_as_string(imessage, "parts");
+    mail.edits_json = imessage_nested_as_string(imessage, "edits");
+    mail.app_json = imessage_nested_as_string(imessage, "app");
     mail.balloon_bundle_id = imessage_str(bag, "balloon_bundle_id");
     mail.balloon_kind = imessage_str(bag, "balloon_kind");
-    mail.tapbacks_json = imessage_nested_as_string(imessage, "tapbacks", "tapbacks_json");
+    mail.tapbacks_json = imessage_nested_as_string(imessage, "tapbacks");
     mail.associated_guid = imessage_str(bag, "associated_guid");
     mail.associated_part = imessage_u32(bag, "associated_part");
     mail.tapback_kind = imessage_str(bag, "tapback_kind");

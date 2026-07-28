@@ -12,7 +12,7 @@ Stem rules match CSV filenames (including optional `filename_suffix`, e.g. `__wh
 ## Status
 
 - **IR-backed** (`ConversationDocument` → `message_ir::write_format`, `--format csv|eml|mbox|json|jsonl`): all exporters, including iMessage (`imessage-ir-exporter`).
-- **Schema version 2** (breaking vs v1): nested objects/arrays instead of stringified `*_json` bags; no `source.date_ms`.
+- **Schema version 2 only.** Nested objects/arrays (not stringified `*_json` bags); no `source.date_ms`. Older IR JSON is not read or dual-written — regenerate exports after schema changes.
 
 ## Document shape (`schema_version: 2`)
 
