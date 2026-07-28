@@ -919,6 +919,7 @@ fn pending_to_document(
             tool: EXPORT_TOOL.into(),
             tool_version: EXPORT_TOOL_VERSION.into(),
             owner_handle: None,
+            owner_display_name: None,
         },
         conversation: ConversationMeta {
             chat_identifier: chat_id.to_string(),
