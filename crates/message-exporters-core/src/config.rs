@@ -20,6 +20,8 @@ pub enum OutputFormat {
     Csv,
     /// Per-conversation folder of `.eml` files (see docs/MAIL_ARCHIVE.md).
     Eml,
+    /// Per-conversation `.mbox` (mboxrd) mailbox file.
+    Mbox,
 }
 
 impl fmt::Display for OutputFormat {
@@ -27,6 +29,7 @@ impl fmt::Display for OutputFormat {
         f.write_str(match self {
             Self::Csv => "CSV (per conversation)",
             Self::Eml => "EML archive (mail folders)",
+            Self::Mbox => "MBOX (per conversation)",
         })
     }
 }
@@ -36,6 +39,7 @@ impl OutputFormat {
         match self {
             Self::Csv => "csv",
             Self::Eml => "eml",
+            Self::Mbox => "mbox",
         }
     }
 
@@ -43,15 +47,25 @@ impl OutputFormat {
         match s.trim().to_ascii_lowercase().as_str() {
             "csv" => Ok(Self::Csv),
             "eml" => Ok(Self::Eml),
+            "mbox" => Ok(Self::Mbox),
             other => Err(format!(
-                "unknown output format '{other}' (expected csv or eml)"
+                "unknown output format '{other}' (expected csv, eml, or mbox)"
             )),
         }
     }
+
+    /// True for mail-archive packaging (EML folders or MBOX files).
+    pub fn is_mail_archive(self) -> bool {
+        matches!(self, Self::Eml | Self::Mbox)
+    }
 }
 
-/// Values shown in the GUI output-format combo.
+/// Values shown in the GUI for SMS Backup & Restore (CSV / EML).
 pub const OUTPUT_FORMATS: [OutputFormat; 2] = [OutputFormat::Csv, OutputFormat::Eml];
+
+/// Values shown in the GUI for iPhone backup (CSV / EML / MBOX).
+pub const OUTPUT_FORMATS_IMESSAGE: [OutputFormat; 3] =
+    [OutputFormat::Csv, OutputFormat::Eml, OutputFormat::Mbox];
 
 /// Shared export inputs. Source-specific fields are in [`Self::source`].
 #[derive(Debug, Clone)]
@@ -65,7 +79,7 @@ pub struct ExporterConfig {
     /// OpenExtract uses [`MediaMode::Disabled`].
     pub media: MediaConfig,
     pub cancel: Option<CancelFlag>,
-    /// Packaging format. SMS Backup & Restore and iMessage honor [`OutputFormat::Eml`].
+    /// Packaging format. SBR honors EML; iMessage mail honors EML/MBOX.
     pub output_format: OutputFormat,
     pub source: SourceConfig,
 }

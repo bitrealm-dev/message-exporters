@@ -16,7 +16,7 @@ use message_exporters_core::{
     ensure_output_dir, resolve_binary, spawn, spawn_job, AttachmentMedia, ContactsKind,
     ExportIniState, Exporter, ExporterConfig, Form, OutputFormat, ProcessControl, ProcessEvent,
     WhatsappPlatform, APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS,
-    OUTPUT_FORMATS, WHATSAPP_PLATFORMS,
+    OUTPUT_FORMATS, OUTPUT_FORMATS_IMESSAGE, WHATSAPP_PLATFORMS,
 };
 use message_media::process_export_media;
 use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
@@ -1069,11 +1069,20 @@ impl App {
     }
 
     fn ui_output_format(&mut self, ui: &mut egui::Ui) {
+        let formats: &[OutputFormat] = if self.exporter == Exporter::Imessage {
+            &OUTPUT_FORMATS_IMESSAGE
+        } else {
+            &OUTPUT_FORMATS
+        };
+        // Drop MBOX if switching away from iMessage while it was selected.
+        if !formats.contains(&self.form.output_format) {
+            self.form.output_format = OutputFormat::Csv;
+        }
         combo_enum(
             ui,
             "Output format",
             &mut self.form.output_format,
-            &OUTPUT_FORMATS,
+            formats,
             PATH_W,
         );
     }
@@ -1516,8 +1525,12 @@ fn library_job_for_exporter(exporter: Exporter, config: ExporterConfig) -> Libra
             let mut config = config;
             config.cancel = Some(cancel);
             let result = match config.output_format {
-                OutputFormat::Eml => run_imessage_mail(&config).map(|r| r.messages).map_err(|e| e.to_string()),
-                OutputFormat::Csv => run_imessage(&config).map(|r| r.messages).map_err(|e| e.to_string()),
+                OutputFormat::Eml | OutputFormat::Mbox => run_imessage_mail(&config)
+                    .map(|r| r.messages)
+                    .map_err(|e| e.to_string()),
+                OutputFormat::Csv => run_imessage(&config)
+                    .map(|r| r.messages)
+                    .map_err(|e| e.to_string()),
             };
             match result {
                 Ok(messages) => {

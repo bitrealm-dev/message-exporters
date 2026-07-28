@@ -1,4 +1,4 @@
-//! Session caches (chats, handles, contacts) without tapbacks/translations.
+//! Session caches (chats, handles, contacts, tapbacks).
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
@@ -27,6 +27,8 @@ pub struct MailSession {
     pub chatroom_participants: HashMap<i32, BTreeSet<i32>>,
     pub participants: HashMap<i32, Name>,
     pub real_participants: HashMap<i32, i32>,
+    /// Tapbacks keyed by target message GUID → part index → reactions.
+    pub tapbacks: HashMap<String, HashMap<usize, Vec<Message>>>,
 }
 
 impl MailSession {
@@ -34,20 +36,23 @@ impl MailSession {
         let data_source = DataSource::from(&options)?;
 
         eprintln!("Building cache...");
-        eprintln!("  [1/3] Caching chats...");
+        eprintln!("  [1/4] Caching chats...");
         let chatrooms = Chat::cache(data_source.db())?;
 
-        eprintln!("  [2/3] Caching chatrooms...");
+        eprintln!("  [2/4] Caching chatrooms...");
         let chatroom_participants = ChatToHandle::cache(data_source.db())?;
         let chat_handle_lookup = ChatToHandle::get_chat_lookup_map(data_source.db())?;
         let real_chatrooms = ChatToHandle::dedupe(&chatroom_participants, &chat_handle_lookup)?;
 
-        eprintln!("  [3/3] Caching participants...");
+        eprintln!("  [3/4] Caching participants...");
         let participants = Handle::cache(data_source.db())?;
         let real_participants = Handle::dedupe(&participants);
         let participants_map = data_source
             .contacts_index
             .build_participants_map(&participants, &real_participants);
+
+        eprintln!("  [4/4] Caching tapbacks...");
+        let tapbacks = Message::cache(data_source.db())?;
         eprintln!("Cache built!");
 
         Ok(Self {
@@ -56,6 +61,7 @@ impl MailSession {
             chatroom_participants,
             real_participants,
             participants: participants_map,
+            tapbacks,
             options,
             offset: get_offset(),
             data_source,

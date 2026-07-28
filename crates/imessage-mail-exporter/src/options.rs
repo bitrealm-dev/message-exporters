@@ -6,8 +6,11 @@ use imessage_database::{
     tables::table::DEFAULT_PATH_IOS,
     util::{platform::Platform, query_context::QueryContext},
 };
+use message_exporters_core::OutputFormat;
 
-/// Whether to embed attachment bytes in `.eml` files.
+use crate::error::RuntimeError;
+
+/// Whether to embed attachment bytes in `.eml` / `.mbox` files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttachmentEmbed {
     /// Resolve and embed media bytes (macOS path or iOS decrypt).
@@ -29,6 +32,8 @@ pub struct MailOptions {
     pub cleartext_password: Option<String>,
     pub contacts_path: Option<PathBuf>,
     pub attachment_embed: AttachmentEmbed,
+    /// [`OutputFormat::Eml`] or [`OutputFormat::Mbox`].
+    pub output_format: OutputFormat,
 }
 
 impl MailOptions {
@@ -41,23 +46,46 @@ impl MailOptions {
     }
 }
 
-/// Validate export directory does not already contain conversation `.eml` folders.
-pub fn validate_export_path(export_path: &Path) -> Result<PathBuf, crate::error::RuntimeError> {
-    use crate::error::RuntimeError;
-
+/// Validate export directory does not already contain mail-archive data for `format`.
+pub fn validate_export_path(
+    export_path: &Path,
+    format: OutputFormat,
+) -> Result<PathBuf, RuntimeError> {
     let resolved = export_path.to_path_buf();
     if resolved.exists() {
         match resolved.read_dir() {
             Ok(files) => {
                 for file in files.flatten() {
                     let path = file.path();
-                    if path.is_dir() {
-                        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                        if name != "attachments" && dir_contains_eml(&path) {
-                            return Err(RuntimeError::InvalidOptions(format!(
-                                "Specified export path {} contains existing \"eml\" export data!",
-                                resolved.display()
-                            )));
+                    match format {
+                        OutputFormat::Eml => {
+                            if path.is_dir() {
+                                let name =
+                                    path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                                if name != "attachments" && dir_contains_eml(&path) {
+                                    return Err(RuntimeError::InvalidOptions(format!(
+                                        "Specified export path {} contains existing \"eml\" export data!",
+                                        resolved.display()
+                                    )));
+                                }
+                            }
+                        }
+                        OutputFormat::Mbox => {
+                            if path
+                                .extension()
+                                .and_then(|s| s.to_str())
+                                .is_some_and(|ext| ext.eq_ignore_ascii_case("mbox"))
+                            {
+                                return Err(RuntimeError::InvalidOptions(format!(
+                                    "Specified export path {} contains existing \"mbox\" export data!",
+                                    resolved.display()
+                                )));
+                            }
+                        }
+                        OutputFormat::Csv => {
+                            return Err(RuntimeError::InvalidOptions(
+                                "imessage-mail-exporter does not write CSV".to_string(),
+                            ));
                         }
                     }
                 }

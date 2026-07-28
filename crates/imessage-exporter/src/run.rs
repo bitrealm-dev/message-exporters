@@ -127,9 +127,9 @@ pub fn options_from_export_config(config: &ExporterConfig) -> Result<Options, Ru
 
     let export_type = match config.output_format {
         OutputFormat::Csv => ExportType::Csv,
-        OutputFormat::Eml => {
+        OutputFormat::Eml | OutputFormat::Mbox => {
             return Err(RuntimeError::InvalidOptions(
-                "EML mail archives are handled by imessage-mail-exporter, not imessage-exporter"
+                "EML/MBOX mail archives are handled by imessage-mail-exporter, not imessage-exporter"
                     .to_string(),
             ));
         }

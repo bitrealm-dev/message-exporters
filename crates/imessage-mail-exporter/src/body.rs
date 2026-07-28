@@ -18,13 +18,13 @@ pub fn apply_body(msg: &mut Message, db: &Connection) {
     }
 }
 
-struct AttachmentResolver {
+pub(crate) struct AttachmentResolver {
     by_guid: HashMap<String, usize>,
     next_positional: usize,
 }
 
 impl AttachmentResolver {
-    fn new(attachments: &[Attachment]) -> Self {
+    pub(crate) fn new(attachments: &[Attachment]) -> Self {
         Self {
             by_guid: attachments
                 .iter()
@@ -35,7 +35,7 @@ impl AttachmentResolver {
         }
     }
 
-    fn resolve(&mut self, range: &AttributedRange) -> usize {
+    pub(crate) fn resolve(&mut self, range: &AttributedRange) -> usize {
         if let Some(idx) = range
             .attachment
             .as_ref()
@@ -50,7 +50,7 @@ impl AttachmentResolver {
     }
 }
 
-fn resolve_run<'r>(
+pub(crate) fn resolve_run<'r>(
     ranges: &'r [AttributedRange],
     resolver: &mut AttachmentResolver,
 ) -> Vec<(&'r AttributedRange, Option<usize>)> {

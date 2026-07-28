@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use imessage_database::util::{
     dirs::default_db_path, platform::Platform, query_context::QueryContext,
 };
-use message_exporters_core::{ApplePlatform, ExporterConfig, OutputFormat, SourceConfig};
+use message_exporters_core::{ApplePlatform, ExporterConfig, SourceConfig};
 
 use crate::{
     emit::run_export,
@@ -20,17 +20,18 @@ pub struct RunResult {
     pub messages: Vec<String>,
 }
 
-/// Build options from [`ExporterConfig`], open the DB, and write `.eml` archives.
+/// Build options from [`ExporterConfig`], open the DB, and write mail archives.
 pub fn run(config: &ExporterConfig) -> Result<RunResult, RuntimeError> {
     check_cancel(config)?;
-    if config.output_format != OutputFormat::Eml {
+    if !config.output_format.is_mail_archive() {
         return Err(RuntimeError::InvalidOptions(
-            "imessage-mail-exporter requires OutputFormat::Eml (CSV stays on imessage-exporter)"
+            "imessage-mail-exporter requires OutputFormat::Eml or OutputFormat::Mbox (CSV stays on imessage-exporter)"
                 .to_string(),
         ));
     }
 
     let options = options_from_export_config(config)?;
+    let format = options.output_format;
     let mut session = MailSession::new(options)?;
     session.resolve_filtered_handles();
     check_cancel(config)?;
@@ -39,7 +40,8 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult, RuntimeError> {
 
     Ok(RunResult {
         messages: vec![format!(
-            "Wrote eml archive under {}",
+            "Wrote {} archive under {}",
+            format.as_str(),
             config.output.display()
         )],
     })
@@ -133,7 +135,7 @@ fn options_from_export_config(config: &ExporterConfig) -> Result<MailOptions, Ru
         }
     };
 
-    let export_path = validate_export_path(&config.output)?;
+    let export_path = validate_export_path(&config.output, config.output_format)?;
     std::fs::create_dir_all(&export_path)?;
 
     Ok(MailOptions {
@@ -147,5 +149,6 @@ fn options_from_export_config(config: &ExporterConfig) -> Result<MailOptions, Ru
         cleartext_password: source.backup_password.clone(),
         contacts_path: source.apple_contacts.clone(),
         attachment_embed,
+        output_format: config.output_format,
     })
 }

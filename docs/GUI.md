@@ -202,7 +202,7 @@ Global Obfuscate and Start/End date apply. Output files use the `__whatsapp` suf
 
 Form link label: **imessage-exporter** → [imessage-exporter](https://github.com/ReagentX/imessage-exporter). Dropdown stays **iPhone backup**.
 
-GUI defaults: CSV, `--copy-method clone` (or `disabled`), always `--use-caller-id`. **CSV** runs `imessage-exporter`; **EML** runs `imessage-mail-exporter` (`imessage-database` → `message-mail`). Convert/Compress run as a GUI post-step via `message-media` (not imessage `basic`/`full`) for CSV only.
+GUI defaults: CSV, `--copy-method clone` (or `disabled`), always `--use-caller-id`. **CSV** runs `imessage-exporter`; **EML** / **MBOX** run `imessage-mail-exporter` (`imessage-database` → `message-mail`). Mail honors dates, conversation filter, contacts, attachment embed, and caller-id on From. Convert/Compress/obfuscate remain CSV-only (GUI post-step via `message-media` for CSV).
 
 | Control | Type | Required | CLI |
 |---------|------|:--------:|-----|
@@ -210,7 +210,7 @@ GUI defaults: CSV, `--copy-method clone` (or `disabled`), always `--use-caller-i
 | Backup password | password | no | `-x` / `--cleartext-password` |
 | Platform | macOS / iOS / auto | no | `-a` / `--platform` |
 | Output / export path | folder | yes | `-o` / `--export-path` |
-| Output format | enum | no | CSV → `imessage-exporter -f csv`; EML → `imessage-mail-exporter` |
+| Output format | enum | no | CSV → `imessage-exporter`; EML/MBOX → `imessage-mail-exporter` |
 | Attachments | enum | no | copy `clone`/`disabled`; convert/compress post-process |
 | Max resolution / fps / min size / skip efficient | when Compress | no | GUI → `message-media` compress options |
 | Attachment root | folder | no | `-r` / `--attachment-root` (advanced) |

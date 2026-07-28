@@ -2,7 +2,7 @@
 
 Design for a human-viewable export: **one folder per conversation**, **one `.eml` per message**, with structured `X-ME-*` headers for machine fidelity. Intended as an archive / interchange path before vault exists. Mail clients can open individual messages; translators can recover SMS, group MMS, and (later) iMessage semantics without relying on CSV.
 
-**Status:** SMS-shaped writer in [`message-mail`](../crates/message-mail/). Wired for SMS Backup & Restore (`--format eml`) and iMessage via [`imessage-mail-exporter`](../crates/imessage-mail-exporter/) (GUI Output format **EML**; uses `imessage-database`, not `imessage-exporter`). CSV remains the default (`imessage-exporter` for iPhone CSV). iMessage extensions (tapbacks as EMLs, parts, edits, balloons, reply headers) are not emitted yet. See also [csv-output.md](src/csv-output.md).
+**Status:** Writer in [`message-mail`](../crates/message-mail/). Wired for SMS Backup & Restore (`--format eml`) and iMessage via [`imessage-mail-exporter`](../crates/imessage-mail-exporter/) (GUI **EML** / **MBOX**; uses `imessage-database`, not `imessage-exporter`). CSV remains the default (`imessage-exporter` for iPhone CSV). iMessage mail emits extension headers (replies, tapbacks, parts, edits, balloons, send effects, announcements, location, deleted); handwriting attaches SVG (`image/svg+xml`). See also [csv-output.md](src/csv-output.md).
 
 ## Goals
 
@@ -48,7 +48,7 @@ Each file is one RFC 5322 message. Prefer writing via a MIME builder (e.g. `mail
 | Large chats | Open one message | Some clients load the whole file |
 | Thunderbird “mailbox” UX | Import/drag varies | Often smoother import-as-folder |
 
-**Canonical form = folder of EMLs.** A future tool may synthesize `mboxrd` from that folder for clients that prefer mailbox import. Outlook has poor native support for both; do not optimize the canonical format for Outlook.
+**Canonical form = folder of EMLs.** `imessage-mail-exporter` can also write derived **mboxrd** (`OutputFormat::Mbox` / GUI **MBOX**): one `<conversation-stem>.mbox` per chat, same MIME/`X-ME-*` payload as the `.eml` files. Outlook has poor native support for both; do not optimize the canonical format for Outlook.
 
 ### Explicit anti-pattern: SMS Backup+ archive EML
 
@@ -75,9 +75,9 @@ Do **not** use the `X-smssync-*` header namespace. This format is not Plus-compa
 
 | Header | Rule |
 |--------|------|
-| `From` / `To` / `Cc` | Human-readable mapping (below); synthetic `+E164@sms.local` or handle-based local-part |
+| `From` / `To` / `Cc` | Browse mapping (below); synthetic `+E164@sms.local`, handle, or `…@chat.local` |
 | `Date` | Message timestamp as RFC 5322 **UTC** |
-| `Subject` | Short preview (peer name, group title, or SMS subject); not the sole carrier of semantics |
+| `Subject` | `Message with {peer name \| group title \| chat id}` — **not** message-body preview; SMS subject stays in `X-ME-Subject` |
 | `Message-ID` | Stable, unique, deterministic (see below) |
 | `MIME-Version` | `1.0` |
 | `Content-Type` | `text/plain` or `multipart/mixed` (or `multipart/related`) when attachments exist |
@@ -97,15 +97,17 @@ Do **not** use the `X-smssync-*` header namespace. This format is not Plus-compa
 
 ### From / To / Cc mapping
 
-**1:1 incoming:** `From` = peer; `To` = owner.
+Browse-oriented so mail-client **Correspondents** / Subject columns stay readable. Machine identity remains in `X-ME-*`.
 
-**1:1 outgoing:** `From` = owner; `To` = peer.
+**1:1 incoming:** `From` = peer (display name when known); `To` = owner as `Me <…>`.
 
-**Group incoming:** `From` = actual sender; `To`/`Cc` = other participants (including owner); full roster still in `X-ME-Participants`.
+**1:1 outgoing:** `From` = `Me <owner>`; `To` = peer.
 
-**Group outgoing:** `From` = owner; `To` = all other participants; roster in `X-ME-Participants`.
+**Group incoming:** `From` = actual sender; `To` = one conversation address (`Group Title <sanitized-chat-id@chat.local>`); full roster in `X-ME-Participants` only.
 
-Outgoing `X-ME-Sender-Handle` is empty/absent (same convention as CSV).
+**Group outgoing:** `From` = `Me <owner>`; `To` = same conversation address; roster in `X-ME-Participants`.
+
+Empty owner handle falls back to `me@sms.local` with display name `Me`. Outgoing `X-ME-Sender-Handle` is empty/absent (same convention as CSV).
 
 ## Core `X-ME-*` headers (SMS / MMS / shared)
 
@@ -257,8 +259,8 @@ MIME: `multipart/mixed` (or `related`) with flattened `text/plain` first, then a
 
 ### Send effects
 
-- `X-ME-Send-Effect` — same label space as CSV `send_effect` / `expressive_label` (slam, loud, gentle, invisible ink, screen effects, …).
-- Not rendered by mail clients.
+- `X-ME-Send-Effect` — same label space as CSV `send_effect` / `expressive_label` (`Sent with Balloons`, Confetti, Invisible Ink, …).
+- Plain body also appends that line so clients show the effect without parsing headers.
 
 ### Balloons / app messages
 
@@ -274,7 +276,8 @@ MIME:
 
 - `text/plain` summary for preview (URL title, `Poll: …`, `Apple Pay`, …)
 - Optional `application/json` part (`name=app.json`) when the payload is large
-- Handwriting / Digital Touch: attach a rendered image/PDF **if** the exporter materializes one; otherwise bundle id + JSON only
+- Handwriting: `imessage-mail-exporter` attaches `HandwrittenMessage::render_svg` as `image/svg+xml`
+- Digital Touch: bundle id + `X-ME-App` JSON only (no SVG path today)
 
 ### Announcements and location
 
@@ -298,7 +301,7 @@ Normal sticker sends: image MIME part + `X-ME-Attachment-Meta` (`is_sticker`, `s
 | Tapback | Short reply-like message | `X-ME-Tapback-*` + association |
 | Balloon | Summary (+ optional image/JSON part) | `X-ME-App` |
 | Edits | Current text only | `X-ME-Edits` |
-| Effects | Nothing | `X-ME-Send-Effect` |
+| Effects | Trailing “Sent with …” line | `X-ME-Send-Effect` |
 | Parts / mentions | Flattened text | `X-ME-Parts` |
 
 ---
@@ -330,10 +333,10 @@ Normal sticker sends: image MIME part + `X-ME-Attachment-Meta` (`is_sticker`, `s
 
 ## Implementation notes
 
-1. Crate [`message-mail`](../crates/message-mail/) emits one `.eml` per message into the conversation directory.
+1. Crate [`message-mail`](../crates/message-mail/) emits one `.eml` per message into the conversation directory (including iMessage extension headers when set).
 2. **SMS Backup & Restore** maps pending rows → `MailMessage` (`--format eml`).
-3. **iMessage** EML is [`imessage-mail-exporter`](../crates/imessage-mail-exporter/) (`imessage-database` → `MailMessage`). CSV stays on [`imessage-exporter`](../crates/imessage-exporter/).
-4. Later: tapback EMLs / parts / edits / balloons / reply headers; optional `mboxrd` synthesis.
+3. **iMessage** EML/MBOX is [`imessage-mail-exporter`](../crates/imessage-mail-exporter/) (`imessage-database` → `MailMessage`; mboxrd via `append_message_mbox`). CSV stays on [`imessage-exporter`](../crates/imessage-exporter/).
+4. Deferred: Digital Touch animation, translations UI, HEIC convert / obfuscate inside MIME, Askama HTML bodies.
 
 ## Related docs
 

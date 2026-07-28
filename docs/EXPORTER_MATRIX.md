@@ -15,7 +15,7 @@ All converters write **one CSV file per conversation**. Across the board:
 
 | | GO SMS Pro | SMS Backup & Restore | SMS Backup+ | OpenExtract | iMazing | WhatsApp | iMessage Exporter |
 |---|---|---|---|---|---|---|---|
-| **Output** | Per-chat CSV | Per-chat CSV; EML via `--format eml` | Per-chat CSV | Per-chat CSV | Per-chat CSV (`__whatsapp` for WA) | Per-chat CSV (`__whatsapp`) | Per-chat CSV (also txt/html); EML via `imessage-mail-exporter` (GUI format) |
+| **Output** | Per-chat CSV | Per-chat CSV; EML via `--format eml` | Per-chat CSV | Per-chat CSV | Per-chat CSV (`__whatsapp` for WA) | Per-chat CSV (`__whatsapp`) | Per-chat CSV (also txt/html); EML/MBOX via `imessage-mail-exporter` |
 | **Peer phone** (`chat_identifier`) | yes | yes | yes (or `unknown`) | partial (name stem if unresolved) | partial (name stem if unresolved) | yes (JID → E.164) | yes (Apple chat id) |
 | **Sender phone** (`sender_handle`, incoming) | yes | yes | yes | yes | yes | yes (groups via sender JID) | yes |
 | **Names** | yes (XML + contacts) | yes (XML + contacts) | yes (contacts + name-mapping) | partial (contacts critical) | yes (Contacts CSV) | yes (`wa.db` via wtsexporter) | yes (AddressBook / backup) |
@@ -63,4 +63,4 @@ All converters write **one CSV file per conversation**. Across the board:
 | iMessage Exporter | [`crates/imessage-exporter/README.md`](../crates/imessage-exporter/README.md) |
 | iMessage mail (EML) | [`crates/imessage-mail-exporter/`](../crates/imessage-mail-exporter/) |
 
-**Mail archive format:** per-conversation folders of `.eml` with `X-ME-*` headers — see [`MAIL_ARCHIVE.md`](MAIL_ARCHIVE.md). SMS Backup & Restore (`--format eml`) and iMessage (`imessage-mail-exporter` / GUI Output format EML) support MVP EML via `message-mail`; CSV remains the default.
+**Mail archive format:** per-conversation folders of `.eml` with `X-ME-*` headers — see [`MAIL_ARCHIVE.md`](MAIL_ARCHIVE.md). SMS Backup & Restore (`--format eml`) and iMessage (`imessage-mail-exporter`: EML or MBOX) support MVP mail via `message-mail`; CSV remains the default.

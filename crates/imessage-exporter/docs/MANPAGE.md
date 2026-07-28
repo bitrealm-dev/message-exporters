@@ -27,7 +27,7 @@ Reads Apple Messages history (`chat.db` on macOS, or an iOS backup root) and wri
 
 Fork of [ReagentX/imessage-exporter](https://github.com/ReagentX/imessage-exporter) with CSV export and post-export CSV obfuscation. GPL-3.0-or-later.
 
-For per-conversation `.eml` mail archives, use the workspace crate **`imessage-mail-exporter`** (GUI: iPhone backup → Output format **EML**). That path talks to `imessage-database` directly and does not use this binary’s `-f` flag.
+For per-conversation `.eml` / `.mbox` mail archives, use the workspace crate **`imessage-mail-exporter`** (GUI: iPhone backup → Output format **EML** or **MBOX**). That path talks to `imessage-database` directly and does not use this binary’s `-f` flag.
 
 # OPTIONS
 

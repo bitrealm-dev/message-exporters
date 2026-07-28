@@ -13,11 +13,18 @@ use message_exporters_core::ExporterConfig;
 let result = run(&config)?;
 ```
 
-Requires `SourceConfig::Apple` and `OutputFormat::Eml`.
+Requires `SourceConfig::Apple` and `OutputFormat::Eml` or `OutputFormat::Mbox`.
 
 ## GUI
 
-**iPhone backup** → Output format **EML** dispatches here; **CSV** still uses `imessage-exporter`.
+**iPhone backup** → Output format **EML** / **MBOX** dispatches here; **CSV** still uses `imessage-exporter`.
+
+- **EML** — one folder per conversation of `.eml` files (canonical mail archive)
+- **MBOX** — one `.mbox` per conversation (mboxrd), for mailbox import
+
+Honored options: start/end dates, conversation filter, contacts / AddressBook, attachment embed vs disabled, `--use-caller-id` on outgoing From. Convert / compress / obfuscate stay CSV-only.
+
+Content: plain-text bodies plus `X-ME-*` headers for replies, tapbacks (per-message EML + parent `X-ME-Tapbacks`), parts/edits, app balloons, send effects (`Sent with …`), announcements, SharePlay, shared location, deleted. Handwriting attaches SVG.
 
 ## License
 

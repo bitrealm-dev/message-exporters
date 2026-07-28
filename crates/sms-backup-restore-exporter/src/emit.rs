@@ -422,6 +422,8 @@ fn pending_to_mail_messages(
                 mime_type: a.mime_type.clone(),
                 digest_sha256: Some(a.digest_hex.clone()),
                 is_sticker: false,
+                transcription: None,
+                sticker_effect: None,
             })
             .collect();
 
@@ -442,6 +444,7 @@ fn pending_to_mail_messages(
             sender_handle,
             sender_display_name,
             owner_handle: owner_handle.to_string(),
+            owner_display_name: None,
             subject: if msg.subject.is_empty() {
                 None
             } else {
@@ -462,6 +465,26 @@ fn pending_to_mail_messages(
             export_tool: EXPORT_TOOL.into(),
             export_tool_version: EXPORT_TOOL_VERSION.into(),
             attachments,
+            is_reply: false,
+            in_reply_to_guid: None,
+            thread_originator_part: None,
+            num_replies: None,
+            is_deleted: false,
+            send_effect: None,
+            shared_location: None,
+            announcement: None,
+            read_receipt_rfc3339: None,
+            parts_json: None,
+            edits_json: None,
+            app_json: None,
+            balloon_bundle_id: None,
+            balloon_kind: None,
+            tapbacks_json: None,
+            associated_guid: None,
+            associated_part: None,
+            tapback_kind: None,
+            tapback_emoji: None,
+            tapback_action: None,
         });
     }
     Ok(out)
@@ -558,7 +581,7 @@ pub fn convert_export(
 ) -> Result<ExportReport> {
     let owners = OwnerPhoneSet::new(owner_phones)?;
     let owner_handle = to_e164(&owners.primary_digits);
-    let keep_bytes = output_format == OutputFormat::Eml;
+    let keep_bytes = output_format.is_mail_archive();
     let mut report = ExportReport::default();
     let mut conversations: BTreeMap<String, PendingConversation> = BTreeMap::new();
 
@@ -625,6 +648,11 @@ pub fn convert_export(
                     &owner_handle,
                     &mut report,
                 )?;
+            }
+            OutputFormat::Mbox => {
+                anyhow::bail!(
+                    "OutputFormat::Mbox is not supported by sms-backup-restore-exporter yet"
+                );
             }
         }
         report.conversations += 1;

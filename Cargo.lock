@@ -2248,6 +2248,8 @@ dependencies = [
  "message-mail",
  "rpassword",
  "rusqlite",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
