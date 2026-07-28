@@ -1,17 +1,17 @@
-# SMS Backup & Restore XML → common message / CSV mapping
+# SMS Backup & Restore import mapping
 
-How SyncTech `<sms>` / `<mms>` elements map into the common message (`ConversationDocument`) and the shared CSV projector written by `sms-backup-restore-exporter` (`--format csv`).
+How SyncTech `<sms>` and `<mms>` elements become `ConversationDocument` values, including validation, skipped records, and the source-specific data retained for later output.
 
-Attribute meanings: [FIELDS.md](FIELDS.md). Shared CSV columns: [CSV columns](../../../docs/src/content/docs/understand-output/csv-columns.md).
+Input structure and attribute meanings: [INPUT_FORMAT.md](INPUT_FORMAT.md). Shared model: [message-ir](../../../docs/maintainers/architecture/message-ir.md). CSV projection: [CSV columns](../../../docs/src/content/docs/understand-output/csv-columns.md).
 
 ## Pipeline
 
 Source XML → `ConversationDocument` → packaging (`--format json|jsonl|csv|eml|mbox|xml`; default `json`).
 
 With `--format csv`: one file per conversation. Decoded MMS media under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv`. `--format xml` writes a single SyncTech `smses.xml`.
-## Source → shared cells
+## Source → shared fields
 
-| CSV / common-message cell | SMS / MMS source |
+| Shared field | SMS / MMS source |
 |---------------|------------------|
 | `chat_identifier` | Peer E.164, or `chat-group-…` for groups |
 | `conversation_type` | `individual` / `group` |
@@ -80,6 +80,4 @@ Example group address string: `+15555550101~+15555550102` with two From/To addrs
 
 For each `<part>` that has a `data` attribute, the bag stores `data_len` and `data_sha256` of the **decoded** bytes and **omits** the base64 `data` string (binaries live under `attachments/` or are embedded for mail/Xml). Other part attributes (`seq`, `ct`, `name`, `cl`, `chset`, `text`, …) are kept as-is.
 
-## Reverse: common message → XML
-
-`--format xml` writes `smses.xml`. When `source.fields` still holds the importer bag (`kind`/`attrs`/`parts`/`addrs`), those attributes are preferred; otherwise SMS/MMS elements are synthesized from common-message core fields. Apple-only fields are dropped. Call logs are not supported.
+The reverse `ConversationDocument` → `smses.xml` rules are documented in [SMS Backup & Restore XML output](../../../docs/maintainers/formats/sms-backup-restore-xml.md).

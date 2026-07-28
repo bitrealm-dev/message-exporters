@@ -1,6 +1,6 @@
-# Fields in SMS Backup & Restore XML
+# SMS Backup & Restore input format
 
-SyncTech’s **input** attribute reference for the XML backup format. Mapping into the common message / shared CSV: [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md).
+This reference describes the SMS and MMS XML structures consumed and preserved by the importer. It is not a replacement for SyncTech’s complete schema. Import behavior is documented in [IMPORT_MAPPING.md](IMPORT_MAPPING.md).
 
 Source: SyncTech’s [Fields in XML backup files](https://www.synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/). Related SyncTech links:
 

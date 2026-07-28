@@ -39,7 +39,7 @@ cargo run --release -p message-exporters-gui
 | SMS Backup & Restore (SyncTech XML) | [`sms-backup-restore-exporter`](crates/sms-backup-restore-exporter) |
 | WhatsApp (native DB / crypt) | [`whatsapp-exporter`](crates/whatsapp-exporter) |
 
-Experimental converters also ship in the GUI and release zip: GO SMS Pro, iMazing CSV, OpenExtract, and SMS Backup+. Use those when they are the only backup on hand. Details: the [docs site](https://bitrealm-dev.github.io/message-exporters/) and [`docs/EXPORTER_MATRIX.md`](docs/EXPORTER_MATRIX.md).
+Experimental converters also ship in the GUI and release zip: GO SMS Pro, iMazing CSV, OpenExtract, and SMS Backup+. Use those when they are the only backup on hand. Details: the [docs site](https://bitrealm-dev.github.io/message-exporters/) and [exporter capability matrix](docs/maintainers/exporter-matrix.md).
 
 Already exported? The GUI **Re-export** tab ([`message-reexporter`](crates/message-reexporter)) converts a prior output folder to another format (CSV ↔ EML ↔ MBOX ↔ JSON ↔ JSONL ↔ XML).
 
@@ -47,7 +47,7 @@ Already exported? The GUI **Re-export** tab ([`message-reexporter`](crates/messa
 
 Prebuilt Linux, Windows, and macOS binaries: [Releases](https://github.com/bitrealm-dev/message-exporters/releases).
 
-How maintainers cut a version: [`docs/DEVELOPING.md`](docs/DEVELOPING.md).
+Maintainer documentation: [`docs/maintainers/`](docs/maintainers/README.md). Release steps: [Development and releases](docs/maintainers/developing.md).
 
 ## License
 

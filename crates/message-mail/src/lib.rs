@@ -1,6 +1,6 @@
 //! Per-conversation `.eml` / `.mbox` archive writer.
 //!
-//! Layout and headers follow [`docs/MAIL_ARCHIVE.md`](../../../docs/MAIL_ARCHIVE.md).
+//! Layout and headers follow the [mail archive format](../../../docs/maintainers/formats/mail-archive.md).
 //! Canonical packaging is folders of `.eml`; [`append_message_mbox`] writes
 //! derived **mboxrd** mailboxes for clients that prefer a single file.
 //! SMS/MMS fill the core fields; iMessage exporters also set reply / tapback /

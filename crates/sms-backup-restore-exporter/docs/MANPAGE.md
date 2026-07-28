@@ -103,4 +103,4 @@ cargo run --release -p sms-backup-restore-exporter -- \
 
 # NOTES
 
-XML attribute reference: [FIELDS.md](FIELDS.md). Source → common-message mapping: [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md).
+Input XML reference: [INPUT_FORMAT.md](INPUT_FORMAT.md). Source → common-message mapping: [IMPORT_MAPPING.md](IMPORT_MAPPING.md).

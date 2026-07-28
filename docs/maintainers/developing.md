@@ -1,12 +1,12 @@
-# Developer notes
+# Development and releases
 
-End-user documentation for the docs site lives in [`docs/src/content/docs/`](src/content/docs/) (start with [What’s inside an export](src/content/docs/understand-output/export-structure.md)). Contributor design notes remain in [`GUI.md`](GUI.md), [`EXPORTER_MATRIX.md`](EXPORTER_MATRIX.md), and [`COMMON_MESSAGE.md`](COMMON_MESSAGE.md).
+End-user documentation lives in the [Starlight source](../src/content/docs/) (start with [What’s inside an export](../src/content/docs/understand-output/export-structure.md)). Use the [maintainer index](README.md) to find architecture, GUI, exporter, and format documentation.
 
 ## Cutting a release
 
 Prebuilt binaries are published only by a **manual** GitHub Actions workflow. Nothing builds or releases on push, PR, or tag by default.
 
-Workflow file: [`.github/workflows/release.yml`](../.github/workflows/release.yml)
+Workflow file: [`.github/workflows/release.yml`](../../.github/workflows/release.yml)
 
 ### Steps
 
@@ -52,7 +52,7 @@ To quiet that: [Notification settings](https://github.com/settings/notifications
 
 ## Documentation site (GitHub Pages)
 
-User-facing docs use [Astro Starlight](https://starlight.astro.build/) under [`docs/`](.), deployed by [`.github/workflows/docs.yml`](../.github/workflows/docs.yml).
+User-facing docs use [Astro Starlight](https://starlight.astro.build/) under [`docs/`](..), deployed by [`.github/workflows/docs.yml`](../../.github/workflows/docs.yml).
 
 ### Enable Pages (one-time)
 

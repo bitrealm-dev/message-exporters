@@ -1,13 +1,13 @@
-# GO SMS Pro XML / PDU → common message / CSV mapping
+# GO SMS Pro import mapping
 
-How `gosms_sys*.xml` `<SMS>` elements and `I_*.pdu` MMS files map into the common message and the shared CSV projector written by `go-sms-pro-exporter` (`--format csv`).
+How `gosms_sys*.xml` `<SMS>` elements and `I_*.pdu` MMS files become shared `ConversationDocument` values, including validation, skipped records, and retained source data.
 
-Shared CSV contract: [CSV columns](../../../docs/src/content/docs/understand-output/csv-columns.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). Common message: [export structure](../../../docs/src/content/docs/understand-output/export-structure.md), [`docs/COMMON_MESSAGE.md`](../../../docs/COMMON_MESSAGE.md).
+Shared model: [message-ir](../../../docs/maintainers/architecture/message-ir.md). CSV projection: [CSV columns](../../../docs/src/content/docs/understand-output/csv-columns.md) and [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs).
 
 ## Goal / non-goal
 
-- **Goal:** Document how GO SMS Pro fields fill shared common-message / CSV cells (and the vendor bag).
-- **Non-goal:** A private per-exporter CSV header. All exporters use one CSV header; Apple-only cells are empty for this source.
+- **Goal:** Document how GO SMS Pro fields fill shared conversation fields and the retained source-data bag.
+- **Non-goal:** Define output-format layouts or a private CSV schema. All output formats are projections of the shared model.
 
 ## Pipeline / output
 
@@ -33,11 +33,11 @@ Diagnostic skip lists (`skipped_invalid_address.csv`, `skipped_empty_pdu.csv`, `
 </GoSms>
 ```
 
-Each `<SMS>` becomes one common-message / CSV data row. The `chat_identifier` cell holds the peer’s E.164 handle.
+Each `<SMS>` becomes one message in a shared conversation. `chat_identifier` holds the peer’s E.164 handle.
 
-## Known XML children → shared cells
+## Known XML children → shared fields
 
-| XML child | CSV / common-message cell(s) | Notes |
+| XML child | Shared field(s) | Notes |
 |-----------|------------------|--------|
 | `<address>` | `chat_identifier`, `sender_handle` | Digits sanitized then E.164. For sent (`type=2`), address is the peer (not the sender). For received (`type=1`), address is also `sender_handle` unless Google Voice voicemail parsing overrides it from `<body>`. |
 | `<contactName>` | `sender_display_name` | Display name filled for incoming when present. |
@@ -46,9 +46,9 @@ Each `<SMS>` becomes one common-message / CSV data row. The `chat_identifier` ce
 | `<body>` | `text` | GO SMS emoji codes (e.g. `+g1f602`) decoded to Unicode. |
 | *(all children)* | `source_fields_json` | Child element name → text (plus `source_kind`, see below). |
 
-## Other shared cells
+## Other shared fields
 
-| CSV / common-message cell | Source |
+| Shared field | Source |
 |---------------|--------|
 | `conversation_type` | Always `individual` for XML SMS; `group` from PDU PLMN lists |
 | `group_title` | Derived for PDU groups; empty for XML |
@@ -100,9 +100,9 @@ Printed only when non-zero:
 
 ## PDU rows
 
-MMS from `I_<unix>_*.pdu` files use the same conversation CSV header. Differences:
+MMS from `I_<unix>_*.pdu` files use the same shared conversation model. Differences:
 
-| CSV / common-message cell | PDU behavior |
+| Shared field | PDU behavior |
 |---------------|--------------|
 | `chat_identifier` / `conversation_type` / `group_title` | From PLMN participants; groups use `chat-group-…` ids |
 | `timestamp*` / `timestamp_unix_ms` | MMS `Date` header when present; else filename `I_<unix>_` (seconds). Filename still required to accept the file. |

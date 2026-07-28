@@ -27,6 +27,6 @@ Body is `text/plain` (first part). Non-text MIME parts are exported as attachmen
 
 Optional MIME attachments are attached to messages in order.
 
-## CSV mapping and dedupe
+## Import mapping and deduplication
 
-EML → CSV field mapping and online cover-key dedupe: [`EML_CSV_MAPPING.md`](EML_CSV_MAPPING.md).
+Source-field mapping and online cover-key deduplication: [`IMPORT_MAPPING.md`](IMPORT_MAPPING.md).

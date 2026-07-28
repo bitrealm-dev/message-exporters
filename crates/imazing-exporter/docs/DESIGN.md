@@ -139,4 +139,4 @@ These are upstream/export constraints, not converter bugs:
 
 - CLI: [`MANPAGE.md`](MANPAGE.md)
 - Contacts helper: [`../../message-contacts/README.md`](../../message-contacts/README.md)
-- Common message / CSV contract: [`docs/COMMON_MESSAGE.md`](../../../docs/COMMON_MESSAGE.md), [export structure](../../../docs/src/content/docs/understand-output/export-structure.md), [CSV columns](../../../docs/src/content/docs/understand-output/csv-columns.md)
+- Shared model and output contracts: [message-ir architecture](../../../docs/maintainers/architecture/message-ir.md), [export structure](../../../docs/src/content/docs/understand-output/export-structure.md), [CSV columns](../../../docs/src/content/docs/understand-output/csv-columns.md)

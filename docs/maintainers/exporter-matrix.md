@@ -4,7 +4,7 @@ What each converter writes (and where it falls short). Marks: **yes** / **partia
 
 ## Shared model
 
-All converters build a **common message** per conversation (`ConversationDocument`, schema v3 in [`message-ir`](../crates/message-ir/)), then project the user-picked format via `FormatSink` (default **JSON**). When packaging is CSV, columns follow [`CSV_HEADERS`](../crates/message-ir/src/lib.rs). Across the board:
+All converters build a **common message** per conversation (`ConversationDocument`, schema v3 in [`message-ir`](../../crates/message-ir/)), then project the user-picked format via `FormatSink` (default **JSON**). When packaging is CSV, columns follow [`CSV_HEADERS`](../../crates/message-ir/src/lib.rs). Across the board:
 
 - The peer is `chat_identifier` — there is **no** dedicated receiver-phone column
 - Direction is `direction` (`incoming` / `outgoing`) — there is **no** `is_from_me` column
@@ -50,18 +50,18 @@ All converters build a **common message** per conversation (`ConversationDocumen
 | **Timezone** | XML/PDU epoch | XML epoch | EML dates | vendor `Date` | naive + `--timezone` | epoch from wtsexporter | DB epoch + offset |
 | **Skip diagnostics** | `skipped_*.csv` (invalid address, empty PDU, no party) | counters on stderr | counters on stderr | unresolved phone count | counters on stderr | counters on stderr | counters on stderr |
 
-## Format docs
+## Technical docs
 
 | Exporter | Mapping / design |
 |---|---|
-| GO SMS Pro | [`crates/go-sms-pro-exporter/docs/XML_CSV_MAPPING.md`](../crates/go-sms-pro-exporter/docs/XML_CSV_MAPPING.md) |
-| SMS Backup & Restore | [`crates/sms-backup-restore-exporter/docs/XML_CSV_MAPPING.md`](../crates/sms-backup-restore-exporter/docs/XML_CSV_MAPPING.md) |
-| SMS Backup+ | [`crates/sms-backup-plus-exporter/docs/EML_CSV_MAPPING.md`](../crates/sms-backup-plus-exporter/docs/EML_CSV_MAPPING.md) |
-| OpenExtract | [`crates/openextract-exporter/docs/MANPAGE.md`](../crates/openextract-exporter/docs/MANPAGE.md) |
-| iMazing | [`crates/imazing-exporter/docs/DESIGN.md`](../crates/imazing-exporter/docs/DESIGN.md) |
-| WhatsApp | [`crates/whatsapp-exporter/docs/MANPAGE.md`](../crates/whatsapp-exporter/docs/MANPAGE.md) |
-| iMessage | [`crates/imessage-ir-exporter/docs/MANPAGE.md`](../crates/imessage-ir-exporter/docs/MANPAGE.md) |
+| GO SMS Pro | [`crates/go-sms-pro-exporter/docs/IMPORT_MAPPING.md`](../../crates/go-sms-pro-exporter/docs/IMPORT_MAPPING.md) |
+| SMS Backup & Restore | [`INPUT_FORMAT.md`](../../crates/sms-backup-restore-exporter/docs/INPUT_FORMAT.md) · [`IMPORT_MAPPING.md`](../../crates/sms-backup-restore-exporter/docs/IMPORT_MAPPING.md) |
+| SMS Backup+ | [`FORMAT.md`](../../crates/sms-backup-plus-exporter/docs/FORMAT.md) · [`IMPORT_MAPPING.md`](../../crates/sms-backup-plus-exporter/docs/IMPORT_MAPPING.md) |
+| OpenExtract | [`crates/openextract-exporter/docs/MANPAGE.md`](../../crates/openextract-exporter/docs/MANPAGE.md) |
+| iMazing | [`crates/imazing-exporter/docs/DESIGN.md`](../../crates/imazing-exporter/docs/DESIGN.md) |
+| WhatsApp | [`crates/whatsapp-exporter/docs/MANPAGE.md`](../../crates/whatsapp-exporter/docs/MANPAGE.md) |
+| iMessage | [`crates/imessage-ir-exporter/docs/MANPAGE.md`](../../crates/imessage-ir-exporter/docs/MANPAGE.md) |
 
-**Common message:** end-user [export structure](src/content/docs/understand-output/export-structure.md); schema [`COMMON_MESSAGE.md`](COMMON_MESSAGE.md) (`message-ir`, schema v3). All exporters parse to `ConversationDocument` then project via `message_ir::FormatSink` (per-chat JSON/JSONL/CSV/EML/MBOX, or one SyncTech `smses.xml` with `--format xml`). Mail packaging: [`MAIL_ARCHIVE.md`](MAIL_ARCHIVE.md). SBR XML: [`SBR_XML.md`](SBR_XML.md). Attachment modes (none / copy / convert / compress) and obfuscate apply through `FormatSink` for every format.
+**Common message:** end-user [export structure](../src/content/docs/understand-output/export-structure.md); schema [message-ir architecture](architecture/message-ir.md). All exporters parse to `ConversationDocument` then project via `message_ir::FormatSink` (per-chat JSON/JSONL/CSV/EML/MBOX, or one SyncTech `smses.xml` with `--format xml`). Output formats: [mail archives](formats/mail-archive.md) and [SMS Backup & Restore XML](formats/sms-backup-restore-xml.md). Attachment modes (none / copy / convert / compress) and obfuscate apply through `FormatSink` for every format.
 
-**Re-export:** [`message-reexporter`](../crates/message-reexporter/) converts an existing Message Exporters output directory to another format (auto-detect input; GUI **Re-export** tab). Not a vendor backup source.
+**Re-export:** [`message-reexporter`](../../crates/message-reexporter/) converts an existing Message Exporters output directory to another format (auto-detect input; GUI **Re-export** tab). Not a vendor backup source.

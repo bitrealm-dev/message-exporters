@@ -4,7 +4,7 @@
 //! project with [`FormatSink`] (or [`write_format`] for a single non-XML
 //! conversation). XML backups use a session inside [`FormatSink`] → `smses.xml`.
 //! Reverse projectors (`read_conversation_*`) restore IR for content round-trips.
-//! See [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
+//! See the [message-ir architecture](../../../docs/maintainers/architecture/message-ir.md).
 //!
 //! Schema version 3 is a typed, stable JSON shape: enums for service/kind,
 //! struct bags for `imessage` / `source`, filled outgoing identity, conversation

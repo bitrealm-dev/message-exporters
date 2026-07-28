@@ -4,7 +4,7 @@
 //! `MailMessage` mapping), converted to [`IrMessage`] (core fields + a nested
 //! `imessage` extension bag), and accumulated per conversation.
 //! After the DB stream ends, conversations are written via
-//! [`message_ir::FormatSink`] (see [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md)).
+//! [`message_ir::FormatSink`] (see the [message-ir architecture](../../../docs/maintainers/architecture/message-ir.md)).
 
 use std::collections::BTreeMap;
 use std::fs;

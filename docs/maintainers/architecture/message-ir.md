@@ -1,8 +1,8 @@
 # Common message (schema / JSON / JSONL)
 
-**Common message** is the shared per-conversation structure after source parse and before packaging (CSV / EML / MBOX / JSON / JSONL / XML). End-user overview: [What’s inside an export](src/content/docs/understand-output/export-structure.md).
+**Common message** is the shared per-conversation structure after source parse and before packaging (CSV / EML / MBOX / JSON / JSONL / XML). End-user overview: [What’s inside an export](../../src/content/docs/understand-output/export-structure.md).
 
-Typed model: [`crates/message-ir/`](../crates/message-ir/) (crate name still `message-ir`; type `ConversationDocument`). On-disk forms:
+Typed model: [`crates/message-ir/`](../../../crates/message-ir/) (crate name still `message-ir`; type `ConversationDocument`). On-disk forms:
 
 - **JSON** (CLI/GUI default) — one pretty-printed `<conversation-stem>.json` per chat
 - **JSONL** — one `<conversation-stem>.jsonl` per chat: header line, then one `IrMessage` per line
@@ -111,13 +111,13 @@ Line 1 is the header (includes `conversation.stats`; no `messages` array). Each 
 |--------|--------|--------|
 | JSON | pretty-printed `ConversationDocument` | `read_conversation_json` |
 | JSONL | header + one message per line | `read_conversation_jsonl` |
-| CSV | unified [`CSV_HEADERS`](../crates/message-ir/src/lib.rs) (header from first data row on read) | `read_conversation_csv` |
-| EML / MBOX | common message → `MailMessage` → [`message-mail`](../crates/message-mail/) | `read_conversation_eml_dir` / `read_conversation_mbox` |
-| XML | single `smses.xml` via [`FormatSink`](../crates/message-ir/) + [`message-sbr`](../crates/message-sbr/) | `sms_backup_restore_exporter::load_documents_from_xml` (owner inferred when omitted) |
+| CSV | unified [`CSV_HEADERS`](../../../crates/message-ir/src/lib.rs) (header from first data row on read) | `read_conversation_csv` |
+| EML / MBOX | common message → `MailMessage` → [`message-mail`](../../../crates/message-mail/) | `read_conversation_eml_dir` / `read_conversation_mbox` |
+| XML | single `smses.xml` via [`FormatSink`](../../../crates/message-ir/) + [`message-sbr`](../../../crates/message-sbr/) | `sms_backup_restore_exporter::load_documents_from_xml` (owner inferred when omitted) |
 
-**Directory convert:** [`message-reexporter`](../crates/message-reexporter/) auto-detects one format in an export folder and writes another via `FormatSink` (GUI **Re-export** tab / CLI).
+**Directory convert:** [`message-reexporter`](../../../crates/message-reexporter/) auto-detects one format in an export folder and writes another via `FormatSink` (GUI **Re-export** tab / CLI).
 
-**XML packaging differs:** one SyncTech backup for the whole export (not per conversation). iMessage-only fields are dropped. See [SBR_XML.md](SBR_XML.md).
+**XML packaging differs:** one SyncTech backup for the whole export (not per conversation). iMessage-only fields are dropped. See [SMS Backup & Restore XML output](../formats/sms-backup-restore-xml.md).
 
 ## Content round-trip
 
@@ -125,7 +125,7 @@ Library APIs support content-preserving cycles:
 
 `ConversationDocument` → CSV \| EML \| MBOX \| JSON \| JSONL → `ConversationDocument`
 
-Use [`message-reexporter`](../crates/message-reexporter/) to convert a whole export directory between formats.
+Use [`message-reexporter`](../../../crates/message-reexporter/) to convert a whole export directory between formats.
 
 XML is **lossy** for non-Android common messages (Apple bags omitted). SBR-origin `source.fields` can restore many SyncTech attrs on write-back.
 
@@ -139,11 +139,11 @@ After `normalize_document_for_compare`:
 
 **Not required:** filename stem / pretty-print identity, packaging suffix in the JSON body, embedding attachment bytes in JSON. EML `X-ME-Attachment-Meta` currently omits on-disk `path` (bytes may still round-trip in memory for re-export).
 
-CSV nested bags use empty string when absent (never literal `null`). See [CSV columns](src/content/docs/understand-output/csv-columns.md).
+CSV nested bags use empty string when absent (never literal `null`). See [CSV columns](../../src/content/docs/understand-output/csv-columns.md).
 
 ## Related
 
-- [MAIL_ARCHIVE.md](MAIL_ARCHIVE.md) — EML/MBOX packaging
-- [SBR_XML.md](SBR_XML.md) — SyncTech `smses.xml` backup output
-- [CSV columns](src/content/docs/understand-output/csv-columns.md) — user-facing CSV conventions
-- [EXPORTER_MATRIX.md](EXPORTER_MATRIX.md)
+- [Mail archive format](../formats/mail-archive.md) — EML/MBOX packaging
+- [SMS Backup & Restore XML output](../formats/sms-backup-restore-xml.md) — SyncTech `smses.xml` output
+- [CSV columns](../../src/content/docs/understand-output/csv-columns.md) — user-facing CSV conventions
+- [Exporter capability matrix](../exporter-matrix.md)

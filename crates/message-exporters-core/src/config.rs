@@ -17,11 +17,11 @@ use crate::process::CancelFlag;
 pub enum OutputFormat {
     /// Per-conversation CSV.
     Csv,
-    /// Per-conversation folder of `.eml` files (see docs/MAIL_ARCHIVE.md).
+    /// Per-conversation folder of `.eml` files (see docs/maintainers/formats/mail-archive.md).
     Eml,
     /// Per-conversation `.mbox` (mboxrd) mailbox file.
     Mbox,
-    /// Per-conversation common message JSON (default; see docs/MESSAGE_IR.md).
+    /// Per-conversation common message JSON (default; see docs/maintainers/architecture/message-ir.md).
     #[default]
     Json,
     /// Per-conversation common message as JSON Lines (header + one message per line).

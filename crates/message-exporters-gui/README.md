@@ -32,4 +32,4 @@ The GUI searches for helper binaries (`contacts-validate`, `wtsexporter`) beside
 - Native file/folder dialogs
 - Shared run log with cancel
 
-Contributor option matrix: [`../../docs/GUI.md`](../../docs/GUI.md).
+Contributor option matrix: [`../../docs/maintainers/gui.md`](../../docs/maintainers/gui.md).

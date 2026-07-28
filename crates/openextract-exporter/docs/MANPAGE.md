@@ -57,7 +57,7 @@ Non-zero on invalid paths, parse/convert failure, or bad date/seed arguments.
 : OpenExtract conversation CSV(s); optional contacts VCF/CSV.
 
 **Output**
-: One `*.csv` per conversation. Name-only chat ids may remain unresolved for vault import.
+: Output in the selected format. JSON, JSONL, CSV, EML, and MBOX are organized per conversation; XML writes one `smses.xml` backup. Name-only chat ids may remain unresolved for later tools that require phone identifiers. No output contains binary media because OpenExtract attachment sidecars are not imported.
 
 # ENVIRONMENT
 

@@ -99,4 +99,4 @@ go-sms-pro-exporter \
 
 # NOTES
 
-Experimental in the desktop GUI. Field mapping and skip counters: [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md).
+Experimental in the desktop GUI. Field mapping and skip counters: [IMPORT_MAPPING.md](IMPORT_MAPPING.md).

@@ -107,4 +107,4 @@ sms-backup-plus-exporter -v convert \
 
 # NOTES
 
-Experimental in the GUI. Attachment→message pairing in archives is heuristic. EML layouts: [FORMAT.md](FORMAT.md). Field mapping: [EML_CSV_MAPPING.md](EML_CSV_MAPPING.md).
+Experimental in the GUI. Attachment→message pairing in archives is heuristic. EML layouts: [FORMAT.md](FORMAT.md). Field mapping: [IMPORT_MAPPING.md](IMPORT_MAPPING.md).

@@ -3,7 +3,7 @@
 Living design notes for the cross-platform desktop GUI that drives the existing exporter binaries.
 
 **Framework:** [egui](https://github.com/emilk/egui) / [eframe](https://github.com/emilk/egui/tree/master/crates/eframe) 0.31, implemented in
-[`crates/message-exporters-gui`](../crates/message-exporters-gui).
+[`crates/message-exporters-gui`](../../crates/message-exporters-gui).
 
 ## Goals
 
@@ -26,7 +26,7 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 - **Global options** (Obfuscate + Start/End date) on the Message tab per-source form.
 - **Re-export** tab converts a prior output folder via `message-reexporter` (INI section `[message-reexport]`).
 
-Export options persist in `export.ini` (load on start; save on Run / exit). Prefer an existing file in the working directory, else beside the GUI binary; otherwise create `./export.ini` on first save. Template: [`export.example.ini`](../crates/message-exporters-gui/export.example.ini). Backup passwords are never written.
+Export options persist in `export.ini` (load on start; save on Run / exit). Prefer an existing file in the working directory, else beside the GUI binary; otherwise create `./export.ini` on first save. Template: [`export.example.ini`](../../crates/message-exporters-gui/export.example.ini). Backup passwords are never written.
 
 Build the workspace, then run:
 
@@ -50,7 +50,7 @@ cargo run -p message-exporters-gui
 
 ### Contacts
 
-Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules as exporters).
+Spawns [`contacts-validate`](../../crates/message-contacts) (same discovery rules as exporters).
 
 - **Check** (`--check`): dry run — no files written; the run log shows the same UNCERTAIN / DUPLICATE / summary content as a validate log.
 - **Update**: write `<stem>-update.<ext>` (or `<stem>-update-N` when re-updating) (+ `.log`; CSV also `.vcf`). Only unambiguous phones are rewritten; uncertain values stay as-is.
@@ -68,7 +68,7 @@ Top tab (not a Message backup type). Converts a prior Message Exporters output f
 | Attachments | enum | no | `--media-mode` |
 | Obfuscate / seed | checkbox + text | no | `--obfuscate` / `--obfuscate-seed` |
 
-Persists under `[message-reexport]` in `export.ini`. Mixed or unrecognized input dirs fail with a clear error. See [`crates/message-reexporter/docs/MANPAGE.md`](../crates/message-reexporter/docs/MANPAGE.md).
+Persists under `[message-reexport]` in `export.ini`. Mixed or unrecognized input dirs fail with a clear error. See [`crates/message-reexporter/docs/MANPAGE.md`](../../crates/message-reexporter/docs/MANPAGE.md).
 
 ## Shared / global controls
 
@@ -109,7 +109,7 @@ Convert/Compress need `ffmpeg`/`ffprobe` on PATH. **Do not copy** skips writing 
 
 \* Required unless filled from Plus `config/owner.toml` (source-relative today); GUI collects fields explicitly.
 
-‡ Default packaging is **JSON** (common message). Schema v3 applies to every exporter, including iMessage (`imessage-ir-exporter`). See [What’s inside an export](src/content/docs/understand-output/export-structure.md) and [COMMON_MESSAGE.md](COMMON_MESSAGE.md). Attachment modes and obfuscate apply to every output format via `FormatSink`.
+‡ Default packaging is **JSON** (common message). Schema v3 applies to every exporter, including iMessage (`imessage-ir-exporter`). See [What’s inside an export](../src/content/docs/understand-output/export-structure.md) and the [message-ir architecture](architecture/message-ir.md). Attachment modes and obfuscate apply to every output format via `FormatSink`.
 
 †† OpenExtract has no media in its source CSVs yet, so attachment modes are a no-op for files; the control is still shown.
 
@@ -147,7 +147,7 @@ Product: [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/)
 | Contacts CSV / VCF | file | no† | `--contacts` / `--vcf` |
 | Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro); all formats |
 
-Encrypted ZIP backups must be unlocked/extracted before selecting input. The exporter builds the [shared conversation structure](src/content/docs/understand-output/export-structure.md), then writes the chosen format. Media modes and obfuscate apply through FormatSink for every format.
+Encrypted ZIP backups must be unlocked/extracted before selecting input. The exporter builds the [shared conversation structure](../src/content/docs/understand-output/export-structure.md), then writes the chosen format. Media modes and obfuscate apply through FormatSink for every format.
 
 ### SMS Backup+ — `sms-backup-plus-exporter convert`
 
@@ -194,7 +194,7 @@ Product: [iMazing](https://imazing.com/)
 | Contacts | iMazing Contacts CSV only | no | `--contacts` |
 | Timezone | IANA text | no | `--timezone` (default: host local) |
 
-Media modes and obfuscate apply through FormatSink for every format. WhatsApp chats use the `__whatsapp` stem suffix (CSV, mail, JSON, or JSONL). See [`crates/imazing-exporter/docs/DESIGN.md`](../crates/imazing-exporter/docs/DESIGN.md).
+Media modes and obfuscate apply through FormatSink for every format. WhatsApp chats use the `__whatsapp` stem suffix (CSV, mail, JSON, or JSONL). See [`crates/imazing-exporter/docs/DESIGN.md`](../../crates/imazing-exporter/docs/DESIGN.md).
 
 ### WhatsApp — `whatsapp-exporter`
 
@@ -271,7 +271,7 @@ Tabs: Contacts | Message | Re-export | Log
            → message-reexporter::run → log
 ```
 
-End-user walkthrough: [First export with the app](src/content/docs/get-started/first-export.mdx).
+End-user walkthrough: [First export with the app](../src/content/docs/get-started/first-export.mdx).
 
 ## Known gaps
 

@@ -1,7 +1,7 @@
 //! SMS Backup & Restore (SyncTech) XML codec.
 //!
 //! Writers produce a single backup file (`smses.xml`) with root
-//! `<smses count="N">`. See [`docs/SBR_XML.md`](../../../docs/SBR_XML.md).
+//! `<smses count="N">`. See the [SMS Backup & Restore XML output](../../../docs/maintainers/formats/sms-backup-restore-xml.md).
 
 use anyhow::{Context, Result};
 use base64::Engine;

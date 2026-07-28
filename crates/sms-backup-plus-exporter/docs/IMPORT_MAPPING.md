@@ -1,13 +1,13 @@
-# SMS Backup+ EML → common message / CSV mapping
+# SMS Backup+ import mapping
 
-How flat and archive `.eml` messages map into the common message and the shared CSV projector written by `sms-backup-plus-exporter` (`--format csv`).
+How flat and archive `.eml` messages become shared `ConversationDocument` values, including identity resolution, deduplication, and retained source data.
 
-Deeper EML format notes: [`FORMAT.md`](FORMAT.md). Shared CSV contract: [CSV columns](../../../docs/src/content/docs/understand-output/csv-columns.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). Common message: [export structure](../../../docs/src/content/docs/understand-output/export-structure.md), [`docs/COMMON_MESSAGE.md`](../../../docs/COMMON_MESSAGE.md).
+Input layouts: [FORMAT.md](FORMAT.md). Shared model: [message-ir](../../../docs/maintainers/architecture/message-ir.md). CSV projection: [CSV columns](../../../docs/src/content/docs/understand-output/csv-columns.md) and [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs).
 
 ## Goal / non-goal
 
-- **Goal:** Document how Backup+ EML fields fill shared common-message / CSV cells (and the vendor bag).
-- **Non-goal:** A private per-exporter CSV header, or omitting unused Apple columns. All exporters write the full [`CSV_HEADERS`](../../message-ir/src/lib.rs); Apple-only cells are empty for this source.
+- **Goal:** Document how SMS Backup+ fields fill shared conversation fields and the retained source-data bag.
+- **Non-goal:** Define EML source layouts or a private CSV schema. Source layout belongs in [FORMAT.md](FORMAT.md), and every output format is projected from the shared model.
 
 ## Pipeline / output
 
@@ -25,9 +25,9 @@ Typical headers: `X-smssync-type`, `X-smssync-address`, `X-smssync-date`, `X-sms
 
 `Subject: SMS archive …`, body lines `YYYY-MM-DD HH:MM:SS - {Sender}` then text; sender `Me` = outgoing.
 
-## Source → shared cells
+## Source → shared fields
 
-| CSV / common-message cell | EML source |
+| Shared field | EML source |
 |---------------|------------|
 | `chat_identifier` | Peer E.164 or `chat-group-…` |
 | `conversation_type` | `individual` / `group` from address list |
