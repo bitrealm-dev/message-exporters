@@ -1,20 +1,28 @@
 # message-exporters
 
-Backing up texts is easy. Getting the messages *out* in a form you can read is not.
+Phone backups are easy to make. Reading the messages later is harder.
 
-This repo turns vendor-specific phone backups into **plain CSV**—one spreadsheet file per conversation, with media beside those files.
+This project turns vendor backups into plain files that a spreadsheet, mail program, or other tool can open. Pick the output format that fits the job—one size does not fit all:
+
+- **CSV** — one spreadsheet file per conversation
+- **EML** — one email folder per conversation
+- **MBOX** — one mailbox file per conversation
+- **JSON** / **JSON Lines** — machine-readable archives
+- **XML** — one SyncTech `smses.xml` backup
+
+Photos and other media are saved next to those files when the format needs them.
 
 ## Docs
 
-Full documentation (install, GUI, supported exporters, CSV shape):
+Read the full guide (install, desktop app, supported backups, CSV layout):
 
 **https://bitrealm-dev.github.io/message-exporters/**
 
-(Source: [`docs/`](docs/) — mdBook; chapters pull in Markdown from `docs/` and crate READMEs.)
+Source Markdown lives in [`docs/`](docs/) (mdBook). Chapters also pull in crate READMEs.
 
 ## Quick start
 
-**GUI / binaries:** download the latest [Release](https://github.com/bitrealm-dev/message-exporters/releases), keep the tools in one folder, run `message-exporters-gui`.
+**Desktop app / binaries:** Download the latest [Release](https://github.com/bitrealm-dev/message-exporters/releases). Keep every tool from the zip in the same folder. Run `message-exporters-gui`.
 
 **From source:**
 
@@ -31,11 +39,12 @@ cargo run --release -p message-exporters-gui
 | SMS Backup & Restore (SyncTech XML) | [`sms-backup-restore-exporter`](crates/sms-backup-restore-exporter) |
 | WhatsApp (native DB / crypt) | [`whatsapp-exporter`](crates/whatsapp-exporter) |
 
-Experimental (also in the GUI / release zip): GO SMS Pro, iMazing CSV, OpenExtract, SMS Backup+. See the [docs site](https://bitrealm-dev.github.io/message-exporters/) and [`docs/EXPORTER_MATRIX.md`](docs/EXPORTER_MATRIX.md).
+Experimental converters also ship in the GUI and release zip: GO SMS Pro, iMazing CSV, OpenExtract, and SMS Backup+. Use those when they are the only backup on hand. Details: the [docs site](https://bitrealm-dev.github.io/message-exporters/) and [`docs/EXPORTER_MATRIX.md`](docs/EXPORTER_MATRIX.md).
 
 ## Releases
 
-Prebuilt Linux, Windows, and macOS binaries: [Releases](https://github.com/bitrealm-dev/message-exporters/releases).  
+Prebuilt Linux, Windows, and macOS binaries: [Releases](https://github.com/bitrealm-dev/message-exporters/releases).
+
 How maintainers cut a version: [`docs/DEVELOPING.md`](docs/DEVELOPING.md).
 
 ## License
