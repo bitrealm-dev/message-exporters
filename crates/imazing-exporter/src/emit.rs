@@ -8,8 +8,8 @@ use message_contacts::ContactsBook;
 use message_csv::{format_local_ts, parse_utc_offset, stable_guid, AttachmentCell, DateRange};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    write_format, ConversationDocument, ConversationMeta, ExportMeta, IrAttachment, IrDirection,
-    IrMessage, IrParticipant, SCHEMA_VERSION,
+    write_format, ConversationDocument, ConversationMeta, ExportMeta, IrAttachment, IrConversationType,
+    IrDirection, IrMessage, IrParticipant, SCHEMA_VERSION,
 };
 use message_mail::clean_previous_mail_output;
 use message_phone::{sanitize_number, to_e164};
@@ -523,7 +523,9 @@ fn clean_previous_output(output_dir: &Path) -> Result<()> {
             && (name.ends_with(".csv")
                 || name.ends_with(".csv.tmp")
                 || name.ends_with(".json")
-                || name.ends_with(".json.tmp"))
+                || name.ends_with(".json.tmp")
+                || name.ends_with(".jsonl")
+                || name.ends_with(".jsonl.tmp"))
         {
             fs::remove_file(&path)
                 .with_context(|| format!("remove previous {}", path.display()))?;
@@ -838,9 +840,6 @@ fn pending_to_document(
         };
 
         let mut source = serde_json::Map::new();
-        if !msg.date_ms.is_empty() {
-            source.insert("date_ms".into(), serde_json::json!(msg.date_ms));
-        }
         if !msg.contact_name.is_empty() {
             source.insert("contact_name".into(), serde_json::json!(msg.contact_name));
         }
@@ -870,10 +869,7 @@ fn pending_to_document(
             }
         }
         if !fields.is_empty() {
-            source.insert(
-                "xml_fields_json".into(),
-                serde_json::json!(serde_json::Value::Object(fields).to_string()),
-            );
+            source.insert("fields".into(), serde_json::Value::Object(fields));
         }
 
         messages.push(IrMessage {
@@ -884,7 +880,7 @@ fn pending_to_document(
             } else {
                 IrDirection::Incoming
             },
-            service: msg.service.clone(),
+            service: msg.service.to_ascii_lowercase(),
             message_kind: message_kind.into(),
             sender_handle: if msg.is_from_me || msg.sender_handle.is_empty() {
                 None
@@ -923,7 +919,7 @@ fn pending_to_document(
         },
         conversation: ConversationMeta {
             chat_identifier: chat_id.to_string(),
-            conversation_type: convo.conversation_type.clone(),
+            conversation_type: IrConversationType::parse(&convo.conversation_type),
             // None matches previous CSV/mail stem (session string is not a real group title).
             group_title: None,
             participants,
@@ -1135,7 +1131,7 @@ Bob,,,+15555550100,\n",
         assert!(out.join("+15555550100.csv").is_file());
         assert!(out.join("+15555550100__whatsapp.csv").is_file());
         let wa = fs::read_to_string(out.join("+15555550100__whatsapp.csv")).unwrap();
-        assert!(wa.contains("WhatsApp"));
+        assert!(wa.contains("whatsapp"));
     }
 
     #[test]

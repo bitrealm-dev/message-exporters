@@ -1,6 +1,6 @@
 # imessage-ir-exporter
 
-Export Apple Messages (`chat.db` / iOS backup) to **per-conversation CSV, EML, MBOX, or JSON** via [`imessage-database`](https://crates.io/crates/imessage-database) and [`message-ir`](../message-ir/).
+Export Apple Messages (`chat.db` / iOS backup) to **per-conversation CSV, EML, MBOX, JSON, or JSONL** via [`imessage-database`](https://crates.io/crates/imessage-database) and [`message-ir`](../message-ir/).
 
 Pipeline: `chat.db` → `MailMessage` → `ConversationDocument` → `message_ir::write_format`.
 
@@ -12,7 +12,7 @@ cargo run -p imessage-ir-exporter -- \
   --format json
 ```
 
-Formats: `csv` (default), `eml`, `mbox`, `json`.
+Formats: `csv` (default), `eml`, `mbox`, `json`, `jsonl` (schema v2 IR).
 
 ## Library
 

@@ -9,8 +9,8 @@ use anyhow::{Context, Result};
 use message_csv::{format_local_ts, json_cell, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    write_format, ConversationDocument, ConversationMeta, ExportMeta, IrAttachment, IrDirection,
-    IrMessage, IrParticipant, SCHEMA_VERSION,
+    write_format, ConversationDocument, ConversationMeta, ExportMeta, IrAttachment, IrConversationType,
+    IrDirection, IrMessage, IrParticipant, SCHEMA_VERSION,
 };
 use message_mail::clean_previous_mail_output;
 use sha2::{Digest, Sha256};
@@ -428,7 +428,12 @@ fn clean_previous_output(output_dir: &Path) -> Result<()> {
         let path = entry?.path();
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
         if path.is_file()
-            && (name.ends_with(".csv") || name.ends_with(".csv.tmp") || name.ends_with(".json"))
+            && (name.ends_with(".csv")
+                || name.ends_with(".csv.tmp")
+                || name.ends_with(".json")
+                || name.ends_with(".json.tmp")
+                || name.ends_with(".jsonl")
+                || name.ends_with(".jsonl.tmp"))
         {
             fs::remove_file(&path)
                 .with_context(|| format!("remove previous {}", path.display()))?;
@@ -533,10 +538,7 @@ fn pending_to_document(
             None
         } else {
             let mut source = serde_json::Map::new();
-            source.insert(
-                "xml_fields_json".into(),
-                serde_json::json!(serde_json::Value::Object(xml_fields).to_string()),
-            );
+            source.insert("fields".into(), serde_json::Value::Object(xml_fields));
             Some(serde_json::Value::Object(source))
         };
 
@@ -548,7 +550,7 @@ fn pending_to_document(
             } else {
                 IrDirection::Incoming
             },
-            service: "WhatsApp".into(),
+            service: "whatsapp".into(),
             message_kind: message_kind.into(),
             sender_handle: if msg.is_from_me || msg.sender_handle.is_empty() {
                 None
@@ -579,7 +581,7 @@ fn pending_to_document(
         },
         conversation: ConversationMeta {
             chat_identifier: chat_id.to_string(),
-            conversation_type: convo.conversation_type.clone(),
+            conversation_type: IrConversationType::parse(&convo.conversation_type),
             group_title: convo.group_title.clone(),
             participants,
             filename_suffix: Some("__whatsapp".into()),

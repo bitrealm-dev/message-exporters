@@ -33,7 +33,7 @@ pub struct MailOptions {
     pub cleartext_password: Option<String>,
     pub contacts_path: Option<PathBuf>,
     pub attachment_embed: AttachmentEmbed,
-    /// [`OutputFormat::Csv`], [`OutputFormat::Eml`], [`OutputFormat::Mbox`], or [`OutputFormat::Json`].
+    /// CSV, EML, MBOX, JSON, or JSONL.
     pub output_format: OutputFormat,
 }
 
@@ -103,6 +103,18 @@ pub fn validate_export_path(
                             {
                                 return Err(RuntimeError::InvalidOptions(format!(
                                     "Specified export path {} contains existing \"json\" export data!",
+                                    resolved.display()
+                                )));
+                            }
+                        }
+                        OutputFormat::Jsonl => {
+                            if path
+                                .extension()
+                                .and_then(|s| s.to_str())
+                                .is_some_and(|ext| ext.eq_ignore_ascii_case("jsonl"))
+                            {
+                                return Err(RuntimeError::InvalidOptions(format!(
+                                    "Specified export path {} contains existing \"jsonl\" export data!",
                                     resolved.display()
                                 )));
                             }

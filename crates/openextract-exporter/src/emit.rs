@@ -8,8 +8,8 @@ use message_contacts::ContactsBook;
 use message_csv::{format_local_ts, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    write_format, ConversationDocument, ConversationMeta, ExportMeta, IrDirection, IrMessage,
-    IrParticipant, SCHEMA_VERSION,
+    write_format, ConversationDocument, ConversationMeta, ExportMeta, IrConversationType,
+    IrDirection, IrMessage, IrParticipant, SCHEMA_VERSION,
 };
 use message_mail::clean_previous_mail_output;
 use message_phone::{sanitize_number, to_e164};
@@ -159,7 +159,12 @@ fn clean_previous_output(output_dir: &Path) -> Result<()> {
         let path = entry.path();
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
         if path.is_file()
-            && (name.ends_with(".csv") || name.ends_with(".csv.tmp") || name.ends_with(".json"))
+            && (name.ends_with(".csv")
+                || name.ends_with(".csv.tmp")
+                || name.ends_with(".json")
+                || name.ends_with(".json.tmp")
+                || name.ends_with(".jsonl")
+                || name.ends_with(".jsonl.tmp"))
         {
             fs::remove_file(&path)
                 .with_context(|| format!("remove previous {}", path.display()))?;
@@ -358,20 +363,14 @@ fn pending_to_document(
             .unwrap_or_else(|_| secs.saturating_mul(1000));
 
         let mut source = serde_json::Map::new();
-        if !msg.date_ms.is_empty() {
-            source.insert("date_ms".into(), serde_json::json!(msg.date_ms));
-        }
         if !msg.contact_name.is_empty() {
             source.insert("contact_name".into(), serde_json::json!(msg.contact_name));
         }
-        let xml_fields = serde_json::json!({
+        let fields = serde_json::json!({
             "source_kind": msg.source_kind.as_str(),
             "has_attachments": msg.has_attachments,
         });
-        source.insert(
-            "xml_fields_json".into(),
-            serde_json::json!(xml_fields.to_string()),
-        );
+        source.insert("fields".into(), fields);
 
         messages.push(IrMessage {
             guid,
@@ -381,7 +380,7 @@ fn pending_to_document(
             } else {
                 IrDirection::Incoming
             },
-            service: "SMS".into(),
+            service: "sms".into(),
             message_kind: "sms".into(),
             sender_handle: if msg.is_from_me || msg.sender_handle.is_empty() {
                 None
@@ -412,7 +411,7 @@ fn pending_to_document(
         },
         conversation: ConversationMeta {
             chat_identifier: chat_id.to_string(),
-            conversation_type: "individual".into(),
+            conversation_type: IrConversationType::Individual,
             group_title: None,
             participants,
             filename_suffix: None,

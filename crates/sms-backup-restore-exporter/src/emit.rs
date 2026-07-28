@@ -7,8 +7,8 @@ use message_contacts::ContactsBook;
 use message_csv::{format_local_ts, json_cell, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    write_format, ConversationDocument, ConversationMeta, ExportMeta, IrAttachment, IrDirection,
-    IrMessage, IrParticipant, SCHEMA_VERSION,
+    parse_json_value, write_format, ConversationDocument, ConversationMeta, ExportMeta,
+    IrAttachment, IrConversationType, IrDirection, IrMessage, IrParticipant, SCHEMA_VERSION,
 };
 use message_mail::clean_previous_mail_output;
 use message_phone::{to_e164, OwnerPhoneSet};
@@ -292,9 +292,6 @@ fn pending_to_document(
             .collect();
 
         let mut source = serde_json::Map::new();
-        if !msg.date_ms.is_empty() {
-            source.insert("date_ms".into(), serde_json::json!(msg.date_ms));
-        }
         if !msg.contact_name.is_empty() {
             source.insert("contact_name".into(), serde_json::json!(msg.contact_name));
         }
@@ -302,10 +299,7 @@ fn pending_to_document(
             source.insert("android_type".into(), serde_json::json!(msg.android_type));
         }
         if !msg.xml_fields_json.is_empty() {
-            source.insert(
-                "xml_fields_json".into(),
-                serde_json::json!(msg.xml_fields_json),
-            );
+            source.insert("fields".into(), parse_json_value(&msg.xml_fields_json));
         }
 
         messages.push(IrMessage {
@@ -316,7 +310,7 @@ fn pending_to_document(
             } else {
                 IrDirection::Incoming
             },
-            service: "SMS".into(),
+            service: "sms".into(),
             message_kind: msg.message_kind.to_string(),
             sender_handle,
             sender_display_name,
@@ -347,7 +341,7 @@ fn pending_to_document(
         },
         conversation: ConversationMeta {
             chat_identifier: chat_id.to_string(),
-            conversation_type: conv_type.to_string(),
+            conversation_type: IrConversationType::parse(conv_type),
             group_title: convo.group_title.clone(),
             participants,
             filename_suffix: None,
@@ -361,7 +355,12 @@ fn clean_previous_output(output_dir: &Path) -> Result<()> {
         let path = entry?.path();
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
         if path.is_file()
-            && (name.ends_with(".csv") || name.ends_with(".csv.tmp") || name.ends_with(".json"))
+            && (name.ends_with(".csv")
+                || name.ends_with(".csv.tmp")
+                || name.ends_with(".json")
+                || name.ends_with(".json.tmp")
+                || name.ends_with(".jsonl")
+                || name.ends_with(".jsonl.tmp"))
         {
             let _ = fs::remove_file(&path);
         }

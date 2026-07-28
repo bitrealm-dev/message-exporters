@@ -214,3 +214,64 @@ fn convert_export_eml_writes_conversation_folder() {
     assert!(text.contains("X-ME-Export-Source: sms-backup-restore"));
     assert!(text.contains("X-ME-Guid:"));
 }
+
+#[test]
+fn convert_export_json_and_jsonl_use_nested_v2() {
+    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample.xml");
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let contacts = empty_contacts(&tmp);
+
+    convert_export(
+        &fixture,
+        tmp.path(),
+        &["+15555550100".into()],
+        &contacts,
+        &DateRange::default(),
+        true,
+        OutputFormat::Json,
+        None,
+    )
+    .expect("json export");
+
+    let json_path = fs::read_dir(tmp.path())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .find(|p| p.extension().and_then(|x| x.to_str()) == Some("json"))
+        .expect("expected .json");
+    let doc: serde_json::Value =
+        serde_json::from_slice(&fs::read(&json_path).unwrap()).unwrap();
+    assert_eq!(doc["schema_version"], 2);
+    let msg = &doc["messages"][0];
+    assert!(msg["source"]["fields"].is_object());
+    assert!(msg["source"].get("date_ms").is_none());
+    assert!(msg["source"].get("xml_fields_json").is_none());
+
+    let out_jsonl = tmp.path().join("jsonl-out");
+    fs::create_dir_all(&out_jsonl).unwrap();
+    convert_export(
+        &fixture,
+        &out_jsonl,
+        &["+15555550100".into()],
+        &contacts,
+        &DateRange::default(),
+        true,
+        OutputFormat::Jsonl,
+        None,
+    )
+    .expect("jsonl export");
+
+    let jsonl_path = fs::read_dir(&out_jsonl)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .find(|p| p.extension().and_then(|x| x.to_str()) == Some("jsonl"))
+        .expect("expected .jsonl");
+    let body = fs::read_to_string(&jsonl_path).unwrap();
+    let mut lines = body.lines();
+    let header: serde_json::Value = serde_json::from_str(lines.next().unwrap()).unwrap();
+    assert_eq!(header["schema_version"], 2);
+    assert!(header.get("messages").is_none());
+    let msg_line: serde_json::Value = serde_json::from_str(lines.next().unwrap()).unwrap();
+    assert!(msg_line["source"]["fields"].is_object());
+}

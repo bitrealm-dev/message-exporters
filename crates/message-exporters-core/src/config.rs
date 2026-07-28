@@ -24,6 +24,8 @@ pub enum OutputFormat {
     Mbox,
     /// Per-conversation canonical IR JSON (see docs/MESSAGE_IR.md).
     Json,
+    /// Per-conversation IR as JSON Lines (header + one message per line).
+    Jsonl,
 }
 
 impl fmt::Display for OutputFormat {
@@ -33,6 +35,7 @@ impl fmt::Display for OutputFormat {
             Self::Eml => "EML archive (mail folders)",
             Self::Mbox => "MBOX (per conversation)",
             Self::Json => "JSON (canonical IR)",
+            Self::Jsonl => "JSONL (canonical IR lines)",
         })
     }
 }
@@ -44,6 +47,7 @@ impl OutputFormat {
             Self::Eml => "eml",
             Self::Mbox => "mbox",
             Self::Json => "json",
+            Self::Jsonl => "jsonl",
         }
     }
 
@@ -53,8 +57,9 @@ impl OutputFormat {
             "eml" => Ok(Self::Eml),
             "mbox" => Ok(Self::Mbox),
             "json" => Ok(Self::Json),
+            "jsonl" | "ndjson" => Ok(Self::Jsonl),
             other => Err(format!(
-                "unknown output format '{other}' (expected csv, eml, mbox, or json)"
+                "unknown output format '{other}' (expected csv, eml, mbox, json, or jsonl)"
             )),
         }
     }
@@ -69,15 +74,16 @@ impl OutputFormat {
 pub const OUTPUT_FORMATS: [OutputFormat; 2] = [OutputFormat::Csv, OutputFormat::Eml];
 
 /// Values shown in the GUI for full packaging choices.
-pub const OUTPUT_FORMATS_MAIL: [OutputFormat; 4] = [
+pub const OUTPUT_FORMATS_MAIL: [OutputFormat; 5] = [
     OutputFormat::Csv,
     OutputFormat::Eml,
     OutputFormat::Mbox,
     OutputFormat::Json,
+    OutputFormat::Jsonl,
 ];
 
 /// Alias kept for iPhone backup UI (same as [`OUTPUT_FORMATS_MAIL`]).
-pub const OUTPUT_FORMATS_IMESSAGE: [OutputFormat; 4] = OUTPUT_FORMATS_MAIL;
+pub const OUTPUT_FORMATS_IMESSAGE: [OutputFormat; 5] = OUTPUT_FORMATS_MAIL;
 
 /// Shared export inputs. Source-specific fields are in [`Self::source`].
 #[derive(Debug, Clone)]

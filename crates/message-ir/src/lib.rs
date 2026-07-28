@@ -1,8 +1,11 @@
 //! Canonical conversation intermediate representation (IR).
 //!
 //! Source exporters parse vendor formats into [`ConversationDocument`], then
-//! project with [`write_format`] to CSV, EML, MBOX, or JSON. See
+//! project with [`write_format`] to CSV, EML, MBOX, JSON, or JSONL. See
 //! [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
+//!
+//! Schema version 2 nests vendor/iMessage bags as real JSON values (not
+//! stringified `*_json` cells). CSV/EML projectors stringify at the boundary.
 
 use anyhow::{bail, Context, Result};
 use message_csv::{
@@ -14,12 +17,12 @@ use message_mail::{
     Participant, SmsMailFields,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// Shared CSV columns written by the IR CSV projector (SBR-compatible).
 pub const CSV_HEADERS: &[&str] = &[
@@ -105,14 +108,40 @@ pub struct ExportMeta {
     pub owner_display_name: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum IrConversationType {
+    Individual,
+    Group,
+}
+
+impl IrConversationType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Individual => "individual",
+            Self::Group => "group",
+        }
+    }
+
+    /// Normalize common labels; unknown values become [`Self::Individual`].
+    pub fn parse(s: &str) -> Self {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "group" => Self::Group,
+            _ => Self::Individual,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationMeta {
     pub chat_identifier: String,
-    pub conversation_type: String,
+    pub conversation_type: IrConversationType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_title: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub participants: Vec<IrParticipant>,
+    /// Packaging stem suffix (e.g. `__whatsapp`). Serialized when present so
+    /// the JSON body matches the on-disk filename stem.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filename_suffix: Option<String>,
 }
@@ -140,10 +169,11 @@ pub struct IrMessage {
     pub text: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<IrAttachment>,
-    /// iMessage extensions (parts, tapbacks, …). Omitted for SMS.
+    /// iMessage extensions. Nested keys: `parts`, `edits`, `tapbacks`, `app`
+    /// (arrays/objects), plus scalar flags. Omitted for SMS.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imessage: Option<Value>,
-    /// Vendor-specific bag (android_type, xml_fields, contact_name, date_ms, …).
+    /// Vendor leftovers: `contact_name`, `android_type`, `fields` (object).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<Value>,
 }
@@ -194,7 +224,7 @@ impl ConversationDocument {
             .map(|p| p.handle.clone())
             .collect();
         let csv = conversation_filename(
-            &self.conversation.conversation_type,
+            self.conversation.conversation_type.as_str(),
             &self.conversation.chat_identifier,
             self.conversation.group_title.as_deref(),
             &handles,
@@ -215,6 +245,7 @@ pub fn write_format(
     match format {
         OutputFormat::Csv => write_conversation_csv(output_dir, doc),
         OutputFormat::Json => write_conversation_json(output_dir, doc),
+        OutputFormat::Jsonl => write_conversation_jsonl(output_dir, doc),
         OutputFormat::Eml => write_conversation_mail(output_dir, doc, MailPackage::EmlFolders),
         OutputFormat::Mbox => write_conversation_mail(output_dir, doc, MailPackage::Mbox),
     }
@@ -240,6 +271,42 @@ pub fn write_conversation_json(output_dir: &Path, doc: &ConversationDocument) ->
     Ok(path)
 }
 
+/// JSONL header line (schema + export + conversation; no messages).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct JsonlHeader {
+    schema_version: u32,
+    export: ExportMeta,
+    conversation: ConversationMeta,
+}
+
+/// Per-conversation JSON Lines (`<stem>.jsonl`): header object, then one
+/// [`IrMessage`] per line.
+pub fn write_conversation_jsonl(output_dir: &Path, doc: &ConversationDocument) -> Result<PathBuf> {
+    fs::create_dir_all(output_dir)
+        .with_context(|| format!("create {}", output_dir.display()))?;
+    let path = output_dir.join(format!("{}.jsonl", doc.filename_stem()));
+    let mut tmp = path.clone();
+    tmp.set_extension("jsonl.tmp");
+    {
+        let mut file =
+            File::create(&tmp).with_context(|| format!("create {}", tmp.display()))?;
+        let header = JsonlHeader {
+            schema_version: doc.schema_version,
+            export: doc.export.clone(),
+            conversation: doc.conversation.clone(),
+        };
+        serde_json::to_writer(&mut file, &header).context("serialize JSONL header")?;
+        file.write_all(b"\n")?;
+        for msg in &doc.messages {
+            serde_json::to_writer(&mut file, msg).context("serialize JSONL message")?;
+            file.write_all(b"\n")?;
+        }
+    }
+    fs::rename(&tmp, &path)
+        .with_context(|| format!("rename {} → {}", tmp.display(), path.display()))?;
+    Ok(path)
+}
+
 /// Per-conversation CSV. Dispatches to the iMessage-shaped projector for
 /// `export.source == "imessage"` (fork-compatible columns); otherwise the
 /// shared SBR-style core + `source` columns.
@@ -255,7 +322,7 @@ fn write_conversation_csv_core(output_dir: &Path, doc: &ConversationDocument) ->
     fs::create_dir_all(output_dir)
         .with_context(|| format!("create {}", output_dir.display()))?;
     let filename = conversation_filename(
-        &doc.conversation.conversation_type,
+        doc.conversation.conversation_type.as_str(),
         &doc.conversation.chat_identifier,
         doc.conversation.group_title.as_deref(),
         &doc.conversation
@@ -296,17 +363,10 @@ fn write_conversation_csv_core(output_dir: &Path, doc: &ConversationDocument) ->
             .collect();
         let attachments_json = json_cell(&attachment_cells);
         let source = msg.source.as_ref();
-        let date_ms = source_string(source, "date_ms")
-            .unwrap_or_else(|| msg.timestamp_unix_ms.to_string());
+        let date_ms = msg.timestamp_unix_ms.to_string();
         let contact_name = source_string(source, "contact_name").unwrap_or_default();
         let android_type = source_string(source, "android_type").unwrap_or_default();
-        let xml_fields_json = source_string(source, "xml_fields_json")
-            .or_else(|| {
-                source
-                    .and_then(|v| v.get("xml_fields"))
-                    .map(|v| serde_json::to_string(v).unwrap_or_default())
-            })
-            .unwrap_or_default();
+        let xml_fields_json = source_fields_for_csv(source);
 
         wtr.write_record([
             doc.conversation.chat_identifier.as_str(),
@@ -353,6 +413,21 @@ fn source_string(source: Option<&Value>, key: &str) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+/// Serialize `source.fields` (v2) for the CSV `xml_fields_json` cell.
+/// Also accepts legacy `xml_fields` / string `xml_fields_json` during migration.
+fn source_fields_for_csv(source: Option<&Value>) -> String {
+    let Some(source) = source else {
+        return String::new();
+    };
+    if let Some(fields) = source.get("fields") {
+        return serde_json::to_string(fields).unwrap_or_default();
+    }
+    if let Some(fields) = source.get("xml_fields") {
+        return serde_json::to_string(fields).unwrap_or_default();
+    }
+    source_string(Some(source), "xml_fields_json").unwrap_or_default()
+}
+
 fn imessage_str(imessage: Option<&Value>, key: &str) -> Option<String> {
     imessage
         .and_then(|v| v.get(key))
@@ -375,6 +450,31 @@ fn imessage_u32(imessage: Option<&Value>, key: &str) -> Option<u32> {
         .and_then(|n| u32::try_from(n).ok())
 }
 
+/// Stringify a nested iMessage bag value (v2 `parts` / `edits` / …) for CSV/mail.
+/// Falls back to legacy string keys (`parts_json`, …).
+fn imessage_json_cell(imessage: Option<&Value>, nested_key: &str, legacy_key: &str) -> String {
+    if let Some(v) = imessage.and_then(|b| b.get(nested_key)) {
+        return serde_json::to_string(v).unwrap_or_else(|_| "null".into());
+    }
+    imessage_str(imessage, legacy_key).unwrap_or_else(|| "null".into())
+}
+
+/// Prefer nested object/array; else parse a legacy JSON string; else None.
+fn imessage_nested_as_string(imessage: &Value, nested_key: &str, legacy_key: &str) -> Option<String> {
+    if let Some(v) = imessage.get(nested_key) {
+        if v.is_null() {
+            return None;
+        }
+        return Some(serde_json::to_string(v).unwrap_or_default()).filter(|s| !s.is_empty());
+    }
+    imessage_str(Some(imessage), legacy_key)
+}
+
+/// Parse a JSON string into a [`Value`], or return the string as a JSON string value.
+pub fn parse_json_value(s: &str) -> Value {
+    serde_json::from_str(s).unwrap_or_else(|_| json!(s))
+}
+
 #[derive(Serialize)]
 struct ImessageParticipantCell {
     handle: String,
@@ -390,7 +490,7 @@ fn write_conversation_csv_imessage(output_dir: &Path, doc: &ConversationDocument
     fs::create_dir_all(output_dir)
         .with_context(|| format!("create {}", output_dir.display()))?;
     let filename = conversation_filename(
-        &doc.conversation.conversation_type,
+        doc.conversation.conversation_type.as_str(),
         &doc.conversation.chat_identifier,
         doc.conversation.group_title.as_deref(),
         &doc.conversation
@@ -449,11 +549,10 @@ fn write_conversation_csv_imessage(output_dir: &Path, doc: &ConversationDocument
             String::new()
         };
         let num_replies = imessage_u32(imessage, "num_replies").unwrap_or(0).to_string();
-        let parts_json = imessage_str(imessage, "parts_json").unwrap_or_else(|| "null".into());
-        let edits_json = imessage_str(imessage, "edits_json").unwrap_or_else(|| "null".into());
-        let tapbacks_json =
-            imessage_str(imessage, "tapbacks_json").unwrap_or_else(|| "null".into());
-        let app_json = imessage_str(imessage, "app_json").unwrap_or_else(|| "null".into());
+        let parts_json = imessage_json_cell(imessage, "parts", "parts_json");
+        let edits_json = imessage_json_cell(imessage, "edits", "edits_json");
+        let tapbacks_json = imessage_json_cell(imessage, "tapbacks", "tapbacks_json");
+        let app_json = imessage_json_cell(imessage, "app", "app_json");
 
         let attachment_cells: Vec<AttachmentCell> = msg
             .attachments
@@ -573,19 +672,14 @@ pub fn document_to_mail_messages(
         }
 
         let android_type = source_string(msg.source.as_ref(), "android_type");
-        let source_fields_json = source_string(msg.source.as_ref(), "xml_fields_json").or_else(
-            || {
-                msg.source
-                    .as_ref()
-                    .and_then(|v| v.get("xml_fields"))
-                    .map(|v| serde_json::to_string(v).unwrap_or_default())
-                    .filter(|s| !s.is_empty())
-            },
-        );
+        let source_fields_json = {
+            let s = source_fields_for_csv(msg.source.as_ref());
+            (!s.is_empty()).then_some(s)
+        };
 
         let mut mail = MailMessage::sms(SmsMailFields {
             chat_identifier: doc.conversation.chat_identifier.clone(),
-            conversation_type: doc.conversation.conversation_type.clone(),
+            conversation_type: doc.conversation.conversation_type.as_str().to_string(),
             group_title: doc.conversation.group_title.clone(),
             participants: participants.clone(),
             guid: msg.guid.clone(),
@@ -636,12 +730,12 @@ pub fn apply_imessage_fields(mail: &mut MailMessage, imessage: &Value) {
     mail.shared_location = imessage_str(bag, "shared_location");
     mail.announcement = imessage_str(bag, "announcement");
     mail.read_receipt_rfc3339 = imessage_str(bag, "read_receipt_rfc3339");
-    mail.parts_json = imessage_str(bag, "parts_json");
-    mail.edits_json = imessage_str(bag, "edits_json");
-    mail.app_json = imessage_str(bag, "app_json");
+    mail.parts_json = imessage_nested_as_string(imessage, "parts", "parts_json");
+    mail.edits_json = imessage_nested_as_string(imessage, "edits", "edits_json");
+    mail.app_json = imessage_nested_as_string(imessage, "app", "app_json");
     mail.balloon_bundle_id = imessage_str(bag, "balloon_bundle_id");
     mail.balloon_kind = imessage_str(bag, "balloon_kind");
-    mail.tapbacks_json = imessage_str(bag, "tapbacks_json");
+    mail.tapbacks_json = imessage_nested_as_string(imessage, "tapbacks", "tapbacks_json");
     mail.associated_guid = imessage_str(bag, "associated_guid");
     mail.associated_part = imessage_u32(bag, "associated_part");
     mail.tapback_kind = imessage_str(bag, "tapback_kind");
@@ -669,7 +763,7 @@ mod tests {
             },
             conversation: ConversationMeta {
                 chat_identifier: "+15555550101".into(),
-                conversation_type: "individual".into(),
+                conversation_type: IrConversationType::Individual,
                 group_title: None,
                 participants: vec![IrParticipant {
                     handle: "+15555550101".into(),
@@ -681,7 +775,7 @@ mod tests {
                 guid: "aabbccddeeff00112233445566778899".into(),
                 timestamp_unix_ms: 1_400_773_261_000,
                 direction: IrDirection::Incoming,
-                service: "SMS".into(),
+                service: "sms".into(),
                 message_kind: "sms".into(),
                 sender_handle: Some("+15555550101".into()),
                 sender_display_name: Some("Sam".into()),
@@ -690,17 +784,16 @@ mod tests {
                 attachments: vec![],
                 imessage: None,
                 source: Some(serde_json::json!({
-                    "date_ms": "1400773261000",
                     "contact_name": "Sam",
                     "android_type": "1",
-                    "xml_fields_json": "{\"address\":\"+15555550101\"}"
+                    "fields": { "address": "+15555550101" }
                 })),
             }],
         }
     }
 
     #[test]
-    fn writes_json_csv_and_eml() {
+    fn writes_json_csv_jsonl_and_eml() {
         let tmp = tempfile::tempdir().unwrap();
         let doc = sample_doc();
 
@@ -708,14 +801,40 @@ mod tests {
         assert!(json_path.ends_with("+15555550101.json"));
         let parsed: ConversationDocument =
             serde_json::from_slice(&fs::read(&json_path).unwrap()).unwrap();
+        assert_eq!(parsed.schema_version, 2);
         assert_eq!(parsed.messages[0].text, "hello ir");
         assert!(parsed.messages[0].attachments.is_empty());
+        assert!(parsed.messages[0]
+            .source
+            .as_ref()
+            .unwrap()
+            .get("fields")
+            .unwrap()
+            .is_object());
+        assert!(parsed.messages[0]
+            .source
+            .as_ref()
+            .unwrap()
+            .get("date_ms")
+            .is_none());
+
+        let jsonl_path = write_format(tmp.path(), OutputFormat::Jsonl, &doc).unwrap();
+        assert!(jsonl_path.ends_with("+15555550101.jsonl"));
+        let jsonl = fs::read_to_string(&jsonl_path).unwrap();
+        let mut lines = jsonl.lines();
+        let header: Value = serde_json::from_str(lines.next().unwrap()).unwrap();
+        assert_eq!(header["schema_version"], 2);
+        assert!(header.get("messages").is_none());
+        let msg_line: Value = serde_json::from_str(lines.next().unwrap()).unwrap();
+        assert_eq!(msg_line["text"], "hello ir");
+        assert!(msg_line["source"]["fields"].is_object());
 
         let csv_path = write_format(tmp.path(), OutputFormat::Csv, &doc).unwrap();
         let csv = fs::read_to_string(&csv_path).unwrap();
         assert!(csv.contains("hello ir"));
         assert!(csv.contains("sms-backup-restore"));
         assert!(csv.contains("xml_fields_json"));
+        assert!(csv.contains("+15555550101"));
 
         let _ = clean_previous_mail_output(tmp.path());
         let eml_dir = write_format(tmp.path(), OutputFormat::Eml, &doc).unwrap();
@@ -730,11 +849,11 @@ mod tests {
                 tool: "imessage-ir-exporter".into(),
                 tool_version: "0.1.0".into(),
                 owner_handle: Some("+15555550100".into()),
-                owner_display_name: None,
+                owner_display_name: Some("Me".into()),
             },
             conversation: ConversationMeta {
                 chat_identifier: "+15555550101".into(),
-                conversation_type: "individual".into(),
+                conversation_type: IrConversationType::Individual,
                 group_title: None,
                 participants: vec![IrParticipant {
                     handle: "+15555550101".into(),
@@ -747,7 +866,7 @@ mod tests {
                     guid: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE".into(),
                     timestamp_unix_ms: 1_400_773_261_000,
                     direction: IrDirection::Incoming,
-                    service: "iMessage".into(),
+                    service: "imessage".into(),
                     message_kind: "imessage".into(),
                     sender_handle: Some("+15555550101".into()),
                     sender_display_name: Some("Sam".into()),
@@ -761,8 +880,8 @@ mod tests {
                         "num_replies": 2,
                         "is_deleted": false,
                         "send_effect": "Sent with Balloons",
-                        "tapbacks_json": "[{\"part_index\":0,\"kind\":\"loved\"}]",
-                        "parts_json": "[{\"index\":0,\"kind\":\"run\",\"text\":\"hello imessage\"}]",
+                        "tapbacks": [{"part_index": 0, "kind": "loved"}],
+                        "parts": [{"index": 0, "kind": "run", "text": "hello imessage"}],
                         "owner_display_name": "+15555550100",
                     })),
                     source: None,
@@ -771,7 +890,7 @@ mod tests {
                     guid: "TAPBACK-GUID-0001".into(),
                     timestamp_unix_ms: 1_400_773_262_000,
                     direction: IrDirection::Outgoing,
-                    service: "iMessage".into(),
+                    service: "imessage".into(),
                     message_kind: "tapback".into(),
                     sender_handle: None,
                     sender_display_name: None,
@@ -812,8 +931,8 @@ mod tests {
         assert_eq!(tapback.associated_part, Some(0));
         assert_eq!(tapback.tapback_kind.as_deref(), Some("loved"));
         assert_eq!(tapback.tapback_action.as_deref(), Some("add"));
-        // Owner display name falls back to `export.owner_display_name` (unset here).
-        assert!(tapback.owner_display_name.is_none());
+        // Owner display name falls back to `export.owner_display_name`.
+        assert_eq!(tapback.owner_display_name.as_deref(), Some("Me"));
     }
 
     #[test]

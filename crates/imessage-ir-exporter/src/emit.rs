@@ -1,11 +1,10 @@
-//! Stream messages → [`MailMessage`] → canonical IR → CSV / EML / MBOX / JSON.
+//! Stream messages → [`MailMessage`] → canonical IR → CSV / EML / MBOX / JSON / JSONL.
 //!
 //! Every message is built once via [`build_mail_message`] (unchanged Apple →
-//! `MailMessage` mapping), converted to [`IrMessage`] (core fields + a
-//! serialized `imessage` extension bag), and accumulated per conversation.
+//! `MailMessage` mapping), converted to [`IrMessage`] (core fields + a nested
+//! `imessage` extension bag), and accumulated per conversation.
 //! After the DB stream ends, each conversation is written once via
-//! [`message_ir::write_format`], so CSV / JSON / EML / MBOX all share one
-//! code path (see [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md)).
+//! [`message_ir::write_format`] (see [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md)).
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -30,8 +29,8 @@ use imessage_database::{
 };
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    write_format, ConversationDocument, ConversationMeta, ExportMeta, IrAttachment, IrDirection,
-    IrMessage, IrParticipant, SCHEMA_VERSION,
+    parse_json_value, write_format, ConversationDocument, ConversationMeta, ExportMeta,
+    IrAttachment, IrConversationType, IrDirection, IrMessage, IrParticipant, SCHEMA_VERSION,
 };
 use message_mail::{Direction as MailDirection, MailAttachment, MailMessage, Participant};
 use serde_json::{json, Value};
@@ -54,17 +53,18 @@ const EXPORT_SOURCE: &str = "imessage";
 const EXPORT_TOOL: &str = "imessage-ir-exporter";
 
 /// Messages accumulated for one Apple `chat_identifier` before projection.
-#[derive(Default)]
 struct PendingConversation {
-    conversation_type: String,
+    conversation_type: IrConversationType,
     group_title: Option<String>,
     participants: Vec<Participant>,
     /// First non-empty `destination_caller_id` seen (used for `From`/`To` mapping).
     owner_handle: String,
+    /// First non-empty owner display name (caller-id / Me).
+    owner_display_name: Option<String>,
     messages: Vec<IrMessage>,
 }
 
-/// Stream chat.db into per-conversation CSV, EML, MBOX, or JSON.
+/// Stream chat.db into per-conversation CSV, EML, MBOX, JSON, or JSONL.
 pub fn run_export(session: &MailSession) -> Result<(), RuntimeError> {
     let format = session.options.output_format;
     eprintln!(
@@ -74,8 +74,10 @@ pub fn run_export(session: &MailSession) -> Result<(), RuntimeError> {
     );
 
     let attachments_dir = session.options.export_path.join("attachments");
-    if matches!(format, OutputFormat::Csv | OutputFormat::Json)
-        && session.options.attachment_embed == AttachmentEmbed::Embed
+    if matches!(
+        format,
+        OutputFormat::Csv | OutputFormat::Json | OutputFormat::Jsonl
+    ) && session.options.attachment_embed == AttachmentEmbed::Embed
     {
         fs::create_dir_all(&attachments_dir)?;
     }
@@ -147,7 +149,9 @@ pub fn run_export(session: &MailSession) -> Result<(), RuntimeError> {
                 tool: EXPORT_TOOL.into(),
                 tool_version: env!("CARGO_PKG_VERSION").into(),
                 owner_handle: (!convo.owner_handle.is_empty()).then(|| convo.owner_handle.clone()),
-                owner_display_name: None,
+                owner_display_name: convo
+                    .owner_display_name
+                    .or_else(|| session.options.use_caller_id.then(|| ME.to_string())),
             },
             conversation: ConversationMeta {
                 chat_identifier,
@@ -203,14 +207,18 @@ fn collect_one(
     let convo = conversations
         .entry(chat_identifier)
         .or_insert_with(|| PendingConversation {
-            conversation_type: mail.conversation_type.clone(),
+            conversation_type: IrConversationType::parse(&mail.conversation_type),
             group_title: mail.group_title.clone(),
             participants: mail.participants.clone(),
             owner_handle: String::new(),
+            owner_display_name: None,
             messages: Vec::new(),
         });
     if convo.owner_handle.is_empty() && !mail.owner_handle.is_empty() {
         convo.owner_handle = mail.owner_handle.clone();
+    }
+    if convo.owner_display_name.is_none() {
+        convo.owner_display_name = mail.owner_display_name.clone();
     }
     convo.messages.push(ir_message);
     Ok(())
@@ -218,17 +226,19 @@ fn collect_one(
 
 /// Convert a built [`MailMessage`] into [`IrMessage`] (core fields + `imessage` bag).
 ///
-/// For [`OutputFormat::Csv`] / [`OutputFormat::Json`], non-empty attachment
-/// bytes are persisted under `attachments/` and referenced by `path`. For
-/// [`OutputFormat::Eml`] / [`OutputFormat::Mbox`], bytes stay in memory for
-/// [`message_ir::document_to_mail_messages`] to embed directly.
+/// For CSV / JSON / JSONL, non-empty attachment bytes are persisted under
+/// `attachments/` and referenced by `path`. For EML / MBOX, bytes stay in
+/// memory for [`message_ir::document_to_mail_messages`] to embed directly.
 fn mail_message_to_ir(
     mail: &MailMessage,
     attachments_dir: &Path,
     format: OutputFormat,
     embed: AttachmentEmbed,
 ) -> Result<IrMessage, RuntimeError> {
-    let persist_to_disk = matches!(format, OutputFormat::Csv | OutputFormat::Json);
+    let persist_to_disk = matches!(
+        format,
+        OutputFormat::Csv | OutputFormat::Json | OutputFormat::Jsonl
+    );
 
     let mut attachments = Vec::with_capacity(mail.attachments.len());
     for attachment in &mail.attachments {
@@ -268,7 +278,7 @@ fn mail_message_to_ir(
             MailDirection::Incoming => IrDirection::Incoming,
             MailDirection::Outgoing => IrDirection::Outgoing,
         },
-        service: mail.service.clone(),
+        service: normalize_service(&mail.service),
         message_kind: mail.message_kind.clone(),
         sender_handle: mail.sender_handle.clone(),
         sender_display_name: mail.sender_display_name.clone(),
@@ -280,8 +290,19 @@ fn mail_message_to_ir(
     })
 }
 
+fn normalize_service(service: &str) -> String {
+    let lower = service.trim().to_ascii_lowercase();
+    if lower == "imessage" || lower == "sms" || lower == "rcs" {
+        lower
+    } else if service.is_empty() {
+        String::new()
+    } else {
+        lower
+    }
+}
+
 /// Serialize `MailMessage`'s iMessage extension fields into the IR `imessage`
-/// bag (`None` when the message carries no iMessage-only data).
+/// bag with nested `parts` / `edits` / `tapbacks` / `app` values.
 fn imessage_bag(mail: &MailMessage) -> Option<Value> {
     let mut bag = serde_json::Map::new();
     if mail.is_reply {
@@ -316,13 +337,13 @@ fn imessage_bag(mail: &MailMessage) -> Option<Value> {
         bag.insert("read_receipt_rfc3339".into(), json!(v));
     }
     if let Some(v) = mail.parts_json.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("parts_json".into(), json!(v));
+        bag.insert("parts".into(), parse_json_value(v));
     }
     if let Some(v) = mail.edits_json.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("edits_json".into(), json!(v));
+        bag.insert("edits".into(), parse_json_value(v));
     }
     if let Some(v) = mail.app_json.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("app_json".into(), json!(v));
+        bag.insert("app".into(), parse_json_value(v));
     }
     if let Some(v) = mail.balloon_bundle_id.as_deref().filter(|s| !s.is_empty()) {
         bag.insert("balloon_bundle_id".into(), json!(v));
@@ -331,7 +352,7 @@ fn imessage_bag(mail: &MailMessage) -> Option<Value> {
         bag.insert("balloon_kind".into(), json!(v));
     }
     if let Some(v) = mail.tapbacks_json.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("tapbacks_json".into(), json!(v));
+        bag.insert("tapbacks".into(), parse_json_value(v));
     }
     if let Some(v) = mail.associated_guid.as_deref().filter(|s| !s.is_empty()) {
         bag.insert("associated_guid".into(), json!(v));

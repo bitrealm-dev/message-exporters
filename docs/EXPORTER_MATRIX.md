@@ -62,4 +62,4 @@ All converters write **one CSV file per conversation**. Across the board:
 | WhatsApp | [`crates/whatsapp-exporter/README.md`](../crates/whatsapp-exporter/README.md) |
 | iMessage | [`crates/imessage-ir-exporter/README.md`](../crates/imessage-ir-exporter/README.md) |
 
-**Canonical IR:** [`MESSAGE_IR.md`](MESSAGE_IR.md) (`message-ir`). All exporters (including iMessage) parse to `ConversationDocument` then project CSV/EML/MBOX/JSON via `message_ir::write_format`. Mail packaging: [`MAIL_ARCHIVE.md`](MAIL_ARCHIVE.md). CSV remains the default. Convert/compress/obfuscate stay CSV-only.
+**Canonical IR:** [`MESSAGE_IR.md`](MESSAGE_IR.md) (`message-ir`, schema v2). All exporters (including iMessage) parse to `ConversationDocument` then project CSV/EML/MBOX/JSON/JSONL via `message_ir::write_format`. Mail packaging: [`MAIL_ARCHIVE.md`](MAIL_ARCHIVE.md). CSV remains the default. Convert/compress/obfuscate stay CSV-only.
