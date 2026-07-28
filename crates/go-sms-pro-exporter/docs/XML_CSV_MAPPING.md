@@ -13,7 +13,7 @@ Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md)
 
 Source XML/PDU → `ConversationDocument` → [`message_ir::FormatSink`](../../message-ir/src/format_sink.rs) (`--format json|jsonl|csv|eml|mbox|xml`; default `json`).
 
-With `--format csv`: one file per conversation plus `<stem>.meta.json`. PDU media under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). `--format xml` writes a single SyncTech `smses.xml`.
+With `--format csv`: one file per conversation. PDU media under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). `--format xml` writes a single SyncTech `smses.xml`.
 
 Diagnostic skip lists (`skipped_invalid_address.csv`, `skipped_empty_pdu.csv`, `skipped_no_party.csv`) are **not** conversation CSVs; they use their own small headers (see [Skip counters](#skip-counters-cli-summary)).
 

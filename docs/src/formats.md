@@ -19,7 +19,7 @@ Attachment handling depends on the Attachments control (Copy / Convert / Compres
 
 ### CSV
 
-Writes one `.csv` file per conversation plus a matching `.meta.json` header sidecar.
+Writes one `.csv` file per conversation.
 
 **Attachments:** sidecar `attachments/` folder; rows reference relative paths.
 
@@ -28,9 +28,7 @@ Writes one `.csv` file per conversation plus a matching `.meta.json` header side
 ```text
 output/
 ├── +15555550101.csv
-├── +15555550101.meta.json
 ├── group_+15555550101_+15555550102.csv
-├── group_+15555550101_+15555550102.meta.json
 └── attachments/
     └── IMG_0001.jpg
 ```

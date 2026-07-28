@@ -12,7 +12,11 @@ pub fn normalize_document_for_compare(doc: &mut ConversationDocument) {
         if let Some(source) = msg.source.take() {
             msg.source = source.into_option();
         }
-        if let Some(imessage) = msg.imessage.take() {
+        if let Some(mut imessage) = msg.imessage.take() {
+            // Match CSV packaging: a single text/run part equal to `text` is omitted.
+            if crate::parts_are_trivial_text_duplicate(&msg.text, imessage.parts.as_ref()) {
+                imessage.parts = None;
+            }
             msg.imessage = imessage.into_option();
         }
         for att in &mut msg.attachments {

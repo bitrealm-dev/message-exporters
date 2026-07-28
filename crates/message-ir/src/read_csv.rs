@@ -1,4 +1,4 @@
-//! Reverse projector: unified CSV (+ optional `.meta.json`) → [`ConversationDocument`].
+//! Reverse projector: unified CSV → [`ConversationDocument`].
 
 use crate::normalize::{imessage_from_parts, source_from_parts};
 use crate::{
@@ -11,7 +11,7 @@ use message_csv::AttachmentCell;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 
@@ -24,8 +24,7 @@ struct ParticipantCell {
 
 /// Read a conversation CSV written by [`crate::write_conversation_csv`].
 ///
-/// Prefers `<stem>.meta.json` for export/conversation header. When missing,
-/// reconstructs from the first data row.
+/// Conversation / export header is taken from the first data row.
 pub fn read_conversation_csv(path: &Path) -> Result<ConversationDocument> {
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
     let mut rdr = csv::ReaderBuilder::new()
@@ -49,7 +48,7 @@ pub fn read_conversation_csv(path: &Path) -> Result<ConversationDocument> {
         bail!("CSV has no data rows: {}", path.display());
     }
 
-    let header = load_meta_or_from_row(path, &headers, &rows[0])?;
+    let header = header_from_row(&headers, &rows[0])?;
     let packaging_stem_suffix = path
         .file_stem()
         .and_then(|n| n.to_str())
@@ -72,21 +71,6 @@ pub fn read_conversation_csv(path: &Path) -> Result<ConversationDocument> {
     };
     doc.finalize_stats();
     Ok(doc)
-}
-
-fn load_meta_or_from_row(
-    csv_path: &Path,
-    headers: &[String],
-    first: &csv::StringRecord,
-) -> Result<ConversationHeader> {
-    let meta_path = csv_path.with_extension("meta.json");
-    if meta_path.is_file() {
-        let raw = fs::read_to_string(&meta_path)
-            .with_context(|| format!("read {}", meta_path.display()))?;
-        return serde_json::from_str(&raw)
-            .with_context(|| format!("parse {}", meta_path.display()));
-    }
-    Ok(header_from_row(headers, first)?)
 }
 
 fn header_from_row(headers: &[String], row: &csv::StringRecord) -> Result<ConversationHeader> {

@@ -488,7 +488,7 @@ pub fn write_conversation_json(output_dir: &Path, doc: &ConversationDocument) ->
     Ok(path)
 }
 
-/// JSONL header / CSV `<stem>.meta.json` (schema + export + conversation; no messages).
+/// JSONL header line (schema + export + conversation; no messages).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationHeader {
     pub schema_version: u32,
@@ -540,6 +540,39 @@ fn value_cell(v: Option<&Value>) -> String {
         .map(|v| serde_json::to_string(v).unwrap_or_default())
         .filter(|s| !s.is_empty())
         .unwrap_or_default()
+}
+
+/// CSV `parts_json` cell: only from the iMessage bag, and omit a single plain
+/// text/run part that merely duplicates [`IrMessage::text`].
+fn parts_cell_for_csv(text: &str, parts: Option<&Value>) -> String {
+    if parts_are_trivial_text_duplicate(text, parts) {
+        return String::new();
+    }
+    value_cell(parts)
+}
+
+/// True when `parts` is a one-element array whose text equals `message_text`
+/// and kind is absent, `run`, or `text`.
+pub(crate) fn parts_are_trivial_text_duplicate(message_text: &str, parts: Option<&Value>) -> bool {
+    let Some(Value::Array(items)) = parts else {
+        return false;
+    };
+    if items.len() != 1 {
+        return false;
+    }
+    let Some(obj) = items[0].as_object() else {
+        return false;
+    };
+    let Some(part_text) = obj.get("text").and_then(|v| v.as_str()) else {
+        return false;
+    };
+    if part_text != message_text {
+        return false;
+    }
+    match obj.get("kind").and_then(|v| v.as_str()) {
+        None | Some("run") | Some("text") => true,
+        _ => false,
+    }
 }
 
 fn value_as_string(v: Option<&Value>) -> Option<String> {
@@ -648,7 +681,7 @@ pub fn write_conversation_csv(output_dir: &Path, doc: &ConversationDocument) -> 
             .and_then(|i| i.num_replies)
             .map(|n| n.to_string())
             .unwrap_or_default();
-        let parts_json = value_cell(im.and_then(|i| i.parts.as_ref()));
+        let parts_json = parts_cell_for_csv(msg.text.as_str(), im.and_then(|i| i.parts.as_ref()));
         let edits_json = value_cell(im.and_then(|i| i.edits.as_ref()));
         let tapbacks_json = value_cell(im.and_then(|i| i.tapbacks.as_ref()));
         let app_json = value_cell(im.and_then(|i| i.app.as_ref()));
@@ -717,22 +750,6 @@ pub fn write_conversation_csv(output_dir: &Path, doc: &ConversationDocument) -> 
     drop(wtr);
     fs::rename(&tmp_path, &path)
         .with_context(|| format!("rename {} → {}", tmp_path.display(), path.display()))?;
-
-    let meta_path = path.with_extension("meta.json");
-    let meta = ConversationHeader::from_document(doc);
-    let meta_json =
-        serde_json::to_vec_pretty(&meta).context("serialize conversation meta sidecar")?;
-    let mut meta_tmp = meta_path.clone();
-    meta_tmp.set_extension("meta.json.tmp");
-    {
-        let mut file =
-            File::create(&meta_tmp).with_context(|| format!("create {}", meta_tmp.display()))?;
-        file.write_all(&meta_json)
-            .with_context(|| format!("write {}", meta_tmp.display()))?;
-        file.write_all(b"\n")?;
-    }
-    fs::rename(&meta_tmp, &meta_path)
-        .with_context(|| format!("rename {} → {}", meta_tmp.display(), meta_path.display()))?;
 
     Ok(path)
 }
@@ -1174,11 +1191,70 @@ mod tests {
                     );
                 }
             }
-            assert!(csv_path.with_extension("meta.json").is_file());
+            assert!(!csv_path.with_extension("meta.json").is_file());
 
             let back = read_conversation_csv(&csv_path).unwrap();
             assert_docs_equal_after_normalize(doc, back);
         }
+    }
+
+    #[test]
+    fn csv_omits_trivial_parts_json_keeps_rich_parts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut doc = sample_imessage_doc();
+        // First message has a single run equal to text → omit parts_json.
+        // Add a second body with multi-part parts that must be kept.
+        doc.messages.push(IrMessage {
+            guid: "MULTI-PART-GUID".into(),
+            timestamp_unix_ms: 1_400_773_263_000,
+            direction: IrDirection::Incoming,
+            service: IrService::IMessage,
+            message_kind: IrMessageKind::IMessage,
+            sender_handle: Some("+15555550101".into()),
+            sender_display_name: Some("Sam".into()),
+            subject: None,
+            text: "hello".into(),
+            attachments: vec![],
+            imessage: Some(IrImessage {
+                parts: Some(json!([
+                    {"index": 0, "kind": "run", "text": "hello"},
+                    {"index": 1, "kind": "attachment", "transfer_name": "a.jpg"}
+                ])),
+                ..IrImessage::default()
+            }),
+            source: None,
+        });
+        doc.finalize_stats();
+
+        let csv_path = write_conversation_csv(tmp.path(), &doc).unwrap();
+        let csv = fs::read_to_string(&csv_path).unwrap();
+        let header = csv.lines().next().unwrap();
+        let cols: Vec<&str> = header.split(',').collect();
+        let parts_idx = cols.iter().position(|c| *c == "parts_json").unwrap();
+        let text_idx = cols.iter().position(|c| *c == "text").unwrap();
+
+        let mut saw_trivial_empty = false;
+        let mut saw_rich = false;
+        for line in csv.lines().skip(1) {
+            let mut rdr = csv::ReaderBuilder::new()
+                .has_headers(false)
+                .from_reader(line.as_bytes());
+            let record = rdr.records().next().unwrap().unwrap();
+            let text = record.get(text_idx).unwrap_or("");
+            let parts = record.get(parts_idx).unwrap_or("");
+            if text == "hello imessage" {
+                assert!(parts.is_empty(), "trivial parts_json should be empty");
+                saw_trivial_empty = true;
+            }
+            if text == "hello" {
+                assert!(
+                    parts.contains("attachment"),
+                    "rich parts_json should be kept: {parts}"
+                );
+                saw_rich = true;
+            }
+        }
+        assert!(saw_trivial_empty && saw_rich);
     }
 
     #[test]

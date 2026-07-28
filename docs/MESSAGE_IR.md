@@ -111,7 +111,7 @@ Line 1 is the header (includes `conversation.stats`; no `messages` array). Each 
 |--------|--------|--------|
 | JSON | pretty-printed `ConversationDocument` | `read_conversation_json` |
 | JSONL | header + one message per line | `read_conversation_jsonl` |
-| CSV | unified [`CSV_HEADERS`](../crates/message-ir/src/lib.rs) + `<stem>.meta.json` | `read_conversation_csv` |
+| CSV | unified [`CSV_HEADERS`](../crates/message-ir/src/lib.rs) (header from first data row on read) | `read_conversation_csv` |
 | EML / MBOX | common message → `MailMessage` → [`message-mail`](../crates/message-mail/) | `read_conversation_eml_dir` / `read_conversation_mbox` |
 | XML | single `smses.xml` via [`FormatSink`](../crates/message-ir/) + [`message-sbr`](../crates/message-sbr/) | `sms_backup_restore_exporter::load_documents_from_xml` (owner inferred when omitted) |
 

@@ -45,7 +45,7 @@ The tool inspects the top level of the input folder and requires **exactly one**
 | `.mbox` files | MBOX |
 | Subfolders containing `.eml` | EML |
 
-`attachments/` and `*.meta.json` are ignored for detection.
+`attachments/` and leftover `*.meta.json` files (no longer written) are ignored for detection.
 
 ## Result
 

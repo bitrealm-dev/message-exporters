@@ -13,7 +13,7 @@ Attribute meanings (SyncTech **input** reference): [FIELDS.md](FIELDS.md). Share
 
 Source XML → `ConversationDocument` → [`message_ir::FormatSink`](../../message-ir/src/format_sink.rs) (`--format json|jsonl|csv|eml|mbox|xml`; default `json`).
 
-With `--format csv`: one file per conversation (header + one row per message) plus `<stem>.meta.json`. Decoded MMS media under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). The `chat_identifier` cell may still use `chat-group-…` for groups. `--format xml` writes a single SyncTech `smses.xml` ([`docs/SBR_XML.md`](../../../docs/SBR_XML.md)).
+With `--format csv`: one file per conversation (header + one row per message). Decoded MMS media under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). The `chat_identifier` cell may still use `chat-group-…` for groups. `--format xml` writes a single SyncTech `smses.xml` ([`docs/SBR_XML.md`](../../../docs/SBR_XML.md)).
 
 ## Source → shared cells
 

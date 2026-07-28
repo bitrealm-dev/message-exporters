@@ -1,6 +1,8 @@
 # CSV columns
 
-CSV exports write one spreadsheet file per conversation, a `<stem>.meta.json` header sidecar, and an `attachments/` directory when media is copied. Use this page when inspecting or importing CSV rows.
+CSV exports write one spreadsheet file per conversation and an `attachments/` directory when media is copied. Use this page when inspecting or importing CSV rows.
+
+Conversation and export identity live on every data row (there is no separate header sidecar). Re-import reads those fields from the first row.
 
 ## Conventions
 
@@ -19,9 +21,7 @@ Columns such as `source_fields_json`, `parts_json`, `edits_json`, `tapbacks_json
 
 Booleans (`is_deleted`, `is_reply`, `is_announcement`) are always `true` or `false` as text.
 
-## Meta sidecar
-
-Beside `<stem>.csv`, the exporter writes `<stem>.meta.json` with schema version, export identity, and conversation header. Tools that re-read CSV prefer this sidecar when present.
+`parts_json` is written only from the iMessage bag. A single plain `run` / `text` part that merely duplicates the `text` column is omitted; multi-part or richer bodies still write `parts_json`.
 
 ## Column list
 
