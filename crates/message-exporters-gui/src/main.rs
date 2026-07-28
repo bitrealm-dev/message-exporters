@@ -1519,6 +1519,10 @@ fn library_job_for_exporter(exporter: Exporter, config: ExporterConfig) -> Libra
                 OutputFormat::Eml | OutputFormat::Mbox => run_imessage_mail(&config)
                     .map(|r| r.messages)
                     .map_err(|e| e.to_string()),
+                OutputFormat::Json => Err(
+                    "JSON IR for iPhone backup is not available yet (use CSV, EML, or MBOX)"
+                        .into(),
+                ),
                 OutputFormat::Csv => run_imessage(&config)
                     .map(|r| r.messages)
                     .map_err(|e| e.to_string()),

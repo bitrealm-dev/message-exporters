@@ -125,9 +125,9 @@ fn write_one(
             append_message_mbox(&mbox_path, &mail)
                 .map_err(|e| RuntimeError::InvalidOptions(format!("write mbox: {e:#}")))?;
         }
-        OutputFormat::Csv => {
+        OutputFormat::Csv | OutputFormat::Json => {
             return Err(RuntimeError::InvalidOptions(
-                "imessage-mail-exporter does not write CSV".to_string(),
+                "imessage-mail-exporter does not write CSV/JSON yet (use EML or MBOX)".to_string(),
             ));
         }
     }

@@ -2,7 +2,7 @@
 
 Design for a human-viewable export: **one folder per conversation**, **one `.eml` per message**, with structured `X-ME-*` headers for machine fidelity. Intended as an archive / interchange path before vault exists. Mail clients can open individual messages; translators can recover SMS, group MMS, and (later) iMessage semantics without relying on CSV.
 
-**Status:** Writer in [`message-mail`](../crates/message-mail/). All GUI exporters support `--format eml` / `mbox` (and GUI **Output format**). iMessage uses [`imessage-mail-exporter`](../crates/imessage-mail-exporter/) (`imessage-database`, not `imessage-exporter`); others map pending conversation rows → `MailMessage`. CSV remains the default. iMessage mail emits extension headers (replies, tapbacks, parts, edits, balloons, send effects, announcements, location, deleted); handwriting attaches SVG (`image/svg+xml`). See also [csv-output.md](src/csv-output.md).
+**Status:** Writer in [`message-mail`](../crates/message-mail/). All GUI exporters support `--format eml` / `mbox`. **SMS Backup & Restore** goes pending → [`message-ir`](../crates/message-ir/) → EML/MBOX (see [MESSAGE_IR.md](MESSAGE_IR.md)). Other exporters still map pending → `MailMessage` directly. iMessage uses [`imessage-mail-exporter`](../crates/imessage-mail-exporter/). CSV remains the default. iMessage mail emits extension headers; handwriting attaches SVG. See also [csv-output.md](src/csv-output.md).
 
 ## Goals
 

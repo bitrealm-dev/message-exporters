@@ -2614,6 +2614,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "message-ir"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "csv",
+ "message-csv",
+ "message-exporters-core",
+ "message-mail",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "message-mail"
 version = "0.1.0"
 dependencies = [
@@ -4067,6 +4081,7 @@ dependencies = [
  "message-contacts",
  "message-csv",
  "message-exporters-core",
+ "message-ir",
  "message-mail",
  "message-media",
  "message-obfuscate",

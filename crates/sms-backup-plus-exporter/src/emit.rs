@@ -951,6 +951,11 @@ pub fn convert_export<P: AsRef<Path>>(
                     &mut report,
                 )?;
             }
+            OutputFormat::Json => {
+                anyhow::bail!(
+                    "OutputFormat::Json is not supported yet (canonical IR is SBR-first)"
+                );
+            }
         }
         report.conversations += 1;
         written += 1;

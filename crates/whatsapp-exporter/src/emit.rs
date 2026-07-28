@@ -166,6 +166,11 @@ pub fn convert_json(
                     &mut report,
                 )?;
             }
+            OutputFormat::Json => {
+                anyhow::bail!(
+                    "OutputFormat::Json is not supported yet (canonical IR is SBR-first)"
+                );
+            }
         }
         report.conversations += 1;
     }

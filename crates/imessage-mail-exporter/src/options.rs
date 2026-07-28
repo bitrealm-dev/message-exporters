@@ -82,9 +82,9 @@ pub fn validate_export_path(
                                 )));
                             }
                         }
-                        OutputFormat::Csv => {
+                        OutputFormat::Csv | OutputFormat::Json => {
                             return Err(RuntimeError::InvalidOptions(
-                                "imessage-mail-exporter does not write CSV".to_string(),
+                                "imessage-mail-exporter does not write CSV/JSON yet".to_string(),
                             ));
                         }
                     }

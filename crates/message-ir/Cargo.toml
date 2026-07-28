@@ -1,0 +1,18 @@
+[package]
+name = "message-ir"
+version = "0.1.0"
+edition = "2024"
+description = "Canonical conversation intermediate representation and CSV/EML/MBOX/JSON projectors"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+anyhow = "1.0.103"
+csv = "1.4.0"
+message-csv = { path = "../message-csv" }
+message-exporters-core = { path = "../message-exporters-core" }
+message-mail = { path = "../message-mail" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+
+[dev-dependencies]
+tempfile = "3.27.0"

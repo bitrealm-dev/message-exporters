@@ -1,12 +1,12 @@
 # NAME
 
-sms-backup-restore-exporter - convert SMS Backup & Restore XML to per-conversation CSV or EML
+sms-backup-restore-exporter - convert SMS Backup & Restore XML via canonical IR to CSV/EML/MBOX/JSON
 
 # SYNOPSIS
 
 ```text
 sms-backup-restore-exporter --input <PATH> --output <DIR> --owner-phone <PHONE>...
-    [--format csv|eml]
+    [--format csv|eml|mbox|json]
     [--contacts <PATH> | --vcf <PATH>]
     [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD]
     [--media-mode disabled|clone|convert|compress]
@@ -17,7 +17,7 @@ sms-backup-restore-exporter --input <PATH> --output <DIR> --owner-phone <PHONE>.
 
 # DESCRIPTION
 
-Converts SyncTech **SMS Backup & Restore** XML (one file or a directory of `.xml` files) into vault-shaped per-conversation CSV under `--output` (default), or a per-conversation folder of `.eml` files with `--format eml` (see [MAIL_ARCHIVE.md](../../../docs/MAIL_ARCHIVE.md)). MMS media is written under `attachments/` when enabled; for EML, attachment bytes are also embedded in each message.
+Converts SyncTech **SMS Backup & Restore** XML into a canonical IR document per conversation, then projects to CSV (default), EML, MBOX, or JSON (`--format`). See [MESSAGE_IR.md](../../../docs/MESSAGE_IR.md) and [MAIL_ARCHIVE.md](../../../docs/MAIL_ARCHIVE.md). MMS media is written under `attachments/` when enabled; for EML/MBOX, attachment bytes are embedded.
 
 Owner phone(s) are required so MMS chat keys and direction resolve correctly. Encrypted ZIP backups must be unlocked/extracted before use. Media convert/compress and obfuscation apply to CSV output only.
 
@@ -29,8 +29,8 @@ Owner phone(s) are required so MMS chat keys and direction resolve correctly. En
 **--output** *DIR*
 : Destination for per-conversation CSV (or EML folders) and `attachments/`.
 
-**--format** *csv|eml*
-: Output packaging. `csv` (default) writes one CSV per conversation. `eml` writes one folder per conversation of individual `.eml` files (`X-ME-*` headers).
+**--format** *csv|eml|mbox|json*
+: Output packaging from IR. `csv` (default) one CSV per conversation; `eml` / `mbox` mail archives; `json` canonical IR file per conversation.
 
 **--owner-phone** *PHONE*
 : Owner number (E.164 or digits). Repeat for multiple. Required.

@@ -22,6 +22,8 @@ pub enum OutputFormat {
     Eml,
     /// Per-conversation `.mbox` (mboxrd) mailbox file.
     Mbox,
+    /// Per-conversation canonical IR JSON (see docs/MESSAGE_IR.md).
+    Json,
 }
 
 impl fmt::Display for OutputFormat {
@@ -30,6 +32,7 @@ impl fmt::Display for OutputFormat {
             Self::Csv => "CSV (per conversation)",
             Self::Eml => "EML archive (mail folders)",
             Self::Mbox => "MBOX (per conversation)",
+            Self::Json => "JSON (canonical IR)",
         })
     }
 }
@@ -40,6 +43,7 @@ impl OutputFormat {
             Self::Csv => "csv",
             Self::Eml => "eml",
             Self::Mbox => "mbox",
+            Self::Json => "json",
         }
     }
 
@@ -48,8 +52,9 @@ impl OutputFormat {
             "csv" => Ok(Self::Csv),
             "eml" => Ok(Self::Eml),
             "mbox" => Ok(Self::Mbox),
+            "json" => Ok(Self::Json),
             other => Err(format!(
-                "unknown output format '{other}' (expected csv, eml, or mbox)"
+                "unknown output format '{other}' (expected csv, eml, mbox, or json)"
             )),
         }
     }
@@ -63,12 +68,16 @@ impl OutputFormat {
 /// Values shown in the GUI for exporters that support CSV / EML (no MBOX).
 pub const OUTPUT_FORMATS: [OutputFormat; 2] = [OutputFormat::Csv, OutputFormat::Eml];
 
-/// Values shown in the GUI when EML and MBOX are both available (all mail exporters).
-pub const OUTPUT_FORMATS_MAIL: [OutputFormat; 3] =
-    [OutputFormat::Csv, OutputFormat::Eml, OutputFormat::Mbox];
+/// Values shown in the GUI for full packaging choices.
+pub const OUTPUT_FORMATS_MAIL: [OutputFormat; 4] = [
+    OutputFormat::Csv,
+    OutputFormat::Eml,
+    OutputFormat::Mbox,
+    OutputFormat::Json,
+];
 
 /// Alias kept for iPhone backup UI (same as [`OUTPUT_FORMATS_MAIL`]).
-pub const OUTPUT_FORMATS_IMESSAGE: [OutputFormat; 3] = OUTPUT_FORMATS_MAIL;
+pub const OUTPUT_FORMATS_IMESSAGE: [OutputFormat; 4] = OUTPUT_FORMATS_MAIL;
 
 /// Shared export inputs. Source-specific fields are in [`Self::source`].
 #[derive(Debug, Clone)]
@@ -82,7 +91,7 @@ pub struct ExporterConfig {
     /// OpenExtract uses [`MediaMode::Disabled`].
     pub media: MediaConfig,
     pub cancel: Option<CancelFlag>,
-    /// Packaging format (`csv` / `eml` / `mbox`). All GUI exporters honor mail archives.
+    /// Packaging format (`csv` / `eml` / `mbox` / `json`).
     pub output_format: OutputFormat,
     pub source: SourceConfig,
 }

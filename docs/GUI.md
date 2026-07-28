@@ -84,7 +84,7 @@ Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules a
 | Timezone | — | — | — | — | yes | — | — |
 | Name mapping | — | — | advanced | — | — | — | — |
 | Verbose logging | — | — | always on | — | — | — | — |
-| Output format (CSV / EML / MBOX) | yes | yes | yes | yes | yes | yes | yes |
+| Output format (CSV / EML / MBOX / JSON‡) | yes | yes | yes | yes | yes | yes | yes |
 | Attachments (copy/convert/compress/do not copy) | yes | yes | yes | — | yes | yes | yes |
 | Compress options (resolution/fps/…) | when Compress | when Compress | when Compress | — | when Compress | when Compress | when Compress |
 | Advanced (attachment root, …) | — | — | name mapping | — | — | Android key / backup / wa / media / db / business | yes |
@@ -92,6 +92,8 @@ Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules a
 Convert/Compress need `ffmpeg`/`ffprobe` on PATH. **Do not copy** skips writing attachment files (`--media-mode disabled` / iPhone `--copy-method disabled`).
 
 \* Required unless filled from Plus `config/owner.toml` (source-relative today); GUI collects fields explicitly.
+
+‡ JSON IR is implemented for SMS Backup & Restore; other exporters error if JSON is selected until migrated.
 
 ## Per-exporter options
 
@@ -122,12 +124,12 @@ Product: [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/)
 |---------|------|:--------:|-----|
 | Input | XML file or folder of XML | yes | `--input` |
 | Output | folder | yes | `--output` |
-| Output format | enum | no | `--format` (`csv` / `eml` / `mbox`) |
+| Output format | enum | no | `--format` (`csv` / `eml` / `mbox` / `json`) |
 | Your phone numbers | multi-value text | yes | `--owner-phone` |
 | Contacts CSV / VCF | file | no† | `--contacts` / `--vcf` |
 | Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro); CSV only |
 
-Encrypted ZIP backups must be unlocked/extracted before selecting input. Global Obfuscate and Start/End date apply for CSV; convert/compress and obfuscate are skipped for EML/MBOX.
+Encrypted ZIP backups must be unlocked/extracted before selecting input. SBR builds [canonical IR](MESSAGE_IR.md) then projects the chosen format. Global Obfuscate and Start/End date apply for CSV; convert/compress and obfuscate are skipped for EML/MBOX/JSON.
 
 ### SMS Backup+ — `sms-backup-plus-exporter convert`
 
