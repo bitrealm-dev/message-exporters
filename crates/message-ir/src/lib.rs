@@ -55,6 +55,44 @@ pub struct ConversationDocument {
     pub messages: Vec<IrMessage>,
 }
 
+/// Shared CSV columns written by the IR CSV projector for `export.source == "imessage"`.
+pub const IMESSAGE_CSV_HEADERS: &[&str] = &[
+    "chat_identifier",
+    "conversation_type",
+    "group_title",
+    "participants_json",
+    "guid",
+    "timestamp",
+    "timestamp_utc",
+    "timestamp_display",
+    "read_receipt",
+    "direction",
+    "service",
+    "sender_handle",
+    "sender_display_name",
+    "subject",
+    "text",
+    "is_deleted",
+    "send_effect",
+    "shared_location",
+    "is_announcement",
+    "announcement",
+    "is_reply",
+    "thread_originator_guid",
+    "thread_originator_part",
+    "num_replies",
+    "parts_json",
+    "edits_json",
+    "attachments_json",
+    "tapbacks_json",
+    "app_json",
+    "export_source",
+    "export_tool",
+    "export_tool_version",
+];
+
+const IMESSAGE_EXPORT_SOURCE: &str = "imessage";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExportMeta {
     pub source: String,
@@ -62,6 +100,9 @@ pub struct ExportMeta {
     pub tool_version: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner_handle: Option<String>,
+    /// Outgoing From display name (iMessage `--use-caller-id`); defaults to `"Me"` when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_display_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -199,8 +240,18 @@ pub fn write_conversation_json(output_dir: &Path, doc: &ConversationDocument) ->
     Ok(path)
 }
 
-/// Per-conversation CSV (shared core + SBR-style source columns from `source`).
+/// Per-conversation CSV. Dispatches to the iMessage-shaped projector for
+/// `export.source == "imessage"` (fork-compatible columns); otherwise the
+/// shared SBR-style core + `source` columns.
 pub fn write_conversation_csv(output_dir: &Path, doc: &ConversationDocument) -> Result<PathBuf> {
+    if doc.export.source == IMESSAGE_EXPORT_SOURCE {
+        write_conversation_csv_imessage(output_dir, doc)
+    } else {
+        write_conversation_csv_core(output_dir, doc)
+    }
+}
+
+fn write_conversation_csv_core(output_dir: &Path, doc: &ConversationDocument) -> Result<PathBuf> {
     fs::create_dir_all(output_dir)
         .with_context(|| format!("create {}", output_dir.display()))?;
     let filename = conversation_filename(
@@ -302,6 +353,166 @@ fn source_string(source: Option<&Value>, key: &str) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+fn imessage_str(imessage: Option<&Value>, key: &str) -> Option<String> {
+    imessage
+        .and_then(|v| v.get(key))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+fn imessage_bool(imessage: Option<&Value>, key: &str) -> bool {
+    imessage
+        .and_then(|v| v.get(key))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
+fn imessage_u32(imessage: Option<&Value>, key: &str) -> Option<u32> {
+    imessage
+        .and_then(|v| v.get(key))
+        .and_then(|v| v.as_u64())
+        .and_then(|n| u32::try_from(n).ok())
+}
+
+#[derive(Serialize)]
+struct ImessageParticipantCell {
+    handle: String,
+    display_name: String,
+}
+
+/// Per-conversation CSV matching `IMESSAGE_CSV_HEADERS`, populated from core
+/// IR fields plus the per-message `imessage` bag.
+///
+/// `read_receipt` carries the raw `read_receipt_rfc3339` value (human phrases
+/// like `"(Read by you after 12 seconds)"` are not reconstructable from IR alone).
+fn write_conversation_csv_imessage(output_dir: &Path, doc: &ConversationDocument) -> Result<PathBuf> {
+    fs::create_dir_all(output_dir)
+        .with_context(|| format!("create {}", output_dir.display()))?;
+    let filename = conversation_filename(
+        &doc.conversation.conversation_type,
+        &doc.conversation.chat_identifier,
+        doc.conversation.group_title.as_deref(),
+        &doc.conversation
+            .participants
+            .iter()
+            .map(|p| p.handle.clone())
+            .collect::<Vec<_>>(),
+        doc.conversation.filename_suffix.as_deref(),
+    );
+    let path = output_dir.join(filename);
+    let mut tmp_name = path
+        .file_name()
+        .map(|n| n.to_os_string())
+        .unwrap_or_else(|| "chat.csv".into());
+    tmp_name.push(".tmp");
+    let tmp_path = path.with_file_name(tmp_name);
+    let file = File::create(&tmp_path).with_context(|| format!("create {}", tmp_path.display()))?;
+    let mut wtr = csv::Writer::from_writer(file);
+    wtr.write_record(IMESSAGE_CSV_HEADERS)
+        .with_context(|| format!("write header {}", path.display()))?;
+
+    let participants_json = json_cell(
+        &doc.conversation
+            .participants
+            .iter()
+            .map(|p| ImessageParticipantCell {
+                handle: p.handle.clone(),
+                display_name: p.display_name.clone().unwrap_or_default(),
+            })
+            .collect::<Vec<_>>(),
+    );
+
+    for msg in &doc.messages {
+        let secs = msg.timestamp_unix_ms.div_euclid(1000);
+        let (ts_local, ts_utc, ts_display) = format_local_ts(secs).ok_or_else(|| {
+            anyhow::anyhow!("invalid timestamp_unix_ms {}", msg.timestamp_unix_ms)
+        })?;
+        let imessage = msg.imessage.as_ref();
+        let read_receipt = imessage_str(imessage, "read_receipt_rfc3339").unwrap_or_default();
+        let is_deleted = imessage_bool(imessage, "is_deleted");
+        let send_effect = imessage_str(imessage, "send_effect").unwrap_or_default();
+        let shared_location = imessage_str(imessage, "shared_location").unwrap_or_default();
+        let is_announcement = msg.message_kind == "announcement";
+        let announcement = imessage_str(imessage, "announcement").unwrap_or_default();
+        let is_reply = imessage_bool(imessage, "is_reply");
+        let thread_originator_guid = if is_reply {
+            imessage_str(imessage, "in_reply_to_guid").unwrap_or_default()
+        } else {
+            String::new()
+        };
+        let thread_originator_part = if is_reply {
+            imessage_u32(imessage, "thread_originator_part")
+                .unwrap_or(0)
+                .to_string()
+        } else {
+            String::new()
+        };
+        let num_replies = imessage_u32(imessage, "num_replies").unwrap_or(0).to_string();
+        let parts_json = imessage_str(imessage, "parts_json").unwrap_or_else(|| "null".into());
+        let edits_json = imessage_str(imessage, "edits_json").unwrap_or_else(|| "null".into());
+        let tapbacks_json =
+            imessage_str(imessage, "tapbacks_json").unwrap_or_else(|| "null".into());
+        let app_json = imessage_str(imessage, "app_json").unwrap_or_else(|| "null".into());
+
+        let attachment_cells: Vec<AttachmentCell> = msg
+            .attachments
+            .iter()
+            .map(|a| AttachmentCell {
+                path: a.path.clone(),
+                original_name: a.original_name.clone(),
+                mime_type: a.mime_type.clone(),
+                is_sticker: a.is_sticker,
+                transcription: a.transcription.clone(),
+                sticker_effect: a.sticker_effect.clone(),
+            })
+            .collect();
+        let attachments_json = json_cell(&attachment_cells);
+
+        wtr.write_record([
+            doc.conversation.chat_identifier.as_str(),
+            doc.conversation.conversation_type.as_str(),
+            doc.conversation.group_title.as_deref().unwrap_or(""),
+            participants_json.as_str(),
+            msg.guid.as_str(),
+            ts_local.as_str(),
+            ts_utc.as_str(),
+            ts_display.as_str(),
+            read_receipt.as_str(),
+            msg.direction.as_str(),
+            msg.service.as_str(),
+            msg.sender_handle.as_deref().unwrap_or(""),
+            msg.sender_display_name.as_deref().unwrap_or(""),
+            msg.subject.as_deref().unwrap_or(""),
+            msg.text.as_str(),
+            if is_deleted { "true" } else { "false" },
+            send_effect.as_str(),
+            shared_location.as_str(),
+            if is_announcement { "true" } else { "false" },
+            announcement.as_str(),
+            if is_reply { "true" } else { "false" },
+            thread_originator_guid.as_str(),
+            thread_originator_part.as_str(),
+            num_replies.as_str(),
+            parts_json.as_str(),
+            edits_json.as_str(),
+            attachments_json.as_str(),
+            tapbacks_json.as_str(),
+            app_json.as_str(),
+            doc.export.source.as_str(),
+            doc.export.tool.as_str(),
+            doc.export.tool_version.as_str(),
+        ])
+        .with_context(|| format!("write row {}", path.display()))?;
+    }
+
+    wtr.flush()?;
+    drop(wtr);
+    fs::rename(&tmp_path, &path)
+        .with_context(|| format!("rename {} → {}", tmp_path.display(), path.display()))?;
+    Ok(path)
+}
+
 fn write_conversation_mail(
     output_dir: &Path,
     doc: &ConversationDocument,
@@ -372,7 +583,7 @@ pub fn document_to_mail_messages(
             },
         );
 
-        out.push(MailMessage::sms(SmsMailFields {
+        let mut mail = MailMessage::sms(SmsMailFields {
             chat_identifier: doc.conversation.chat_identifier.clone(),
             conversation_type: doc.conversation.conversation_type.clone(),
             group_title: doc.conversation.group_title.clone(),
@@ -397,9 +608,48 @@ pub fn document_to_mail_messages(
             export_tool_version: doc.export.tool_version.clone(),
             attachments,
             filename_suffix: doc.conversation.filename_suffix.clone(),
-        }));
+        });
+        if let Some(imessage) = &msg.imessage {
+            apply_imessage_fields(&mut mail, imessage);
+        }
+        if mail.owner_display_name.is_none() {
+            mail.owner_display_name = doc.export.owner_display_name.clone();
+        }
+        out.push(mail);
     }
     Ok(out)
+}
+
+/// Restore iMessage extension fields (parts, tapbacks, balloons, replies, …)
+/// from an [`IrMessage::imessage`] bag onto a [`MailMessage`].
+///
+/// Unknown / absent keys leave the corresponding field unset. `owner_handle`
+/// is not touched here (it comes from [`ExportMeta::owner_handle`]).
+pub fn apply_imessage_fields(mail: &mut MailMessage, imessage: &Value) {
+    let bag = Some(imessage);
+    mail.is_reply = imessage_bool(bag, "is_reply");
+    mail.in_reply_to_guid = imessage_str(bag, "in_reply_to_guid");
+    mail.thread_originator_part = imessage_u32(bag, "thread_originator_part");
+    mail.num_replies = imessage_u32(bag, "num_replies");
+    mail.is_deleted = imessage_bool(bag, "is_deleted");
+    mail.send_effect = imessage_str(bag, "send_effect");
+    mail.shared_location = imessage_str(bag, "shared_location");
+    mail.announcement = imessage_str(bag, "announcement");
+    mail.read_receipt_rfc3339 = imessage_str(bag, "read_receipt_rfc3339");
+    mail.parts_json = imessage_str(bag, "parts_json");
+    mail.edits_json = imessage_str(bag, "edits_json");
+    mail.app_json = imessage_str(bag, "app_json");
+    mail.balloon_bundle_id = imessage_str(bag, "balloon_bundle_id");
+    mail.balloon_kind = imessage_str(bag, "balloon_kind");
+    mail.tapbacks_json = imessage_str(bag, "tapbacks_json");
+    mail.associated_guid = imessage_str(bag, "associated_guid");
+    mail.associated_part = imessage_u32(bag, "associated_part");
+    mail.tapback_kind = imessage_str(bag, "tapback_kind");
+    mail.tapback_emoji = imessage_str(bag, "tapback_emoji");
+    mail.tapback_action = imessage_str(bag, "tapback_action");
+    if let Some(name) = imessage_str(bag, "owner_display_name") {
+        mail.owner_display_name = Some(name);
+    }
 }
 
 #[cfg(test)]
@@ -415,6 +665,7 @@ mod tests {
                 tool: "SMS Backup & Restore".into(),
                 tool_version: "10.26.003".into(),
                 owner_handle: Some("+15555550100".into()),
+                owner_display_name: None,
             },
             conversation: ConversationMeta {
                 chat_identifier: "+15555550101".into(),
@@ -469,5 +720,121 @@ mod tests {
         let _ = clean_previous_mail_output(tmp.path());
         let eml_dir = write_format(tmp.path(), OutputFormat::Eml, &doc).unwrap();
         assert!(eml_dir.is_dir());
+    }
+
+    fn sample_imessage_doc() -> ConversationDocument {
+        ConversationDocument {
+            schema_version: SCHEMA_VERSION,
+            export: ExportMeta {
+                source: "imessage".into(),
+                tool: "imessage-ir-exporter".into(),
+                tool_version: "0.1.0".into(),
+                owner_handle: Some("+15555550100".into()),
+                owner_display_name: None,
+            },
+            conversation: ConversationMeta {
+                chat_identifier: "+15555550101".into(),
+                conversation_type: "individual".into(),
+                group_title: None,
+                participants: vec![IrParticipant {
+                    handle: "+15555550101".into(),
+                    display_name: Some("Sam".into()),
+                }],
+                filename_suffix: None,
+            },
+            messages: vec![
+                IrMessage {
+                    guid: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE".into(),
+                    timestamp_unix_ms: 1_400_773_261_000,
+                    direction: IrDirection::Incoming,
+                    service: "iMessage".into(),
+                    message_kind: "imessage".into(),
+                    sender_handle: Some("+15555550101".into()),
+                    sender_display_name: Some("Sam".into()),
+                    subject: None,
+                    text: "hello imessage".into(),
+                    attachments: vec![],
+                    imessage: Some(serde_json::json!({
+                        "is_reply": true,
+                        "in_reply_to_guid": "parent-guid-1111",
+                        "thread_originator_part": 0,
+                        "num_replies": 2,
+                        "is_deleted": false,
+                        "send_effect": "Sent with Balloons",
+                        "tapbacks_json": "[{\"part_index\":0,\"kind\":\"loved\"}]",
+                        "parts_json": "[{\"index\":0,\"kind\":\"run\",\"text\":\"hello imessage\"}]",
+                        "owner_display_name": "+15555550100",
+                    })),
+                    source: None,
+                },
+                IrMessage {
+                    guid: "TAPBACK-GUID-0001".into(),
+                    timestamp_unix_ms: 1_400_773_262_000,
+                    direction: IrDirection::Outgoing,
+                    service: "iMessage".into(),
+                    message_kind: "tapback".into(),
+                    sender_handle: None,
+                    sender_display_name: None,
+                    subject: None,
+                    text: "Loved a message".into(),
+                    attachments: vec![],
+                    imessage: Some(serde_json::json!({
+                        "associated_guid": "parent-guid-1111",
+                        "associated_part": 0,
+                        "tapback_kind": "loved",
+                        "tapback_action": "add",
+                        "in_reply_to_guid": "parent-guid-1111",
+                    })),
+                    source: None,
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn imessage_bag_restores_mail_extension_headers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let doc = sample_imessage_doc();
+        let mail_messages = document_to_mail_messages(&doc, tmp.path()).unwrap();
+
+        let reply = &mail_messages[0];
+        assert!(reply.is_reply);
+        assert_eq!(reply.in_reply_to_guid.as_deref(), Some("parent-guid-1111"));
+        assert_eq!(reply.thread_originator_part, Some(0));
+        assert_eq!(reply.num_replies, Some(2));
+        assert_eq!(reply.send_effect.as_deref(), Some("Sent with Balloons"));
+        assert!(reply.tapbacks_json.as_deref().unwrap().contains("loved"));
+        assert!(reply.parts_json.as_deref().unwrap().contains("hello imessage"));
+        assert_eq!(reply.owner_display_name.as_deref(), Some("+15555550100"));
+
+        let tapback = &mail_messages[1];
+        assert_eq!(tapback.associated_guid.as_deref(), Some("parent-guid-1111"));
+        assert_eq!(tapback.associated_part, Some(0));
+        assert_eq!(tapback.tapback_kind.as_deref(), Some("loved"));
+        assert_eq!(tapback.tapback_action.as_deref(), Some("add"));
+        // Owner display name falls back to `export.owner_display_name` (unset here).
+        assert!(tapback.owner_display_name.is_none());
+    }
+
+    #[test]
+    fn imessage_csv_uses_fork_compatible_headers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let doc = sample_imessage_doc();
+
+        let csv_path = write_format(tmp.path(), OutputFormat::Csv, &doc).unwrap();
+        let csv = fs::read_to_string(&csv_path).unwrap();
+        let header_line = csv.lines().next().unwrap();
+        assert_eq!(header_line, IMESSAGE_CSV_HEADERS.join(","));
+        assert!(csv.contains("hello imessage"));
+        assert!(csv.contains("Loved a message"));
+        assert!(csv.contains("Sent with Balloons"));
+        assert!(csv.contains("true")); // is_reply
+        assert!(csv.contains("loved"));
+
+        // Non-iMessage sources keep the shared SBR-style headers.
+        let sbr_doc = sample_doc();
+        let sbr_csv_path = write_format(tmp.path(), OutputFormat::Csv, &sbr_doc).unwrap();
+        let sbr_csv = fs::read_to_string(&sbr_csv_path).unwrap();
+        assert_eq!(sbr_csv.lines().next().unwrap(), CSV_HEADERS.join(","));
     }
 }

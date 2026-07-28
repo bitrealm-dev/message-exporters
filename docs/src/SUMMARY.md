@@ -22,6 +22,6 @@
 - [openextract-exporter](reference/openextract.md)
 - [imazing-exporter](reference/imazing.md)
 - [whatsapp-exporter](reference/whatsapp.md)
-- [imessage-exporter](reference/imessage.md)
+- [imessage-ir-exporter](reference/imessage.md)
 
 - [Developing / releases](developing.md)

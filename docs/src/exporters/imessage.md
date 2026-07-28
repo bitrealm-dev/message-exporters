@@ -1,3 +1,1 @@
-Supported path for Apple Messages (`chat.db`).
-
-{{#include ../../../crates/imessage-exporter/README.md}}
+{{#include ../../../crates/imessage-ir-exporter/README.md}}

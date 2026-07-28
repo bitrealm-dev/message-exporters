@@ -1,3 +1,0 @@
-{% if let Some(summary) = summary.get() %}{{ summary }}
-{% endif %}{% for option in options %}- {{ option.text }}{% if option.selected %} ✓{% endif %}
-{% endfor %}

@@ -1,1 +1,1 @@
-{{#include ../../../crates/imessage-exporter/docs/MANPAGE.md}}
+{{#include ../../../crates/imessage-ir-exporter/docs/MANPAGE.md}}

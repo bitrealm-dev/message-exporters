@@ -22,7 +22,7 @@ WhatsApp conversations are written separately from SMS/iMessage (`…__whatsapp.
 
 Unresolved name-only chats still write (name-based filename). That is not fatal here, but vault ingest may struggle until the contact book is complete.
 
-This is **not** the same as [`imessage-exporter`](../imessage-exporter), which reads Apple’s `chat.db` on a Mac.
+This is **not** the same as [`imessage-ir-exporter`](../imessage-ir-exporter), which reads Apple’s `chat.db` on a Mac.
 
 Example output: [`sample-output/`](sample-output/).
 

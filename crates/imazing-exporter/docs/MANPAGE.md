@@ -18,7 +18,7 @@ imazing-exporter --input <PATH> --output <DIR>
 
 Normalizes iMazing-exported Messages and/or WhatsApp CSV into vault-shaped per-conversation files. WhatsApp chats are written with the `__whatsapp` filename suffix. Prefer exporting from iMazing’s **All backup** view when attachment filenames matter.
 
-Distinct from `imessage-exporter`, which reads Apple `chat.db` directly.
+Distinct from `imessage-ir-exporter`, which reads Apple `chat.db` directly.
 
 # OPTIONS
 
@@ -81,5 +81,5 @@ Experimental in the GUI. Outgoing sender identity, WhatsApp group roster, and re
 
 [README.md](../README.md), [DESIGN.md](DESIGN.md),
 [whatsapp-exporter](../../whatsapp-exporter) (native WhatsApp path),
-[imessage-exporter](../../imessage-exporter) (`chat.db` path),
+[imessage-ir-exporter](../../imessage-ir-exporter) (`chat.db` path),
 [message-media](../../message-media), [message-obfuscate](../../message-obfuscate)

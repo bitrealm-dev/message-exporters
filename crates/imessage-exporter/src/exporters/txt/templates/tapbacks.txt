@@ -1,3 +1,0 @@
-Tapbacks:
-{% for tapback in tapbacks %}    {{ tapback }}
-{% endfor %}

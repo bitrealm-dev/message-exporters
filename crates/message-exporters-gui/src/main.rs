@@ -10,8 +10,7 @@ use chrono::Local;
 use eframe::egui;
 use go_sms_pro_exporter::run as run_go_sms_pro;
 use imazing_exporter::run as run_imazing;
-use imessage_exporter::run as run_imessage;
-use imessage_mail_exporter::run as run_imessage_mail;
+use imessage_ir_exporter::run as run_imessage;
 use message_exporters_core::{
     ensure_output_dir, resolve_binary, spawn, spawn_job, AttachmentMedia, ContactsKind,
     ExportIniState, Exporter, ExporterConfig, Form, OutputFormat, ProcessControl, ProcessEvent,
@@ -1515,27 +1514,7 @@ fn library_job_for_exporter(exporter: Exporter, config: ExporterConfig) -> Libra
         Exporter::Imessage => Box::new(move |cancel, tx| {
             let mut config = config;
             config.cancel = Some(cancel);
-            let result = match config.output_format {
-                OutputFormat::Eml | OutputFormat::Mbox => run_imessage_mail(&config)
-                    .map(|r| r.messages)
-                    .map_err(|e| e.to_string()),
-                OutputFormat::Json => Err(
-                    "JSON IR for iPhone backup is not available yet (use CSV, EML, or MBOX)"
-                        .into(),
-                ),
-                OutputFormat::Csv => run_imessage(&config)
-                    .map(|r| r.messages)
-                    .map_err(|e| e.to_string()),
-            };
-            match result {
-                Ok(messages) => {
-                    for line in messages {
-                        let _ = tx.send(ProcessEvent::Log(line));
-                    }
-                    Ok(())
-                }
-                Err(error) => Err(error),
-            }
+            run_and_log(run_imessage(&config), tx)
         }),
     }
 }
@@ -1580,5 +1559,6 @@ impl_has_messages!(
     sms_backup_plus_exporter::RunResult,
     openextract_exporter::RunResult,
     imazing_exporter::RunResult,
+    imessage_ir_exporter::RunResult,
     whatsapp_exporter::RunResult,
 );

@@ -93,7 +93,7 @@ Convert/Compress need `ffmpeg`/`ffprobe` on PATH. **Do not copy** skips writing 
 
 \* Required unless filled from Plus `config/owner.toml` (source-relative today); GUI collects fields explicitly.
 
-‡ JSON IR is implemented for GO SMS Pro, SMS Backup & Restore, SMS Backup+, OpenExtract, iMazing, and WhatsApp. iMessage Exporter does not yet support JSON.
+‡ JSON IR is implemented for all exporters, including iMessage (`imessage-ir-exporter`).
 
 ## Per-exporter options
 
@@ -205,26 +205,26 @@ No Input directory and no Contacts file row in the GUI. `wtsexporter` runs in a 
 
 Global Obfuscate and Start/End date apply for CSV; skipped for EML/MBOX/JSON. Output stems use the `__whatsapp` suffix. Optional CLI `--input` (defaults to cwd for resolving `msgstore.db` / media folders) is not sent by the GUI; extraction always uses a temp dir under Output.
 
-### iPhone backup — `imessage-exporter` / `imessage-mail-exporter`
+### iPhone backup — `imessage-ir-exporter`
 
-Form link label: **imessage-exporter** → [imessage-exporter](https://github.com/ReagentX/imessage-exporter). Dropdown stays **iPhone backup**.
+Form link label: **imessage-ir-exporter** → [imessage-ir-exporter](https://github.com/bitrealm-dev/message-exporters/tree/main/crates/imessage-ir-exporter). Dropdown stays **iPhone backup**.
 
-GUI defaults: CSV, `--copy-method clone` (or `disabled`), always `--use-caller-id`. **CSV** runs `imessage-exporter`; **EML** / **MBOX** run `imessage-mail-exporter` (`imessage-database` → `message-mail`). Mail honors dates, conversation filter, contacts, attachment embed, and caller-id on From. Convert/Compress/obfuscate remain CSV-only (GUI post-step via `message-media` for CSV).
+GUI defaults: CSV, `--copy-method clone` (or `disabled`), always `--use-caller-id`. All formats (`csv` / `eml` / `mbox` / `json`) run `imessage-ir-exporter` (`chat.db` → IR → projectors). Honors dates, conversation filter, contacts, attachment embed, and caller-id on From. Convert/Compress/obfuscate remain CSV-only (GUI post-step via `message-media` for CSV).
 
 | Control | Type | Required | CLI |
 |---------|------|:--------:|-----|
-| Database / iOS backup path | file/folder | no | `-p` / `--db-path` |
-| Backup password | password | no | `-x` / `--cleartext-password` |
-| Platform | macOS / iOS / auto | no | `-a` / `--platform` |
-| Output / export path | folder | yes | `-o` / `--export-path` |
-| Output format | enum | no | CSV → `imessage-exporter`; EML/MBOX → `imessage-mail-exporter` |
-| Attachments | enum | no | copy `clone`/`disabled`; convert/compress post-process |
+| Database / iOS backup path | file/folder | no | `--input` |
+| Backup password | password | no | `--backup-password` |
+| Platform | macOS / iOS / auto | no | `--platform` |
+| Output / export path | folder | yes | `--output` |
+| Output format | enum | no | `--format` (`csv` / `eml` / `mbox` / `json`) |
+| Attachments | enum | no | `--copy-method` `clone`/`disabled`; convert/compress post-process |
 | Max resolution / fps / min size / skip efficient | when Compress | no | GUI → `message-media` compress options |
-| Attachment root | folder | no | `-r` / `--attachment-root` (advanced) |
-| Conversation filter | text | no | `-t` (advanced) |
-| Contacts (AddressBook DB) | file | no | `-n` / `--contacts-path` (advanced) |
+| Attachment root | folder | no | `--attachment-root` (advanced) |
+| Conversation filter | text | no | `--conversation` (advanced) |
+| Contacts (AddressBook DB) | file | no | `--contacts` (advanced) |
 
-Global Obfuscate and Start/End date apply. With Convert/Compress, obfuscate runs in the GUI after media. Not exposed: `--custom-name`, `--ignore-disk-warning`. Caller ID is always on.
+Global Obfuscate and Start/End date apply. With Convert/Compress, obfuscate runs in the GUI after media. Caller ID is always on.
 
 Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox.
 

@@ -2,7 +2,7 @@
 
 Design for a human-viewable export: **one folder per conversation**, **one `.eml` per message**, with structured `X-ME-*` headers for machine fidelity. Intended as an archive / interchange path before vault exists. Mail clients can open individual messages; translators can recover SMS, group MMS, and (later) iMessage semantics without relying on CSV.
 
-**Status:** Writer in [`message-mail`](../crates/message-mail/). All GUI exporters support `--format eml` / `mbox`. GO SMS Pro, **SMS Backup & Restore**, SMS Backup+, OpenExtract, iMazing, and WhatsApp go pending → [`message-ir`](../crates/message-ir/) → EML/MBOX/CSV/JSON (see [MESSAGE_IR.md](MESSAGE_IR.md)). iMessage uses [`imessage-mail-exporter`](../crates/imessage-mail-exporter/). CSV remains the default. iMessage mail emits extension headers; handwriting attaches SVG. See also [csv-output.md](src/csv-output.md).
+**Status:** Writer in [`message-mail`](../crates/message-mail/). All GUI exporters support `--format eml` / `mbox`. All exporters (including iMessage via [`imessage-ir-exporter`](../crates/imessage-ir-exporter/)) go pending → [`message-ir`](../crates/message-ir/) → EML/MBOX/CSV/JSON (see [MESSAGE_IR.md](MESSAGE_IR.md)). CSV remains the default. iMessage emits extension headers; handwriting attaches SVG. See also [csv-output.md](src/csv-output.md).
 
 ## Goals
 
@@ -47,7 +47,7 @@ Each file is one RFC 5322 message. Prefer writing via a MIME builder (e.g. `mail
 | Large chats | Open one message | Some clients load the whole file |
 | Thunderbird “mailbox” UX | Import/drag varies | Often smoother import-as-folder |
 
-**Canonical form = folder of EMLs.** `imessage-mail-exporter` can also write derived **mboxrd** (`OutputFormat::Mbox` / GUI **MBOX**): one `<conversation-stem>.mbox` per chat, same MIME/`X-ME-*` payload as the `.eml` files. Outlook has poor native support for both; do not optimize the canonical format for Outlook.
+**Canonical form = folder of EMLs.** Derived **mboxrd** (`OutputFormat::Mbox` / GUI **MBOX**) is also available: one `<conversation-stem>.mbox` per chat, same MIME/`X-ME-*` payload as the `.eml` files. Outlook has poor native support for both; do not optimize the canonical format for Outlook.
 
 ### Explicit anti-pattern: SMS Backup+ archive EML
 
@@ -196,7 +196,7 @@ Optional later mode: external files under `attachments/` with `Content-Location`
 
 ## iMessage extension
 
-Align with the iMessage CSV inventory in [`crates/imessage-exporter/src/exporters/csv/`](../crates/imessage-exporter/src/exporters/csv/). SMS exporters MUST NOT emit these headers.
+Align with the iMessage CSV inventory in [`message-ir::IMESSAGE_CSV_HEADERS`](../crates/message-ir/src/lib.rs). SMS exporters MUST NOT emit these headers.
 
 ### Threading (replies)
 
@@ -275,7 +275,7 @@ MIME:
 
 - `text/plain` summary for preview (URL title, `Poll: …`, `Apple Pay`, …)
 - Optional `application/json` part (`name=app.json`) when the payload is large
-- Handwriting: `imessage-mail-exporter` attaches `HandwrittenMessage::render_svg` as `image/svg+xml`
+- Handwriting: `imessage-ir-exporter` attaches `HandwrittenMessage::render_svg` as `image/svg+xml`
 - Digital Touch: bundle id + `X-ME-App` JSON only (no SVG path today)
 
 ### Announcements and location
@@ -334,7 +334,7 @@ Normal sticker sends: image MIME part + `X-ME-Attachment-Meta` (`is_sticker`, `s
 
 1. Crate [`message-mail`](../crates/message-mail/) emits one `.eml` / mboxrd record per message (`write_mail_package`).
 2. **Android / OpenExtract / iMazing / WhatsApp** exporters map pending rows → `MailMessage` (`--format eml|mbox`).
-3. **iMessage** EML/MBOX is [`imessage-mail-exporter`](../crates/imessage-mail-exporter/) (`imessage-database` → `MailMessage`). CSV stays on [`imessage-exporter`](../crates/imessage-exporter/).
+3. **iMessage** is [`imessage-ir-exporter`](../crates/imessage-ir-exporter/) (`imessage-database` → IR → CSV/EML/MBOX/JSON).
 4. Deferred: Digital Touch animation, translations UI, HEIC convert / obfuscate inside MIME, Askama HTML bodies.
 
 ## Related docs

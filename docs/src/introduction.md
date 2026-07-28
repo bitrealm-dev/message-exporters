@@ -26,7 +26,7 @@ It is not meant to preserve every source-specific detail. It is a simple, portab
 
 The desktop app focuses on 3 supported import paths:
 
-1. **iPhone backups** — Apple Messages exports produced by `imessage-exporter`
+1. **iPhone backups** — Apple Messages exports produced by `imessage-ir-exporter`
 2. **SMS Backup & Restore** — SyncTech XML backups
 3. **WhatsApp** — native databases and encrypted `crypt` backups processed by `wtsexporter`
 

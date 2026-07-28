@@ -27,7 +27,7 @@ For each platform, these binaries are attached to the release (standalone CLIs; 
 - `sms-backup-plus-exporter`
 - `openextract-exporter`
 - `imazing-exporter`
-- `imessage-exporter`
+- `imessage-ir-exporter`
 - `whatsapp-exporter`
 - `wtsexporter` / `wtsexporter.exe` (KnugiHK 0.13.0, still required beside the GUI for WhatsApp extract)
 

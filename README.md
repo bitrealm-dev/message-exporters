@@ -27,7 +27,7 @@ cargo run --release -p message-exporters-gui
 
 | Backup | Converter |
 |--------|-----------|
-| Apple Messages (`chat.db`) | [`imessage-exporter`](crates/imessage-exporter) |
+| Apple Messages (`chat.db`) | [`imessage-ir-exporter`](crates/imessage-ir-exporter) |
 | SMS Backup & Restore (SyncTech XML) | [`sms-backup-restore-exporter`](crates/sms-backup-restore-exporter) |
 | WhatsApp (native DB / crypt) | [`whatsapp-exporter`](crates/whatsapp-exporter) |
 
@@ -40,4 +40,4 @@ How maintainers cut a version: [`docs/DEVELOPING.md`](docs/DEVELOPING.md).
 
 ## License
 
-Most converters are MIT — see [LICENSE](LICENSE). `imessage-exporter` is GPL-3.0-or-later (inherited from upstream).
+Most converters are MIT — see [LICENSE](LICENSE). `imessage-ir-exporter` is GPL-3.0-or-later (via `imessage-database` / `crabapple`).

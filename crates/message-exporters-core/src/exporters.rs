@@ -42,7 +42,7 @@ impl Exporter {
             Self::SmsBackupPlus => "sms-backup-plus-exporter",
             Self::OpenExtract => "openextract-exporter",
             Self::Imazing => "imazing-exporter",
-            Self::Imessage => "imessage-exporter",
+            Self::Imessage => "imessage-ir-exporter",
             Self::Whatsapp => "whatsapp-exporter",
         }
     }
@@ -79,7 +79,7 @@ impl Exporter {
     /// Form title / hyperlink text (may be longer than the dropdown label).
     pub fn link_label(self) -> &'static str {
         match self {
-            Self::Imessage => "imessage-exporter",
+            Self::Imessage => "imessage-ir-exporter",
             other => other.display_name(),
         }
     }
@@ -91,7 +91,9 @@ impl Exporter {
             Self::SmsBackupPlus => "https://github.com/jberkel/sms-backup-plus",
             Self::OpenExtract => "https://www.openextract.app/",
             Self::Imazing => "https://imazing.com/",
-            Self::Imessage => "https://github.com/ReagentX/imessage-exporter",
+            Self::Imessage => {
+                "https://github.com/bitrealm-dev/message-exporters/tree/main/crates/imessage-ir-exporter"
+            }
             Self::Whatsapp => "https://github.com/KnugiHK/WhatsApp-Chat-Exporter",
         }
     }
