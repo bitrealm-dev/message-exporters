@@ -1,6 +1,6 @@
 # Choose an output format
 
-Pick the packaging that matches the next tool. The Message tab and Re-export tab write the same set of formats; the default is **JSON**.
+Pick the format that matches your needs. The Message tab and Re-export tab write the same set of formats with default being **JSON**.
 
 ## Quick chooser
 
@@ -50,7 +50,9 @@ output/
     └── 000002_2021-03-28_170102_e5f6a7b8.eml
 ```
 
-Use EML when the goal is to browse history in a mail client.
+Use EML when the mail client imports a folder of individual message files.
+
+**Note:** In a mail client, EML and MBOX both usually become one folder (or mailbox) per conversation with the messages inside. Pick whichever packaging your client imports best.
 
 ### MBOX
 
@@ -66,13 +68,15 @@ output/
 └── group_+15555550101_+15555550102.mbox
 ```
 
-Use MBOX when a single mailbox file per chat is easier to archive or import than a folder of EMLs.
+Use MBOX when the mail client prefers a single mailbox file per conversation.
+
+**Note:** In a mail client, EML and MBOX both usually become one folder (or mailbox) per conversation with the messages inside. Pick whichever packaging your client imports best.
 
 ### JSON
 
 Writes one pretty-printed `.json` document per conversation. See [Common message](common-message.md).
 
-**Attachments:** sidecar `attachments/`; bytes are never inside the `.json` (documents reference paths and digests).
+**Attachments:** sidecar `attachments/`; attachments are not byte encoded within the `.json`.
 
 **Layout:**
 
@@ -83,13 +87,13 @@ output/
     └── IMG_0001.jpg
 ```
 
-Use JSON as the default archive and for later re-packaging.
+Use JSON as the default archive: one pretty-printed document per chat that is easy to open, inspect, and re-export. Prefer it over JSONL when you want the whole conversation as a single object.
 
 ### JSON Lines (JSONL)
 
 Writes one `.jsonl` file per conversation: a header line, then one message per line.
 
-**Attachments:** sidecar `attachments/`; bytes are never inside the `.jsonl` (same as JSON).
+**Attachments:** sidecar `attachments/`; attachments are not byte encoded within the `.jsonl`.
 
 **Layout:**
 
@@ -100,11 +104,11 @@ output/
     └── IMG_0001.jpg
 ```
 
-Use JSONL for streaming or line-oriented processing of large chats.
+Use JSONL to allow tools (i.e. `jq`, `grep`) to stream or filter message without loading the whole conversation at once.
 
 ### XML
 
-Writes a single `smses.xml` for the whole export (SyncTech SMS Backup & Restore shape).
+Writes a single `smses.xml` for the whole export in SyncTech SMS Backup & Restore format. iMessage specific fields are dropped.
 
 **Attachments:** transformed, then embedded as base64 inside `smses.xml`. No sidecar folder.
 
@@ -115,9 +119,7 @@ output/
 └── smses.xml
 ```
 
-XML exists for **Android compatibility**. Backing up or restoring a whole Android phone without third-party tooling requires root and often an unlocked bootloader, which is difficult on most devices. The SMS Backup & Restore app works without root, and `smses.xml` is the file it reads—so this format is the practical way to move messages onto an Android phone.
-
-Use XML when the destination is an Android device (or another tool that expects that backup format). Apple-only fields are dropped. Prefer JSON when preserving iMessage detail matters.
+Use XML for **Android compatibility**. Backing up or restoring a whole Android phone without third-party tooling requires root and often an unlocked bootloader, which is difficult on most devices. The SMS Backup & Restore app works without root, and `smses.xml` is the file it reads.
 
 ## Change format later
 
