@@ -16,6 +16,8 @@ pub struct AttachmentCell {
     pub path: Option<String>,
     pub original_name: Option<String>,
     pub mime_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub digest_sha256: Option<String>,
     pub is_sticker: bool,
     pub transcription: Option<String>,
     pub sticker_effect: Option<String>,

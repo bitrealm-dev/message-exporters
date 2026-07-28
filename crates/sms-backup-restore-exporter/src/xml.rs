@@ -67,7 +67,7 @@ pub struct AttachmentBlob {
     pub digest_hex: String,
 }
 
-/// Full XML fidelity payload for CSV `xml_fields_json`.
+/// Full XML fidelity payload for IR `source.fields` / CSV `source_fields_json`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind")]
 pub enum XmlFields {

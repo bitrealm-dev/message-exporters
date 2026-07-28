@@ -7,56 +7,53 @@ Typed model: [`crates/message-ir/`](../crates/message-ir/). On-disk forms:
 - **JSON** — one pretty-printed `<conversation-stem>.json` per chat (`ConversationDocument`)
 - **JSONL** — one `<conversation-stem>.jsonl` per chat: header line, then one `IrMessage` per line
 
-Stem rules match CSV filenames (including optional `filename_suffix`, e.g. `__whatsapp`).
+Stem rules match CSV filenames. Packaging-only suffixes (e.g. `__whatsapp`) affect the on-disk stem but are **not** serialized in the JSON body.
 
 ## Status
 
 - **IR-backed** (`ConversationDocument` → `message_ir::write_format`, `--format csv|eml|mbox|json|jsonl`): all exporters, including iMessage (`imessage-ir-exporter`).
-- **Schema version 2 only.** Nested objects/arrays (not stringified `*_json` bags); no `source.date_ms`. Older IR JSON is not read or dual-written — regenerate exports after schema changes.
+- **Schema version 3 only** (breaking). Typed enums/bags, filled outgoing identity, conversation stats, stable null/`[]` keys. Older IR is not read — regenerate exports after schema changes.
 
-## Document shape (`schema_version: 2`)
+## Document shape (`schema_version: 3`)
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "export": {
     "source": "sms-backup-restore",
     "tool": "SMS Backup & Restore",
     "tool_version": "10.26.003",
     "owner_handle": "+15555550100",
-    "owner_display_name": null
+    "owner_display_name": "Me"
   },
   "conversation": {
     "chat_identifier": "+15555550101",
     "conversation_type": "individual",
     "group_title": null,
     "participants": [{ "handle": "+15555550101", "display_name": "Sam" }],
-    "filename_suffix": null
+    "stats": {
+      "message_count": 1,
+      "attachment_count": 0,
+      "first_timestamp_unix_ms": 1400773261000,
+      "last_timestamp_unix_ms": 1400773261000
+    }
   },
   "messages": [
     {
       "guid": "…",
       "timestamp_unix_ms": 1400773261000,
-      "direction": "incoming",
+      "direction": "outgoing",
       "service": "sms",
       "message_kind": "sms",
-      "sender_handle": "+15555550101",
-      "sender_display_name": "Sam",
+      "sender_handle": "+15555550100",
+      "sender_display_name": "Me",
       "subject": null,
       "text": "Hello",
-      "attachments": [
-        {
-          "path": "attachments/…",
-          "original_name": "photo.jpg",
-          "mime_type": "image/jpeg",
-          "digest_sha256": "…",
-          "is_sticker": false
-        }
-      ],
+      "attachments": [],
+      "imessage": null,
       "source": {
-        "contact_name": "Sam",
-        "android_type": "1",
-        "fields": { "address": "+15555550101" }
+        "android_type": 2,
+        "fields": { "kind": "sms", "attrs": { "address": "+15555550101" } }
       }
     }
   ]
@@ -65,39 +62,45 @@ Stem rules match CSV filenames (including optional `filename_suffix`, e.g. `__wh
 
 | Tier | Contents |
 |------|----------|
-| Core | conversation + message fields shared with CSV / mail |
-| `imessage` | optional object: nested `parts` / `edits` / `tapbacks` / `app`, plus scalars (`is_reply`, `read_receipt_rfc3339`, …) |
-| `source` | vendor leftovers: `contact_name`, `android_type`, `fields` (object) |
+| Core | typed conversation + message fields |
+| `imessage` | typed Apple extensions (`IrImessage`); nested `parts` / `edits` / `tapbacks` / `app` are JSON values |
+| `source` | `android_type` (`i32` or null) + vendor `fields` object |
 
 ### Identity
 
-- Outgoing rows leave `sender_handle` / `sender_display_name` blank by design.
-- Owner identity lives on `export.owner_handle` and optional `export.owner_display_name` (iMessage caller-id / `"Me"`).
+- Outgoing rows set `sender_handle` / `sender_display_name` from `export.owner_*` (display defaults to `"Me"` when a handle is known).
+- Incoming rows use the peer identity.
+- Display names are not duplicated under `source`.
 
 ### Attachments
 
-Attachment **bytes** are never stored in JSON/JSONL (`#[serde(skip)]`). Projectors read `attachments/` by `path`, or use in-memory bytes when the exporter kept them for EML. JSON alone is not enough to rebuild mail with media.
+Attachment **bytes** are never stored in JSON/JSONL (`#[serde(skip)]`). Paths + digests point at sidecar files under `attachments/`. JSON/JSONL alone is not enough to rebuild mail with media — keep the attachment directory with the export.
 
-### Vocabulary (normalized at emit)
+### Vocabulary (enums)
 
 - `conversation_type`: `individual` \| `group`
-- `service`: lowercase (`sms`, `imessage`, `whatsapp`, …)
-- `message_kind`: exporter-specific lowercase/snake strings (`sms`, `mms`, `tapback`, …)
+- `service`: `sms` \| `imessage` \| `whatsapp` \| `rcs` \| `unknown`
+- `message_kind`: `sms` \| `mms` \| `imessage` \| `tapback` \| `sticker_tapback` \| `announcement` \| `location_share` \| `balloon` \| `unknown`
 
-### `filename_suffix`
+### Serialization rules
 
-When set (e.g. `__whatsapp`), it is serialized on `conversation` and incorporated into the on-disk stem so the JSON body matches the filename.
+- Optional strings / bags serialize as `null` when absent (stable keys).
+- Empty `participants` / `attachments` serialize as `[]`.
+- Packaging stem suffix is not part of the document (internal `packaging_stem_suffix` only).
+
+### Conversation stats
+
+`conversation.stats` is computed from messages at write time (`message_count`, `attachment_count`, first/last `timestamp_unix_ms`).
 
 ## JSONL layout
 
 ```text
-{"schema_version":2,"export":{…},"conversation":{…}}
-{"guid":"…","timestamp_unix_ms":…, …}
+{"schema_version":3,"export":{…},"conversation":{…}}
 {"guid":"…","timestamp_unix_ms":…, …}
 …
 ```
 
-Line 1 is the header (no `messages` array). Each following line is one `IrMessage` (same nested v2 shape).
+Line 1 is the header (includes `conversation.stats`; no `messages` array). Each following line is one `IrMessage`.
 
 ## Projectors
 
@@ -105,7 +108,7 @@ Line 1 is the header (no `messages` array). Each following line is one `IrMessag
 |--------|--------|
 | JSON | pretty-printed `ConversationDocument` |
 | JSONL | header + one message per line |
-| CSV | shared SBR-compatible columns (+ Apple columns when `export.source == "imessage"`); nested bags stringified into `xml_fields_json` / `parts_json` / … cells |
+| CSV | unified [`CSV_HEADERS`](../crates/message-ir/src/lib.rs) for all sources; nested bags stringified into `source_fields_json` / `parts_json` / … cells (Apple cells empty for SMS) |
 | EML / MBOX | IR → `MailMessage` → [`message-mail`](../crates/message-mail/) |
 
 ## Related

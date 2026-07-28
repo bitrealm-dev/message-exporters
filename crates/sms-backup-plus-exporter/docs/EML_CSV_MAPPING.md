@@ -38,19 +38,17 @@ Typical headers: `X-smssync-type`, `X-smssync-address`, `X-smssync-date`, `X-sms
 | `text` | First `text/plain` (flat) or archive body text |
 | `attachments_json` | Non-text MIME parts under `attachments/` |
 
-## Backup+-only columns
+## Backup+-only fields
 
-| CSV column | Source |
-|------------|--------|
-| `export_source` | Always `sms-backup-plus` |
-| `export_tool` | Always `SMS Backup+` |
-| `export_tool_version` | Always `1.5.11` (targeted Android app version) |
-| `source_kind` | `flat` or `archive` |
-| `smssync_id` | `X-smssync-id` (flat only) |
-| `date_ms` | Timestamp as milliseconds string |
-| `contact_name` | Subject / name hint |
+Shared header: [`message-ir::CSV_HEADERS`](../../message-ir/src/lib.rs).
+
+| Field | Where |
+|-------|--------|
+| `export_source` / `export_tool` / `export_tool_version` | CSV provenance (`sms-backup-plus` / `SMS Backup+` / `1.5.11`) |
+| `timestamp_unix_ms` | Epoch ms |
 | `android_type` | Raw `X-smssync-type` when present |
-| `eml_path` | Source `.eml` path (relative to an `--input` root when possible) |
+| `source_kind` / `smssync_id` / `eml_path` | Inside `source_fields_json` |
+| Subject / name hint | `sender_display_name` (incoming); not a separate column |
 
 ## Deduplication
 

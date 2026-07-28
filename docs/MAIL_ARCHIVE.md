@@ -131,7 +131,7 @@ Prefix: **`X-ME-`** (Message Exporters). JSON header values are compact single-l
 | `X-ME-Export-Tool` | string | |
 | `X-ME-Export-Tool-Version` | string | |
 | `X-ME-Android-Type` | integer string | Optional; SMS `type` / MMS `msg_box` |
-| `X-ME-Source-Fields` | JSON | Optional full-fidelity bag (CSV `xml_fields_json` / PDU extras) |
+| `X-ME-Source-Fields` | JSON | Optional full-fidelity bag (CSV `source_fields_json` / PDU extras) |
 | `X-ME-Attachment-Meta` | JSON array | Parallel to MIME attachment parts (see Attachments) |
 
 ### Message-kind taxonomy (shared)
@@ -196,7 +196,7 @@ Optional later mode: external files under `attachments/` with `Content-Location`
 
 ## iMessage extension
 
-Align with the iMessage CSV inventory in [`message-ir::IMESSAGE_CSV_HEADERS`](../crates/message-ir/src/lib.rs). SMS exporters MUST NOT emit these headers.
+Align with the unified CSV inventory in [`message-ir::CSV_HEADERS`](../crates/message-ir/src/lib.rs). Apple-only cells are empty for SMS rows.
 
 ### Threading (replies)
 
@@ -313,7 +313,7 @@ Normal sticker sends: image MIME part + `X-ME-Attachment-Meta` (`is_sticker`, `s
 | `conversation_type` | `X-ME-Conversation-Type` |
 | `group_title` | `X-ME-Group-Title` |
 | `guid` | `X-ME-Guid` + `Message-ID` |
-| `timestamp` / `timestamp_utc` / `date_ms` | `Date` + `X-ME-Timestamp-Unix-Ms` |
+| `timestamp` / `timestamp_utc` / `timestamp_unix_ms` | `Date` + `X-ME-Timestamp-Unix-Ms` |
 | `direction` | `X-ME-Direction` |
 | `service` | `X-ME-Service` |
 | `sender_handle` / `sender_display_name` | headers + `From` phrase |
@@ -322,7 +322,7 @@ Normal sticker sends: image MIME part + `X-ME-Attachment-Meta` (`is_sticker`, `s
 | `attachments_json` | MIME parts + `X-ME-Attachment-Meta` |
 | `message_kind` | `X-ME-Message-Kind` (`sms`/`mms`) |
 | `android_type` | `X-ME-Android-Type` |
-| `xml_fields_json` / PDU extras | `X-ME-Source-Fields` |
+| `source_fields_json` / PDU extras | `X-ME-Source-Fields` |
 | `export_*` | `X-ME-Export-*` |
 | `participants_json` (iMessage) | `X-ME-Participants` |
 | `tapbacks_json` | tapback EMLs (+ optional `X-ME-Tapbacks`) |

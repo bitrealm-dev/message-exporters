@@ -9,9 +9,11 @@ use anyhow::{Context, Result};
 use message_csv::{format_local_ts, json_cell, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    write_format, ConversationDocument, ConversationMeta, ExportMeta, IrAttachment, IrConversationType,
-    IrDirection, IrMessage, IrParticipant, SCHEMA_VERSION,
+    owner_sender, write_format, ConversationDocument, ConversationMeta, ConversationStats,
+    ExportMeta, IrAttachment, IrConversationType, IrDirection, IrMessage, IrMessageKind,
+    IrParticipant, IrService, IrSource, SCHEMA_VERSION,
 };
+use serde_json::Map;
 use message_mail::clean_previous_mail_output;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -475,6 +477,15 @@ fn pending_to_document(
         })
         .collect();
 
+    let export = ExportMeta {
+        source: EXPORT_SOURCE.into(),
+        tool: EXPORT_TOOL.into(),
+        tool_version: EXPORT_TOOL_VERSION.into(),
+        owner_handle: None,
+        owner_display_name: None,
+    };
+    let (owner_handle, owner_display) = owner_sender(&export);
+
     let mut messages = Vec::with_capacity(convo.messages.len());
     for msg in &convo.messages {
         report.messages += 1;
@@ -502,44 +513,59 @@ fn pending_to_document(
             })
             .collect();
         let message_kind = if msg.attachments.is_empty() {
-            "sms"
+            IrMessageKind::Sms
         } else {
-            "mms"
+            IrMessageKind::Mms
         };
 
-        let mut xml_fields = serde_json::Map::new();
+        let mut fields = Map::new();
         if !convo.whatsapp_jid.is_empty() {
-            xml_fields.insert(
+            fields.insert(
                 "jid".into(),
                 serde_json::Value::String(convo.whatsapp_jid.clone()),
             );
         }
         if !msg.key_id.is_empty() {
-            xml_fields.insert(
+            fields.insert(
                 "key_id".into(),
                 serde_json::Value::String(msg.key_id.clone()),
             );
         }
         if !msg.reply_json.is_empty() {
-            xml_fields.insert(
+            fields.insert(
                 "reply".into(),
                 serde_json::from_str(&msg.reply_json)
                     .unwrap_or_else(|_| serde_json::Value::String(msg.reply_json.clone())),
             );
         }
         if !msg.reactions_json.is_empty() {
-            xml_fields.insert(
+            fields.insert(
                 "reactions".into(),
                 serde_json::from_str(&msg.reactions_json)
                     .unwrap_or_else(|_| serde_json::Value::String(msg.reactions_json.clone())),
             );
         }
-        let source = if xml_fields.is_empty() {
-            None
+        let source = IrSource {
+            android_type: None,
+            fields,
+        }
+        .into_option();
+
+        let (sender_handle, sender_display_name) = if msg.is_from_me {
+            (owner_handle.clone(), owner_display.clone())
         } else {
-            let mut source = serde_json::Map::new();
-            source.insert("fields".into(), serde_json::Value::Object(xml_fields));
-            Some(serde_json::Value::Object(source))
+            (
+                if msg.sender_handle.is_empty() {
+                    None
+                } else {
+                    Some(msg.sender_handle.clone())
+                },
+                if msg.sender_display_name.is_empty() {
+                    None
+                } else {
+                    Some(msg.sender_display_name.clone())
+                },
+            )
         };
 
         messages.push(IrMessage {
@@ -550,18 +576,10 @@ fn pending_to_document(
             } else {
                 IrDirection::Incoming
             },
-            service: "whatsapp".into(),
-            message_kind: message_kind.into(),
-            sender_handle: if msg.is_from_me || msg.sender_handle.is_empty() {
-                None
-            } else {
-                Some(msg.sender_handle.clone())
-            },
-            sender_display_name: if msg.sender_display_name.is_empty() {
-                None
-            } else {
-                Some(msg.sender_display_name.clone())
-            },
+            service: IrService::Whatsapp,
+            message_kind,
+            sender_handle,
+            sender_display_name,
             subject: None,
             text: msg.text.clone(),
             attachments,
@@ -572,20 +590,15 @@ fn pending_to_document(
 
     Ok(ConversationDocument {
         schema_version: SCHEMA_VERSION,
-        export: ExportMeta {
-            source: EXPORT_SOURCE.into(),
-            tool: EXPORT_TOOL.into(),
-            tool_version: EXPORT_TOOL_VERSION.into(),
-            owner_handle: None,
-            owner_display_name: None,
-        },
+        export,
         conversation: ConversationMeta {
             chat_identifier: chat_id.to_string(),
             conversation_type: IrConversationType::parse(&convo.conversation_type),
             group_title: convo.group_title.clone(),
             participants,
-            filename_suffix: Some("__whatsapp".into()),
+            stats: ConversationStats::default(),
         },
         messages,
+        packaging_stem_suffix: Some("__whatsapp".into()),
     })
 }

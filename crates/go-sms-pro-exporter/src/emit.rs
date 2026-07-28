@@ -9,8 +9,9 @@ use message_contacts::ContactsBook;
 use message_csv::{format_local_ts, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    write_format, ConversationDocument, ConversationMeta, ExportMeta, IrAttachment,
-    IrConversationType, IrDirection, IrMessage, IrParticipant, SCHEMA_VERSION,
+    owner_sender, parse_android_type, write_format, ConversationDocument, ConversationMeta,
+    ConversationStats, ExportMeta, IrAttachment, IrConversationType, IrDirection, IrMessage,
+    IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION,
 };
 use message_mail::clean_previous_mail_output;
 use message_phone::{to_e164, OwnerPhoneSet};
@@ -493,6 +494,15 @@ fn pending_to_document(
         });
     }
 
+    let export = ExportMeta {
+        source: EXPORT_SOURCE.into(),
+        tool: EXPORT_TOOL.into(),
+        tool_version: EXPORT_TOOL_VERSION.into(),
+        owner_handle: Some(owner_handle.to_string()),
+        owner_display_name: None,
+    };
+    let (owner_sender_handle, owner_sender_display) = owner_sender(&export);
+
     let mut messages = Vec::with_capacity(convo.messages.len());
     for msg in &convo.messages {
         if msg.is_from_me {
@@ -509,7 +519,7 @@ fn pending_to_document(
             .parse::<i64>()
             .unwrap_or_else(|_| secs.saturating_mul(1000));
         let (sender_handle, sender_display_name) = if msg.is_from_me {
-            (None, None)
+            (owner_sender_handle.clone(), owner_sender_display.clone())
         } else {
             (
                 msg.sender_digits.as_ref().map(|d| to_e164(d)),
@@ -531,18 +541,10 @@ fn pending_to_document(
             })
             .collect();
         let message_kind = if msg.attachments.is_empty() {
-            "sms"
+            IrMessageKind::Sms
         } else {
-            "mms"
+            IrMessageKind::Mms
         };
-
-        let mut source = serde_json::Map::new();
-        if !msg.contact_name.is_empty() {
-            source.insert("contact_name".into(), serde_json::json!(msg.contact_name));
-        }
-        if !msg.android_type.is_empty() {
-            source.insert("android_type".into(), serde_json::json!(msg.android_type));
-        }
 
         let mut fields = serde_json::Map::new();
         fields.insert(
@@ -579,7 +581,11 @@ fn pending_to_document(
                 serde_json::Value::String(title.to_string()),
             );
         }
-        source.insert("fields".into(), serde_json::Value::Object(fields));
+        let source = IrSource {
+            android_type: parse_android_type(&msg.android_type),
+            fields,
+        }
+        .into_option();
 
         messages.push(IrMessage {
             guid,
@@ -589,36 +595,31 @@ fn pending_to_document(
             } else {
                 IrDirection::Incoming
             },
-            service: "sms".into(),
-            message_kind: message_kind.into(),
+            service: IrService::Sms,
+            message_kind,
             sender_handle,
             sender_display_name,
             subject: None,
             text: msg.text.clone(),
             attachments,
             imessage: None,
-            source: Some(serde_json::Value::Object(source)),
+            source,
         });
     }
 
     Ok(ConversationDocument {
         schema_version: SCHEMA_VERSION,
-        export: ExportMeta {
-            source: EXPORT_SOURCE.into(),
-            tool: EXPORT_TOOL.into(),
-            tool_version: EXPORT_TOOL_VERSION.into(),
-            owner_handle: Some(owner_handle.to_string()),
-            owner_display_name: None,
-        },
+        export,
         conversation: ConversationMeta {
             chat_identifier: chat_id.to_string(),
             conversation_type: IrConversationType::parse(&convo.conversation_type),
             // Synthetic Android group titles are not used for filenames.
             group_title: None,
             participants,
-            filename_suffix: None,
+            stats: ConversationStats::default(),
         },
         messages,
+        packaging_stem_suffix: None,
     })
 }
 

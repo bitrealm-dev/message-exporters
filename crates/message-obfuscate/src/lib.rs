@@ -538,7 +538,8 @@ const EXPORT_IDENTITY_COLS: &[&str] = &[
     "participants_json",
     "sender_handle",
     "sender_display_name",
-    "contact_name",
+    "owner_handle",
+    "owner_display_name",
     "text",
     "subject",
     "attachments_json",
@@ -659,14 +660,16 @@ fn obfuscate_export_record(
                 }
             }
             "participants_json" => obfuscate_participants_json(val, anon),
-            "sender_handle" => {
-                sender_handle_original = val.to_string();
+            "sender_handle" | "owner_handle" => {
+                if header == "sender_handle" {
+                    sender_handle_original = val.to_string();
+                }
                 anon.obfuscate_handle(val)
             }
-            "sender_display_name" | "contact_name" => {
+            "sender_display_name" | "owner_display_name" => {
                 if val.is_empty() {
                     String::new()
-                } else if !sender_handle_original.is_empty() {
+                } else if header == "sender_display_name" && !sender_handle_original.is_empty() {
                     anon.display_name_for_handle(&sender_handle_original)
                 } else {
                     anon.obfuscate_display_name(val)

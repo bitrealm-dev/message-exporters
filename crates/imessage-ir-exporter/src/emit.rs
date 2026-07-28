@@ -29,11 +29,11 @@ use imessage_database::{
 };
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    parse_json_value, write_format, ConversationDocument, ConversationMeta, ExportMeta,
-    IrAttachment, IrConversationType, IrDirection, IrMessage, IrParticipant, SCHEMA_VERSION,
+    owner_sender, parse_json_value, write_format, ConversationDocument, ConversationMeta,
+    ExportMeta, IrAttachment, IrConversationType, IrDirection, IrImessage, IrMessage,
+    IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION,
 };
 use message_mail::{Direction as MailDirection, MailAttachment, MailMessage, Participant};
-use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 use crate::{
@@ -142,17 +142,26 @@ pub fn run_export(session: &MailSession) -> Result<(), RuntimeError> {
         if convo.messages.is_empty() {
             continue;
         }
+        let export = ExportMeta {
+            source: EXPORT_SOURCE.into(),
+            tool: EXPORT_TOOL.into(),
+            tool_version: env!("CARGO_PKG_VERSION").into(),
+            owner_handle: (!convo.owner_handle.is_empty()).then(|| convo.owner_handle.clone()),
+            owner_display_name: convo
+                .owner_display_name
+                .or_else(|| session.options.use_caller_id.then(|| ME.to_string())),
+        };
+        let (owner_handle, owner_display_name) = owner_sender(&export);
+        let mut messages = convo.messages;
+        for msg in &mut messages {
+            if msg.direction == IrDirection::Outgoing {
+                msg.sender_handle = owner_handle.clone();
+                msg.sender_display_name = owner_display_name.clone();
+            }
+        }
         let doc = ConversationDocument {
             schema_version: SCHEMA_VERSION,
-            export: ExportMeta {
-                source: EXPORT_SOURCE.into(),
-                tool: EXPORT_TOOL.into(),
-                tool_version: env!("CARGO_PKG_VERSION").into(),
-                owner_handle: (!convo.owner_handle.is_empty()).then(|| convo.owner_handle.clone()),
-                owner_display_name: convo
-                    .owner_display_name
-                    .or_else(|| session.options.use_caller_id.then(|| ME.to_string())),
-            },
+            export,
             conversation: ConversationMeta {
                 chat_identifier,
                 conversation_type: convo.conversation_type,
@@ -165,9 +174,10 @@ pub fn run_export(session: &MailSession) -> Result<(), RuntimeError> {
                         display_name: p.display_name,
                     })
                     .collect(),
-                filename_suffix: None,
+                stats: Default::default(),
             },
-            messages: convo.messages,
+            messages,
+            packaging_stem_suffix: None,
         };
         write_format(&session.options.export_path, format, &doc).map_err(|e| {
             RuntimeError::InvalidOptions(format!(
@@ -271,17 +281,32 @@ fn mail_message_to_ir(
         });
     }
 
+    let direction = match mail.direction {
+        MailDirection::Incoming => IrDirection::Incoming,
+        MailDirection::Outgoing => IrDirection::Outgoing,
+    };
+    let (sender_handle, sender_display_name) = match direction {
+        IrDirection::Outgoing => {
+            let export = ExportMeta {
+                source: mail.export_source.clone(),
+                tool: mail.export_tool.clone(),
+                tool_version: mail.export_tool_version.clone(),
+                owner_handle: (!mail.owner_handle.is_empty()).then(|| mail.owner_handle.clone()),
+                owner_display_name: mail.owner_display_name.clone(),
+            };
+            owner_sender(&export)
+        }
+        IrDirection::Incoming => (mail.sender_handle.clone(), mail.sender_display_name.clone()),
+    };
+
     Ok(IrMessage {
         guid: mail.guid.clone(),
         timestamp_unix_ms: mail.timestamp_unix_ms,
-        direction: match mail.direction {
-            MailDirection::Incoming => IrDirection::Incoming,
-            MailDirection::Outgoing => IrDirection::Outgoing,
-        },
-        service: normalize_service(&mail.service),
-        message_kind: mail.message_kind.clone(),
-        sender_handle: mail.sender_handle.clone(),
-        sender_display_name: mail.sender_display_name.clone(),
+        direction,
+        service: IrService::parse(&mail.service),
+        message_kind: IrMessageKind::parse(&mail.message_kind),
+        sender_handle,
+        sender_display_name,
         subject: mail.subject.clone(),
         text: mail.text.clone(),
         attachments,
@@ -290,97 +315,58 @@ fn mail_message_to_ir(
     })
 }
 
-fn normalize_service(service: &str) -> String {
-    let lower = service.trim().to_ascii_lowercase();
-    if lower == "imessage" || lower == "sms" || lower == "rcs" {
-        lower
-    } else if service.is_empty() {
-        String::new()
-    } else {
-        lower
+/// Build typed [`IrImessage`] from `MailMessage` extension fields.
+///
+/// Nested Apple blobs (`parts` / `edits` / `tapbacks` / `app`) are parsed from
+/// JSON strings into [`serde_json::Value`]s. Owner display name lives on
+/// [`ExportMeta`], not here.
+fn imessage_bag(mail: &MailMessage) -> Option<IrImessage> {
+    fn nonempty(s: &Option<String>) -> Option<String> {
+        s.as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(str::to_string)
     }
-}
 
-/// Serialize `MailMessage`'s iMessage extension fields into the IR `imessage`
-/// bag with nested `parts` / `edits` / `tapbacks` / `app` values.
-fn imessage_bag(mail: &MailMessage) -> Option<Value> {
-    let mut bag = serde_json::Map::new();
-    if mail.is_reply {
-        bag.insert("is_reply".into(), json!(true));
+    IrImessage {
+        is_reply: mail.is_reply,
+        in_reply_to_guid: nonempty(&mail.in_reply_to_guid),
+        thread_originator_part: mail.thread_originator_part,
+        num_replies: mail.num_replies,
+        is_deleted: mail.is_deleted,
+        send_effect: nonempty(&mail.send_effect),
+        shared_location: nonempty(&mail.shared_location),
+        announcement: nonempty(&mail.announcement),
+        read_receipt_rfc3339: nonempty(&mail.read_receipt_rfc3339),
+        parts: mail
+            .parts_json
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(parse_json_value),
+        edits: mail
+            .edits_json
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(parse_json_value),
+        tapbacks: mail
+            .tapbacks_json
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(parse_json_value),
+        app: mail
+            .app_json
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(parse_json_value),
+        balloon_bundle_id: nonempty(&mail.balloon_bundle_id),
+        balloon_kind: nonempty(&mail.balloon_kind),
+        associated_guid: nonempty(&mail.associated_guid),
+        associated_part: mail.associated_part,
+        tapback_kind: nonempty(&mail.tapback_kind),
+        tapback_emoji: nonempty(&mail.tapback_emoji),
+        tapback_action: nonempty(&mail.tapback_action),
     }
-    if let Some(v) = mail.in_reply_to_guid.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("in_reply_to_guid".into(), json!(v));
-    }
-    if let Some(v) = mail.thread_originator_part {
-        bag.insert("thread_originator_part".into(), json!(v));
-    }
-    if let Some(v) = mail.num_replies {
-        bag.insert("num_replies".into(), json!(v));
-    }
-    if mail.is_deleted {
-        bag.insert("is_deleted".into(), json!(true));
-    }
-    if let Some(v) = mail.send_effect.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("send_effect".into(), json!(v));
-    }
-    if let Some(v) = mail.shared_location.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("shared_location".into(), json!(v));
-    }
-    if let Some(v) = mail.announcement.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("announcement".into(), json!(v));
-    }
-    if let Some(v) = mail
-        .read_receipt_rfc3339
-        .as_deref()
-        .filter(|s| !s.is_empty())
-    {
-        bag.insert("read_receipt_rfc3339".into(), json!(v));
-    }
-    if let Some(v) = mail.parts_json.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("parts".into(), parse_json_value(v));
-    }
-    if let Some(v) = mail.edits_json.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("edits".into(), parse_json_value(v));
-    }
-    if let Some(v) = mail.app_json.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("app".into(), parse_json_value(v));
-    }
-    if let Some(v) = mail.balloon_bundle_id.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("balloon_bundle_id".into(), json!(v));
-    }
-    if let Some(v) = mail.balloon_kind.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("balloon_kind".into(), json!(v));
-    }
-    if let Some(v) = mail.tapbacks_json.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("tapbacks".into(), parse_json_value(v));
-    }
-    if let Some(v) = mail.associated_guid.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("associated_guid".into(), json!(v));
-    }
-    if let Some(v) = mail.associated_part {
-        bag.insert("associated_part".into(), json!(v));
-    }
-    if let Some(v) = mail.tapback_kind.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("tapback_kind".into(), json!(v));
-    }
-    if let Some(v) = mail.tapback_emoji.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("tapback_emoji".into(), json!(v));
-    }
-    if let Some(v) = mail.tapback_action.as_deref().filter(|s| !s.is_empty()) {
-        bag.insert("tapback_action".into(), json!(v));
-    }
-    if let Some(v) = mail
-        .owner_display_name
-        .as_deref()
-        .filter(|s| !s.is_empty())
-    {
-        bag.insert("owner_display_name".into(), json!(v));
-    }
-    if bag.is_empty() {
-        None
-    } else {
-        Some(Value::Object(bag))
-    }
+    .into_option()
 }
 
 /// Destination file name for a persisted attachment: `<local-date>-<digest16><ext>`.

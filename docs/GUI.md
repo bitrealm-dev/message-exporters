@@ -93,7 +93,7 @@ Convert/Compress need `ffmpeg`/`ffprobe` on PATH. **Do not copy** skips writing 
 
 \* Required unless filled from Plus `config/owner.toml` (source-relative today); GUI collects fields explicitly.
 
-‡ JSON / JSONL IR (schema v2) for all exporters, including iMessage (`imessage-ir-exporter`). See [MESSAGE_IR.md](MESSAGE_IR.md).
+‡ JSON / JSONL IR (schema v3) for all exporters, including iMessage (`imessage-ir-exporter`). See [MESSAGE_IR.md](MESSAGE_IR.md).
 
 ## Per-exporter options
 

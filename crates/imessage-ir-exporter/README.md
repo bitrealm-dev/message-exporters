@@ -12,7 +12,7 @@ cargo run -p imessage-ir-exporter -- \
   --format json
 ```
 
-Formats: `csv` (default), `eml`, `mbox`, `json`, `jsonl` (schema v2 IR).
+Formats: `csv` (default), `eml`, `mbox`, `json`, `jsonl` (schema v3 IR).
 
 ## Library
 

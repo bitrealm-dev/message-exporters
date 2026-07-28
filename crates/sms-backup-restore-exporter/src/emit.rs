@@ -7,8 +7,9 @@ use message_contacts::ContactsBook;
 use message_csv::{format_local_ts, json_cell, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    parse_json_value, write_format, ConversationDocument, ConversationMeta, ExportMeta,
-    IrAttachment, IrConversationType, IrDirection, IrMessage, IrParticipant, SCHEMA_VERSION,
+    owner_sender, parse_android_type, parse_json_value, write_format, ConversationDocument,
+    ConversationMeta, ConversationStats, ExportMeta, IrAttachment, IrConversationType, IrDirection,
+    IrMessage, IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION,
 };
 use message_mail::clean_previous_mail_output;
 use message_phone::{to_e164, OwnerPhoneSet};
@@ -253,6 +254,15 @@ fn pending_to_document(
         })
         .collect();
 
+    let export = ExportMeta {
+        source: EXPORT_SOURCE.into(),
+        tool: EXPORT_TOOL.into(),
+        tool_version: EXPORT_TOOL_VERSION.into(),
+        owner_handle: Some(owner_handle.to_string()),
+        owner_display_name: None,
+    };
+    let (owner_sender_handle, owner_sender_display) = owner_sender(&export);
+
     let mut messages = Vec::with_capacity(convo.messages.len());
     for msg in &convo.messages {
         if msg.is_from_me {
@@ -269,7 +279,7 @@ fn pending_to_document(
             .parse::<i64>()
             .unwrap_or_else(|_| secs.saturating_mul(1000));
         let (sender_handle, sender_display_name) = if msg.is_from_me {
-            (None, None)
+            (owner_sender_handle.clone(), owner_sender_display.clone())
         } else {
             (
                 msg.sender_digits.as_ref().map(|d| to_e164(d)),
@@ -291,16 +301,19 @@ fn pending_to_document(
             })
             .collect();
 
-        let mut source = serde_json::Map::new();
-        if !msg.contact_name.is_empty() {
-            source.insert("contact_name".into(), serde_json::json!(msg.contact_name));
+        let fields = if msg.xml_fields_json.is_empty() {
+            serde_json::Map::new()
+        } else {
+            match parse_json_value(&msg.xml_fields_json) {
+                serde_json::Value::Object(m) => m,
+                _ => serde_json::Map::new(),
+            }
+        };
+        let source = IrSource {
+            android_type: parse_android_type(&msg.android_type),
+            fields,
         }
-        if !msg.android_type.is_empty() {
-            source.insert("android_type".into(), serde_json::json!(msg.android_type));
-        }
-        if !msg.xml_fields_json.is_empty() {
-            source.insert("fields".into(), parse_json_value(&msg.xml_fields_json));
-        }
+        .into_option();
 
         messages.push(IrMessage {
             guid,
@@ -310,8 +323,8 @@ fn pending_to_document(
             } else {
                 IrDirection::Incoming
             },
-            service: "sms".into(),
-            message_kind: msg.message_kind.to_string(),
+            service: IrService::Sms,
+            message_kind: IrMessageKind::parse(msg.message_kind),
             sender_handle,
             sender_display_name,
             subject: if msg.subject.is_empty() {
@@ -322,31 +335,22 @@ fn pending_to_document(
             text: msg.text.clone(),
             attachments,
             imessage: None,
-            source: if source.is_empty() {
-                None
-            } else {
-                Some(serde_json::Value::Object(source))
-            },
+            source,
         });
     }
 
     Ok(ConversationDocument {
         schema_version: SCHEMA_VERSION,
-        export: ExportMeta {
-            source: EXPORT_SOURCE.into(),
-            tool: EXPORT_TOOL.into(),
-            tool_version: EXPORT_TOOL_VERSION.into(),
-            owner_handle: Some(owner_handle.to_string()),
-            owner_display_name: None,
-        },
+        export,
         conversation: ConversationMeta {
             chat_identifier: chat_id.to_string(),
             conversation_type: IrConversationType::parse(conv_type),
             group_title: convo.group_title.clone(),
             participants,
-            filename_suffix: None,
+            stats: ConversationStats::default(),
         },
         messages,
+        packaging_stem_suffix: None,
     })
 }
 

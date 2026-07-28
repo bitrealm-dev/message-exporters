@@ -65,11 +65,14 @@ fn convert_export_smoke_on_sample_fixture() {
     assert!(header.contains("export_tool"));
     assert!(header.contains("export_tool_version"));
     assert!(header.contains("message_kind"));
-    assert!(header.contains("xml_fields_json"));
+    assert!(header.contains("timestamp_unix_ms"));
+    assert!(header.contains("source_fields_json"));
+    assert!(header.contains("owner_handle"));
+    assert!(header.contains("participants_json"));
     assert!(header.contains("subject"));
-    assert!(!header.contains("participants_json"));
-    assert!(!header.contains("read_receipt"));
-    assert!(!header.contains("tapbacks_json"));
+    assert!(!header.contains("date_ms"));
+    assert!(!header.contains("contact_name"));
+    assert!(!header.contains("xml_fields_json"));
     assert!(contents.contains("sms-backup-restore"));
 
     let attachments = tmp.path().join("attachments");
@@ -216,7 +219,7 @@ fn convert_export_eml_writes_conversation_folder() {
 }
 
 #[test]
-fn convert_export_json_and_jsonl_use_nested_v2() {
+fn convert_export_json_and_jsonl_use_pristine_v3() {
     let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample.xml");
     let tmp = tempfile::tempdir().expect("tempdir");
     let contacts = empty_contacts(&tmp);
@@ -239,13 +242,23 @@ fn convert_export_json_and_jsonl_use_nested_v2() {
         .map(|e| e.path())
         .find(|p| p.extension().and_then(|x| x.to_str()) == Some("json"))
         .expect("expected .json");
-    let doc: serde_json::Value =
-        serde_json::from_slice(&fs::read(&json_path).unwrap()).unwrap();
-    assert_eq!(doc["schema_version"], 2);
+    let raw = fs::read_to_string(&json_path).unwrap();
+    let doc: serde_json::Value = serde_json::from_str(&raw).unwrap();
+    assert_eq!(doc["schema_version"], 3);
+    assert!(doc["conversation"]["stats"]["message_count"].as_u64().unwrap() >= 1);
+    assert!(!raw.contains("filename_suffix"));
+    assert!(!raw.contains("\"bytes\""));
     let msg = &doc["messages"][0];
     assert!(msg["source"]["fields"].is_object());
-    assert!(msg["source"].get("date_ms").is_none());
-    assert!(msg["source"].get("xml_fields_json").is_none());
+    assert!(msg["source"].get("contact_name").is_none());
+    assert!(msg["source"]["android_type"].is_number() || msg["source"]["android_type"].is_null());
+    assert!(msg["service"].as_str() == Some("sms"));
+    // Outgoing rows carry owner identity.
+    let has_outgoing = doc["messages"].as_array().unwrap().iter().any(|m| {
+        m["direction"] == "outgoing"
+            && m["sender_handle"].as_str() == Some("+15555550100")
+    });
+    assert!(has_outgoing, "expected outgoing message with owner sender");
 
     let out_jsonl = tmp.path().join("jsonl-out");
     fs::create_dir_all(&out_jsonl).unwrap();
@@ -270,8 +283,9 @@ fn convert_export_json_and_jsonl_use_nested_v2() {
     let body = fs::read_to_string(&jsonl_path).unwrap();
     let mut lines = body.lines();
     let header: serde_json::Value = serde_json::from_str(lines.next().unwrap()).unwrap();
-    assert_eq!(header["schema_version"], 2);
+    assert_eq!(header["schema_version"], 3);
     assert!(header.get("messages").is_none());
+    assert!(header["conversation"]["stats"]["message_count"].as_u64().unwrap() >= 1);
     let msg_line: serde_json::Value = serde_json::from_str(lines.next().unwrap()).unwrap();
     assert!(msg_line["source"]["fields"].is_object());
 }

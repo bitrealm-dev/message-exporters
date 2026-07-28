@@ -8,9 +8,11 @@ use message_contacts::ContactsBook;
 use message_csv::{format_local_ts, parse_utc_offset, stable_guid, AttachmentCell, DateRange};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    write_format, ConversationDocument, ConversationMeta, ExportMeta, IrAttachment, IrConversationType,
-    IrDirection, IrMessage, IrParticipant, SCHEMA_VERSION,
+    owner_sender, write_format, ConversationDocument, ConversationMeta, ConversationStats,
+    ExportMeta, IrAttachment, IrConversationType, IrDirection, IrMessage, IrMessageKind,
+    IrParticipant, IrService, IrSource, SCHEMA_VERSION,
 };
+use serde_json::Map;
 use message_mail::clean_previous_mail_output;
 use message_phone::{sanitize_number, to_e164};
 use sha2::{Digest, Sha256};
@@ -399,6 +401,7 @@ fn resolve_attachment_cell(
             path: Some(csv_name.to_string()),
             original_name: Some(csv_name.to_string()),
             mime_type: mime,
+            digest_sha256: None,
             is_sticker,
             transcription: None,
             sticker_effect: None,
@@ -416,6 +419,7 @@ fn resolve_attachment_cell(
             path: Some(rel_path),
             original_name: Some(csv_name.to_string()),
             mime_type: mime,
+            digest_sha256: None,
             is_sticker,
             transcription: None,
             sticker_effect: None,
@@ -424,6 +428,7 @@ fn resolve_attachment_cell(
             path: Some(csv_name.to_string()),
             original_name: Some(csv_name.to_string()),
             mime_type: mime,
+            digest_sha256: None,
             is_sticker,
             transcription: None,
             sticker_effect: None,
@@ -760,7 +765,7 @@ fn imazing_peers(conversation_type: &str, chat_id: &str) -> Vec<String> {
     }
 }
 
-fn imazing_filename_suffix(source_kind: Option<SourceKind>) -> Option<String> {
+fn imazing_packaging_stem_suffix(source_kind: Option<SourceKind>) -> Option<String> {
     if source_kind == Some(SourceKind::WhatsApp) {
         Some("__whatsapp".into())
     } else {
@@ -792,10 +797,19 @@ fn pending_to_document(
                 .map(str::to_string),
         });
     }
-    let filename_suffix = imazing_filename_suffix(convo.source_kind);
+    let packaging_stem_suffix = imazing_packaging_stem_suffix(convo.source_kind);
     // Match previous CSV/mail stem: conversation_filename gets None for title
     // (session string is not a real group title).
     let session_title = convo.group_title.trim();
+
+    let export = ExportMeta {
+        source: EXPORT_SOURCE.into(),
+        tool: EXPORT_TOOL.into(),
+        tool_version: EXPORT_TOOL_VERSION.into(),
+        owner_handle: None,
+        owner_display_name: None,
+    };
+    let (owner_handle, owner_display) = owner_sender(&export);
 
     let mut messages = Vec::with_capacity(convo.messages.len());
     for msg in &convo.messages {
@@ -834,17 +848,12 @@ fn pending_to_document(
             })
             .collect();
         let message_kind = if msg.attachments.is_empty() {
-            "sms"
+            IrMessageKind::Sms
         } else {
-            "mms"
+            IrMessageKind::Mms
         };
 
-        let mut source = serde_json::Map::new();
-        if !msg.contact_name.is_empty() {
-            source.insert("contact_name".into(), serde_json::json!(msg.contact_name));
-        }
-
-        let mut fields = serde_json::Map::new();
+        let mut fields = Map::new();
         if !session_title.is_empty() {
             fields.insert(
                 "group_title".into(),
@@ -868,30 +877,42 @@ fn pending_to_document(
                 fields.insert(key.into(), serde_json::Value::String(val.to_string()));
             }
         }
-        if !fields.is_empty() {
-            source.insert("fields".into(), serde_json::Value::Object(fields));
+        let source = IrSource {
+            android_type: None,
+            fields,
         }
+        .into_option();
+
+        let is_outgoing = msg.is_from_me && !msg.is_notification;
+        let (sender_handle, sender_display_name) = if is_outgoing {
+            (owner_handle.clone(), owner_display.clone())
+        } else {
+            (
+                if msg.sender_handle.is_empty() {
+                    None
+                } else {
+                    Some(msg.sender_handle.clone())
+                },
+                if msg.sender_display_name.is_empty() {
+                    None
+                } else {
+                    Some(msg.sender_display_name.clone())
+                },
+            )
+        };
 
         messages.push(IrMessage {
             guid,
             timestamp_unix_ms,
-            direction: if msg.is_from_me && !msg.is_notification {
+            direction: if is_outgoing {
                 IrDirection::Outgoing
             } else {
                 IrDirection::Incoming
             },
-            service: msg.service.to_ascii_lowercase(),
-            message_kind: message_kind.into(),
-            sender_handle: if msg.is_from_me || msg.sender_handle.is_empty() {
-                None
-            } else {
-                Some(msg.sender_handle.clone())
-            },
-            sender_display_name: if msg.sender_display_name.is_empty() {
-                None
-            } else {
-                Some(msg.sender_display_name.clone())
-            },
+            service: IrService::parse(&msg.service),
+            message_kind,
+            sender_handle,
+            sender_display_name,
             subject: if msg.subject.is_empty() {
                 None
             } else {
@@ -900,32 +921,23 @@ fn pending_to_document(
             text: msg.text.clone(),
             attachments,
             imessage: None,
-            source: if source.is_empty() {
-                None
-            } else {
-                Some(serde_json::Value::Object(source))
-            },
+            source,
         });
     }
 
     Ok(ConversationDocument {
         schema_version: SCHEMA_VERSION,
-        export: ExportMeta {
-            source: EXPORT_SOURCE.into(),
-            tool: EXPORT_TOOL.into(),
-            tool_version: EXPORT_TOOL_VERSION.into(),
-            owner_handle: None,
-            owner_display_name: None,
-        },
+        export,
         conversation: ConversationMeta {
             chat_identifier: chat_id.to_string(),
             conversation_type: IrConversationType::parse(&convo.conversation_type),
             // None matches previous CSV/mail stem (session string is not a real group title).
             group_title: None,
             participants,
-            filename_suffix,
+            stats: ConversationStats::default(),
         },
         messages,
+        packaging_stem_suffix,
     })
 }
 

@@ -20,7 +20,7 @@ PDU (`I_*.pdu`) rows use the same CSV columns; see [PDU notes](#pdu-rows) at the
     <date>…</date>          <!-- Unix ms -->
     <type>1|2</type>        <!-- 1 = inbox, 2 = sent -->
     <body>…</body>
-    <!-- any other Telephony-style children are kept in xml_fields_json -->
+    <!-- any other Telephony-style children are kept in source_fields_json -->
   </SMS>
 </GoSms>
 ```
@@ -32,11 +32,11 @@ Each `<SMS>` becomes one CSV data row. The `chat_identifier` column holds the pe
 | XML child | CSV column(s) | Notes |
 |-----------|---------------|--------|
 | `<address>` | `chat_identifier`, `sender_handle` | Digits sanitized then E.164. For sent (`type=2`), address is the peer (not the sender). For received (`type=1`), address is also `sender_handle` unless Google Voice voicemail parsing overrides it from `<body>`. |
-| `<contactName>` | `contact_name`, `sender_display_name` | Raw string in `contact_name`. Display name filled for incoming when present. |
-| `<date>` | `date_ms`, `timestamp`, `timestamp_utc`, `timestamp_display` | Raw ms string in `date_ms`. Converted to local/UTC RFC3339 and a human display string. |
+| `<contactName>` | `sender_display_name` | Display name filled for incoming when present. |
+| `<date>` | `timestamp_unix_ms`, `timestamp`, `timestamp_utc`, `timestamp_display` | Raw ms string in `timestamp_unix_ms`. Converted to local/UTC RFC3339 and a human display string. |
 | `<type>` | `android_type`, `direction` | `1` → `incoming`, `2` → `outgoing`. Other values are skipped. |
 | `<body>` | `text` | GO SMS emoji codes (e.g. `+g1f602`) decoded to Unicode. |
-| *(all children)* | `xml_fields_json` | Full map of every child element name → text (includes the five above plus extras such as `read`, `status`, `date_sent`, …). |
+| *(all children)* | `source_fields_json` | Full map of every child element name → text (includes the five above plus extras such as `read`, `status`, `date_sent`, …). |
 
 ## Columns (imessage names where shared)
 
@@ -56,14 +56,9 @@ Each `<SMS>` becomes one CSV data row. The `chat_identifier` column holds the pe
 | `export_source` | Always `go-sms-pro` |
 | `export_tool` | Always `GO SMS Pro` |
 | `export_tool_version` | Empty until a target app version is pinned |
-| `source_kind` | `xml` or `pdu` |
 | `android_type` | Raw `<type>` (`1`/`2`); empty for PDU |
-| `date_ms` | Raw `<date>` ms; empty for PDU |
-| `contact_name` | Raw `<contactName>`; empty for PDU |
-| `pdu_filename` | PDU basename; empty for XML |
-| `xml_fields_json` | All `<SMS>` children as JSON object; empty for PDU |
-| `pdu_fields_json` | Optional MMS headers for PDU rows; empty for XML |
-| `pdu_decode` | PDU decode confidence; empty for XML |
+| `timestamp_unix_ms` | From `<date>` ms (also on shared header) |
+| `source_fields_json` | Vendor bag: XML children and/or `source_kind` / `pdu_*` keys |
 
 ## Skip counters (CLI summary)
 
@@ -90,7 +85,7 @@ MMS from `I_<unix>_*.pdu` files use the same header. Differences:
 | `timestamp*` | MMS `Date` header when present; else filename `I_<unix>_` (seconds). Filename still required to accept the file. |
 | `text` | Content-Location text parts / multipart `text/*` (emoji-decoded); marker/`</smil>` fallback if needed |
 | `attachments_json` | Named/typed media parts, else magic-byte splits under `attachments/` |
-| `android_type`, `date_ms`, `contact_name`, `xml_fields_json` | Empty |
+| `android_type`, `timestamp_unix_ms`, `source_fields_json` | Empty |
 | `pdu_filename` | Source PDU basename |
 | `pdu_fields_json` | Optional MMS headers (see below); empty for XML |
 | `pdu_decode` | `structured` / `mixed` / `heuristic` confidence for body, attachments, and direction; empty for XML |
