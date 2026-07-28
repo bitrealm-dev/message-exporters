@@ -49,7 +49,9 @@ Use JSONL for streaming or line-oriented processing of large chats.
 
 Writes a single `smses.xml` for the whole export (SyncTech SMS Backup & Restore shape).
 
-Use XML when the next step expects that backup format. Apple-only fields are dropped. Prefer JSON or CSV when preserving iMessage detail matters.
+XML exists for **Android compatibility**. Backing up or restoring a whole Android phone without third-party tooling requires root and often an unlocked bootloader, which is difficult on most devices. The SMS Backup & Restore app works without root, and `smses.xml` is the file it reads—so this format is the practical way to move messages onto an Android phone.
+
+Use XML when the destination is an Android device (or another tool that expects that backup format). Apple-only fields are dropped. Prefer JSON when preserving iMessage detail matters.
 
 ## Change format later
 

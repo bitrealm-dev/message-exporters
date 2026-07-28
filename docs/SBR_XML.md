@@ -16,6 +16,8 @@ Root shape:
 
 This is the same family of files that [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/) reads. Attribute reference: [`crates/sms-backup-restore-exporter/docs/FIELDS.md`](../crates/sms-backup-restore-exporter/docs/FIELDS.md).
 
+**Motivation:** Android compatibility. Full-device Android backup/restore without third-party tooling requires root and often an unlocked bootloader; the SMS Backup & Restore app restores `smses.xml` without either, so this format is the practical path for putting messages back onto an Android phone.
+
 ## Layout
 
 | Piece | Crate / API |

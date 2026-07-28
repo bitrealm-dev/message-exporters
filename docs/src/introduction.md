@@ -14,7 +14,7 @@ Every export builds a shared per-conversation **[common message](common-message.
 | **CSV** | Spreadsheets, scripts, and vault-style import |
 | **EML** | Reading threads in a mail client (one folder per chat) |
 | **MBOX** | One mailbox file per chat |
-| **XML** | One SyncTech `smses.xml` backup for restore-oriented workflows |
+| **XML** | Restore messages onto an Android phone (SyncTech `smses.xml`, no root needed) |
 
 See [Common message](common-message.md) and [Choose an output format](formats.md).
 

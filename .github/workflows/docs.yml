@@ -34,6 +34,9 @@ jobs:
         uses: baptiste0928/cargo-install@v3
         with:
           crate: mdbook-mermaid
+          # Pinned so a future mdbook major bump cannot break the build;
+          # bump alongside mdbook (0.17.x targets mdbook 0.5).
+          version: "0.17.0"
 
       - name: Build book
         run: mdbook build
