@@ -62,7 +62,7 @@ Removed legacy columns: `date_ms`, `contact_name`, `xml_fields_json`.
 
 ## Attachments / media modes
 
-Converters that write `attachments/` support `--media-mode`:
+Every IR exporter supports `--media-mode` for **all** output formats (applied in `FormatSink` before projection):
 
 | Mode | Behavior |
 |------|----------|
@@ -75,7 +75,7 @@ Details: [`crates/message-media`](https://github.com/bitrealm-dev/message-export
 
 ## Obfuscate
 
-Add `--obfuscate` (optional `--obfuscate-seed` with exactly 8 hex characters) to rewrite names, numbers, message text (same length), and media into a shareable structure without PII. See [`crates/message-obfuscate`](https://github.com/bitrealm-dev/message-exporters/tree/main/crates/message-obfuscate).
+Add `--obfuscate` (optional `--obfuscate-seed` with exactly 8 hex characters) to rewrite names, numbers, message text (same length), and media into a shareable structure without PII. Applies to every format via `FormatSink`. See [`crates/message-obfuscate`](https://github.com/bitrealm-dev/message-exporters/tree/main/crates/message-obfuscate).
 
 ## Related
 

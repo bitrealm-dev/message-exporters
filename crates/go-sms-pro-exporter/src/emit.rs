@@ -10,7 +10,8 @@ use message_csv::{format_local_ts, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
 use message_ir::{
     clean_previous_ir_output, owner_sender, parse_android_type, ConversationDocument,
-    ConversationMeta, ConversationStats, ExportMeta, FormatSink, IrAttachment, IrConversationType,
+    ConversationMeta, ConversationStats, ExportMeta, ExportTransforms, FormatSink,
+    FormatSinkResult, IrAttachment, IrConversationType,
     IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION,
 };
 use message_phone::{to_e164, OwnerPhoneSet};
@@ -631,10 +632,10 @@ pub fn convert_export(
     owner_phones: &[String],
     contacts: &ContactsBook,
     date_range: &DateRange,
-    copy_attachments: bool,
+    transforms: ExportTransforms,
     output_format: OutputFormat,
     cancel: Option<&CancelFlag>,
-) -> Result<ExportReport> {
+) -> Result<(ExportReport, FormatSinkResult)> {
     if !input_dir.is_dir() {
         bail!("input is not a directory: {}", input_dir.display());
     }
@@ -647,14 +648,12 @@ pub fn convert_export(
     // Clean previous CSV / mail artifacts (keep attachments if re-run; rewrite as needed).
     fs::create_dir_all(output_dir)?;
     clean_previous_ir_output(output_dir)?;
-    // Mail/XML need attachment files on disk for MIME / base64 embedding.
-    let copy_attachments =
-        copy_attachments || output_format.is_mail_archive() || output_format.is_sbr_xml();
+    let copy_attachments = transforms.copies_attachments();
     let attachments_dir = output_dir.join("attachments");
     if copy_attachments {
         fs::create_dir_all(&attachments_dir)?;
     }
-    let mut sink = FormatSink::open(output_dir, output_format)?;
+    let mut sink = FormatSink::open(output_dir, output_format, transforms)?;
 
     let mut xml_paths: Vec<PathBuf> = fs::read_dir(input_dir)?
         .filter_map(|e| e.ok())
@@ -758,13 +757,13 @@ pub fn convert_export(
         report.conversations += 1;
     }
 
-    sink.finish()?;
+    let sink_result = sink.finish()?;
 
     write_skipped_invalid_address_csv(output_dir, &report.skipped_unknown_address_details)?;
     write_skipped_empty_pdu_csv(output_dir, &report.skipped_empty_pdu_details)?;
     write_skipped_no_party_csv(output_dir, &report.skipped_no_other_party_details)?;
 
-    Ok(report)
+    Ok((report, sink_result))
 }
 
 fn remove_if_exists(path: &Path) {

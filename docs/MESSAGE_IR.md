@@ -12,6 +12,7 @@ Stem rules match CSV filenames. Packaging-only suffixes (e.g. `__whatsapp`) affe
 ## Status
 
 - **IR-backed** (`ConversationDocument` → `message_ir::FormatSink`, `--format csv|eml|mbox|json|jsonl|xml`): all exporters, including iMessage (`imessage-ir-exporter`). Per-chat formats also accept `write_format`; XML uses a single `smses.xml` via the sink.
+- **Media + obfuscate** run inside `FormatSink::finish` for every format (`ExportTransforms`: none / copy / convert / compress, plus optional obfuscate). Exporters pass transforms from `ExporterConfig.media` / `.obfuscate`; there is no CSV-only post-step.
 - **Schema version 3 only** (breaking). Typed enums/bags, filled outgoing identity, conversation stats, stable null/`[]` keys. Older IR is not read — regenerate exports after schema changes.
 
 ## Document shape (`schema_version: 3`)

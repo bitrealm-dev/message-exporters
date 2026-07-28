@@ -10,8 +10,9 @@ use message_csv::{format_local_ts, json_cell, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
 use message_ir::{
     clean_previous_ir_output, owner_sender, ConversationDocument, ConversationMeta,
-    ConversationStats, ExportMeta, FormatSink, IrAttachment, IrConversationType, IrDirection,
-    IrMessage, IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION,
+    ConversationStats, ExportMeta, ExportTransforms, FormatSink, FormatSinkResult, IrAttachment,
+    IrConversationType, IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, IrSource,
+    SCHEMA_VERSION,
 };
 use serde_json::Map;
 use sha2::{Digest, Sha256};
@@ -78,19 +79,18 @@ pub fn convert_json(
     json_path: &Path,
     output: &Path,
     date_range: &DateRange,
-    copy_attachments: bool,
+    transforms: ExportTransforms,
     media_search_roots: &[PathBuf],
     output_format: OutputFormat,
     cancel: Option<&CancelFlag>,
-) -> Result<ExportReport> {
+) -> Result<(ExportReport, FormatSinkResult)> {
     fs::create_dir_all(output).with_context(|| format!("create {}", output.display()))?;
     clean_previous_ir_output(output)?;
-    let copy_attachments =
-        copy_attachments || output_format.is_mail_archive() || output_format.is_sbr_xml();
+    let copy_attachments = transforms.copies_attachments();
     if copy_attachments {
         fs::create_dir_all(output.join("attachments"))?;
     }
-    let mut sink = FormatSink::open(output, output_format)?;
+    let mut sink = FormatSink::open(output, output_format, transforms)?;
 
     let store = load_chat_store(json_path)?;
     let mut report = ExportReport::default();
@@ -128,9 +128,9 @@ pub fn convert_json(
         sink.write_document(&doc)?;
         report.conversations += 1;
     }
-    sink.finish()?;
+    let sink_result = sink.finish()?;
 
-    Ok(report)
+    Ok((report, sink_result))
 }
 
 fn ingest_chat(

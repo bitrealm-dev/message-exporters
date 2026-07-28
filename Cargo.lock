@@ -2519,6 +2519,8 @@ dependencies = [
  "message-csv",
  "message-exporters-core",
  "message-mail",
+ "message-media",
+ "message-obfuscate",
  "message-sbr",
  "serde",
  "serde_json",

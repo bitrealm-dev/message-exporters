@@ -13,12 +13,10 @@ use imazing_exporter::run as run_imazing;
 use imessage_ir_exporter::run as run_imessage;
 use message_exporters_core::{
     ensure_output_dir, resolve_binary, spawn, spawn_job, AttachmentMedia, ContactsKind,
-    ExportIniState, Exporter, ExporterConfig, Form, OutputFormat, ProcessControl, ProcessEvent,
+    ExportIniState, Exporter, ExporterConfig, Form, ProcessControl, ProcessEvent,
     WhatsappPlatform, APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS,
     OUTPUT_FORMATS_MAIL, WHATSAPP_PLATFORMS,
 };
-use message_media::process_export_media;
-use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
 use openextract_exporter::run as run_openextract;
 use sms_backup_plus_exporter::run as run_sms_plus;
 use sms_backup_restore_exporter::run as run_sms_restore;
@@ -186,12 +184,6 @@ impl App {
                 ProcessEvent::Log(line) => self.push_log(line),
                 ProcessEvent::Finished(summary) => {
                     self.push_log(summary);
-                    if self.mode == AppMode::Export
-                        && self.exporter == Exporter::Imessage
-                        && self.form.output_format == OutputFormat::Csv
-                    {
-                        self.run_imessage_media_post();
-                    }
                     self.running = false;
                     self.rx = None;
                 }
@@ -334,69 +326,6 @@ impl App {
         match self.control.cancel() {
             Ok(()) => self.push_log("Cancellation requested…".into()),
             Err(error) => self.errors = vec![error],
-        }
-    }
-
-    fn run_imessage_media_post(&mut self) {
-        let mode = self.form.attachment_media.media_mode();
-        if matches!(mode, message_media::MediaMode::Disabled) {
-            return;
-        }
-        let output = PathBuf::from(self.form.output.trim());
-        if mode.needs_tools() {
-            self.push_log(format!("Processing attachment media ({mode})…"));
-            let compress = match self.form.compress_options() {
-                Ok(opts) => opts,
-                Err(error) => {
-                    self.errors = vec![error.clone()];
-                    self.push_log(format!("Error: {error}"));
-                    return;
-                }
-            };
-            match process_export_media(&output, mode, &compress) {
-                Ok(report) => {
-                    if report.processed > 0 || report.skipped > 0 || !report.errors.is_empty() {
-                        self.push_log(format!(
-                            "Media: processed {} file(s), skipped {}, updated {} CSV(s)",
-                            report.processed, report.skipped, report.csv_files_updated
-                        ));
-                    }
-                    for err in report.errors.iter().take(10) {
-                        self.push_log(format!("media warning: {err}"));
-                    }
-                }
-                Err(error) => {
-                    let msg = format!("Media processing failed: {error}");
-                    self.errors = vec![msg.clone()];
-                    self.push_log(msg);
-                    return;
-                }
-            }
-        }
-        if mode.needs_tools()
-            && (self.form.obfuscate || !self.form.obfuscate_seed.trim().is_empty())
-        {
-            let seed = {
-                let s = self.form.obfuscate_seed.trim();
-                if s.is_empty() {
-                    None
-                } else {
-                    Some(s.to_string())
-                }
-            };
-            match resolve_obfuscator(seed.as_deref())
-                .and_then(|mut anon| obfuscate_export_dir(&output, &mut anon).map(|n| (n, anon)))
-            {
-                Ok((n, _)) => self.push_log(format!(
-                    "Obfuscated {n} CSV file(s) under {}",
-                    output.display()
-                )),
-                Err(error) => {
-                    let msg = format!("Obfuscate failed: {error}");
-                    self.errors = vec![msg.clone()];
-                    self.push_log(msg);
-                }
-            }
         }
     }
 
@@ -577,25 +506,11 @@ impl App {
         }
 
         let contacts_enabled = self.exporter != Exporter::Imessage;
-        let attachments_enabled = matches!(
-            self.exporter,
-            Exporter::GoSmsPro
-                | Exporter::SmsBackupRestore
-                | Exporter::SmsBackupPlus
-                | Exporter::Imazing
-                | Exporter::Imessage
-                | Exporter::Whatsapp
-        );
-        if self.exporter == Exporter::OpenExtract {
-            self.form.attachment_media = AttachmentMedia::Disabled;
-        }
         if self.exporter != Exporter::Whatsapp {
             self.ui_contacts(ui, contacts_enabled);
         }
-        // Convert/compress only apply to CSV; mail embeds (or skips) at export time.
-        let attachments_enabled =
-            attachments_enabled && self.form.output_format == OutputFormat::Csv;
-        self.ui_attachment_media(ui, attachments_enabled);
+        // Attachment modes (none / copy / convert / compress) apply to every format via FormatSink.
+        self.ui_attachment_media(ui, true);
 
         // Exporter-specific fields.
         match self.exporter {
@@ -765,21 +680,19 @@ impl App {
             "YYYY-MM-DD (exclusive)",
             PATH_W,
         );
-        ui.add_enabled_ui(self.form.output_format == OutputFormat::Csv, |ui| {
-            ui.horizontal(|ui| {
-                form_label(ui, "Obfuscate");
-                ui.checkbox(&mut self.form.obfuscate, "");
-            });
-            if self.form.obfuscate || !self.form.obfuscate_seed.is_empty() {
-                labeled_text(
-                    ui,
-                    "Seed",
-                    &mut self.form.obfuscate_seed,
-                    "Optional 8-hex seed",
-                    PATH_W,
-                );
-            }
+        ui.horizontal(|ui| {
+            form_label(ui, "Obfuscate");
+            ui.checkbox(&mut self.form.obfuscate, "");
         });
+        if self.form.obfuscate || !self.form.obfuscate_seed.is_empty() {
+            labeled_text(
+                ui,
+                "Seed",
+                &mut self.form.obfuscate_seed,
+                "Optional 8-hex seed",
+                PATH_W,
+            );
+        }
         ui.add_space(10.0);
         ui.horizontal(|ui| {
             let run = ui.add_enabled(!self.running, egui::Button::new("Run exporter"));

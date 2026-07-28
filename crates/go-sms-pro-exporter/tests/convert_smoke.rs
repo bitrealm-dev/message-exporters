@@ -2,6 +2,7 @@ use go_sms_pro_exporter::convert_export;
 use message_contacts::ContactsBook;
 use message_csv::DateRange;
 use message_exporters_core::OutputFormat;
+use message_ir::ExportTransforms;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -20,13 +21,13 @@ fn convert_smoke_writes_csv_not_json() {
 
     let tmp = tempfile::tempdir().expect("tempdir");
     let contacts = empty_contacts(&tmp);
-    let report = convert_export(
+    let (report, _) = convert_export(
         input.as_path(),
         tmp.path(),
         &["+15555550100".into()],
         &contacts,
         &DateRange::default(),
-        true,
+        ExportTransforms::none(),
         OutputFormat::Csv,
         None,
     )
@@ -46,7 +47,14 @@ fn convert_smoke_writes_csv_not_json() {
     let json_count = fs::read_dir(tmp.path())
         .unwrap()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("json"))
+        .map(|e| e.path())
+        .filter(|p| {
+            p.extension().and_then(|x| x.to_str()) == Some("json")
+                && !p
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.ends_with(".meta.json"))
+        })
         .count();
     assert_eq!(json_count, 0);
 

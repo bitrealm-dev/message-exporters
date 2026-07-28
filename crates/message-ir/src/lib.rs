@@ -11,6 +11,7 @@
 //! stats, and packaging stem suffixes kept out of serialized JSON.
 
 mod clean;
+mod export_transforms;
 mod format_sink;
 mod normalize;
 mod read_csv;
@@ -19,7 +20,8 @@ mod util;
 mod write_sbr;
 
 pub use clean::clean_previous_ir_output;
-pub use format_sink::FormatSink;
+pub use export_transforms::ExportTransforms;
+pub use format_sink::{FormatSink, FormatSinkResult};
 pub use normalize::normalize_document_for_compare;
 pub use read_csv::read_conversation_csv;
 pub use read_mail::{

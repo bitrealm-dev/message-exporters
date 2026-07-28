@@ -440,12 +440,6 @@ impl Form {
             matches!(self.attachment_media, AttachmentMedia::Compress),
             errors,
         );
-        // When convert/compress, GUI obfuscates after media post-process.
-        let obfuscate = if self.attachment_media.needs_ffmpeg() {
-            ObfuscateConfig::default()
-        } else {
-            obfuscate
-        };
         let copy_method = match self.attachment_media {
             AttachmentMedia::Disabled => "disabled".into(),
             _ => "clone".into(),
@@ -571,16 +565,14 @@ impl Form {
             non_empty(self.end_date.trim()),
             errors,
         );
+        let media = self.validate_media(errors);
         ExporterConfig {
             inputs: input.into_iter().collect(),
             output: PathBuf::from(self.output.trim()),
             date_range,
             contacts,
             obfuscate,
-            media: MediaConfig {
-                mode: MediaMode::Disabled,
-                compress: message_media::CompressOptions::default(),
-            },
+            media,
             cancel: None,
             output_format: self.output_format,
             source: SourceConfig::OpenExtract(OpenExtractConfig {}),

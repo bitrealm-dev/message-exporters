@@ -8,8 +8,9 @@ use message_csv::{format_local_ts, json_cell, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
 use message_ir::{
     clean_previous_ir_output, owner_sender, parse_android_type, parse_json_value, ConversationDocument,
-    ConversationMeta, ConversationStats, ExportMeta, FormatSink, IrAttachment, IrConversationType,
-    IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION,
+    ConversationMeta, ConversationStats, ExportMeta, ExportTransforms, FormatSink, FormatSinkResult,
+    IrAttachment, IrConversationType, IrDirection, IrMessage, IrMessageKind, IrParticipant,
+    IrService, IrSource, SCHEMA_VERSION,
 };
 use message_phone::{to_e164, OwnerPhoneSet};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -404,13 +405,15 @@ pub fn convert_export(
     owner_phones: &[String],
     contacts: &ContactsBook,
     date_range: &DateRange,
-    copy_attachments: bool,
+    transforms: ExportTransforms,
     output_format: OutputFormat,
     cancel: Option<&CancelFlag>,
-) -> Result<ExportReport> {
+) -> Result<(ExportReport, FormatSinkResult)> {
     let owners = OwnerPhoneSet::new(owner_phones)?;
     let owner_handle = to_e164(&owners.primary_digits);
-    let keep_bytes = output_format.is_mail_archive() || output_format.is_sbr_xml();
+    let copy_attachments = transforms.copies_attachments();
+    // Bytes are reloaded in FormatSink for mail/XML after media transforms.
+    let keep_bytes = false;
     let mut report = ExportReport::default();
     let mut conversations: BTreeMap<String, PendingConversation> = BTreeMap::new();
 
@@ -420,7 +423,7 @@ pub fn convert_export(
     if copy_attachments {
         fs::create_dir_all(&attachments_dir)?;
     }
-    let mut sink = FormatSink::open(output_dir, output_format)?;
+    let mut sink = FormatSink::open(output_dir, output_format, transforms)?;
 
     for xml_path in collect_xml_paths(input)? {
         check_cancel(cancel)?;
@@ -471,6 +474,6 @@ pub fn convert_export(
         report.conversations += 1;
     }
 
-    sink.finish()?;
-    Ok(report)
+    let sink_result = sink.finish()?;
+    Ok((report, sink_result))
 }

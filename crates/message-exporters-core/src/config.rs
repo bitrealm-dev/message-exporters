@@ -99,7 +99,7 @@ pub struct ExporterConfig {
     pub date_range: DateRange,
     pub contacts: Option<ContactsConfig>,
     pub obfuscate: ObfuscateConfig,
-    /// OpenExtract uses [`MediaMode::Disabled`].
+    /// Attachment handling for FormatSink (none / copy / convert / compress).
     pub media: MediaConfig,
     pub cancel: Option<CancelFlag>,
     /// Packaging format (`csv` / `eml` / `mbox` / `json` / `jsonl` / `xml`).

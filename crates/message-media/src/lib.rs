@@ -14,7 +14,7 @@ mod size;
 mod tools;
 
 pub use csv_rewrite::rewrite_attachment_paths;
-pub use process::{process_export_media, MediaReport};
+pub use process::{process_attachments_dir, process_export_media, MediaReport};
 pub use size::parse_size;
 pub use tools::{ffmpeg_available, require_ffmpeg};
 

@@ -1,33 +1,75 @@
 //! Unified per-export writer for IR packaging formats.
 
+use crate::export_transforms::{apply_transforms, ExportTransforms};
 use crate::write_sbr::SbrBackupSession;
 use crate::{write_format, ConversationDocument};
 use anyhow::Result;
 use message_exporters_core::OutputFormat;
+use message_media::MediaReport;
 use std::path::{Path, PathBuf};
+
+/// Result of [`FormatSink::finish`].
+#[derive(Debug, Default)]
+pub struct FormatSinkResult {
+    pub xml_path: Option<PathBuf>,
+    pub media: MediaReport,
+    pub obfuscated_docs: usize,
+}
+
+impl FormatSinkResult {
+    /// Human-readable lines for CLI / GUI logs.
+    pub fn log_lines(&self) -> Vec<String> {
+        let mut lines = Vec::new();
+        if self.media.processed > 0
+            || self.media.skipped > 0
+            || !self.media.errors.is_empty()
+        {
+            lines.push(format!(
+                "Media: processed {} file(s), skipped {}",
+                self.media.processed, self.media.skipped
+            ));
+            for err in self.media.errors.iter().take(10) {
+                lines.push(format!("  media warning: {err}"));
+            }
+            if self.media.errors.len() > 10 {
+                lines.push(format!("  …and {} more", self.media.errors.len() - 10));
+            }
+        }
+        if self.obfuscated_docs > 0 {
+            lines.push(format!(
+                "Obfuscated {} conversation(s)",
+                self.obfuscated_docs
+            ));
+        }
+        if let Some(path) = &self.xml_path {
+            lines.push(format!("Wrote {}", path.display()));
+        }
+        lines
+    }
+}
 
 /// Writes conversations in the requested [`OutputFormat`].
 ///
-/// For CSV/EML/MBOX/JSON/JSONL each [`write_document`](Self::write_document)
-/// call projects one conversation. For XML, documents are appended into a
-/// single `smses.xml` and finalized in [`finish`](Self::finish).
+/// Documents are buffered until [`finish`](Self::finish), which applies
+/// attachment media transforms and obfuscation, then projects all chats.
 pub struct FormatSink {
     output_dir: PathBuf,
     format: OutputFormat,
-    sbr: Option<SbrBackupSession>,
+    transforms: ExportTransforms,
+    docs: Vec<ConversationDocument>,
 }
 
 impl FormatSink {
-    pub fn open(output_dir: &Path, format: OutputFormat) -> Result<Self> {
-        let sbr = if format.is_sbr_xml() {
-            Some(SbrBackupSession::create(output_dir)?)
-        } else {
-            None
-        };
+    pub fn open(
+        output_dir: &Path,
+        format: OutputFormat,
+        transforms: ExportTransforms,
+    ) -> Result<Self> {
         Ok(Self {
             output_dir: output_dir.to_path_buf(),
             format,
-            sbr,
+            transforms,
+            docs: Vec::new(),
         })
     }
 
@@ -39,21 +81,43 @@ impl FormatSink {
         &self.output_dir
     }
 
-    pub fn write_document(&mut self, doc: &ConversationDocument) -> Result<()> {
-        if let Some(session) = self.sbr.as_mut() {
-            session.append_document(doc)
-        } else {
-            write_format(&self.output_dir, self.format, doc)?;
-            Ok(())
-        }
+    pub fn transforms(&self) -> &ExportTransforms {
+        &self.transforms
     }
 
-    /// Finalize XML backup (no-op for other formats).
-    pub fn finish(self) -> Result<Option<PathBuf>> {
-        match self.sbr {
-            Some(session) => Ok(Some(session.finish()?)),
-            None => Ok(None),
+    pub fn write_document(&mut self, doc: &ConversationDocument) -> Result<()> {
+        self.docs.push(doc.clone());
+        Ok(())
+    }
+
+    /// Apply media/obfuscate transforms, then write all buffered documents.
+    pub fn finish(mut self) -> Result<FormatSinkResult> {
+        let load_bytes = self.format.is_mail_archive() || self.format.is_sbr_xml();
+        let outcome = apply_transforms(
+            &mut self.docs,
+            &self.output_dir,
+            &self.transforms,
+            load_bytes,
+        )?;
+
+        let mut result = FormatSinkResult {
+            xml_path: None,
+            media: outcome.media,
+            obfuscated_docs: outcome.obfuscated_docs,
+        };
+
+        if self.format.is_sbr_xml() {
+            let mut session = SbrBackupSession::create(&self.output_dir)?;
+            for doc in &self.docs {
+                session.append_document(doc)?;
+            }
+            result.xml_path = Some(session.finish()?);
+        } else {
+            for doc in &self.docs {
+                write_format(&self.output_dir, self.format, doc)?;
+            }
         }
+        Ok(result)
     }
 }
 
@@ -109,7 +173,8 @@ mod tests {
     #[test]
     fn format_sink_csv_writes_per_conversation() {
         let tmp = tempfile::tempdir().unwrap();
-        let mut sink = FormatSink::open(tmp.path(), OutputFormat::Csv).unwrap();
+        let mut sink =
+            FormatSink::open(tmp.path(), OutputFormat::Csv, ExportTransforms::none()).unwrap();
         sink.write_document(&tiny_doc("hello")).unwrap();
         sink.finish().unwrap();
         assert!(tmp.path().join("+15555550101.csv").is_file());
@@ -118,16 +183,43 @@ mod tests {
     #[test]
     fn format_sink_xml_merges_documents() {
         let tmp = tempfile::tempdir().unwrap();
-        let mut sink = FormatSink::open(tmp.path(), OutputFormat::Xml).unwrap();
+        let mut sink =
+            FormatSink::open(tmp.path(), OutputFormat::Xml, ExportTransforms::none()).unwrap();
         sink.write_document(&tiny_doc("one")).unwrap();
         let mut doc2 = tiny_doc("two");
         doc2.messages[0].guid = "guid-2".into();
         doc2.messages[0].timestamp_unix_ms = 1_400_773_262_000;
         sink.write_document(&doc2).unwrap();
-        let path = sink.finish().unwrap().expect("smses.xml");
+        let result = sink.finish().unwrap();
+        let path = result.xml_path.expect("smses.xml");
         let text = fs::read_to_string(path).unwrap();
         assert!(text.contains(r#"count="2""#));
         assert!(text.contains("one"));
         assert!(text.contains("two"));
+    }
+
+    #[test]
+    fn format_sink_obfuscate_rewrites_handles() {
+        let tmp = tempfile::tempdir().unwrap();
+        let transforms = ExportTransforms {
+            obfuscate: true,
+            obfuscate_seed: Some("01234567".into()),
+            ..ExportTransforms::none()
+        };
+        let mut sink = FormatSink::open(tmp.path(), OutputFormat::Csv, transforms).unwrap();
+        sink.write_document(&tiny_doc("secret")).unwrap();
+        let result = sink.finish().unwrap();
+        assert_eq!(result.obfuscated_docs, 1);
+        let mut found = false;
+        for entry in fs::read_dir(tmp.path()).unwrap() {
+            let path = entry.unwrap().path();
+            if path.extension().and_then(|e| e.to_str()) == Some("csv") {
+                let body = fs::read_to_string(&path).unwrap();
+                assert!(!body.contains("+15555550101"));
+                assert!(!body.contains("secret"));
+                found = true;
+            }
+        }
+        assert!(found, "expected obfuscated csv");
     }
 }

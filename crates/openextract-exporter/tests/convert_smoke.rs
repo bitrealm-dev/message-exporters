@@ -1,6 +1,7 @@
 use message_contacts::ContactsBook;
 use message_csv::DateRange;
 use message_exporters_core::OutputFormat;
+use message_ir::ExportTransforms;
 use openextract_exporter::convert_export;
 use std::fs;
 use std::path::PathBuf;
@@ -15,16 +16,16 @@ fn convert_all_conversations_with_vcf() {
 
     let book = ContactsBook::load_vcf(&vcf).expect("load vcf");
     let tmp = tempfile::tempdir().expect("tempdir");
-    let report =
-        convert_export(
-            &csv,
-            tmp.path(),
-            &book,
-            &DateRange::default(),
-            OutputFormat::Csv,
-            None,
-        )
-        .expect("convert");
+    let (report, _) = convert_export(
+        &csv,
+        tmp.path(),
+        &book,
+        &DateRange::default(),
+        ExportTransforms::none(),
+        OutputFormat::Csv,
+        None,
+    )
+    .expect("convert");
 
     assert_eq!(report.conversations, 1);
     assert_eq!(report.messages, 2);

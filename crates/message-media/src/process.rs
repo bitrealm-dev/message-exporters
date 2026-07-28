@@ -16,20 +16,23 @@ pub struct MediaReport {
     pub errors: Vec<String>,
 }
 
-/// Convert or compress media under `output_dir/attachments` and rewrite CSV paths.
-pub fn process_export_media(
+/// Convert or compress media under `output_dir/attachments`.
+///
+/// Returns a path remap (`old_rel` → `new_rel`, forward-slash relative to
+/// `output_dir`) for callers that update IR / CSV themselves.
+pub fn process_attachments_dir(
     output_dir: &Path,
     mode: MediaMode,
     compress: &CompressOptions,
-) -> Result<MediaReport> {
+) -> Result<(MediaReport, HashMap<String, String>)> {
     if matches!(mode, MediaMode::Clone | MediaMode::Disabled) {
-        return Ok(MediaReport::default());
+        return Ok((MediaReport::default(), HashMap::new()));
     }
     require_ffmpeg()?;
 
     let attachments = output_dir.join("attachments");
     if !attachments.is_dir() {
-        return Ok(MediaReport::default());
+        return Ok((MediaReport::default(), HashMap::new()));
     }
 
     // Leftovers from a previous failed ffmpeg run.
@@ -52,6 +55,16 @@ pub fn process_export_media(
     // Always sweep again so a failed convert cannot leave junk behind.
     remove_msgmedia_temps(&attachments)?;
 
+    Ok((report, remap))
+}
+
+/// Convert or compress media under `output_dir/attachments` and rewrite CSV paths.
+pub fn process_export_media(
+    output_dir: &Path,
+    mode: MediaMode,
+    compress: &CompressOptions,
+) -> Result<MediaReport> {
+    let (mut report, remap) = process_attachments_dir(output_dir, mode, compress)?;
     report.csv_files_updated = rewrite_attachment_paths(output_dir, &remap)?;
     Ok(report)
 }

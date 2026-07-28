@@ -30,8 +30,8 @@ use imessage_database::{
 use message_exporters_core::OutputFormat;
 use message_ir::{
     owner_sender, parse_json_value, ConversationDocument, ConversationMeta, ExportMeta,
-    FormatSink, IrAttachment, IrConversationType, IrDirection, IrImessage, IrMessage,
-    IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION,
+    FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrImessage,
+    IrMessage, IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION,
 };
 use message_mail::{Direction as MailDirection, MailAttachment, MailMessage, Participant};
 use sha2::{Digest, Sha256};
@@ -65,7 +65,7 @@ struct PendingConversation {
 }
 
 /// Stream chat.db into per-conversation CSV, EML, MBOX, JSON, or JSONL.
-pub fn run_export(session: &MailSession) -> Result<(), RuntimeError> {
+pub fn run_export(session: &MailSession) -> Result<FormatSinkResult, RuntimeError> {
     let format = session.options.output_format;
     eprintln!(
         "Exporting to {} as {}...",
@@ -136,9 +136,12 @@ pub fn run_export(session: &MailSession) -> Result<(), RuntimeError> {
 
     let total_conversations = conversations.len() as u64;
     eprintln!("Writing {total_conversations} conversation file(s)...");
-    let mut sink = FormatSink::open(&session.options.export_path, format).map_err(|e| {
-        RuntimeError::InvalidOptions(format!("open export sink: {e:#}"))
-    })?;
+    let mut sink = FormatSink::open(
+        &session.options.export_path,
+        format,
+        session.options.transforms.clone(),
+    )
+    .map_err(|e| RuntimeError::InvalidOptions(format!("open export sink: {e:#}")))?;
     let mut written = 0u64;
     for (chat_identifier, convo) in conversations {
         written += 1;
@@ -193,11 +196,11 @@ pub fn run_export(session: &MailSession) -> Result<(), RuntimeError> {
             eprintln!("  wrote {written}/{total_conversations} conversations");
         }
     }
-    sink.finish().map_err(|e| {
-        RuntimeError::InvalidOptions(format!("finish export sink: {e:#}"))
-    })?;
+    let sink_result = sink
+        .finish()
+        .map_err(|e| RuntimeError::InvalidOptions(format!("finish export sink: {e:#}")))?;
 
-    Ok(())
+    Ok(sink_result)
 }
 
 fn collect_one(

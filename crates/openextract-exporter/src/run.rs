@@ -1,11 +1,11 @@
-//! Full export pipeline (convert + obfuscate) for CLI and in-process GUI.
+//! Full export pipeline for CLI and in-process GUI.
 
 use crate::emit::{convert_export, ExportReport};
 use anyhow::{bail, Context, Result};
 use message_contacts::resolve_contacts_cli;
 use message_csv::DateRange;
-use message_exporters_core::{ExporterConfig, OutputFormat, SourceConfig};
-use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
+use message_exporters_core::{ExporterConfig, SourceConfig};
+use message_ir::ExportTransforms;
 use std::path::Path;
 
 /// Result of [`run`]: convert report plus human-readable log lines.
@@ -15,7 +15,7 @@ pub struct RunResult {
     pub messages: Vec<String>,
 }
 
-/// Resolve contacts, convert, optionally obfuscate.
+/// Resolve contacts, convert, apply media/obfuscate via FormatSink.
 pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     let SourceConfig::OpenExtract(_) = &config.source else {
         bail!("openextract-exporter requires SourceConfig::OpenExtract");
@@ -24,24 +24,21 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     let mut messages = Vec::new();
     let (contacts_path, vcf) = config.contacts_csv_vcf();
     let (book, book_path) = resolve_contacts_cli(contacts_path, vcf)?;
-    let report = convert_export(
+    let transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
+    let (report, sink) = convert_export(
         input,
         &config.output,
         &book,
         &config.date_range,
+        transforms,
         config.output_format,
         config.cancel.as_ref(),
     )?;
-
-    // CSV obfuscation applies to CSV output only.
-    if config.output_format == OutputFormat::Csv && config.obfuscate_active() {
-        let mut anon = resolve_obfuscator(config.obfuscate.seed.as_deref())?;
-        let n = obfuscate_export_dir(&config.output, &mut anon)?;
-        messages.push(format!(
-            "Obfuscated {n} CSV file(s) under {}",
-            config.output.display()
-        ));
+    if !sink.media.errors.is_empty() && sink.media.processed == 0 && config.media.mode.needs_tools()
+    {
+        anyhow::bail!("media processing failed for all candidate files");
     }
+    messages.extend(sink.log_lines());
 
     messages.extend(report_summary_lines(
         &report,

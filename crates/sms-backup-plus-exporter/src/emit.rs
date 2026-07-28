@@ -14,8 +14,9 @@ use message_csv::{format_local_ts, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
 use message_ir::{
     clean_previous_ir_output, owner_sender, parse_android_type, ConversationDocument,
-    ConversationMeta, ConversationStats, ExportMeta, FormatSink, IrAttachment, IrConversationType,
-    IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION,
+    ConversationMeta, ConversationStats, ExportMeta, ExportTransforms, FormatSink, FormatSinkResult,
+    IrAttachment, IrConversationType, IrDirection, IrMessage, IrMessageKind, IrParticipant,
+    IrService, IrSource, SCHEMA_VERSION,
 };
 use message_phone::{OwnerPhoneSet, to_e164};
 use rayon::prelude::*;
@@ -630,10 +631,10 @@ pub fn convert_export<P: AsRef<Path>>(
     name_mapping: &NameMapping,
     date_range: &DateRange,
     verbose: bool,
-    copy_attachments: bool,
+    transforms: ExportTransforms,
     output_format: OutputFormat,
     cancel: Option<&CancelFlag>,
-) -> Result<ExportReport> {
+) -> Result<(ExportReport, FormatSinkResult)> {
     let owners = OwnerPhoneSet::new(owner_phones)?;
     let owner_handle = to_e164(&owners.primary_digits);
     let owner_emails_lc: Vec<String> = owner_emails
@@ -654,8 +655,7 @@ pub fn convert_export<P: AsRef<Path>>(
 
     fs::create_dir_all(output_dir)?;
     clean_previous_ir_output(output_dir)?;
-    let copy_attachments =
-        copy_attachments || output_format.is_mail_archive() || output_format.is_sbr_xml();
+    let copy_attachments = transforms.copies_attachments();
     let attachments_dir = output_dir.join("attachments");
     if copy_attachments {
         fs::create_dir_all(&attachments_dir)?;
@@ -782,7 +782,7 @@ pub fn convert_export<P: AsRef<Path>>(
             report.duplicates_dropped
         ),
     );
-    let mut sink = FormatSink::open(output_dir, output_format)?;
+    let mut sink = FormatSink::open(output_dir, output_format, transforms)?;
     let mut written = 0u64;
     for (chat_id, mut convo) in conversations {
         check_cancel(cancel)?;
@@ -797,7 +797,7 @@ pub fn convert_export<P: AsRef<Path>>(
         written += 1;
         report_progress(verbose, "wrote", written, convo_total);
     }
-    sink.finish()?;
+    let sink_result = sink.finish()?;
 
     vlog(
         verbose,
@@ -819,7 +819,7 @@ pub fn convert_export<P: AsRef<Path>>(
         }
     }
 
-    Ok(report)
+    Ok((report, sink_result))
 }
 
 #[cfg(test)]

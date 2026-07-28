@@ -1,6 +1,7 @@
 use message_contacts::{ContactsBook, NameMapping};
 use message_csv::DateRange;
 use message_exporters_core::OutputFormat;
+use message_ir::ExportTransforms;
 use sms_backup_plus_exporter::convert_export;
 use std::fs::{self, File};
 use std::io::Read;
@@ -22,7 +23,7 @@ fn empty_mapping() -> NameMapping {
 fn convert_smoke_writes_csv_not_json() {
     let input = fixtures();
     let tmp = tempfile::tempdir().unwrap();
-    let report = convert_export(
+    let (report, _) = convert_export(
         &[input.as_path()],
         tmp.path(),
         &["+15555550100".into()],
@@ -31,7 +32,7 @@ fn convert_smoke_writes_csv_not_json() {
         &empty_mapping(),
         &DateRange::default(),
         false,
-        true,
+        ExportTransforms::none(),
         OutputFormat::Csv,
         None,
     )
@@ -52,7 +53,14 @@ fn convert_smoke_writes_csv_not_json() {
     let json_count = fs::read_dir(tmp.path())
         .unwrap()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("json"))
+        .map(|e| e.path())
+        .filter(|p| {
+            p.extension().and_then(|x| x.to_str()) == Some("json")
+                && !p
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.ends_with(".meta.json"))
+        })
         .count();
     assert_eq!(json_count, 0);
 
@@ -94,7 +102,7 @@ fn end_dedupe_collapses_duplicate_flats() {
     fs::write(input_dir.join("b.eml"), &bytes).unwrap();
 
     let out = tmp.path().join("out");
-    let report = convert_export(
+    let (report, _) = convert_export(
         &[input_dir.as_path()],
         &out,
         &["+15555550100".into()],
@@ -103,7 +111,7 @@ fn end_dedupe_collapses_duplicate_flats() {
         &empty_mapping(),
         &DateRange::default(),
         false,
-        true,
+        ExportTransforms::none(),
         OutputFormat::Csv,
         None,
     )
@@ -163,7 +171,7 @@ Will do\r\n"
     .unwrap();
 
     let out = tmp.path().join("out");
-    let report = convert_export(
+    let (report, _) = convert_export(
         &[input_dir.as_path()],
         &out,
         &["+15555550100".into()],
@@ -172,7 +180,7 @@ Will do\r\n"
         &empty_mapping(),
         &DateRange::default(),
         false,
-        true,
+        ExportTransforms::none(),
         OutputFormat::Csv,
         None,
     )

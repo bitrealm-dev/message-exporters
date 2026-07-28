@@ -1,6 +1,7 @@
 use message_contacts::ContactsBook;
 use message_csv::DateRange;
 use message_exporters_core::OutputFormat;
+use message_ir::ExportTransforms;
 use sms_backup_restore_exporter::convert_export;
 use std::fs::{self, File};
 use std::io::{Read, Write};
@@ -20,13 +21,13 @@ fn convert_export_smoke_on_sample_fixture() {
 
     let tmp = tempfile::tempdir().expect("tempdir");
     let contacts = empty_contacts(&tmp);
-    let report = convert_export(
+    let (report, _) = convert_export(
         &fixture,
         tmp.path(),
         &["+15555550100".into()],
         &contacts,
         &DateRange::default(),
-        true,
+        ExportTransforms::none(),
         OutputFormat::Csv,
         None,
     )
@@ -50,7 +51,14 @@ fn convert_export_smoke_on_sample_fixture() {
     let json_count = fs::read_dir(tmp.path())
         .unwrap()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("json"))
+        .map(|e| e.path())
+        .filter(|p| {
+            p.extension().and_then(|x| x.to_str()) == Some("json")
+                && !p
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.ends_with(".meta.json"))
+        })
         .count();
     assert_eq!(json_count, 0);
 
@@ -108,13 +116,13 @@ fn dedupes_overlapping_xml_files() {
 
     let out = tmp.path().join("out");
     let contacts = empty_contacts(&tmp);
-    let report = convert_export(
+    let (report, _) = convert_export(
         &input_dir,
         &out,
         &["+15555550100".into()],
         &contacts,
         &DateRange::default(),
-        true,
+        ExportTransforms::none(),
         OutputFormat::Csv,
         None,
     )
@@ -141,7 +149,7 @@ fn rejects_owner_phone_without_digits() {
         &["not-a-phone".into()],
         &contacts,
         &DateRange::default(),
-        true,
+        ExportTransforms::none(),
         OutputFormat::Csv,
         None,
     )
@@ -159,13 +167,13 @@ fn convert_export_eml_writes_conversation_folder() {
 
     let tmp = tempfile::tempdir().expect("tempdir");
     let contacts = empty_contacts(&tmp);
-    let report = convert_export(
+    let (report, _) = convert_export(
         &fixture,
         tmp.path(),
         &["+15555550100".into()],
         &contacts,
         &DateRange::default(),
-        true,
+        ExportTransforms::none(),
         OutputFormat::Eml,
         None,
     )
@@ -224,13 +232,13 @@ fn convert_export_json_and_jsonl_use_pristine_v3() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let contacts = empty_contacts(&tmp);
 
-    convert_export(
+    let (_report, _) = convert_export(
         &fixture,
         tmp.path(),
         &["+15555550100".into()],
         &contacts,
         &DateRange::default(),
-        true,
+        ExportTransforms::none(),
         OutputFormat::Json,
         None,
     )
@@ -262,13 +270,13 @@ fn convert_export_json_and_jsonl_use_pristine_v3() {
 
     let out_jsonl = tmp.path().join("jsonl-out");
     fs::create_dir_all(&out_jsonl).unwrap();
-    convert_export(
+    let (_report, _) = convert_export(
         &fixture,
         &out_jsonl,
         &["+15555550100".into()],
         &contacts,
         &DateRange::default(),
-        true,
+        ExportTransforms::none(),
         OutputFormat::Jsonl,
         None,
     )

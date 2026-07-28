@@ -2,6 +2,7 @@ use imazing_exporter::convert_export;
 use message_contacts::ContactsBook;
 use message_csv::DateRange;
 use message_exporters_core::OutputFormat;
+use message_ir::ExportTransforms;
 use std::fs;
 use std::path::PathBuf;
 
@@ -15,13 +16,13 @@ fn convert_messages_with_imazing_contacts() {
 
     let book = ContactsBook::load_imazing_contacts_csv(&contacts).expect("load contacts");
     let tmp = tempfile::tempdir().expect("tempdir");
-    let report = convert_export(
+    let (report, _) = convert_export(
         &messages,
         tmp.path(),
         &book,
         Some("UTC"),
         &DateRange::default(),
-        false,
+        ExportTransforms::none(),
         OutputFormat::Csv,
         None,
     )
@@ -51,13 +52,13 @@ fn convert_whatsapp_csv_direct() {
     let contacts = fixture.join("contacts.csv");
     let book = ContactsBook::load_imazing_contacts_csv(&contacts).expect("load contacts");
     let tmp = tempfile::tempdir().expect("tempdir");
-    let report = convert_export(
+    let (report, _) = convert_export(
         &whatsapp,
         tmp.path(),
         &book,
         Some("UTC"),
         &DateRange::default(),
-        false,
+        ExportTransforms::none(),
         OutputFormat::Csv,
         None,
     )
@@ -80,13 +81,13 @@ fn convert_export_root_recursively_keeps_services_separate() {
     let contacts = root.join("Contacts/All contacts/All/Contacts - synthetic.csv");
     let book = ContactsBook::load_imazing_contacts_csv(&contacts).expect("load contacts");
     let tmp = tempfile::tempdir().expect("tempdir");
-    let report = convert_export(
+    let (report, _) = convert_export(
         &root,
         tmp.path(),
         &book,
         Some("UTC"),
         &DateRange::default(),
-        false,
+        ExportTransforms::none(),
         OutputFormat::Csv,
         None,
     )
@@ -102,7 +103,9 @@ fn convert_export_root_recursively_keeps_services_separate() {
         .unwrap()
         .filter_map(|e| e.ok())
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .find(|n| n.contains("15555550133") && !n.contains("whatsapp"))
+        .find(|n| {
+            n.ends_with(".csv") && n.contains("15555550133") && !n.contains("whatsapp")
+        })
         .expect("group csv with silent Carol");
     let body = fs::read_to_string(tmp.path().join(group)).unwrap();
     assert!(body.contains("group"));

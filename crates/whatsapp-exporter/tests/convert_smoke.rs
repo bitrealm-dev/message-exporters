@@ -1,5 +1,6 @@
 use message_csv::DateRange;
 use message_exporters_core::OutputFormat;
+use message_ir::ExportTransforms;
 use std::fs;
 use std::path::PathBuf;
 use whatsapp_exporter::convert_json;
@@ -11,11 +12,11 @@ fn convert_fixture_json_individual_and_group() {
     assert!(fixture.is_file(), "missing {}", fixture.display());
 
     let tmp = tempfile::tempdir().expect("tempdir");
-    let report = convert_json(
+    let (report, _) = convert_json(
         &fixture,
         tmp.path(),
         &DateRange::default(),
-        false,
+        ExportTransforms::none(),
         &[],
         OutputFormat::Csv,
         None,
@@ -79,11 +80,11 @@ fn copies_ios_style_media_true_data_paths() {
     fs::write(&json_path, json.to_string()).expect("write json");
 
     let out = tempfile::tempdir().expect("out");
-    let report = convert_json(
+    let (report, _) = convert_json(
         &json_path,
         out.path(),
         &DateRange::default(),
-        true,
+        ExportTransforms::none(),
         &[media_root.path().to_path_buf()],
         OutputFormat::Csv,
         None,

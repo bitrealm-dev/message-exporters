@@ -1,12 +1,11 @@
-//! Full export pipeline (convert + media + obfuscate) for CLI and in-process GUI.
+//! Full export pipeline for CLI and in-process GUI.
 
 use crate::emit::{convert_export, ExportReport};
 use anyhow::{bail, Context, Result};
 use message_contacts::{resolve_contacts_cli, NameMapping};
 use message_csv::DateRange;
-use message_exporters_core::{ExporterConfig, OutputFormat, SourceConfig};
-use message_media::{process_export_media, MediaReport};
-use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
+use message_exporters_core::{ExporterConfig, SourceConfig};
+use message_ir::ExportTransforms;
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -103,7 +102,7 @@ pub fn resolve_inputs(cli_inputs: Vec<PathBuf>, defaults: Vec<PathBuf>) -> Resul
     Ok(inputs)
 }
 
-/// Resolve owner/contacts/name-mapping, convert, optionally process media and obfuscate.
+/// Resolve owner/contacts/name-mapping, convert, apply media/obfuscate via FormatSink.
 pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     let SourceConfig::SmsBackupPlus(source) = &config.source else {
         bail!("sms-backup-plus-exporter requires SourceConfig::SmsBackupPlus");
@@ -129,7 +128,8 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
         }
     }
 
-    let report = convert_export(
+    let transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
+    let (report, sink) = convert_export(
         &inputs,
         &config.output,
         &owner_phones,
@@ -138,53 +138,20 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
         &name_mapping,
         &config.date_range,
         source.verbose,
-        config.media.mode.copies_attachments(),
+        transforms,
         config.output_format,
         config.cancel.as_ref(),
     )?;
-
-    // Media convert/compress and CSV obfuscation apply to CSV output only.
-    if config.output_format == OutputFormat::Csv {
-        if config.media.mode.needs_tools() {
-            let media =
-                process_export_media(&config.output, config.media.mode, &config.media.compress)?;
-            messages.extend(media_report_lines(&media));
-            if !media.errors.is_empty() && media.processed == 0 {
-                anyhow::bail!("media processing failed for all candidate files");
-            }
-        }
-
-        if config.obfuscate_active() {
-            let mut anon = resolve_obfuscator(config.obfuscate.seed.as_deref())?;
-            let n = obfuscate_export_dir(&config.output, &mut anon)?;
-            messages.push(format!(
-                "Obfuscated {n} CSV file(s) under {}",
-                config.output.display()
-            ));
-        }
+    if !sink.media.errors.is_empty() && sink.media.processed == 0 && config.media.mode.needs_tools()
+    {
+        anyhow::bail!("media processing failed for all candidate files");
     }
+    messages.extend(sink.log_lines());
 
     if source.include_summary {
         messages.extend(report_summary_lines(&report, &config.output));
     }
     Ok(RunResult { report, messages })
-}
-
-fn media_report_lines(report: &MediaReport) -> Vec<String> {
-    if report.processed == 0 && report.skipped == 0 && report.errors.is_empty() {
-        return Vec::new();
-    }
-    let mut lines = vec![format!(
-        "Media: processed {} file(s), skipped {}, updated {} CSV(s)",
-        report.processed, report.skipped, report.csv_files_updated
-    )];
-    for err in report.errors.iter().take(10) {
-        lines.push(format!("  media warning: {err}"));
-    }
-    if report.errors.len() > 10 {
-        lines.push(format!("  …and {} more", report.errors.len() - 10));
-    }
-    lines
 }
 
 /// Format the convert summary the same way the CLI prints it.

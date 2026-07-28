@@ -6,6 +6,7 @@ use imessage_database::util::{
     dirs::default_db_path, platform::Platform, query_context::QueryContext,
 };
 use message_exporters_core::{ApplePlatform, ExporterConfig, SourceConfig};
+use message_ir::ExportTransforms;
 
 use crate::{
     emit::run_export,
@@ -29,16 +30,23 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult, RuntimeError> {
     let mut session = MailSession::new(options)?;
     session.resolve_filtered_handles();
     check_cancel(config)?;
-    run_export(&session)?;
+    let sink = run_export(&session)?;
     check_cancel(config)?;
 
-    Ok(RunResult {
-        messages: vec![format!(
-            "Wrote {} export under {}",
-            format.as_str(),
-            config.output.display()
-        )],
-    })
+    if !sink.media.errors.is_empty() && sink.media.processed == 0 && config.media.mode.needs_tools()
+    {
+        return Err(RuntimeError::InvalidOptions(
+            "media processing failed for all candidate files".to_string(),
+        ));
+    }
+
+    let mut messages = sink.log_lines();
+    messages.push(format!(
+        "Wrote {} export under {}",
+        format.as_str(),
+        config.output.display()
+    ));
+    Ok(RunResult { messages })
 }
 
 fn check_cancel(config: &ExporterConfig) -> Result<(), RuntimeError> {
@@ -119,7 +127,7 @@ fn options_from_export_config(config: &ExporterConfig) -> Result<MailOptions, Ru
         }
     }
 
-    let mut attachment_embed = match source.copy_method.to_ascii_lowercase().as_str() {
+    let attachment_embed = match source.copy_method.to_ascii_lowercase().as_str() {
         "disabled" => AttachmentEmbed::Disabled,
         "clone" | "basic" | "full" => AttachmentEmbed::Embed,
         other => {
@@ -128,10 +136,6 @@ fn options_from_export_config(config: &ExporterConfig) -> Result<MailOptions, Ru
             )));
         }
     };
-    // Mail archives and SyncTech XML need attachment bytes (inline or on-disk).
-    if config.output_format.is_mail_archive() || config.output_format.is_sbr_xml() {
-        attachment_embed = AttachmentEmbed::Embed;
-    }
 
     let export_path = validate_export_path(&config.output, config.output_format)?;
     std::fs::create_dir_all(&export_path)?;
@@ -147,6 +151,7 @@ fn options_from_export_config(config: &ExporterConfig) -> Result<MailOptions, Ru
         cleartext_password: source.backup_password.clone(),
         contacts_path: source.apple_contacts.clone(),
         attachment_embed,
+        transforms: ExportTransforms::from_configs(&config.media, &config.obfuscate),
         output_format: config.output_format,
     })
 }

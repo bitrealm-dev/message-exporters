@@ -85,7 +85,7 @@ Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules a
 | Name mapping | — | — | advanced | — | — | — | — |
 | Verbose logging | — | — | always on | — | — | — | — |
 | Output format (CSV / EML / MBOX / JSON / JSONL‡) | yes | yes | yes | yes | yes | yes | yes |
-| Attachments (copy/convert/compress/do not copy) | yes | yes | yes | — | yes | yes | yes |
+| Attachments (copy/convert/compress/do not copy) | yes | yes | yes | yes†† | yes | yes | yes |
 | Compress options (resolution/fps/…) | when Compress | when Compress | when Compress | — | when Compress | when Compress | when Compress |
 | Advanced (attachment root, …) | — | — | name mapping | — | — | Android key / backup / wa / media / db / business | yes |
 
@@ -93,7 +93,9 @@ Convert/Compress need `ffmpeg`/`ffprobe` on PATH. **Do not copy** skips writing 
 
 \* Required unless filled from Plus `config/owner.toml` (source-relative today); GUI collects fields explicitly.
 
-‡ JSON / JSONL IR (schema v3) for all exporters, including iMessage (`imessage-ir-exporter`). See [MESSAGE_IR.md](MESSAGE_IR.md).
+‡ JSON / JSONL IR (schema v3) for all exporters, including iMessage (`imessage-ir-exporter`). See [MESSAGE_IR.md](MESSAGE_IR.md). Attachment modes and obfuscate apply to every output format via `FormatSink` (not CSV-only).
+
+†† OpenExtract has no media in its source CSVs yet, so attachment modes are a no-op for files; the control is still shown.
 
 ## Per-exporter options
 
@@ -111,10 +113,10 @@ In-process via `go_sms_pro_exporter::run`. Cancel is cooperative (between XML/PD
 | Contacts CSV | file | no† | `--contacts` |
 | Contacts VCF | file | no† | `--vcf` |
 | Output format | enum | no | `--format` (`csv` / `eml` / `mbox` / `json` / `jsonl`) |
-| Attachments | enum | no | `--media-mode` (`clone` / `convert` / `compress` / `disabled`); CSV only |
+| Attachments | enum | no | `--media-mode` (`clone` / `convert` / `compress` / `disabled`); all formats via FormatSink |
 | Max resolution / fps / min size / skip efficient | when Compress | no | `--media-max-resolution`, `--media-max-fps`, `--media-min-size`, `--media-skip-efficient` |
 
-† At most one of `--contacts` / `--vcf`. Global Obfuscate and Start/End date apply for CSV (see Shared / global controls). Convert → `.jpg`/`.mp4`/`.mp3`; Compress re-encodes (needs ffmpeg). Mail, JSON, and JSONL formats skip convert/compress/obfuscate.
+† At most one of `--contacts` / `--vcf`. Global Obfuscate and Start/End date apply for every format via FormatSink. Convert → `.jpg`/`.mp4`/`.mp3`; Compress re-encodes (needs ffmpeg).
 
 ### SMS Backup & Restore — `sms-backup-restore-exporter`
 
@@ -127,9 +129,9 @@ Product: [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/)
 | Output format | enum | no | `--format` (`csv` / `eml` / `mbox` / `json` / `jsonl`) |
 | Your phone numbers | multi-value text | yes | `--owner-phone` |
 | Contacts CSV / VCF | file | no† | `--contacts` / `--vcf` |
-| Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro); CSV only |
+| Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro); all formats |
 
-Encrypted ZIP backups must be unlocked/extracted before selecting input. Builds [canonical IR](MESSAGE_IR.md) then projects the chosen format. Global Obfuscate and Start/End date apply for CSV; convert/compress and obfuscate are skipped for EML/MBOX/JSON/JSONL.
+Encrypted ZIP backups must be unlocked/extracted before selecting input. Builds [canonical IR](MESSAGE_IR.md) then projects the chosen format. Media modes and obfuscate apply through FormatSink for every format.
 
 ### SMS Backup+ — `sms-backup-plus-exporter convert`
 
@@ -147,9 +149,9 @@ GUI always runs the `convert` subcommand and always passes `--verbose`.
 | Contacts CSV / VCF | file | no† | `--contacts` / `--vcf` |
 | Name mapping CSV | file | no | `--name-mapping` (`Phone,Incorrect Name`) |
 | Verbose | — | always | `--verbose` |
-| Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro); CSV only |
+| Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro); all formats |
 
-\* Or from crate-relative `config/owner.toml` — GUI does not rely on that; collect explicitly. Global Obfuscate and Start/End date apply for CSV; skipped for EML/MBOX/JSON/JSONL.
+\* Or from crate-relative `config/owner.toml` — GUI does not rely on that; collect explicitly. Media modes and obfuscate apply through FormatSink for every format.
 
 ### OpenExtract — `openextract-exporter`
 
@@ -162,7 +164,7 @@ Product: [OpenExtract](https://www.openextract.app/)
 | Output format | enum | no | `--format` (`csv` / `eml` / `mbox` / `json` / `jsonl`) |
 | Contacts VCF / iMazing CSV | file | no† | `--vcf` / `--contacts` |
 
-Global Obfuscate and Start/End date apply for CSV; skipped for EML/MBOX/JSON/JSONL. Mail is text-only (no media in source).
+Media modes and obfuscate apply through FormatSink for every format. Mail is text-only (no media in source).
 
 ### iMazing — `imazing-exporter`
 
@@ -176,7 +178,7 @@ Product: [iMazing](https://imazing.com/)
 | Contacts | iMazing Contacts CSV only | no | `--contacts` |
 | Timezone | IANA text | no | `--timezone` (default: host local) |
 
-Global Obfuscate and Start/End date apply for CSV; skipped for EML/MBOX/JSON/JSONL. WhatsApp chats use the `__whatsapp` stem suffix (CSV, mail, JSON, or JSONL). See [`crates/imazing-exporter/docs/DESIGN.md`](../crates/imazing-exporter/docs/DESIGN.md).
+Media modes and obfuscate apply through FormatSink for every format. WhatsApp chats use the `__whatsapp` stem suffix (CSV, mail, JSON, or JSONL). See [`crates/imazing-exporter/docs/DESIGN.md`](../crates/imazing-exporter/docs/DESIGN.md).
 
 ### WhatsApp — `whatsapp-exporter`
 
@@ -198,18 +200,18 @@ No Input directory and no Contacts file row in the GUI. `wtsexporter` runs in a 
 | Decryption key | text (Android only; not saved) | no | `--key` |
 | Output | folder | yes | `--output` |
 | Output format | enum | no | `--format` (`csv` / `eml` / `mbox` / `json` / `jsonl`) |
-| Attachments | enum | no | `--media-mode`; CSV only |
+| Attachments | enum | no | `--media-mode`; all formats |
 | Media folder | folder (advanced, Android only) | no | `--media` |
 | Message Database | file (advanced, Android only; hint: Optional msgstore.db override) | no | `--db` |
 | WhatsApp Business | checkbox (advanced) | no | `--business` |
 
-Global Obfuscate and Start/End date apply for CSV; skipped for EML/MBOX/JSON/JSONL. Output stems use the `__whatsapp` suffix. Optional CLI `--input` (defaults to cwd for resolving `msgstore.db` / media folders) is not sent by the GUI; extraction always uses a temp dir under Output.
+Media modes and obfuscate apply through FormatSink for every format. Output stems use the `__whatsapp` suffix. Optional CLI `--input` (defaults to cwd for resolving `msgstore.db` / media folders) is not sent by the GUI; extraction always uses a temp dir under Output.
 
 ### iPhone backup — `imessage-ir-exporter`
 
 Form link label: **imessage-ir-exporter** → [imessage-ir-exporter](https://github.com/bitrealm-dev/message-exporters/tree/main/crates/imessage-ir-exporter). Dropdown stays **iPhone backup**.
 
-GUI defaults: CSV, `--copy-method clone` (or `disabled`), always `--use-caller-id`. All formats (`csv` / `eml` / `mbox` / `json` / `jsonl`) run `imessage-ir-exporter` (`chat.db` → IR → projectors). Honors dates, conversation filter, contacts, attachment embed, and caller-id on From. Convert/Compress/obfuscate remain CSV-only (GUI post-step via `message-media` for CSV).
+GUI defaults: CSV, `--copy-method clone` (or `disabled`), always `--use-caller-id`. All formats (`csv` / `eml` / `mbox` / `json` / `jsonl` / `xml`) run `imessage-ir-exporter` (`chat.db` → IR → projectors). Honors dates, conversation filter, contacts, attachment embed, and caller-id on From. Convert/Compress/obfuscate apply through FormatSink for every format (same as other exporters).
 
 | Control | Type | Required | CLI |
 |---------|------|:--------:|-----|
@@ -217,14 +219,14 @@ GUI defaults: CSV, `--copy-method clone` (or `disabled`), always `--use-caller-i
 | Backup password | password | no | `--backup-password` |
 | Platform | macOS / iOS / auto | no | `--platform` |
 | Output / export path | folder | yes | `--output` |
-| Output format | enum | no | `--format` (`csv` / `eml` / `mbox` / `json` / `jsonl`) |
-| Attachments | enum | no | `--copy-method` `clone`/`disabled`; convert/compress post-process |
-| Max resolution / fps / min size / skip efficient | when Compress | no | GUI → `message-media` compress options |
+| Output format | enum | no | `--format` (`csv` / `eml` / `mbox` / `json` / `jsonl` / `xml`) |
+| Attachments | enum | no | `--copy-method` / media mode via FormatSink |
+| Max resolution / fps / min size / skip efficient | when Compress | no | compress options on FormatSink |
 | Attachment root | folder | no | `--attachment-root` (advanced) |
 | Conversation filter | text | no | `--conversation` (advanced) |
 | Contacts (AddressBook DB) | file | no | `--contacts` (advanced) |
 
-Global Obfuscate and Start/End date apply. With Convert/Compress, obfuscate runs in the GUI after media. Caller ID is always on.
+Media modes and obfuscate apply through FormatSink for every format. Caller ID is always on.
 
 Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox.
 
@@ -236,7 +238,7 @@ Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox
 4. **Path existence:** input must exist; output folder may be created on run.
 5. **Obfuscate seed:** if provided, must be exactly 8 hex characters; empty means generate.
 6. **Timezone (iMazing):** if set, must be a valid IANA name (or defer to converter error).
-7. **iPhone backup:** output directory is required; always passes `--use-caller-id`; obfuscate / convert / compress only apply to CSV (all exporters).
+7. **iPhone backup:** output directory is required; always passes `--use-caller-id`; obfuscate / convert / compress apply via FormatSink for every format.
 8. **SMS Backup+:** exactly one input path; `SourceConfig::SmsBackupPlus` sets `verbose` / `include_summary`.
 9. **Date range:** optional start/end `YYYY-MM-DD`; end is exclusive; blank means unbounded (`DateRange` on `ExporterConfig`).
 10. **Media convert/compress:** require `ffmpeg` and `ffprobe` on PATH; Compress options validated (fps number, min size like `20M`).

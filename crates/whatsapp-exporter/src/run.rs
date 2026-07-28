@@ -1,4 +1,4 @@
-//! Full export pipeline (wtsexporter/JSON convert + media + obfuscate) for CLI and GUI.
+//! Full export pipeline (wtsexporter/JSON convert) for CLI and GUI.
 
 use crate::cancel::check_cancel;
 use crate::emit::{convert_json, ExportReport};
@@ -6,10 +6,9 @@ use crate::wtsexporter::{resolve_wtsexporter, run_wtsexporter, Platform, Wtsexpo
 use anyhow::{bail, Context, Result};
 use message_csv::DateRange;
 use message_exporters_core::{
-    ExporterConfig, OutputFormat, SourceConfig, WhatsappPlatform as CorePlatform,
+    ExporterConfig, SourceConfig, WhatsappPlatform as CorePlatform,
 };
-use message_media::{process_export_media, MediaReport};
-use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
+use message_ir::ExportTransforms;
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -21,7 +20,7 @@ pub struct RunResult {
     pub messages: Vec<String>,
 }
 
-/// Resolve JSON (via wtsexporter or `--json`), convert, optionally process media and obfuscate.
+/// Resolve JSON (via wtsexporter or `--json`), convert, apply media/obfuscate via FormatSink.
 pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     let SourceConfig::Whatsapp(source) = &config.source else {
         bail!("whatsapp-exporter requires SourceConfig::Whatsapp");
@@ -115,11 +114,12 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     }
 
     check_cancel(config.cancel.as_ref())?;
-    let report = convert_json(
+    let transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
+    let (report, sink) = convert_json(
         &json_path,
         &config.output,
         &config.date_range,
-        config.media.mode.copies_attachments(),
+        transforms,
         &media_roots,
         config.output_format,
         config.cancel.as_ref(),
@@ -127,48 +127,14 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     // Drop tempdir after convert (media files already copied).
     drop(_work_keep_alive);
 
-    // Media convert/compress and CSV obfuscation apply to CSV output only.
-    if config.output_format == OutputFormat::Csv {
-        if config.media.mode.needs_tools() {
-            check_cancel(config.cancel.as_ref())?;
-            let media =
-                process_export_media(&config.output, config.media.mode, &config.media.compress)?;
-            messages.extend(media_report_lines(&media));
-            if !media.errors.is_empty() && media.processed == 0 {
-                bail!("media processing failed for all candidate files");
-            }
-        }
-
-        if config.obfuscate_active() {
-            check_cancel(config.cancel.as_ref())?;
-            let mut anon = resolve_obfuscator(config.obfuscate.seed.as_deref())?;
-            let n = obfuscate_export_dir(&config.output, &mut anon)?;
-            messages.push(format!(
-                "Obfuscated {n} CSV file(s) under {}",
-                config.output.display()
-            ));
-        }
+    if !sink.media.errors.is_empty() && sink.media.processed == 0 && config.media.mode.needs_tools()
+    {
+        bail!("media processing failed for all candidate files");
     }
+    messages.extend(sink.log_lines());
 
     messages.extend(report_summary_lines(&report, &config.output));
     Ok(RunResult { report, messages })
-}
-
-fn media_report_lines(report: &MediaReport) -> Vec<String> {
-    if report.processed == 0 && report.skipped == 0 && report.errors.is_empty() {
-        return Vec::new();
-    }
-    let mut lines = vec![format!(
-        "Media: processed {} file(s), skipped {}, updated {} CSV(s)",
-        report.processed, report.skipped, report.csv_files_updated
-    )];
-    for err in report.errors.iter().take(10) {
-        lines.push(format!("  media warning: {err}"));
-    }
-    if report.errors.len() > 10 {
-        lines.push(format!("  …and {} more", report.errors.len() - 10));
-    }
-    lines
 }
 
 /// Format the convert summary the same way the CLI prints it.

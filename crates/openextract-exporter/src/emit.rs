@@ -9,8 +9,9 @@ use message_csv::{format_local_ts, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
 use message_ir::{
     clean_previous_ir_output, owner_sender, ConversationDocument, ConversationMeta,
-    ConversationStats, ExportMeta, FormatSink, IrConversationType, IrDirection, IrMessage,
-    IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION,
+    ConversationStats, ExportMeta, ExportTransforms, FormatSink, FormatSinkResult,
+    IrConversationType, IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, IrSource,
+    SCHEMA_VERSION,
 };
 use serde_json::{json, Map};
 use message_phone::{sanitize_number, to_e164};
@@ -62,12 +63,13 @@ pub fn convert_export(
     output: &Path,
     book: &ContactsBook,
     date_range: &DateRange,
+    transforms: ExportTransforms,
     output_format: OutputFormat,
     cancel: Option<&CancelFlag>,
-) -> Result<ExportReport> {
+) -> Result<(ExportReport, FormatSinkResult)> {
     fs::create_dir_all(output).with_context(|| format!("create {}", output.display()))?;
     clean_previous_ir_output(output)?;
-    let mut sink = FormatSink::open(output, output_format)?;
+    let mut sink = FormatSink::open(output, output_format, transforms)?;
 
     let files = discover_csv_files(input)?;
     let mut report = ExportReport::default();
@@ -151,9 +153,9 @@ pub fn convert_export(
         sink.write_document(&doc)?;
         report.conversations += 1;
     }
-    sink.finish()?;
+    let sink_result = sink.finish()?;
 
-    Ok(report)
+    Ok((report, sink_result))
 }
 
 fn prepare_conversation(convo: &mut PendingConversation, report: &mut ExportReport) -> bool {
@@ -447,11 +449,12 @@ TEL;TYPE=CELL:+1-555-555-0122\nEND:VCARD\n",
         );
         let book = ContactsBook::load_vcf(&vcf).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(
+        let (report, _) = convert_export(
             dir.path(),
             &out,
             &book,
             &DateRange::default(),
+            ExportTransforms::none(),
             OutputFormat::Csv,
             None,
         )
@@ -482,11 +485,12 @@ TEL:+15555550999\nEND:VCARD\n",
         );
         let book = ContactsBook::load_vcf(&vcf).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(
+        let (report, _) = convert_export(
             dir.path(),
             &out,
             &book,
             &DateRange::default(),
+            ExportTransforms::none(),
             OutputFormat::Csv,
             None,
         )
@@ -513,8 +517,16 @@ TEL:+15555550999\nEND:VCARD\n",
         let range =
             DateRange::parse_optional_tz(Some("2020-01-01"), Some("2020-01-02"), Some("UTC"))
                 .unwrap();
-        let report =
-            convert_export(dir.path(), &out, &book, &range, OutputFormat::Csv, None).unwrap();
+        let (report, _) = convert_export(
+            dir.path(),
+            &out,
+            &book,
+            &range,
+            ExportTransforms::none(),
+            OutputFormat::Csv,
+            None,
+        )
+        .unwrap();
         assert_eq!(report.skipped_out_of_range, 2);
         assert_eq!(report.messages, 1);
         let body = fs::read_to_string(out.join("+15555550122.csv")).unwrap();
