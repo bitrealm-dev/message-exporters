@@ -60,7 +60,7 @@ Non-zero on missing paths, convert failure, invalid timezone/dates, or total med
 : iMazing CSV export tree; optional Contacts CSV.
 
 **Output**
-: Per-conversation `*.csv` (WhatsApp: `*__whatsapp.csv`); `attachments/` when media is copied.
+: Output in the selected format. JSON, JSONL, CSV, EML, and MBOX are organized per conversation; XML writes one `smses.xml` backup. WhatsApp conversation stems include `__whatsapp`. Media can be written under `attachments/`.
 
 # ENVIRONMENT
 
@@ -79,4 +79,10 @@ imazing-exporter \
 
 # NOTES
 
-Experimental in the GUI. Outgoing sender identity, WhatsApp group roster, and reaction/reply fidelity are limited by the upstream CSV. Design notes and limitations: [DESIGN.md](DESIGN.md).
+Experimental in the GUI. Outgoing sender identity, WhatsApp group roster, and reaction/reply fidelity are limited by the upstream CSV.
+
+# SEE ALSO
+
+- [iMazing user guide](https://bitrealm-dev.github.io/message-exporters/other-app-exports/imazing/)
+- [Input format and source limitations](INPUT_FORMAT.md)
+- [Importer design](DESIGN.md)

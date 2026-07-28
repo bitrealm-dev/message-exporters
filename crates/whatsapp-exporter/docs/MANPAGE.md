@@ -79,7 +79,7 @@ Non-zero if `wtsexporter` is missing/fails, JSON is missing, convert fails, or m
 # FILES
 
 **Output**
-: `*__whatsapp.csv`, `attachments/`, `wtsexporter_result.json`. Scratch `wtsexporter-*` under output during the run.
+: Output in the selected format with `__whatsapp` in conversation stems. JSON, JSONL, CSV, EML, and MBOX are organized per conversation; XML writes one `smses.xml` backup. The output can also contain `attachments/` and `wtsexporter_result.json`. Scratch `wtsexporter-*` directories exist during extraction and are removed afterward.
 
 **Upstream**
 : Requires `wtsexporter` on `PATH`, beside this binary, in `MESSAGE_EXPORTERS_BIN`, or via `WTSEXPORTER`.
@@ -123,3 +123,8 @@ whatsapp-exporter \
 # NOTES
 
 Supported exporter. Android needs an already extracted / decryptable database or crypt backup; iOS uses a WhatsApp-capable iPhone backup path.
+
+# SEE ALSO
+
+- [Android WhatsApp user guide](https://bitrealm-dev.github.io/message-exporters/android/whatsapp/)
+- [Apple WhatsApp user guide](https://bitrealm-dev.github.io/message-exporters/apple/whatsapp/)

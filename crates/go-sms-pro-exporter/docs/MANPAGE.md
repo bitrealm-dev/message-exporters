@@ -80,7 +80,7 @@ Exits non-zero on invalid arguments, missing paths, convert failure, or when med
 : Directory with `gosms_sys*.xml` and matching `I_*.pdu` blobs.
 
 **Output**
-: One `*.csv` per conversation; `attachments/` when media mode copies files; optional `skipped_*.csv` diagnostics.
+: Output in the selected format. JSON, JSONL, CSV, EML, and MBOX are organized per conversation; XML writes one `smses.xml` backup. Media can be written under `attachments/`, and optional `skipped_*.csv` diagnostics explain rejected source records.
 
 # ENVIRONMENT
 
@@ -100,3 +100,8 @@ go-sms-pro-exporter \
 # NOTES
 
 Experimental in the desktop GUI. Field mapping and skip counters: [IMPORT_MAPPING.md](IMPORT_MAPPING.md).
+
+# SEE ALSO
+
+- [GO SMS Pro user guide](https://bitrealm-dev.github.io/message-exporters/other-app-exports/go-sms-pro/)
+- [Import mapping](IMPORT_MAPPING.md)

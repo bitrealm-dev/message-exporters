@@ -58,7 +58,7 @@ All converters build a **common message** per conversation (`ConversationDocumen
 | SMS Backup & Restore | [`INPUT_FORMAT.md`](../../crates/sms-backup-restore-exporter/docs/INPUT_FORMAT.md) · [`IMPORT_MAPPING.md`](../../crates/sms-backup-restore-exporter/docs/IMPORT_MAPPING.md) |
 | SMS Backup+ | [`FORMAT.md`](../../crates/sms-backup-plus-exporter/docs/FORMAT.md) · [`IMPORT_MAPPING.md`](../../crates/sms-backup-plus-exporter/docs/IMPORT_MAPPING.md) |
 | OpenExtract | [`crates/openextract-exporter/docs/MANPAGE.md`](../../crates/openextract-exporter/docs/MANPAGE.md) |
-| iMazing | [`crates/imazing-exporter/docs/DESIGN.md`](../../crates/imazing-exporter/docs/DESIGN.md) |
+| iMazing | [`INPUT_FORMAT.md`](../../crates/imazing-exporter/docs/INPUT_FORMAT.md) · [`DESIGN.md`](../../crates/imazing-exporter/docs/DESIGN.md) |
 | WhatsApp | [`crates/whatsapp-exporter/docs/MANPAGE.md`](../../crates/whatsapp-exporter/docs/MANPAGE.md) |
 | iMessage | [`crates/imessage-ir-exporter/docs/MANPAGE.md`](../../crates/imessage-ir-exporter/docs/MANPAGE.md) |
 

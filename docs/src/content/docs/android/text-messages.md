@@ -34,3 +34,7 @@ SMS and MMS are supported. Embedded MMS media can be copied or embedded in the c
 Missing contacts do not stop the export; unresolved names remain blank. Invalid dates, unknown message types, empty participants, and unreadable attachment data can cause individual records to be skipped and counted in the log.
 
 Writing Android XML creates one `smses.xml` that SMS Backup & Restore can read. Apple-only fields from other source formats cannot be represented in this XML format.
+
+## Use the command line
+
+See the [`sms-backup-restore-exporter` reference](/reference/cli/sms-backup-restore-exporter/) for processing multiple backups, repeating owner phone numbers, selecting contacts, and all available flags.

@@ -36,3 +36,7 @@ In **Message**, choose **iMazing (experimental)**. Select the input, optional co
 - Edited and deleted details are limited to the fields that iMazing included.
 
 Messages and WhatsApp conversations remain separate. WhatsApp output filenames include `__whatsapp`.
+
+## Use the command line
+
+See the [`imazing-exporter` reference](/reference/cli/imazing-exporter/) for recursive input discovery, timezone syntax, media settings, and all available flags.

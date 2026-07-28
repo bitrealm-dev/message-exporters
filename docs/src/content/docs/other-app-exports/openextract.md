@@ -28,3 +28,7 @@ In **Message**, choose **OpenExtract (experimental)**. Select the CSV file or di
 - Name-only conversations are written with name-based filenames and may be unreliable for later tools that require phone identifiers.
 
 Date filtering and obfuscation are available. Attachment conversion settings do not restore media that OpenExtract did not provide.
+
+## Use the command line
+
+See the [`openextract-exporter` reference](/reference/cli/openextract-exporter/) for contacts options, date filters, obfuscation, and all available flags.

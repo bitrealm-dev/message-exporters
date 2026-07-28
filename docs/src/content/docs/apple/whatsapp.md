@@ -31,3 +31,7 @@ Extraction happens first. Conversion starts after `wtsexporter` succeeds. Conver
 - Wait for extraction to finish or fail. The desktop app cannot cancel `wtsexporter` in the middle of its run.
 
 The output may contain `wtsexporter_result.json` in addition to the selected conversation files and media.
+
+## Use the command line
+
+See the [`whatsapp-exporter` reference](/reference/cli/whatsapp-exporter/) for iOS backup arguments, helper discovery, date filters, media settings, and all available flags.

@@ -51,3 +51,7 @@ The detector ignores `attachments/` and old `*.meta.json` files. It rejects mixe
 <Aside type="caution" title="Some conversions lose details">
   Android XML cannot store Apple-only fields. Prefer JSON as the source and destination when preserving iMessage detail matters. Re-export can only carry media that is still present in the source folder or embedded in its files.
 </Aside>
+
+## Command-line reference
+
+See the [`message-reexporter` reference](/reference/cli/message-reexporter/) for format detection, media conversion settings, obfuscation, exit behavior, and all available flags.

@@ -1,69 +1,18 @@
-# iMazing exporter design and limitations
+# iMazing exporter design
 
 Living design notes for [`imazing-exporter`](../). Append dated findings; do not erase prior validation rows.
 
-**Targeted upstream:** iMazing **3.5.5** (validated against a full “All messages” device export on 2026-07-19).
+The observed iMazing 3.5.5 directory layout, CSV headers, and source limitations are documented separately in [INPUT_FORMAT.md](INPUT_FORMAT.md). This file explains how the importer discovers, interprets, and converts those files.
 
 ## Goals
 
 - Accept either one iMazing Messages/WhatsApp CSV **or** a folder at any level of a device export tree.
 - Emit the common message → packaging via `FormatSink` (CSV uses shared [`CSV_HEADERS`](../../message-ir/src/lib.rs); default JSON), with WhatsApp kept separate from SMS/iMessage.
 - Resolve phones/names through an optional iMazing Contacts CSV.
-- Document export limitations that cannot be fixed in the converter.
 
-## Input layout (verified)
+## Input discovery
 
-A full device export root typically contains:
-
-```text
-Device-Info.txt
-Contacts/.../Contacts - {stamp}.csv
-Messages/{YYYY-MM-DD HH MM SS} - {label}/Messages - {export-stamp} - {label}.csv
-WhatsApp/{YYYY-MM-DD HH MM SS} - {label}/WhatsApp - {export-stamp} - {label}.csv
-```
-
-Media files sit beside the CSV in the chat folder (no `Attachments/` subdir). Disk names are often
-`{msgTs} - {truncatedLabel} - {originalBasename}`; the CSV `Attachment` cell is usually only the original basename.
-
-`--input` may be:
-
-| Path | Behavior |
-|------|----------|
-| One `.csv` | Parse if headers match Messages or WhatsApp |
-| Chat folder | Recurse; pick matching CSV(s) |
-| `Messages/` or `WhatsApp/` | Recurse that tree |
-| Device export root | Recurse; skip Contacts CSVs by name/header |
-
-Discovery is recursive, does not follow directory symlinks, sorts paths, and classifies by headers:
-
-- **Messages:** has `Service` (plus shared `Chat Session` / `Message Date` / `Sender ID`)
-- **WhatsApp:** lacks `Service`; has `Forwarded`, `Attachment info`, and/or `Sent Date`
-
-## Schemas (verified headers)
-
-### Messages (17 columns)
-
-```text
-Chat Session, Message Date, Delivered Date, Read Date, Edited Date, Deleted Date,
-Service, Type, Sender ID, Sender Name, Status, Replying to, Subject, Text, Reactions,
-Attachment, Attachment type
-```
-
-`Service` values observed: `SMS`, `iMessage` (sometimes mixed in one chat).
-
-### WhatsApp (14 columns)
-
-```text
-Chat Session, Message Date, Sent Date, Type, Sender ID, Sender Name, Status, Forwarded,
-Replying to, Text, Reactions, Attachment, Attachment type, Attachment info
-```
-
-Output `service` is always `WhatsApp`.
-
-### Contacts
-
-Wide address-book CSV (`First Name`, `Mobile Phone`, …, `Notes`). Phones may appear only in
-`Notes` as `PROP-ID: +…` (handled by `message-contacts`).
+Discovery walks the selected path recursively without following directory symbolic links. Matching files are sorted before parsing so repeated runs process them in the same order. Header classification separates Messages CSV files from WhatsApp CSV files and prevents Contacts exports from being parsed as conversations. See [INPUT_FORMAT.md](INPUT_FORMAT.md) for the accepted paths and identifying headers.
 
 ## Output policy
 
@@ -103,26 +52,6 @@ name→phone; else a sanitized name stem (reported as unresolved).
 `Chat Session` is a **title**, not a roster. Participants are inferred only from distinct senders.
 Non-senders are invisible in the CSV.
 
-## Confirmed limitations
-
-These are upstream/export constraints, not converter bugs:
-
-1. **Silent Messages group member has no phone** unless their display name in `Chat Session`
-   resolves through Contacts. If they never send and are absent from Contacts, only the name
-   exists in the roster string.
-2. **WhatsApp non-senders are absent** — no roster column; Notifications rarely include phones.
-3. **Outgoing identity blank** — own number never appears in `Sender ID` / `Sender Name`.
-4. **Name-only chat sessions** — many 1:1 chats use a display name as `Chat Session`.
-5. **Timezone-less timestamps** — `Message Date` is naive; importer requires `--timezone` or host local.
-6. **Folder/label truncation** — long group folder names may end mid-name with `-`.
-7. **Attachment rename mismatch** — CSV basename often ≠ on-disk filename; suffix join helps but
-   can still miss when labels diverge.
-8. **Contact phone gaps** — many contacts lack phone columns; some phones only in Notes.
-9. **Replies / reactions are free text** — not structured objects; reaction times use US `M/D/YYYY`.
-10. **Edited / deleted** — rare Messages columns / `Recently deleted` status; preserved in `source_fields_json`.
-11. **No group GUID** — only display strings and inferred handles.
-12. **Email iMessage chats** — uncommon; `Sender ID` may be an email.
-
 ## Validation matrix
 
 | Date | iMazing | Sample | Result |
@@ -138,5 +67,6 @@ These are upstream/export constraints, not converter bugs:
 ## Related docs
 
 - CLI: [`MANPAGE.md`](MANPAGE.md)
+- Input format and source limitations: [`INPUT_FORMAT.md`](INPUT_FORMAT.md)
 - Contacts helper: [`../../message-contacts/README.md`](../../message-contacts/README.md)
 - Shared model and output contracts: [message-ir architecture](../../../docs/maintainers/architecture/message-ir.md), [export structure](../../../docs/src/content/docs/understand-output/export-structure.md), [CSV columns](../../../docs/src/content/docs/understand-output/csv-columns.md)

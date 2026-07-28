@@ -39,6 +39,23 @@ Auto-detects a single input format among `csv`, `eml`, `mbox`, `json`, `jsonl`, 
 **--obfuscate**, **--obfuscate-seed** *8-hex*
 : Post-export obfuscation; seed must be exactly eight hex digits.
 
+# EXIT STATUS
+
+Exits non-zero when arguments are invalid, input and output paths are the same, no supported format can be detected, multiple format classes are present, an input file cannot be read, or output conversion fails.
+
+# FILES
+
+**Input**
+: A Message Exporters output directory containing exactly one supported format class: CSV, EML, MBOX, JSON, JSONL, or one `smses.xml`.
+
+**Output**
+: A different directory containing the selected format. JSON, JSONL, CSV, EML, and MBOX are organized per conversation; XML writes one `smses.xml` backup. Media can be written under `attachments/`.
+
+# ENVIRONMENT
+
+**PATH**
+: Must include `ffmpeg` and `ffprobe` when `--media-mode` is `convert` or `compress`.
+
 # EXAMPLES
 
 ```bash
@@ -47,3 +64,11 @@ cargo run -p message-reexporter -- \
   --output /path/to/new-export \
   --format eml
 ```
+
+# NOTES
+
+The detector ignores `attachments/` and legacy `*.meta.json` files. It rejects arbitrary vendor exports and directories that mix supported format classes.
+
+# SEE ALSO
+
+- [Re-export user guide](https://bitrealm-dev.github.io/message-exporters/work-with-exports/convert-format/)

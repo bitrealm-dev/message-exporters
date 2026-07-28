@@ -27,3 +27,7 @@ In **Message**, choose **GO SMS Pro (experimental)**. Select the backup director
 - Contacts are optional. Without them, display names can remain unresolved.
 
 The exporter may write `skipped_invalid_address.csv`, `skipped_empty_pdu.csv`, and `skipped_no_party.csv`. These files explain skipped records; they are not conversation exports.
+
+## Use the command line
+
+See the [`go-sms-pro-exporter` reference](/reference/cli/go-sms-pro-exporter/) for repeatable owner-phone flags, media settings, skip diagnostics, and all available options.

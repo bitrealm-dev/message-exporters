@@ -75,3 +75,7 @@ openextract-exporter \
 # NOTES
 
 Experimental in the GUI. Thin source format: no groups, no media extraction; contacts strongly recommended.
+
+# SEE ALSO
+
+- [OpenExtract user guide](https://bitrealm-dev.github.io/message-exporters/other-app-exports/openextract/)

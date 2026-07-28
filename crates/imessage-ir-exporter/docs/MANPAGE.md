@@ -58,6 +58,23 @@ License: GPL-3.0-or-later (same as `imessage-database` / `crabapple`).
 **--use-caller-id** *true|false*
 : Outgoing From display name (default `true`).
 
+# EXIT STATUS
+
+Exits non-zero when arguments are invalid, the Messages database or backup cannot be opened, an encrypted backup password is wrong, a requested conversation is missing, output conversion fails, or required media tools fail.
+
+# FILES
+
+**Input**
+: A macOS Messages `chat.db`, a macOS Messages data directory, or an iOS backup root. Encrypted iOS backups require `--backup-password`.
+
+**Output**
+: Output in the selected format. JSON, JSONL, CSV, EML, and MBOX are organized per conversation; XML writes one `smses.xml` backup. Copied media can be written under `attachments/`.
+
+# ENVIRONMENT
+
+**PATH**
+: Must include `ffmpeg` and `ffprobe` when attachment handling converts or compresses media.
+
 # EXAMPLES
 
 ```bash
@@ -69,3 +86,11 @@ imessage-ir-exporter --format eml --platform iOS \
   --input ~/Library/Application\ Support/MobileSync/Backup/<id> \
   --output ./out
 ```
+
+# NOTES
+
+This exporter uses the GPL-3.0-or-later `imessage-database` implementation. Android XML cannot preserve Apple-only fields such as tapbacks, edits, replies, and effects.
+
+# SEE ALSO
+
+- [Apple Messages user guide](https://bitrealm-dev.github.io/message-exporters/apple/text-messages/)

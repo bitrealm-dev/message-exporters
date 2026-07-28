@@ -4,6 +4,8 @@ Convert **iMazing** Messages / WhatsApp CSV exports via the common message to JS
 
 **CLI:** [docs/MANPAGE.md](docs/MANPAGE.md)
 
-**Design / limitations:** [docs/DESIGN.md](docs/DESIGN.md)
+**Input format and source limitations:** [docs/INPUT_FORMAT.md](docs/INPUT_FORMAT.md)
+
+**Importer design:** [docs/DESIGN.md](docs/DESIGN.md)
 
 License: MIT

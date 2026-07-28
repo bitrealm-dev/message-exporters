@@ -84,7 +84,7 @@ Non-zero on missing identity/input, convert errors, or total media-tool failure.
 : Offline EML export tree (not live IMAP).
 
 **Output**
-: Per-conversation `*.csv`; `attachments/` when media is copied. Unresolved peers may land in `unknown.csv`.
+: Output in the selected format. JSON, JSONL, CSV, EML, and MBOX are organized per conversation; XML writes one `smses.xml` backup. Media can be written under `attachments/`. Unresolved peers use an `unknown` conversation stem.
 
 **config/owner.toml**
 : Optional defaults for phones, emails, and `source_dirs` (crate-relative when built from source).
@@ -108,3 +108,9 @@ sms-backup-plus-exporter -v convert \
 # NOTES
 
 Experimental in the GUI. Attachment→message pairing in archives is heuristic. EML layouts: [FORMAT.md](FORMAT.md). Field mapping: [IMPORT_MAPPING.md](IMPORT_MAPPING.md).
+
+# SEE ALSO
+
+- [SMS Backup+ user guide](https://bitrealm-dev.github.io/message-exporters/other-app-exports/sms-backup-plus/)
+- [Input EML format](FORMAT.md)
+- [Import mapping](IMPORT_MAPPING.md)

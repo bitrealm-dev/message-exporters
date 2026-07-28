@@ -35,3 +35,7 @@ Most formats create one artifact per conversation. Android XML creates one `smse
 If the export fails, check that the path points to a real Messages database or iPhone backup. For an encrypted backup, check the password. **Convert** and **Convert & compress** also require `ffmpeg` and `ffprobe`.
 
 Android XML drops Apple-only fields. Use JSON when preserving iMessage details for later conversion matters.
+
+## Use the command line
+
+See the [`imessage-ir-exporter` reference](/reference/cli/imessage-ir-exporter/) for platform selection, encrypted-backup passwords, conversation filters, attachment handling, and all available flags.

@@ -15,10 +15,7 @@ Contacts are optional but recommended. Use a VCF or iMazing Contacts CSV. An opt
 
 The command-line tool can accept more than one input root and can read defaults from `config/owner.toml`. The desktop app requires exactly one input path.
 
-## Supported EML layouts
-
-- **One message per file:** direction, peer, and time usually come from `X-smssync-type`, `X-smssync-address`, and `X-smssync-date`.
-- **Archive email:** one email body contains many timestamped messages. A sender named `Me` is treated as outgoing.
+The importer recognizes both one-message-per-file exports and archive emails that contain multiple messages. Exact EML headers and archive-body rules are maintained in the crate’s technical format reference.
 
 ## Run the import
 
@@ -31,3 +28,7 @@ In **Message**, choose **SMS Backup+ (experimental)**. Select the EML file or di
 - Archive attachments are paired to messages by order, so attachment-to-message matching is best effort.
 - Duplicate archive and individual-message copies are detected using conversation, timestamp rounded to the second, direction, and text. When they match, the individual-message copy is preferred and attachments are combined by file content.
 - Source email layouts vary. Fields that SMS Backup+ did not write cannot be recovered.
+
+## Use the command line
+
+See the [`sms-backup-plus-exporter` reference](/reference/cli/sms-backup-plus-exporter/) for repeatable input paths, owner identities, configuration defaults, and all available flags.

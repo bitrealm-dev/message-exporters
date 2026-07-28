@@ -15,16 +15,6 @@ Source EML → `ConversationDocument` → [`message_ir::FormatSink`](../../messa
 
 With `--format csv`: one file per conversation (header + one row per message after dedupe). MIME attachments under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). Peers with no usable phone number are written to `unknown.csv`. `--format xml` writes a single SyncTech `smses.xml`.
 
-## EML layouts
-
-### Flat (one SMS/MMS per file)
-
-Typical headers: `X-smssync-type`, `X-smssync-address`, `X-smssync-date`, `X-smssync-id`, `Subject: SMS with …`.
-
-### Archive (many messages in one file)
-
-`Subject: SMS archive …`, body lines `YYYY-MM-DD HH:MM:SS - {Sender}` then text; sender `Me` = outgoing.
-
 ## Source → shared fields
 
 | Shared field | EML source |

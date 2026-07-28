@@ -36,3 +36,7 @@ The key value may be a key-file path or crypt15 hexadecimal material. The GUI do
 - Wait for extraction to finish or fail. The app cannot cancel the external helper mid-run.
 
 Conversation filenames use `__whatsapp` so they remain separate from SMS and other services.
+
+## Use the command line
+
+See the [`whatsapp-exporter` reference](/reference/cli/whatsapp-exporter/) for crypt keys, explicit database paths, WhatsApp Business mode, helper discovery, and all available flags.
