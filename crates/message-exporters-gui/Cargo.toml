@@ -11,6 +11,7 @@ egui = "0.31"
 go-sms-pro-exporter = { path = "../go-sms-pro-exporter", default-features = false }
 imazing-exporter = { path = "../imazing-exporter", default-features = false }
 imessage-exporter = { path = "../imessage-exporter" }
+imessage-mail-exporter = { path = "../imessage-mail-exporter" }
 openextract-exporter = { path = "../openextract-exporter", default-features = false }
 sms-backup-plus-exporter = { path = "../sms-backup-plus-exporter", default-features = false }
 sms-backup-restore-exporter = { path = "../sms-backup-restore-exporter", default-features = false }

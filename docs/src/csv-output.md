@@ -2,7 +2,7 @@
 
 All converters write **one CSV file per conversation**, plus an `attachments/` directory when media is copied.
 
-A future **mail archive** path (folder of `.eml` per conversation, `X-ME-*` headers) is specified in [`MAIL_ARCHIVE.md`](../MAIL_ARCHIVE.md). It is not wired to exporters yet; this page describes the current CSV output only.
+A **mail archive** path (folder of `.eml` per conversation, `X-ME-*` headers) is specified in [`MAIL_ARCHIVE.md`](../MAIL_ARCHIVE.md) (`message-mail`; SBR `--format eml`, iMessage via `imessage-mail-exporter`). This page describes the current CSV output only.
 
 ## Shared conventions
 

@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/message-phone",
     "crates/message-csv",
+    "crates/message-mail",
     "crates/message-contacts",
     "crates/message-obfuscate",
     "crates/message-media",
@@ -12,6 +13,7 @@ members = [
     "crates/openextract-exporter",
     "crates/imazing-exporter",
     "crates/imessage-exporter",
+    "crates/imessage-mail-exporter",
     "crates/whatsapp-exporter",
     "crates/message-exporters-core",
     "crates/message-exporters-gui",

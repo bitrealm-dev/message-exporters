@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
 use message_exporters_core::{
-    ExporterConfig, MediaConfig, ObfuscateConfig, SourceConfig, WhatsappConfig,
+    ExporterConfig, MediaConfig, ObfuscateConfig, OutputFormat, SourceConfig, WhatsappConfig,
     WhatsappPlatform,
 };
 use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
@@ -131,6 +131,7 @@ fn main() -> Result<()> {
             compress,
         },
         cancel: None,
+        output_format: OutputFormat::Csv,
         source: SourceConfig::Whatsapp(WhatsappConfig {
             platform: cli.platform.map(Into::into),
             json: cli.json,

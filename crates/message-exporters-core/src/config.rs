@@ -3,6 +3,7 @@
 //! [`ExporterConfig`] holds options common to (nearly) every exporter.
 //! Exporter-specific knobs live in [`SourceConfig`].
 
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 use message_csv::DateRange;
@@ -10,6 +11,47 @@ use message_media::{CompressOptions, MediaMode};
 
 use crate::exporters::{ApplePlatform, ContactsKind, Exporter, WhatsappPlatform};
 use crate::process::CancelFlag;
+
+/// Output packaging for exporters that support more than CSV.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum OutputFormat {
+    /// Per-conversation CSV (default).
+    #[default]
+    Csv,
+    /// Per-conversation folder of `.eml` files (see docs/MAIL_ARCHIVE.md).
+    Eml,
+}
+
+impl fmt::Display for OutputFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Csv => "CSV (per conversation)",
+            Self::Eml => "EML archive (mail folders)",
+        })
+    }
+}
+
+impl OutputFormat {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Csv => "csv",
+            Self::Eml => "eml",
+        }
+    }
+
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "csv" => Ok(Self::Csv),
+            "eml" => Ok(Self::Eml),
+            other => Err(format!(
+                "unknown output format '{other}' (expected csv or eml)"
+            )),
+        }
+    }
+}
+
+/// Values shown in the GUI output-format combo.
+pub const OUTPUT_FORMATS: [OutputFormat; 2] = [OutputFormat::Csv, OutputFormat::Eml];
 
 /// Shared export inputs. Source-specific fields are in [`Self::source`].
 #[derive(Debug, Clone)]
@@ -23,6 +65,8 @@ pub struct ExporterConfig {
     /// OpenExtract uses [`MediaMode::Disabled`].
     pub media: MediaConfig,
     pub cancel: Option<CancelFlag>,
+    /// Packaging format. SMS Backup & Restore and iMessage honor [`OutputFormat::Eml`].
+    pub output_format: OutputFormat,
     pub source: SourceConfig,
 }
 

@@ -4,7 +4,7 @@ use anyhow::Result;
 use clap::Parser;
 use message_exporters_core::{
     ContactsConfig, ContactsKind, ExporterConfig, MediaConfig, ObfuscateConfig, OpenExtractConfig,
-    SourceConfig,
+    OutputFormat, SourceConfig,
 };
 use message_media::MediaMode;
 use openextract_exporter::{parse_date_range, run};
@@ -74,6 +74,7 @@ fn main() -> Result<()> {
             compress: Default::default(),
         },
         cancel: None,
+        output_format: OutputFormat::Csv,
         source: SourceConfig::OpenExtract(OpenExtractConfig {}),
     })?;
 

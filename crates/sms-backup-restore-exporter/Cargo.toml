@@ -24,6 +24,7 @@ message-obfuscate = { path = "../message-obfuscate" }
 message-contacts = { path = "../message-contacts" }
 message-csv = { path = "../message-csv" }
 message-exporters-core = { path = "../message-exporters-core" }
+message-mail = { path = "../message-mail" }
 message-media = { path = "../message-media" }
 message-phone = { path = "../message-phone" }
 quick-xml = { version = "0.41.0", features = ["serialize"] }

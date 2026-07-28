@@ -1,7 +1,4 @@
-//! Library entrypoint for in-process iMessage export (GUI).
-//!
-//! Media convert/compress post-processing is left to the caller (GUI
-//! `run_imessage_media_post`) so behavior matches the spawn-based path.
+//! Library entrypoint: [`ExporterConfig`] → mail archive.
 
 use std::path::PathBuf;
 
@@ -10,47 +7,55 @@ use imessage_database::util::{
 };
 use message_exporters_core::{ApplePlatform, ExporterConfig, OutputFormat, SourceConfig};
 
-use crate::app::{
-    compatibility::attachment_manager::{AttachmentManager, AttachmentManagerMode},
+use crate::{
+    emit::run_export,
     error::RuntimeError,
-    export_type::ExportType,
-    options::{validate_path, Options},
-    runtime::Config,
+    options::{validate_export_path, AttachmentEmbed, MailOptions},
+    session::MailSession,
 };
-use crate::cancel::check_cancel;
 
-/// Result of [`run`]. Export logging still goes to stdout/stderr via [`Config::start`].
+/// Result of [`run`]. Logging goes to stderr during export.
 #[derive(Debug, Default)]
 pub struct RunResult {
     pub messages: Vec<String>,
 }
 
-/// Build [`Options`] from [`ExporterConfig`], then run the export.
+/// Build options from [`ExporterConfig`], open the DB, and write `.eml` archives.
 pub fn run(config: &ExporterConfig) -> Result<RunResult, RuntimeError> {
-    check_cancel(config.cancel.as_ref())?;
+    check_cancel(config)?;
+    if config.output_format != OutputFormat::Eml {
+        return Err(RuntimeError::InvalidOptions(
+            "imessage-mail-exporter requires OutputFormat::Eml (CSV stays on imessage-exporter)"
+                .to_string(),
+        ));
+    }
+
     let options = options_from_export_config(config)?;
-    run_with_options(options)?;
-    check_cancel(config.cancel.as_ref())?;
+    let mut session = MailSession::new(options)?;
+    session.resolve_filtered_handles();
+    check_cancel(config)?;
+    run_export(&session)?;
+    check_cancel(config)?;
+
     Ok(RunResult {
-        messages: Vec::new(),
+        messages: vec![format!(
+            "Wrote eml archive under {}",
+            config.output.display()
+        )],
     })
 }
 
-/// Shared path used by the CLI after [`Options::from_args`].
-pub fn run_with_options(options: Options) -> Result<(), RuntimeError> {
-    let mut app = Config::new(options)?;
-    app.resolve_filtered_handles();
-    app.start()
+fn check_cancel(config: &ExporterConfig) -> Result<(), RuntimeError> {
+    message_exporters_core::check_cancel(config.cancel.as_ref())
+        .map_err(|msg| RuntimeError::InvalidOptions(msg.to_string()))
 }
 
-/// Convert library [`ExporterConfig`] into CLI [`Options`] (same validation rules).
-pub fn options_from_export_config(config: &ExporterConfig) -> Result<Options, RuntimeError> {
+fn options_from_export_config(config: &ExporterConfig) -> Result<MailOptions, RuntimeError> {
     let SourceConfig::Apple(source) = &config.source else {
         return Err(RuntimeError::InvalidOptions(
-            "imessage-exporter requires SourceConfig::Apple".to_string(),
+            "imessage-mail-exporter requires SourceConfig::Apple".to_string(),
         ));
     };
-    let obfuscate = config.obfuscate_active();
 
     let mut query_context = QueryContext::default();
     if let Some(start) = &source.start_date
@@ -84,7 +89,7 @@ pub fn options_from_export_config(config: &ExporterConfig) -> Result<Options, Ru
 
     if source.backup_password.is_some() && !matches!(platform, Platform::iOS) {
         return Err(RuntimeError::InvalidOptions(
-            "--cleartext-password is enabled; it can only be used with iOS backups.".to_string(),
+            "backup password is enabled; it can only be used with iOS backups.".to_string(),
         ));
     }
 
@@ -92,12 +97,12 @@ pub fn options_from_export_config(config: &ExporterConfig) -> Result<Options, Ru
         let custom_attachment_path = PathBuf::from(path);
         if !custom_attachment_path.exists() {
             return Err(RuntimeError::InvalidOptions(format!(
-                "Supplied --attachment-root `{path}` does not exist!"
+                "Supplied attachment-root `{path}` does not exist!"
             )));
         }
         if platform == Platform::iOS {
             eprintln!(
-                "Option --attachment-root is enabled, but the platform is {}, so the root will have no effect!",
+                "Option attachment-root is enabled, but the platform is {}, so the root will have no effect!",
                 Platform::iOS
             );
         }
@@ -106,55 +111,41 @@ pub fn options_from_export_config(config: &ExporterConfig) -> Result<Options, Ru
     if let Some(path) = &source.apple_contacts {
         if !path.exists() {
             return Err(RuntimeError::InvalidOptions(format!(
-                "Supplied --contacts-path `{}` does not exist!",
+                "Supplied contacts path `{}` does not exist!",
                 path.display()
             )));
         }
         if platform == Platform::iOS {
             eprintln!(
-                "Option --contacts-path is enabled, but the platform is {}, so the path will have no effect!",
+                "Option contacts path is enabled, but the platform is {}, so the path will have no effect!",
                 Platform::iOS
             );
         }
     }
 
-    let attachment_manager_mode = AttachmentManagerMode::from_cli(&source.copy_method).ok_or(
-        RuntimeError::InvalidOptions(format!(
-            "{} is not a valid attachment manager mode! Must be one of <clone, basic, full, disabled>",
-            source.copy_method
-        )),
-    )?;
-
-    let export_type = match config.output_format {
-        OutputFormat::Csv => ExportType::Csv,
-        OutputFormat::Eml => {
-            return Err(RuntimeError::InvalidOptions(
-                "EML mail archives are handled by imessage-mail-exporter, not imessage-exporter"
-                    .to_string(),
-            ));
+    let attachment_embed = match source.copy_method.to_ascii_lowercase().as_str() {
+        "disabled" => AttachmentEmbed::Disabled,
+        "clone" | "basic" | "full" => AttachmentEmbed::Embed,
+        other => {
+            return Err(RuntimeError::InvalidOptions(format!(
+                "{other} is not a valid attachment mode! Must be one of <clone, basic, full, disabled>"
+            )));
         }
     };
-    let export_path_str = config.output.to_string_lossy().into_owned();
-    let export_path = validate_path(Some(&export_path_str), Some(&export_type))?;
 
-    Ok(Options {
+    let export_path = validate_export_path(&config.output)?;
+    std::fs::create_dir_all(&export_path)?;
+
+    Ok(MailOptions {
         db_path,
         attachment_root: source.attachment_root.clone(),
-        attachment_manager: AttachmentManager::from(attachment_manager_mode),
-        diagnostic: false,
-        export_type: Some(export_type),
         export_path,
         query_context,
-        no_lazy: false,
-        custom_name: None,
         use_caller_id: source.use_caller_id,
         platform,
-        ignore_disk_space: source.ignore_disk_space,
         conversation_filter: source.conversation_filter.clone(),
         cleartext_password: source.backup_password.clone(),
         contacts_path: source.apple_contacts.clone(),
-        show_progress: source.show_progress,
-        obfuscate,
-        obfuscate_seed: config.obfuscate.seed.clone(),
+        attachment_embed,
     })
 }

@@ -7,8 +7,8 @@ use message_media::{MaxResolution, MediaMode};
 
 use crate::config::{
     AppleConfig, ContactsConfig, ExporterConfig, GoSmsProConfig, ImazingConfig, MediaConfig,
-    ObfuscateConfig, OpenExtractConfig, SmsBackupPlusConfig, SmsBackupRestoreConfig, SourceConfig,
-    WhatsappConfig,
+    ObfuscateConfig, OpenExtractConfig, OutputFormat, SmsBackupPlusConfig, SmsBackupRestoreConfig,
+    SourceConfig, WhatsappConfig,
 };
 
 /// Supported exporters first, then experimental (alphabetical by display name).
@@ -341,6 +341,8 @@ pub struct Form {
     pub conversation_filter: String,
     pub apple_contacts: String,
     pub backup_password: String,
+    /// Packaging format. Honored by SMS Backup & Restore and iMessage; others always write CSV.
+    pub output_format: OutputFormat,
     pub attachment_media: AttachmentMedia,
     pub media_max_resolution: MaxResolution,
     pub media_max_fps: String,
@@ -377,6 +379,7 @@ impl Default for Form {
             conversation_filter: String::new(),
             apple_contacts: String::new(),
             backup_password: String::new(),
+            output_format: OutputFormat::default(),
             attachment_media: AttachmentMedia::default(),
             media_max_resolution: MaxResolution::default(),
             media_max_fps: "30".into(),
@@ -460,6 +463,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
+            output_format: self.output_format,
             source: SourceConfig::Apple(AppleConfig {
                 platform,
                 attachment_root: non_empty(self.attachment_root.trim()).map(str::to_string),
@@ -501,6 +505,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
+            output_format: OutputFormat::Csv,
             source: SourceConfig::Whatsapp(WhatsappConfig {
                 platform: Some(self.whatsapp_platform),
                 json: None,
@@ -546,6 +551,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
+            output_format: OutputFormat::Csv,
             source: SourceConfig::Imazing(ImazingConfig { timezone }),
         }
     }
@@ -574,6 +580,7 @@ impl Form {
                 compress: message_media::CompressOptions::default(),
             },
             cancel: None,
+            output_format: OutputFormat::Csv,
             source: SourceConfig::OpenExtract(OpenExtractConfig {}),
         }
     }
@@ -592,6 +599,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
+            output_format: OutputFormat::Csv,
             source: SourceConfig::GoSmsPro(GoSmsProConfig { owner_phones }),
         }
     }
@@ -610,6 +618,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
+            output_format: self.output_format,
             source: SourceConfig::SmsBackupRestore(SmsBackupRestoreConfig { owner_phones }),
         }
     }
@@ -635,6 +644,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
+            output_format: OutputFormat::Csv,
             source: SourceConfig::SmsBackupPlus(SmsBackupPlusConfig {
                 owner_phones,
                 owner_emails,
@@ -955,6 +965,33 @@ mod tests {
         assert_eq!(apple.copy_method, "clone");
         assert!(!apple.ignore_disk_space);
         assert!(!apple.show_progress);
+    }
+
+    #[test]
+    fn sbr_passes_output_format() {
+        let form = Form {
+            input: std::env::current_dir().unwrap().display().to_string(),
+            output: "out".into(),
+            owner_phones: "+15555550100".into(),
+            output_format: OutputFormat::Eml,
+            ..Form::default()
+        };
+        let config = form.to_config(Exporter::SmsBackupRestore).unwrap();
+        assert_eq!(config.output_format, OutputFormat::Eml);
+
+        let go = form.to_config(Exporter::GoSmsPro).unwrap();
+        assert_eq!(go.output_format, OutputFormat::Csv);
+    }
+
+    #[test]
+    fn imessage_passes_output_format() {
+        let form = Form {
+            output: "out".into(),
+            output_format: OutputFormat::Eml,
+            ..Form::default()
+        };
+        let config = form.to_config(Exporter::Imessage).unwrap();
+        assert_eq!(config.output_format, OutputFormat::Eml);
     }
 
     #[test]

@@ -10,7 +10,7 @@
 //! Nested HTML structures (parts, tapbacks, edits, attachments, app cards,
 //! participants) are encoded as JSON strings in cells.
 
-mod data;
+pub(crate) mod data;
 
 use std::{fs::File, io::BufWriter};
 

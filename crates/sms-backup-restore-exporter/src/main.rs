@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 use message_exporters_core::{
-    ContactsConfig, ContactsKind, ExporterConfig, MediaConfig, ObfuscateConfig,
+    ContactsConfig, ContactsKind, ExporterConfig, MediaConfig, ObfuscateConfig, OutputFormat,
     SmsBackupRestoreConfig, SourceConfig,
 };
 use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
@@ -11,15 +11,19 @@ use sms_backup_restore_exporter::{parse_date_range, run};
 
 #[derive(Parser, Debug)]
 #[command(name = "sms-backup-restore-exporter")]
-#[command(about = "Convert SMS Backup & Restore XML to per-conversation CSV")]
+#[command(about = "Convert SMS Backup & Restore XML to per-conversation CSV or EML")]
 struct Cli {
     /// Path to sms-*.xml file, or a directory of .xml files
     #[arg(long)]
     input: PathBuf,
 
-    /// Output directory for CSV + attachments/
+    /// Output directory for CSV or EML archive + attachments/
     #[arg(long)]
     output: PathBuf,
+
+    /// Output format: `csv` (default) or `eml` (per-conversation folder of .eml files)
+    #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
+    format: String,
 
     /// Owner phone (E.164 or digits). Repeat for multiple owner numbers.
     /// Required — there is no demo default (wrong owner flips MMS chat keys).
@@ -75,6 +79,7 @@ struct Cli {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let date_range = parse_date_range(cli.start_date.as_deref(), cli.end_date.as_deref())?;
+    let output_format = OutputFormat::parse(&cli.format).map_err(anyhow::Error::msg)?;
     let compress = compress_options_from_cli(
         cli.media_max_resolution,
         cli.media_max_fps,
@@ -106,6 +111,7 @@ fn main() -> Result<()> {
             compress,
         },
         cancel: None,
+        output_format,
         source: SourceConfig::SmsBackupRestore(SmsBackupRestoreConfig {
             owner_phones: cli.owner_phones,
         }),

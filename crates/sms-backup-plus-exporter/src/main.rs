@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use message_exporters_core::{
-    ContactsConfig, ContactsKind, ExporterConfig, MediaConfig, ObfuscateConfig,
+    ContactsConfig, ContactsKind, ExporterConfig, MediaConfig, ObfuscateConfig, OutputFormat,
     SmsBackupPlusConfig, SourceConfig,
 };
 use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
@@ -154,6 +154,7 @@ fn main() -> Result<()> {
                     compress,
                 },
                 cancel: None,
+                output_format: OutputFormat::Csv,
                 source: SourceConfig::SmsBackupPlus(SmsBackupPlusConfig {
                     owner_phones,
                     owner_emails,

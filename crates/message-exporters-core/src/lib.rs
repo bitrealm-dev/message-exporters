@@ -7,8 +7,8 @@ mod process;
 
 pub use config::{
     AppleConfig, ContactsConfig, ExporterConfig, GoSmsProConfig, ImazingConfig, MediaConfig,
-    ObfuscateConfig, OpenExtractConfig, SmsBackupPlusConfig, SmsBackupRestoreConfig, SourceConfig,
-    WhatsappConfig,
+    ObfuscateConfig, OpenExtractConfig, OutputFormat, SmsBackupPlusConfig, SmsBackupRestoreConfig,
+    SourceConfig, WhatsappConfig, OUTPUT_FORMATS,
 };
 pub use export_ini::{
     resolve_export_ini_path, ExportIniState, ExporterSection, EXPORT_INI_NAME,

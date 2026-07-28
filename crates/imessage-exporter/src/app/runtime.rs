@@ -207,8 +207,8 @@ impl Config {
         sanitize_filename(&filename)
     }
 
-    /// CSV-only filename: phones / titled groups via [`message_csv::conversation_filename`].
-    fn csv_filename(&self, chatroom: &Chat) -> String {
+    /// CSV conversation filename: phones / titled groups via [`message_csv::conversation_filename`].
+    pub(crate) fn csv_filename(&self, chatroom: &Chat) -> String {
         let participants = self.chatroom_participants.get(&chatroom.rowid);
         let count = participants.map(|p| p.len()).unwrap_or(0);
         let conversation_type = if count > 1 { "group" } else { "individual" };

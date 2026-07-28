@@ -5,7 +5,7 @@ use clap::Parser;
 use go_sms_pro_exporter::{parse_date_range, run};
 use message_exporters_core::{
     ContactsConfig, ContactsKind, ExporterConfig, GoSmsProConfig, MediaConfig, ObfuscateConfig,
-    SourceConfig,
+    OutputFormat, SourceConfig,
 };
 use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
 
@@ -107,6 +107,7 @@ fn main() -> Result<()> {
             compress,
         },
         cancel: None,
+        output_format: OutputFormat::Csv,
         source: SourceConfig::GoSmsPro(GoSmsProConfig {
             owner_phones: cli.owner_phones,
         }),

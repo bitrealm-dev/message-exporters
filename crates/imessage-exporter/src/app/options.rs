@@ -53,7 +53,8 @@ pub const SUPPORTED_ATTACHMENT_MANAGER_MODES: &str = "clone, basic, full, disabl
 pub const ABOUT: &str = concat!(
     "The `imessage-exporter` binary exports iMessage data to\n",
     "`txt`, `html`, or `csv` formats. It can also run diagnostics\n",
-    "to find problems with the iMessage database."
+    "to find problems with the iMessage database.\n",
+    "For `.eml` mail archives, use the `imessage-mail-exporter` crate."
 );
 
 // MARK: Options
@@ -364,8 +365,8 @@ pub(crate) fn validate_path(
             Ok(files) => {
                 let export_type_extension = export_type.to_string();
                 for file in files.flatten() {
-                    if file
-                        .path()
+                    let path = file.path();
+                    if path
                         .extension()
                         .is_some_and(|s| s.to_str().unwrap_or("") == export_type_extension)
                     {

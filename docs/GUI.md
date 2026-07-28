@@ -84,6 +84,7 @@ Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules a
 | Timezone | — | — | — | — | yes | — | — |
 | Name mapping | — | — | advanced | — | — | — | — |
 | Verbose logging | — | — | always on | — | — | — | — |
+| Output format (CSV / EML) | — | yes | — | — | — | — | yes |
 | Attachments (copy/convert/compress/do not copy) | yes | yes | yes | — | yes | yes | yes |
 | Compress options (resolution/fps/…) | when Compress | when Compress | when Compress | — | when Compress | when Compress | when Compress |
 | Advanced (attachment root, …) | — | — | name mapping | — | — | Android key / backup / wa / media / db / business | yes |
@@ -120,11 +121,12 @@ Product: [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/)
 |---------|------|:--------:|-----|
 | Input | XML file or folder of XML | yes | `--input` |
 | Output | folder | yes | `--output` |
+| Output format | enum | no | `--format` (`csv` default, `eml`) |
 | Your phone numbers | multi-value text | yes | `--owner-phone` |
 | Contacts CSV / VCF | file | no† | `--contacts` / `--vcf` |
 | Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro) |
 
-Encrypted ZIP backups must be unlocked/extracted before selecting input. Global Obfuscate and Start/End date apply.
+Encrypted ZIP backups must be unlocked/extracted before selecting input. Global Obfuscate and Start/End date apply for CSV; convert/compress and obfuscate are skipped for EML.
 
 ### SMS Backup+ — `sms-backup-plus-exporter convert`
 
@@ -196,11 +198,11 @@ No Input directory and no Contacts file row in the GUI. `wtsexporter` runs in a 
 
 Global Obfuscate and Start/End date apply. Output files use the `__whatsapp` suffix. Optional CLI `--input` (defaults to cwd for resolving `msgstore.db` / media folders) is not sent by the GUI; extraction always uses a temp dir under Output.
 
-### iPhone backup — `imessage-exporter`
+### iPhone backup — `imessage-exporter` / `imessage-mail-exporter`
 
 Form link label: **imessage-exporter** → [imessage-exporter](https://github.com/ReagentX/imessage-exporter). Dropdown stays **iPhone backup**.
 
-GUI defaults: `-f csv`, `--copy-method clone` (or `disabled`), always `--use-caller-id`. Convert/Compress run as a GUI post-step via `message-media` (not imessage `basic`/`full`).
+GUI defaults: CSV, `--copy-method clone` (or `disabled`), always `--use-caller-id`. **CSV** runs `imessage-exporter`; **EML** runs `imessage-mail-exporter` (`imessage-database` → `message-mail`). Convert/Compress run as a GUI post-step via `message-media` (not imessage `basic`/`full`) for CSV only.
 
 | Control | Type | Required | CLI |
 |---------|------|:--------:|-----|
@@ -208,6 +210,7 @@ GUI defaults: `-f csv`, `--copy-method clone` (or `disabled`), always `--use-cal
 | Backup password | password | no | `-x` / `--cleartext-password` |
 | Platform | macOS / iOS / auto | no | `-a` / `--platform` |
 | Output / export path | folder | yes | `-o` / `--export-path` |
+| Output format | enum | no | CSV → `imessage-exporter -f csv`; EML → `imessage-mail-exporter` |
 | Attachments | enum | no | copy `clone`/`disabled`; convert/compress post-process |
 | Max resolution / fps / min size / skip efficient | when Compress | no | GUI → `message-media` compress options |
 | Attachment root | folder | no | `-r` / `--attachment-root` (advanced) |

@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use ini::Ini;
 use message_media::MaxResolution;
 
+use crate::config::OutputFormat;
 use crate::exporters::{
     contacts_kind_from_path, ApplePlatform, AttachmentMedia, Exporter, Form, WhatsappPlatform,
     EXPORTERS,
@@ -232,6 +233,9 @@ fn apply_common(ini: &Ini, form: &mut Form) {
     form.contacts = get(ini, Some(COMMON), "contacts");
     form.contacts_kind = contacts_kind_from_path(&form.contacts);
 
+    if let Ok(format) = OutputFormat::parse(&get(ini, Some(COMMON), "output_format")) {
+        form.output_format = format;
+    }
     if let Some(media) = AttachmentMedia::from_ini_str(&get(ini, Some(COMMON), "attachment_media"))
     {
         form.attachment_media = media;
@@ -288,6 +292,7 @@ fn build_ini(state: &ExportIniState, form: &Form) -> Ini {
             .set("obfuscate_seed", form.obfuscate_seed.trim())
             .set("owner_phones", escape_multiline(form.owner_phones.trim()))
             .set("contacts", form.contacts.trim())
+            .set("output_format", form.output_format.as_str())
             .set("attachment_media", form.attachment_media.as_ini_str())
             .set(
                 "media_max_resolution",
@@ -380,6 +385,7 @@ mod tests {
                 .into(),
             owner_phones: "+15555550100\n+15555550101".into(),
             contacts: "/tmp/contacts.vcf".into(),
+            output_format: OutputFormat::Eml,
             attachment_media: AttachmentMedia::Compress,
             media_max_resolution: MaxResolution::P720,
             media_max_fps: "24".into(),
@@ -412,6 +418,7 @@ mod tests {
         assert_eq!(loaded.exporter, Exporter::SmsBackupPlus);
         assert_eq!(loaded_form.start_date, "2020-01-01");
         assert_eq!(loaded_form.obfuscate, true);
+        assert_eq!(loaded_form.output_format, OutputFormat::Eml);
         assert_eq!(loaded_form.owner_phones, "+15555550100\n+15555550101");
         assert_eq!(loaded_form.input, "/data/plus");
         assert_eq!(loaded_form.owner_emails, "a@example.com");
@@ -426,6 +433,7 @@ mod tests {
         assert!(
             text.contains("exporter=sms-backup-plus") || text.contains("exporter = sms-backup-plus")
         );
+        assert!(text.contains("output_format=eml") || text.contains("output_format = eml"));
     }
 
     #[test]

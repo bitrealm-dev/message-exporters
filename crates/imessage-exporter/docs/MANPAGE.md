@@ -23,9 +23,11 @@ imessage-exporter -f csv -c clone -o ./staging/imessage --use-caller-id
 
 # DESCRIPTION
 
-Reads Apple Messages history (`chat.db` on macOS, or an iOS backup root) and writes one file per conversation. In this repository the supported path is **CSV** with attachment copy (`-c clone`), matching the other vault exporters.
+Reads Apple Messages history (`chat.db` on macOS, or an iOS backup root) and writes one file per conversation. In this repository the vault path is **CSV** with attachment copy (`-c clone`).
 
-Fork of [ReagentX/imessage-exporter](https://github.com/ReagentX/imessage-exporter) with CSV export and post-export obfuscation. GPL-3.0-or-later.
+Fork of [ReagentX/imessage-exporter](https://github.com/ReagentX/imessage-exporter) with CSV export and post-export CSV obfuscation. GPL-3.0-or-later.
+
+For per-conversation `.eml` mail archives, use the workspace crate **`imessage-mail-exporter`** (GUI: iPhone backup → Output format **EML**). That path talks to `imessage-database` directly and does not use this binary’s `-f` flag.
 
 # OPTIONS
 
@@ -82,7 +84,7 @@ Non-zero on missing database access, export failure, or invalid options. macOS m
 : `~/Library/Messages/chat.db` (typical macOS) or an iPhone backup directory.
 
 **Output**
-: Per-conversation files under `-o`; attachments copied when `-c clone` (or convert modes) is used.
+: Per-conversation `.csv` / `.txt` / `.html` files under `-o`; attachments copied when `-c clone` (or convert modes) is used.
 
 # ENVIRONMENT
 
@@ -106,13 +108,8 @@ imessage-exporter -f csv -c clone \
   --use-caller-id
 ```
 
-# NOTES
-
-Supported exporter in the desktop GUI (labeled **iPhone backup**). No `--owner-phone`; direction comes from the Messages database. Outgoing `sender_handle` is blank by design. See the crate README for sample CSV shape.
-
 # SEE ALSO
 
-[README.md](../README.md),
-[upstream imessage-exporter](https://github.com/ReagentX/imessage-exporter),
-[imazing-exporter](../../imazing-exporter) (iMazing CSV path),
-[message-obfuscate](../../message-obfuscate)
+- [`imessage-mail-exporter`](../../imessage-mail-exporter/) — EML mail archives
+- [`docs/MAIL_ARCHIVE.md`](../../../docs/MAIL_ARCHIVE.md)
+- Upstream: <https://github.com/ReagentX/imessage-exporter>

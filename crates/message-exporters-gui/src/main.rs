@@ -11,10 +11,12 @@ use eframe::egui;
 use go_sms_pro_exporter::run as run_go_sms_pro;
 use imazing_exporter::run as run_imazing;
 use imessage_exporter::run as run_imessage;
+use imessage_mail_exporter::run as run_imessage_mail;
 use message_exporters_core::{
     ensure_output_dir, resolve_binary, spawn, spawn_job, AttachmentMedia, ContactsKind,
-    ExportIniState, Exporter, ExporterConfig, Form, ProcessControl, ProcessEvent, WhatsappPlatform,
-    APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS, WHATSAPP_PLATFORMS,
+    ExportIniState, Exporter, ExporterConfig, Form, OutputFormat, ProcessControl, ProcessEvent,
+    WhatsappPlatform, APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS,
+    OUTPUT_FORMATS, WHATSAPP_PLATFORMS,
 };
 use message_media::process_export_media;
 use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
@@ -185,7 +187,10 @@ impl App {
                 ProcessEvent::Log(line) => self.push_log(line),
                 ProcessEvent::Finished(summary) => {
                     self.push_log(summary);
-                    if self.mode == AppMode::Export && self.exporter == Exporter::Imessage {
+                    if self.mode == AppMode::Export
+                        && self.exporter == Exporter::Imessage
+                        && self.form.output_format == OutputFormat::Csv
+                    {
                         self.run_imessage_media_post();
                     }
                     self.running = false;
@@ -586,6 +591,12 @@ impl App {
         }
         if self.exporter != Exporter::Whatsapp {
             self.ui_contacts(ui, contacts_enabled);
+        }
+        if matches!(
+            self.exporter,
+            Exporter::SmsBackupRestore | Exporter::Imessage
+        ) {
+            self.ui_output_format(ui);
         }
         self.ui_attachment_media(ui, attachments_enabled);
 
@@ -1057,6 +1068,16 @@ impl App {
         }
     }
 
+    fn ui_output_format(&mut self, ui: &mut egui::Ui) {
+        combo_enum(
+            ui,
+            "Output format",
+            &mut self.form.output_format,
+            &OUTPUT_FORMATS,
+            PATH_W,
+        );
+    }
+
     fn ui_attachment_media(&mut self, ui: &mut egui::Ui, enabled: bool) {
         ui.add_enabled_ui(enabled, |ui| {
             combo_enum(
@@ -1494,14 +1515,18 @@ fn library_job_for_exporter(exporter: Exporter, config: ExporterConfig) -> Libra
         Exporter::Imessage => Box::new(move |cancel, tx| {
             let mut config = config;
             config.cancel = Some(cancel);
-            match run_imessage(&config) {
-                Ok(result) => {
-                    for line in result.messages {
+            let result = match config.output_format {
+                OutputFormat::Eml => run_imessage_mail(&config).map(|r| r.messages).map_err(|e| e.to_string()),
+                OutputFormat::Csv => run_imessage(&config).map(|r| r.messages).map_err(|e| e.to_string()),
+            };
+            match result {
+                Ok(messages) => {
+                    for line in messages {
                         let _ = tx.send(ProcessEvent::Log(line));
                     }
                     Ok(())
                 }
-                Err(error) => Err(error.to_string()),
+                Err(error) => Err(error),
             }
         }),
     }

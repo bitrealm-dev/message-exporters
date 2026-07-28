@@ -84,6 +84,7 @@ mod tests {
     fn cant_parse_invalid() {
         assert!(ExportType::from_cli("pdf").is_none());
         assert!(ExportType::from_cli("json").is_none());
+        assert!(ExportType::from_cli("eml").is_none());
         assert!(ExportType::from_cli("").is_none());
     }
 }

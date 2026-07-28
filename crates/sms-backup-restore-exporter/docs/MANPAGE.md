@@ -1,11 +1,12 @@
 # NAME
 
-sms-backup-restore-exporter - convert SMS Backup & Restore XML to per-conversation CSV
+sms-backup-restore-exporter - convert SMS Backup & Restore XML to per-conversation CSV or EML
 
 # SYNOPSIS
 
 ```text
 sms-backup-restore-exporter --input <PATH> --output <DIR> --owner-phone <PHONE>...
+    [--format csv|eml]
     [--contacts <PATH> | --vcf <PATH>]
     [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD]
     [--media-mode disabled|clone|convert|compress]
@@ -16,9 +17,9 @@ sms-backup-restore-exporter --input <PATH> --output <DIR> --owner-phone <PHONE>.
 
 # DESCRIPTION
 
-Converts SyncTech **SMS Backup & Restore** XML (one file or a directory of `.xml` files) into vault-shaped per-conversation CSV under `--output`, with MMS media under `attachments/` when enabled.
+Converts SyncTech **SMS Backup & Restore** XML (one file or a directory of `.xml` files) into vault-shaped per-conversation CSV under `--output` (default), or a per-conversation folder of `.eml` files with `--format eml` (see [MAIL_ARCHIVE.md](../../../docs/MAIL_ARCHIVE.md)). MMS media is written under `attachments/` when enabled; for EML, attachment bytes are also embedded in each message.
 
-Owner phone(s) are required so MMS chat keys and direction resolve correctly. Encrypted ZIP backups must be unlocked/extracted before use.
+Owner phone(s) are required so MMS chat keys and direction resolve correctly. Encrypted ZIP backups must be unlocked/extracted before use. Media convert/compress and obfuscation apply to CSV output only.
 
 # OPTIONS
 
@@ -26,7 +27,10 @@ Owner phone(s) are required so MMS chat keys and direction resolve correctly. En
 : An `sms-*.xml` file, or a directory of `.xml` files.
 
 **--output** *DIR*
-: Destination for per-conversation CSV and `attachments/`.
+: Destination for per-conversation CSV (or EML folders) and `attachments/`.
+
+**--format** *csv|eml*
+: Output packaging. `csv` (default) writes one CSV per conversation. `eml` writes one folder per conversation of individual `.eml` files (`X-ME-*` headers).
 
 **--owner-phone** *PHONE*
 : Owner number (E.164 or digits). Repeat for multiple. Required.
@@ -74,7 +78,7 @@ Exits non-zero on invalid arguments, missing input, convert failure, or total me
 : SyncTech XML with embedded or referenced MMS parts.
 
 **Output**
-: One `*.csv` per conversation; `attachments/` for copied MMS media.
+: With `--format csv` (default): one `*.csv` per conversation; `attachments/` for copied MMS media. With `--format eml`: one directory per conversation of `*.eml` files; `attachments/` still used when media copy is enabled.
 
 # ENVIRONMENT
 

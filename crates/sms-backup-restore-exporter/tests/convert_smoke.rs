@@ -1,5 +1,6 @@
 use message_contacts::ContactsBook;
 use message_csv::DateRange;
+use message_exporters_core::OutputFormat;
 use sms_backup_restore_exporter::convert_export;
 use std::fs::{self, File};
 use std::io::{Read, Write};
@@ -26,6 +27,7 @@ fn convert_export_smoke_on_sample_fixture() {
         &contacts,
         &DateRange::default(),
         true,
+        OutputFormat::Csv,
         None,
     )
     .expect("convert_export should succeed");
@@ -110,6 +112,7 @@ fn dedupes_overlapping_xml_files() {
         &contacts,
         &DateRange::default(),
         true,
+        OutputFormat::Csv,
         None,
     )
     .unwrap();
@@ -136,6 +139,7 @@ fn rejects_owner_phone_without_digits() {
         &contacts,
         &DateRange::default(),
         true,
+        OutputFormat::Csv,
         None,
     )
     .unwrap_err();
@@ -143,4 +147,70 @@ fn rejects_owner_phone_without_digits() {
         err.to_string().contains("owner phone"),
         "unexpected error: {err:#}"
     );
+}
+
+#[test]
+fn convert_export_eml_writes_conversation_folder() {
+    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample.xml");
+    assert!(fixture.is_file(), "missing fixture: {}", fixture.display());
+
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let contacts = empty_contacts(&tmp);
+    let report = convert_export(
+        &fixture,
+        tmp.path(),
+        &["+15555550100".into()],
+        &contacts,
+        &DateRange::default(),
+        true,
+        OutputFormat::Eml,
+        None,
+    )
+    .expect("convert_export eml should succeed");
+
+    assert!(
+        report.conversations >= 1,
+        "expected >=1 conversations, got {}",
+        report.conversations
+    );
+
+    let mut eml_dirs = Vec::new();
+    let mut eml_files = 0usize;
+    for entry in fs::read_dir(tmp.path()).unwrap() {
+        let path = entry.unwrap().path();
+        if !path.is_dir() {
+            continue;
+        }
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if name == "attachments" {
+            continue;
+        }
+        let count = fs::read_dir(&path)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("eml"))
+            .count();
+        if count > 0 {
+            eml_dirs.push(path);
+            eml_files += count;
+        }
+    }
+    assert!(
+        !eml_dirs.is_empty(),
+        "expected at least one conversation directory with .eml"
+    );
+    assert!(eml_files >= 1, "expected at least one .eml file");
+
+    let sample = fs::read(
+        fs::read_dir(&eml_dirs[0])
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .find(|p| p.extension().and_then(|x| x.to_str()) == Some("eml"))
+            .unwrap(),
+    )
+    .unwrap();
+    let text = String::from_utf8_lossy(&sample);
+    assert!(text.contains("X-ME-Export-Source: sms-backup-restore"));
+    assert!(text.contains("X-ME-Guid:"));
 }

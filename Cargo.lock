@@ -2236,6 +2236,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "imessage-mail-exporter"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "crabapple",
+ "imessage-database",
+ "message-csv",
+ "message-exporters-core",
+ "message-mail",
+ "rpassword",
+ "rusqlite",
+]
+
+[[package]]
 name = "immutable-chunkmap"
 version = "2.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2486,6 +2501,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mail-builder"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "900998f307338c4013a28ab14d760b784067324b164448c6d98a89e44810473b"
+dependencies = [
+ "gethostname",
+]
+
+[[package]]
 name = "mailparse"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2571,6 +2595,7 @@ dependencies = [
  "go-sms-pro-exporter",
  "imazing-exporter",
  "imessage-exporter",
+ "imessage-mail-exporter",
  "message-contacts",
  "message-exporters-core",
  "message-media",
@@ -2581,6 +2606,20 @@ dependencies = [
  "sms-backup-plus-exporter",
  "sms-backup-restore-exporter",
  "whatsapp-exporter",
+]
+
+[[package]]
+name = "message-mail"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "mail-builder",
+ "mailparse",
+ "message-csv",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -4021,6 +4060,7 @@ dependencies = [
  "message-contacts",
  "message-csv",
  "message-exporters-core",
+ "message-mail",
  "message-media",
  "message-obfuscate",
  "message-phone",

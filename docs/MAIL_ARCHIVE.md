@@ -2,7 +2,7 @@
 
 Design for a human-viewable export: **one folder per conversation**, **one `.eml` per message**, with structured `X-ME-*` headers for machine fidelity. Intended as an archive / interchange path before vault exists. Mail clients can open individual messages; translators can recover SMS, group MMS, and (later) iMessage semantics without relying on CSV.
 
-**Status:** specification only. No writer crate or CLI/`OutputFormat` flag yet. Current exporters still write per-conversation CSV ([csv-output.md](src/csv-output.md)).
+**Status:** SMS-shaped writer in [`message-mail`](../crates/message-mail/). Wired for SMS Backup & Restore (`--format eml`) and iMessage via [`imessage-mail-exporter`](../crates/imessage-mail-exporter/) (GUI Output format **EML**; uses `imessage-database`, not `imessage-exporter`). CSV remains the default (`imessage-exporter` for iPhone CSV). iMessage extensions (tapbacks as EMLs, parts, edits, balloons, reply headers) are not emitted yet. See also [csv-output.md](src/csv-output.md).
 
 ## Goals
 
@@ -16,7 +16,7 @@ Design for a human-viewable export: **one folder per conversation**, **one `.eml
 
 - Vault import/export
 - Replacing CSV as the default exporter output
-- GUI / CLI format switches
+- GUI format switch for exporters other than SBR / iMessage (those have Output format CSV/EML)
 - IMAP sync or SMS Backup+ wire compatibility
 - Writing `.mbox` as the canonical form (optional derived export later)
 - Replaying send-effect animations or handwriting ink in clients
@@ -328,13 +328,12 @@ Normal sticker sends: image MIME part + `X-ME-Attachment-Meta` (`is_sticker`, `s
 | `send_effect` | `X-ME-Send-Effect` |
 | `thread_originator_*` | `In-Reply-To` + `X-ME-Thread-*` |
 
-## Future implementation notes (non-binding)
+## Implementation notes
 
-1. Crate `message-mail` using `mail-builder` to emit one `.eml` per message into the conversation directory.
-2. Shared intermediate struct mapped from exporter pending rows / iMessage CSV cell builders — not vault-specific.
-3. First wiring candidate: **SMS Backup & Restore** (richest Android group MMS).
-4. Second: **iMessage**, reusing `build_part_records`, `build_balloon_value`, tapback cells.
-5. Later: optional `mboxrd` synthesis; `OutputFormat::{Csv, Eml}` on `ExporterConfig`.
+1. Crate [`message-mail`](../crates/message-mail/) emits one `.eml` per message into the conversation directory.
+2. **SMS Backup & Restore** maps pending rows → `MailMessage` (`--format eml`).
+3. **iMessage** EML is [`imessage-mail-exporter`](../crates/imessage-mail-exporter/) (`imessage-database` → `MailMessage`). CSV stays on [`imessage-exporter`](../crates/imessage-exporter/).
+4. Later: tapback EMLs / parts / edits / balloons / reply headers; optional `mboxrd` synthesis.
 
 ## Related docs
 

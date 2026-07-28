@@ -1,0 +1,16 @@
+[package]
+name = "message-mail"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.103"
+chrono = "0.4.44"
+mail-builder = "0.4.4"
+message-csv = { path = "../message-csv" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+
+[dev-dependencies]
+mailparse = "0.16.1"
+tempfile = "3.27.0"

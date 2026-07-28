@@ -1,4 +1,4 @@
-//! Convert SMS Backup & Restore XML → per-conversation CSV.
+//! Convert SMS Backup & Restore XML → per-conversation CSV or EML archive.
 
 use crate::cancel::{check_cancel, CancelFlag};
 use crate::xml::{parse_xml_file, AttachmentBlob, ConvType, ParsedMessage};
@@ -7,10 +7,16 @@ use message_contacts::ContactsBook;
 use message_csv::{
     conversation_filename, format_local_ts, json_cell, stable_guid, AttachmentCell, DateRange,
 };
+use message_exporters_core::OutputFormat;
+use message_mail::{
+    write_conversation as write_mail_conversation, Direction as MailDirection, MailAttachment,
+    MailMessage, Participant,
+};
 use message_phone::{to_e164, OwnerPhoneSet};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 /// Columns this exporter fills. Shared names match imessage-csv where the
 /// concept exists; unused iMessage-only columns are omitted.
@@ -72,6 +78,8 @@ struct PendingAttachment {
     original_name: Option<String>,
     mime_type: Option<String>,
     digest_hex: String,
+    /// Kept in memory for EML embedding (avoid re-reading `attachments/`).
+    bytes: Option<Arc<[u8]>>,
 }
 
 #[derive(Debug, Clone)]
@@ -111,22 +119,30 @@ fn write_attachments(
     attachments_dir: &Path,
     report: &mut ExportReport,
     copy_attachments: bool,
+    keep_bytes: bool,
 ) -> Result<Vec<PendingAttachment>> {
-    if !copy_attachments {
+    if !copy_attachments && !keep_bytes {
         return Ok(Vec::new());
     }
     let mut out = Vec::with_capacity(blobs.len());
     for blob in blobs {
-        let path = attachments_dir.join(&blob.filename);
-        if !path.exists() {
-            fs::write(&path, blob.data.as_ref())?;
-            report.attachments_saved += 1;
+        if copy_attachments {
+            let path = attachments_dir.join(&blob.filename);
+            if !path.exists() {
+                fs::write(&path, blob.data.as_ref())?;
+                report.attachments_saved += 1;
+            }
         }
         out.push(PendingAttachment {
             rel_path: format!("attachments/{}", blob.filename),
             original_name: blob.original_name.clone(),
             mime_type: blob.mime_type.clone(),
             digest_hex: blob.digest_hex.clone(),
+            bytes: if keep_bytes {
+                Some(Arc::clone(&blob.data))
+            } else {
+                None
+            },
         });
     }
     Ok(out)
@@ -203,12 +219,10 @@ fn dedupe_messages(messages: &mut Vec<PendingMessage>) {
     messages.retain(|m| seen.insert(m.dedupe_key.clone()));
 }
 
-fn write_conversation(
-    output_dir: &Path,
-    chat_id: &str,
+fn prepare_conversation(
     convo: &mut PendingConversation,
     report: &mut ExportReport,
-) -> Result<()> {
+) -> Result<bool> {
     dedupe_messages(&mut convo.messages);
     convo.messages.retain(|m| {
         if format_local_ts(m.sort_key as i64).is_some() {
@@ -218,10 +232,15 @@ fn write_conversation(
             false
         }
     });
-    if convo.messages.is_empty() {
-        return Ok(());
-    }
+    Ok(!convo.messages.is_empty())
+}
 
+fn write_conversation_csv(
+    output_dir: &Path,
+    chat_id: &str,
+    convo: &PendingConversation,
+    report: &mut ExportReport,
+) -> Result<()> {
     let conv_type = match convo.conversation_type {
         ConvType::Group => "group",
         ConvType::Individual => "individual",
@@ -320,12 +339,163 @@ fn write_conversation(
     Ok(())
 }
 
-fn clean_previous_csv(output_dir: &Path) -> Result<()> {
+fn display_names_for_handles(convo: &PendingConversation) -> HashMap<String, String> {
+    let mut names = HashMap::new();
+    for msg in &convo.messages {
+        if let Some(digits) = &msg.sender_digits {
+            let handle = to_e164(digits);
+            if let Some(name) = msg
+                .sender_display_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|n| !n.is_empty())
+            {
+                names.entry(handle).or_insert_with(|| name.to_string());
+            }
+        }
+        if convo.conversation_type == ConvType::Individual {
+            let name = msg.contact_name.trim();
+            if !name.is_empty() {
+                for peer in &convo.participant_e164s {
+                    names.entry(peer.clone()).or_insert_with(|| name.to_string());
+                }
+            }
+        }
+    }
+    names
+}
+
+fn pending_to_mail_messages(
+    chat_id: &str,
+    convo: &PendingConversation,
+    owner_handle: &str,
+    report: &mut ExportReport,
+) -> Result<Vec<MailMessage>> {
+    let conv_type = match convo.conversation_type {
+        ConvType::Group => "group",
+        ConvType::Individual => "individual",
+    };
+    let name_by_handle = display_names_for_handles(convo);
+    let participants: Vec<Participant> = convo
+        .participant_e164s
+        .iter()
+        .filter(|h| !h.is_empty())
+        .map(|h| Participant {
+            handle: h.clone(),
+            display_name: name_by_handle.get(h).cloned(),
+        })
+        .collect();
+
+    let mut out = Vec::with_capacity(convo.messages.len());
+    for msg in &convo.messages {
+        if msg.is_from_me {
+            report.sent += 1;
+        } else {
+            report.received += 1;
+        }
+        let secs = msg.sort_key as i64;
+        let (ts_local, _, _) = format_local_ts(secs).expect("timestamp validated above");
+        let digests: Vec<String> = msg.attachments.iter().map(|a| a.digest_hex.clone()).collect();
+        let guid = stable_guid(chat_id, &ts_local, msg.is_from_me, &msg.text, &digests);
+        let timestamp_unix_ms = msg
+            .date_ms
+            .parse::<i64>()
+            .unwrap_or_else(|_| secs.saturating_mul(1000));
+        let (sender_handle, sender_display_name) = if msg.is_from_me {
+            (None, None)
+        } else {
+            (
+                msg.sender_digits.as_ref().map(|d| to_e164(d)),
+                msg.sender_display_name.clone(),
+            )
+        };
+        let attachments: Vec<MailAttachment> = msg
+            .attachments
+            .iter()
+            .map(|a| MailAttachment {
+                bytes: a
+                    .bytes
+                    .as_ref()
+                    .map(|b| b.as_ref().to_vec())
+                    .unwrap_or_default(),
+                original_name: a.original_name.clone(),
+                mime_type: a.mime_type.clone(),
+                digest_sha256: Some(a.digest_hex.clone()),
+                is_sticker: false,
+            })
+            .collect();
+
+        out.push(MailMessage {
+            chat_identifier: chat_id.to_string(),
+            conversation_type: conv_type.to_string(),
+            group_title: convo.group_title.clone(),
+            participants: participants.clone(),
+            guid,
+            timestamp_unix_ms,
+            direction: if msg.is_from_me {
+                MailDirection::Outgoing
+            } else {
+                MailDirection::Incoming
+            },
+            service: "SMS".into(),
+            message_kind: msg.message_kind.to_string(),
+            sender_handle,
+            sender_display_name,
+            owner_handle: owner_handle.to_string(),
+            subject: if msg.subject.is_empty() {
+                None
+            } else {
+                Some(msg.subject.clone())
+            },
+            text: msg.text.clone(),
+            android_type: if msg.android_type.is_empty() {
+                None
+            } else {
+                Some(msg.android_type.clone())
+            },
+            source_fields_json: if msg.xml_fields_json.is_empty() {
+                None
+            } else {
+                Some(msg.xml_fields_json.clone())
+            },
+            export_source: EXPORT_SOURCE.into(),
+            export_tool: EXPORT_TOOL.into(),
+            export_tool_version: EXPORT_TOOL_VERSION.into(),
+            attachments,
+        });
+    }
+    Ok(out)
+}
+
+fn write_conversation_eml(
+    output_dir: &Path,
+    chat_id: &str,
+    convo: &PendingConversation,
+    owner_handle: &str,
+    report: &mut ExportReport,
+) -> Result<()> {
+    let messages = pending_to_mail_messages(chat_id, convo, owner_handle, report)?;
+    write_mail_conversation(output_dir, &messages)?;
+    Ok(())
+}
+
+fn clean_previous_output(output_dir: &Path) -> Result<()> {
     for entry in fs::read_dir(output_dir)? {
         let path = entry?.path();
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if name.ends_with(".csv") || name.ends_with(".csv.tmp") || name.ends_with(".json") {
+        if path.is_file()
+            && (name.ends_with(".csv") || name.ends_with(".csv.tmp") || name.ends_with(".json"))
+        {
             let _ = fs::remove_file(&path);
+            continue;
+        }
+        if path.is_dir() && name != "attachments" {
+            let has_eml = fs::read_dir(&path)?
+                .filter_map(|e| e.ok())
+                .any(|e| e.path().extension().and_then(|x| x.to_str()) == Some("eml"));
+            if has_eml {
+                let _ = fs::remove_dir_all(&path);
+            }
         }
     }
     Ok(())
@@ -372,7 +542,7 @@ fn enrich_pending_names(book: &ContactsBook, chat_id: &str, msg: &mut PendingMes
     }
 }
 
-/// Convert SMS Backup & Restore XML into per-conversation CSV.
+/// Convert SMS Backup & Restore XML into per-conversation CSV or EML archive.
 ///
 /// When `cancel` is set, cooperative cancellation is checked between XML files
 /// and before writing. Cancelled runs return an error with message `cancelled`.
@@ -383,14 +553,17 @@ pub fn convert_export(
     contacts: &ContactsBook,
     date_range: &DateRange,
     copy_attachments: bool,
+    output_format: OutputFormat,
     cancel: Option<&CancelFlag>,
 ) -> Result<ExportReport> {
     let owners = OwnerPhoneSet::new(owner_phones)?;
+    let owner_handle = to_e164(&owners.primary_digits);
+    let keep_bytes = output_format == OutputFormat::Eml;
     let mut report = ExportReport::default();
     let mut conversations: BTreeMap<String, PendingConversation> = BTreeMap::new();
 
     fs::create_dir_all(output_dir)?;
-    clean_previous_csv(output_dir)?;
+    clean_previous_output(output_dir)?;
     let attachments_dir = output_dir.join("attachments");
     if copy_attachments {
         fs::create_dir_all(&attachments_dir)?;
@@ -418,6 +591,7 @@ pub fn convert_export(
                         &attachments_dir,
                         &mut report,
                         copy_attachments,
+                        keep_bytes,
                     ) {
                         Ok(atts) => add_message(&mut conversations, msg, atts),
                         Err(err) => report
@@ -436,10 +610,24 @@ pub fn convert_export(
         for msg in &mut convo.messages {
             enrich_pending_names(contacts, &chat_id, msg);
         }
-        write_conversation(output_dir, &chat_id, &mut convo, &mut report)?;
-        if !convo.messages.is_empty() {
-            report.conversations += 1;
+        if !prepare_conversation(&mut convo, &mut report)? {
+            continue;
         }
+        match output_format {
+            OutputFormat::Csv => {
+                write_conversation_csv(output_dir, &chat_id, &convo, &mut report)?;
+            }
+            OutputFormat::Eml => {
+                write_conversation_eml(
+                    output_dir,
+                    &chat_id,
+                    &convo,
+                    &owner_handle,
+                    &mut report,
+                )?;
+            }
+        }
+        report.conversations += 1;
     }
 
     Ok(report)
