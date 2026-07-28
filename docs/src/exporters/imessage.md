@@ -26,7 +26,7 @@ Export Apple Messages from a local `chat.db` or an iOS backup into CSV, EML, MBO
 
 ## Result
 
-Per-conversation files (or one `smses.xml`) appear under the output directory. Media lands in `attachments/` when copying is enabled.
+Per-conversation files (or one `smses.xml`) appear under the output directory. Media lands in `attachments/` for JSON / JSONL / CSV, or is embedded for EML / MBOX / XML.
 
 ## If it fails
 

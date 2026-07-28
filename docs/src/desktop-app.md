@@ -24,7 +24,7 @@ The desktop app exports phone message backups through the [common message](commo
 
 ### Result
 
-The output directory contains one artifact per conversation for the chosen format (or one `smses.xml` for XML), plus `attachments/` when media was copied.
+The output directory is the archive: one artifact per conversation for the chosen format (or one `smses.xml` for XML). JSON / JSONL / CSV keep media under `attachments/` when copying is enabled; EML / MBOX / XML embed media and leave no sidecar.
 
 ### If it fails
 

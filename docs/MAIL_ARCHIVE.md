@@ -187,7 +187,7 @@ SMS writers use `sms` / `mms` only. Absence of iMessage-only headers means “no
 - `path` may be null when bytes are embedded only; digest supports dedupe across re-exports.
 - **Never** assign leftover MIME parts to the “last” message in a conversation (Plus archive anti-pattern).
 
-Optional later mode: external files under `attachments/` with `Content-Location` — not required for v1.
+Media is transformed then embedded; FormatSink removes the staged `attachments/` directory after write so the mail archive folder is the product.
 
 ## Body text
 

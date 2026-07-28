@@ -25,7 +25,7 @@ Extract WhatsApp chats with the bundled `wtsexporter` helper, then write CSV, EM
 
 ## Result
 
-Conversation files use a WhatsApp packaging suffix where applicable. Media is stored under `attachments/` when copying is enabled.
+Conversation files use a WhatsApp packaging suffix where applicable. Media is stored under `attachments/` for JSON / JSONL / CSV, or embedded for EML / MBOX / XML.
 
 ## If it fails
 

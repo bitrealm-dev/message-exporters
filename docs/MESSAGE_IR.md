@@ -14,7 +14,7 @@ Pipeline: `backup → common message → FormatSink → user-picked format`.
 ## Status
 
 - **Common-message path** (`ConversationDocument` → `message_ir::FormatSink`, `--format json|jsonl|csv|eml|mbox|xml`): all exporters, including iMessage (`imessage-ir-exporter`). Per-chat formats also accept `write_format`; XML uses a single `smses.xml` via the sink.
-- **Media + obfuscate** run inside `FormatSink::finish` for every format (`ExportTransforms`: none / copy / convert / compress, plus optional obfuscate). Exporters pass transforms from `ExporterConfig.media` / `.obfuscate`; there is no CSV-only post-step.
+- **Media + obfuscate** run inside `FormatSink::finish` for every format (`ExportTransforms`: none / copy / convert / compress, plus optional obfuscate). Exporters pass transforms from `ExporterConfig.media` / `.obfuscate`; there is no CSV-only post-step. EML / MBOX / XML embed media and drop the staged `attachments/` directory afterward.
 - **Schema version 3 only** (breaking). Typed enums/bags, filled outgoing identity, conversation stats, stable null/`[]` keys. Older common-message JSON is not read — regenerate exports after schema changes.
 
 ## Document shape (`schema_version: 3`)
@@ -77,7 +77,7 @@ Pipeline: `backup → common message → FormatSink → user-picked format`.
 
 ### Attachments
 
-Attachment **bytes** are never stored in JSON/JSONL (`#[serde(skip)]`). Paths + digests point at sidecar files under `attachments/`. JSON/JSONL alone is not enough to rebuild mail with media — keep the attachment directory with the export.
+Attachment **bytes** are never stored in JSON/JSONL (`#[serde(skip)]`). Paths + digests point at sidecar files under `attachments/`. For EML / MBOX / XML, FormatSink loads those files, embeds the bytes, then removes the staged `attachments/` directory so the output folder is the archive product.
 
 ### Vocabulary (enums)
 

@@ -8,10 +8,12 @@ On the Message and Re-export tabs, set **Attachments** before Run:
 
 | Mode | Behavior |
 |------|----------|
-| **Do not copy** | No media files under `attachments/` |
-| **Copy** (default) | Copy original files |
+| **Do not copy** | No media in the export |
+| **Copy** (default) | Include original media files |
 | **Convert** | Transcode common types to `.jpg` / `.mp4` / `.mp3` |
 | **Convert & compress** | Re-encode with size/quality limits |
+
+JSON / JSONL / CSV store media in a sidecar `attachments/` folder. EML / MBOX / XML transform media then embed it; the output folder does not keep a sidecar.
 
 Convert and Compress require `ffmpeg` and `ffprobe` on `PATH`. Install ffmpeg before selecting those modes. See [Install](install.md).
 

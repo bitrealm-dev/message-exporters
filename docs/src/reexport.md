@@ -8,7 +8,7 @@ Use Re-export only when you already have an export folder (for example CSV → E
 
 1. Locate an existing export directory produced by Message Exporters (one clear format among CSV, EML, MBOX, JSON, JSONL, or `smses.xml`).
 2. Create a **different** empty output directory. Input and output must not be the same path.
-3. Prefer folders that still include `attachments/` when media should carry over.
+3. Prefer folders that still include media (sidecar `attachments/` for JSON / JSONL / CSV, or embedded media for EML / MBOX / XML).
 
 ## Steps (desktop app)
 

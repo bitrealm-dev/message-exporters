@@ -15,7 +15,7 @@ Pick the packaging that matches the next tool. The Message tab and Re-export tab
 
 ## Formats in detail
 
-Attachment handling depends on the Attachments control (Copy / Convert / Compress / Do not copy). The trees below assume media copy is on. **Do not copy** skips writing an `attachments/` folder and does not embed media. WhatsApp chats use a `__whatsapp` stem suffix (for example `+15555550101__whatsapp.json`).
+Attachment handling depends on the Attachments control (Copy / Convert / Compress / Do not copy). The trees below assume media copy is on. **Do not copy** skips media entirely. JSON / JSONL / CSV keep media in a sidecar `attachments/` folder; EML / MBOX / XML transform media then **embed** it and leave no sidecar—the output folder is the archive. WhatsApp chats use a `__whatsapp` stem suffix (for example `+15555550101__whatsapp.json`).
 
 ### CSV
 
@@ -41,7 +41,7 @@ Use CSV for inspection, filtering, and tools that ingest tabular message data. C
 
 Writes one folder per conversation containing individual `.eml` messages.
 
-**Attachments:** embedded in each message (MIME parts); `attachments/` sidecar also written when media copy is enabled.
+**Attachments:** transformed, then embedded in each message (MIME parts). No sidecar folder.
 
 **Layout:**
 
@@ -58,7 +58,7 @@ Use EML when the goal is to browse history in a mail client.
 
 Writes one `.mbox` file per conversation.
 
-**Attachments:** embedded in the mailbox file (MIME parts); `attachments/` sidecar when media copy is enabled.
+**Attachments:** transformed, then embedded in the mailbox file (MIME parts). No sidecar folder.
 
 **Layout:**
 
@@ -108,7 +108,7 @@ Use JSONL for streaming or line-oriented processing of large chats.
 
 Writes a single `smses.xml` for the whole export (SyncTech SMS Backup & Restore shape).
 
-**Attachments:** embedded as base64 inside `smses.xml` (no sidecar).
+**Attachments:** transformed, then embedded as base64 inside `smses.xml`. No sidecar folder.
 
 **Layout:**
 

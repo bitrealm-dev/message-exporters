@@ -6,6 +6,7 @@ use crate::{write_format, ConversationDocument};
 use anyhow::Result;
 use message_exporters_core::OutputFormat;
 use message_media::MediaReport;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Result of [`FormatSink::finish`].
@@ -91,13 +92,16 @@ impl FormatSink {
     }
 
     /// Apply media/obfuscate transforms, then write all buffered documents.
+    ///
+    /// For EML / MBOX / XML, media is transformed then embedded; the staged
+    /// `attachments/` directory is removed so the output folder is the archive.
     pub fn finish(mut self) -> Result<FormatSinkResult> {
-        let load_bytes = self.format.is_mail_archive() || self.format.is_sbr_xml();
+        let embeds_media = self.format.is_mail_archive() || self.format.is_sbr_xml();
         let outcome = apply_transforms(
             &mut self.docs,
             &self.output_dir,
             &self.transforms,
-            load_bytes,
+            embeds_media,
         )?;
 
         let mut result = FormatSinkResult {
@@ -117,17 +121,31 @@ impl FormatSink {
                 write_format(&self.output_dir, self.format, doc)?;
             }
         }
+
+        if embeds_media {
+            remove_staged_attachments(&self.output_dir)?;
+        }
         Ok(result)
     }
+}
+
+/// Drop transform staging under `attachments/` after media has been embedded.
+fn remove_staged_attachments(output_dir: &Path) -> Result<()> {
+    let att_dir = output_dir.join("attachments");
+    if att_dir.is_dir() {
+        fs::remove_dir_all(&att_dir)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        ConversationMeta, ConversationStats, ExportMeta, IrConversationType, IrDirection,
-        IrMessage, IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION,
+        ConversationMeta, ConversationStats, ExportMeta, IrAttachment, IrConversationType,
+        IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION,
     };
+    use message_media::MediaMode;
     use std::fs;
 
     fn tiny_doc(text: &str) -> ConversationDocument {
@@ -196,6 +214,61 @@ mod tests {
         assert!(text.contains(r#"count="2""#));
         assert!(text.contains("one"));
         assert!(text.contains("two"));
+    }
+
+    #[test]
+    fn format_sink_eml_embeds_media_and_drops_attachments_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let att_dir = tmp.path().join("attachments");
+        fs::create_dir_all(&att_dir).unwrap();
+        let rel = "attachments/photo.jpg";
+        fs::write(tmp.path().join(rel), b"jpeg-bytes").unwrap();
+
+        let mut doc = tiny_doc("with media");
+        doc.messages[0].attachments = vec![IrAttachment {
+            path: Some(rel.into()),
+            original_name: Some("photo.jpg".into()),
+            mime_type: Some("image/jpeg".into()),
+            digest_sha256: None,
+            is_sticker: false,
+            transcription: None,
+            sticker_effect: None,
+            bytes: None,
+        }];
+
+        let transforms = ExportTransforms {
+            media: MediaMode::Clone,
+            ..ExportTransforms::none()
+        };
+        let mut sink = FormatSink::open(tmp.path(), OutputFormat::Eml, transforms).unwrap();
+        sink.write_document(&doc).unwrap();
+        sink.finish().unwrap();
+
+        assert!(!tmp.path().join("attachments").exists());
+        let eml_dir = tmp.path().join("+15555550101");
+        assert!(eml_dir.is_dir());
+        let eml = fs::read_dir(&eml_dir)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let body = fs::read_to_string(&eml).unwrap();
+        assert!(body.contains("jpeg-bytes") || body.contains("photo.jpg"));
+    }
+
+    #[test]
+    fn format_sink_csv_keeps_attachments_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let att_dir = tmp.path().join("attachments");
+        fs::create_dir_all(&att_dir).unwrap();
+        fs::write(att_dir.join("photo.jpg"), b"jpeg-bytes").unwrap();
+
+        let mut sink =
+            FormatSink::open(tmp.path(), OutputFormat::Csv, ExportTransforms::none()).unwrap();
+        sink.write_document(&tiny_doc("hello")).unwrap();
+        sink.finish().unwrap();
+        assert!(tmp.path().join("attachments/photo.jpg").is_file());
     }
 
     #[test]

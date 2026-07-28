@@ -25,7 +25,7 @@ Convert a SyncTech SMS Backup & Restore XML backup into CSV, EML, MBOX, JSON, JS
 
 ## Result
 
-One artifact per conversation for the chosen format (or one merged `smses.xml` when writing XML), with media under `attachments/` when copying is enabled.
+One artifact per conversation for the chosen format (or one merged `smses.xml` when writing XML). Media is copied into `attachments/` for JSON / JSONL / CSV, or embedded for EML / MBOX / XML.
 
 ## If it fails
 
