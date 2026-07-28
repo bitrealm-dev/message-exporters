@@ -6,8 +6,7 @@ Typed model: [`crates/message-ir/`](../crates/message-ir/). On-disk form: one `<
 
 ## Status
 
-- **SMS Backup & Restore** builds `ConversationDocument` then projects with `message_ir::write_format` (`--format csv|eml|mbox|json`).
-- Other exporters still write formats directly; JSON bails with a clear error until migrated.
+- **IR-backed** (`ConversationDocument` → `message_ir::write_format`, `--format csv|eml|mbox|json`): SMS Backup & Restore, OpenExtract, WhatsApp Chat Exporter, GO SMS Pro, SMS Backup+, iMazing.
 - iPhone CSV still uses `imessage-exporter`; EML/MBOX use `imessage-mail-exporter` (IR for Apple is a follow-up).
 
 ## Document shape (`schema_version: 1`)

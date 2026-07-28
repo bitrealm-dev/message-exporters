@@ -1,4 +1,4 @@
-//! Convert wtsexporter JSON → per-conversation vault-shaped CSV, EML, or MBOX.
+//! Convert wtsexporter JSON → canonical IR → per-conversation CSV, EML, MBOX, or JSON.
 
 use crate::cancel::{check_cancel, CancelFlag};
 use crate::jid::{chat_id_from_jid, is_group_jid, jid_to_e164};
@@ -6,41 +6,17 @@ use crate::parse::{
     load_chat_store, media_path, message_text, timestamp_secs, ChatJson, MessageJson,
 };
 use anyhow::{Context, Result};
-use message_csv::{
-    conversation_filename, format_local_ts, json_cell, stable_guid, AttachmentCell, DateRange,
-};
+use message_csv::{format_local_ts, json_cell, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
-use message_mail::{
-    clean_previous_mail_output, write_mail_package, Direction as MailDirection, MailAttachment,
-    MailMessage, MailPackage, Participant, SmsMailFields,
+use message_ir::{
+    write_format, ConversationDocument, ConversationMeta, ExportMeta, IrAttachment, IrDirection,
+    IrMessage, IrParticipant, SCHEMA_VERSION,
 };
+use message_mail::clean_previous_mail_output;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::{self, File};
+use std::fs;
 use std::path::{Path, PathBuf};
-
-const HEADERS: &[&str] = &[
-    "chat_identifier",
-    "conversation_type",
-    "group_title",
-    "guid",
-    "timestamp",
-    "timestamp_utc",
-    "timestamp_display",
-    "direction",
-    "service",
-    "sender_handle",
-    "sender_display_name",
-    "text",
-    "attachments_json",
-    "export_source",
-    "export_tool",
-    "export_tool_version",
-    "whatsapp_jid",
-    "whatsapp_key_id",
-    "whatsapp_reply_json",
-    "whatsapp_reactions_json",
-];
 
 const EXPORT_SOURCE: &str = "whatsapp";
 const EXPORT_TOOL: &str = "WhatsApp Chat Exporter";
@@ -144,34 +120,8 @@ pub fn convert_json(
         if !prepare_conversation(&mut convo, &mut report) {
             continue;
         }
-        match output_format {
-            OutputFormat::Csv => {
-                write_conversation_csv(output, &chat_id, &convo, &mut report)?;
-            }
-            OutputFormat::Eml => {
-                write_conversation_mail(
-                    output,
-                    &chat_id,
-                    &convo,
-                    MailPackage::EmlFolders,
-                    &mut report,
-                )?;
-            }
-            OutputFormat::Mbox => {
-                write_conversation_mail(
-                    output,
-                    &chat_id,
-                    &convo,
-                    MailPackage::Mbox,
-                    &mut report,
-                )?;
-            }
-            OutputFormat::Json => {
-                anyhow::bail!(
-                    "OutputFormat::Json is not supported yet (canonical IR is SBR-first)"
-                );
-            }
-        }
+        let doc = pending_to_document(&chat_id, &convo, &mut report)?;
+        write_format(output, output_format, &doc)?;
         report.conversations += 1;
     }
 
@@ -477,7 +427,9 @@ fn clean_previous_output(output_dir: &Path) -> Result<()> {
     for entry in fs::read_dir(output_dir)? {
         let path = entry?.path();
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if path.is_file() && (name.ends_with(".csv") || name.ends_with(".csv.tmp")) {
+        if path.is_file()
+            && (name.ends_with(".csv") || name.ends_with(".csv.tmp") || name.ends_with(".json"))
+        {
             fs::remove_file(&path)
                 .with_context(|| format!("remove previous {}", path.display()))?;
         }
@@ -503,23 +455,22 @@ fn prepare_conversation(convo: &mut PendingConversation, report: &mut ExportRepo
     !convo.messages.is_empty()
 }
 
-fn pending_to_mail_messages(
-    output_dir: &Path,
+fn pending_to_document(
     chat_id: &str,
     convo: &PendingConversation,
     report: &mut ExportReport,
-) -> Result<Vec<MailMessage>> {
-    let participants: Vec<Participant> = convo
+) -> Result<ConversationDocument> {
+    let participants: Vec<IrParticipant> = convo
         .participant_e164s
         .iter()
         .filter(|h| !h.is_empty())
-        .map(|h| Participant {
+        .map(|h| IrParticipant {
             handle: h.clone(),
             display_name: None,
         })
         .collect();
 
-    let mut out = Vec::with_capacity(convo.messages.len());
+    let mut messages = Vec::with_capacity(convo.messages.len());
     for msg in &convo.messages {
         report.messages += 1;
         if msg.is_from_me {
@@ -531,68 +482,71 @@ fn pending_to_mail_messages(
         let (ts_local, _, _) = format_local_ts(secs).expect("timestamp validated above");
         let digests: Vec<String> = msg.attachments.iter().map(|a| a.digest_hex.clone()).collect();
         let guid = stable_guid(chat_id, &ts_local, msg.is_from_me, &msg.text, &digests);
-        let attachments: Vec<MailAttachment> = msg
+        let attachments: Vec<IrAttachment> = msg
             .attachments
             .iter()
-            .map(|a| {
-                MailAttachment::read_file(
-                    &output_dir.join(&a.rel_path),
-                    a.original_name.clone(),
-                    a.mime_type.clone(),
-                    Some(a.digest_hex.clone()),
-                    a.is_sticker,
-                )
+            .map(|a| IrAttachment {
+                path: Some(a.rel_path.clone()),
+                original_name: a.original_name.clone(),
+                mime_type: a.mime_type.clone(),
+                digest_sha256: Some(a.digest_hex.clone()),
+                is_sticker: a.is_sticker,
+                transcription: None,
+                sticker_effect: None,
+                bytes: None,
             })
-            .collect::<Result<_>>()?;
+            .collect();
         let message_kind = if msg.attachments.is_empty() {
             "sms"
         } else {
             "mms"
         };
-        let mut source = serde_json::Map::new();
+
+        let mut xml_fields = serde_json::Map::new();
         if !convo.whatsapp_jid.is_empty() {
-            source.insert(
-                "whatsapp_jid".into(),
+            xml_fields.insert(
+                "jid".into(),
                 serde_json::Value::String(convo.whatsapp_jid.clone()),
             );
         }
         if !msg.key_id.is_empty() {
-            source.insert(
-                "whatsapp_key_id".into(),
+            xml_fields.insert(
+                "key_id".into(),
                 serde_json::Value::String(msg.key_id.clone()),
             );
         }
         if !msg.reply_json.is_empty() {
-            source.insert(
-                "reply_json".into(),
+            xml_fields.insert(
+                "reply".into(),
                 serde_json::from_str(&msg.reply_json)
                     .unwrap_or_else(|_| serde_json::Value::String(msg.reply_json.clone())),
             );
         }
         if !msg.reactions_json.is_empty() {
-            source.insert(
-                "reactions_json".into(),
+            xml_fields.insert(
+                "reactions".into(),
                 serde_json::from_str(&msg.reactions_json)
                     .unwrap_or_else(|_| serde_json::Value::String(msg.reactions_json.clone())),
             );
         }
-        let source_fields_json = if source.is_empty() {
+        let source = if xml_fields.is_empty() {
             None
         } else {
-            Some(serde_json::Value::Object(source).to_string())
+            let mut source = serde_json::Map::new();
+            source.insert(
+                "xml_fields_json".into(),
+                serde_json::json!(serde_json::Value::Object(xml_fields).to_string()),
+            );
+            Some(serde_json::Value::Object(source))
         };
 
-        out.push(MailMessage::sms(SmsMailFields {
-            chat_identifier: chat_id.to_string(),
-            conversation_type: convo.conversation_type.clone(),
-            group_title: convo.group_title.clone(),
-            participants: participants.clone(),
+        messages.push(IrMessage {
             guid,
             timestamp_unix_ms: secs.saturating_mul(1000),
             direction: if msg.is_from_me {
-                MailDirection::Outgoing
+                IrDirection::Outgoing
             } else {
-                MailDirection::Incoming
+                IrDirection::Incoming
             },
             service: "WhatsApp".into(),
             message_kind: message_kind.into(),
@@ -606,123 +560,29 @@ fn pending_to_mail_messages(
             } else {
                 Some(msg.sender_display_name.clone())
             },
-            owner_handle: String::new(),
             subject: None,
             text: msg.text.clone(),
-            android_type: None,
-            source_fields_json,
-            export_source: EXPORT_SOURCE.into(),
-            export_tool: EXPORT_TOOL.into(),
-            export_tool_version: EXPORT_TOOL_VERSION.into(),
             attachments,
+            imessage: None,
+            source,
+        });
+    }
+
+    Ok(ConversationDocument {
+        schema_version: SCHEMA_VERSION,
+        export: ExportMeta {
+            source: EXPORT_SOURCE.into(),
+            tool: EXPORT_TOOL.into(),
+            tool_version: EXPORT_TOOL_VERSION.into(),
+            owner_handle: None,
+        },
+        conversation: ConversationMeta {
+            chat_identifier: chat_id.to_string(),
+            conversation_type: convo.conversation_type.clone(),
+            group_title: convo.group_title.clone(),
+            participants,
             filename_suffix: Some("__whatsapp".into()),
-        }));
-    }
-    Ok(out)
-}
-
-fn write_conversation_csv(
-    output_dir: &Path,
-    chat_id: &str,
-    convo: &PendingConversation,
-    report: &mut ExportReport,
-) -> Result<()> {
-    let filename = conversation_filename(
-        &convo.conversation_type,
-        chat_id,
-        convo.group_title.as_deref(),
-        &convo.participant_e164s,
-        Some("__whatsapp"),
-    );
-    let path = output_dir.join(filename);
-    let mut tmp_name = path
-        .file_name()
-        .map(|n| n.to_os_string())
-        .unwrap_or_else(|| "chat.csv".into());
-    tmp_name.push(".tmp");
-    let tmp_path = path.with_file_name(tmp_name);
-    let file = File::create(&tmp_path).with_context(|| format!("create {}", tmp_path.display()))?;
-    let mut wtr = csv::Writer::from_writer(file);
-    wtr.write_record(HEADERS)
-        .with_context(|| format!("write header {}", path.display()))?;
-
-    for msg in &convo.messages {
-        let secs = msg.sort_key as i64;
-        let (ts_local, ts_utc, ts_display) =
-            format_local_ts(secs).expect("timestamp validated above");
-        let digests: Vec<String> = msg.attachments.iter().map(|a| a.digest_hex.clone()).collect();
-        let guid = stable_guid(chat_id, &ts_local, msg.is_from_me, &msg.text, &digests);
-        let direction = if msg.is_from_me {
-            "outgoing"
-        } else {
-            "incoming"
-        };
-        let attachment_cells: Vec<AttachmentCell> = msg
-            .attachments
-            .iter()
-            .map(|a| AttachmentCell {
-                path: Some(a.rel_path.clone()),
-                original_name: a.original_name.clone(),
-                mime_type: a.mime_type.clone(),
-                is_sticker: a.is_sticker,
-                transcription: None,
-                sticker_effect: None,
-            })
-            .collect();
-        let attachments_json = if attachment_cells.is_empty() {
-            String::new()
-        } else {
-            json_cell(&attachment_cells)
-        };
-
-        wtr.write_record([
-            chat_id,
-            convo.conversation_type.as_str(),
-            convo.group_title.as_deref().unwrap_or(""),
-            guid.as_str(),
-            ts_local.as_str(),
-            ts_utc.as_str(),
-            ts_display.as_str(),
-            direction,
-            "WhatsApp",
-            msg.sender_handle.as_str(),
-            msg.sender_display_name.as_str(),
-            msg.text.as_str(),
-            attachments_json.as_str(),
-            EXPORT_SOURCE,
-            EXPORT_TOOL,
-            EXPORT_TOOL_VERSION,
-            convo.whatsapp_jid.as_str(),
-            msg.key_id.as_str(),
-            msg.reply_json.as_str(),
-            msg.reactions_json.as_str(),
-        ])
-        .with_context(|| format!("write row {}", path.display()))?;
-
-        report.messages += 1;
-        if msg.is_from_me {
-            report.sent += 1;
-        } else {
-            report.received += 1;
-        }
-    }
-
-    wtr.flush()?;
-    // Ensure file is closed before rename on Windows.
-    drop(wtr);
-    fs::rename(&tmp_path, &path)
-        .with_context(|| format!("rename {} → {}", tmp_path.display(), path.display()))?;
-    Ok(())
-}
-
-fn write_conversation_mail(
-    output_dir: &Path,
-    chat_id: &str,
-    convo: &PendingConversation,
-    package: MailPackage,
-    report: &mut ExportReport,
-) -> Result<()> {
-    let messages = pending_to_mail_messages(output_dir, chat_id, convo, report)?;
-    write_mail_package(output_dir, package, &messages)?;
-    Ok(())
+        },
+        messages,
+    })
 }

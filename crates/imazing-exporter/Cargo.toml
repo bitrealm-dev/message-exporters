@@ -23,6 +23,7 @@ message-obfuscate = { path = "../message-obfuscate" }
 message-contacts = { path = "../message-contacts" }
 message-csv = { path = "../message-csv" }
 message-exporters-core = { path = "../message-exporters-core" }
+message-ir = { path = "../message-ir" }
 message-mail = { path = "../message-mail" }
 message-media = { path = "../message-media" }
 message-phone = { path = "../message-phone" }

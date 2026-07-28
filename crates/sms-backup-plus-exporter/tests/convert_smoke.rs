@@ -67,15 +67,18 @@ fn convert_smoke_writes_csv_not_json() {
     assert!(header.contains("export_source"));
     assert!(header.contains("export_tool"));
     assert!(header.contains("export_tool_version"));
-    assert!(header.contains("source_kind"));
-    assert!(header.contains("smssync_id"));
-    assert!(header.contains("eml_path"));
+    assert!(header.contains("date_ms"));
+    assert!(header.contains("contact_name"));
+    assert!(header.contains("android_type"));
+    assert!(header.contains("xml_fields_json"));
     assert!(!header.contains("participants_json"));
     // Unused iMessage-only columns must not appear.
     assert!(!header.contains("read_receipt"));
     assert!(!header.contains("tapbacks_json"));
     assert!(!header.contains("app_json"));
     assert!(contents.contains("sms-backup-plus"));
+    // Vendor fields (source_kind, smssync_id, eml_path) live inside xml_fields_json now.
+    assert!(contents.contains("source_kind"));
 }
 
 #[test]
@@ -180,6 +183,7 @@ Will do\r\n"
 
     let csv = fs::read_to_string(out.join("+14075551234.csv")).unwrap();
     assert!(csv.contains("Will do"));
-    assert!(csv.contains(",flat,"));
-    assert!(csv.contains(",999,"));
+    // source_kind/smssync_id now live inside the xml_fields_json cell.
+    assert!(csv.contains("flat"));
+    assert!(csv.contains("999"));
 }

@@ -1,4 +1,4 @@
-//! Convert GO SMS Pro export → per-conversation CSV, EML, or MBOX.
+//! Convert GO SMS Pro export → canonical IR → per-conversation CSV, EML, MBOX, or JSON.
 
 use crate::pdu::{parse_pdu_file, ParsedPdu};
 use crate::cancel::{check_cancel, CancelFlag};
@@ -6,50 +6,18 @@ use crate::xml::{parse_xml_file, SkippedBadAddrDetail, XmlMessage};
 use anyhow::{bail, Context, Result};
 use chrono::{Local, TimeZone};
 use message_contacts::ContactsBook;
-use message_csv::{
-    conversation_filename, format_local_ts, json_cell, stable_guid, AttachmentCell,
-    DateRange,
-};
+use message_csv::{format_local_ts, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
-use message_mail::{
-    clean_previous_mail_output, write_mail_package, Direction as MailDirection, MailAttachment,
-    MailMessage, MailPackage, Participant, SmsMailFields,
+use message_ir::{
+    write_format, ConversationDocument, ConversationMeta, ExportMeta, IrAttachment, IrDirection,
+    IrMessage, IrParticipant, SCHEMA_VERSION,
 };
+use message_mail::clean_previous_mail_output;
 use message_phone::{to_e164, OwnerPhoneSet};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fs::{self, File};
+use std::fs;
 use std::path::{Path, PathBuf};
-
-/// Columns this exporter fills. Shared names match imessage-csv where the
-/// concept exists; unused iMessage-only columns are omitted.
-const HEADERS: &[&str] = &[
-    "chat_identifier",
-    "conversation_type",
-    "group_title",
-    "guid",
-    "timestamp",
-    "timestamp_utc",
-    "timestamp_display",
-    "direction",
-    "service",
-    "sender_handle",
-    "sender_display_name",
-    "text",
-    "attachments_json",
-    // SMS-Pro-only
-    "export_source",
-    "export_tool",
-    "export_tool_version",
-    "source_kind",
-    "android_type",
-    "date_ms",
-    "contact_name",
-    "pdu_filename",
-    "xml_fields_json",
-    "pdu_fields_json",
-    "pdu_decode",
-];
 
 const EXPORT_SOURCE: &str = "go-sms-pro";
 const EXPORT_TOOL: &str = "GO SMS Pro";
@@ -490,25 +458,24 @@ fn display_names_for_handles(convo: &PendingConversation) -> HashMap<String, Str
     names
 }
 
-fn pending_to_mail_messages(
-    output_dir: &Path,
+fn pending_to_document(
     chat_id: &str,
     convo: &PendingConversation,
     owner_handle: &str,
     report: &mut ExportReport,
-) -> Result<Vec<MailMessage>> {
+) -> Result<ConversationDocument> {
     let name_by_handle = display_names_for_handles(convo);
-    let mut participants: Vec<Participant> = convo
+    let mut participants: Vec<IrParticipant> = convo
         .participant_e164s
         .iter()
         .filter(|h| !h.is_empty())
-        .map(|h| Participant {
+        .map(|h| IrParticipant {
             handle: h.clone(),
             display_name: name_by_handle.get(h).cloned(),
         })
         .collect();
     if participants.is_empty() && convo.conversation_type == "individual" && !chat_id.is_empty() {
-        participants.push(Participant {
+        participants.push(IrParticipant {
             handle: chat_id.to_string(),
             display_name: name_by_handle.get(chat_id).cloned().or_else(|| {
                 convo
@@ -521,7 +488,7 @@ fn pending_to_mail_messages(
         });
     }
 
-    let mut out = Vec::with_capacity(convo.messages.len());
+    let mut messages = Vec::with_capacity(convo.messages.len());
     for msg in &convo.messages {
         if msg.is_from_me {
             report.sent += 1;
@@ -544,215 +511,115 @@ fn pending_to_mail_messages(
                 msg.sender_display_name.clone(),
             )
         };
-        let attachments: Vec<MailAttachment> = msg
+        let attachments: Vec<IrAttachment> = msg
             .attachments
             .iter()
-            .map(|a| {
-                MailAttachment::read_file(
-                    &output_dir.join(&a.rel_path),
-                    a.original_name.clone(),
-                    a.mime_type.clone(),
-                    Some(a.digest_hex.clone()),
-                    false,
-                )
+            .map(|a| IrAttachment {
+                path: Some(a.rel_path.clone()),
+                original_name: a.original_name.clone(),
+                mime_type: a.mime_type.clone(),
+                digest_sha256: Some(a.digest_hex.clone()),
+                is_sticker: false,
+                transcription: None,
+                sticker_effect: None,
+                bytes: None,
             })
-            .collect::<Result<_>>()?;
+            .collect();
         let message_kind = if msg.attachments.is_empty() {
             "sms"
         } else {
             "mms"
         };
+
         let mut source = serde_json::Map::new();
-        if !msg.source_kind.is_empty() {
-            source.insert(
-                "source_kind".into(),
-                serde_json::Value::String(msg.source_kind.to_string()),
-            );
+        if !msg.date_ms.is_empty() {
+            source.insert("date_ms".into(), serde_json::json!(msg.date_ms));
         }
+        if !msg.contact_name.is_empty() {
+            source.insert("contact_name".into(), serde_json::json!(msg.contact_name));
+        }
+        if !msg.android_type.is_empty() {
+            source.insert("android_type".into(), serde_json::json!(msg.android_type));
+        }
+
+        let mut fields = serde_json::Map::new();
+        fields.insert(
+            "source_kind".into(),
+            serde_json::Value::String(msg.source_kind.to_string()),
+        );
         if !msg.pdu_filename.is_empty() {
-            source.insert(
+            fields.insert(
                 "pdu_filename".into(),
                 serde_json::Value::String(msg.pdu_filename.clone()),
             );
         }
-        if !msg.xml_fields.is_empty() {
-            source.insert(
-                "xml_fields".into(),
-                serde_json::to_value(&msg.xml_fields).unwrap_or(serde_json::Value::Null),
+        if !msg.pdu_decode.is_empty() {
+            fields.insert(
+                "pdu_decode".into(),
+                serde_json::Value::String(msg.pdu_decode.clone()),
             );
         }
         if !msg.pdu_fields.is_empty() {
-            source.insert(
+            fields.insert(
                 "pdu_fields".into(),
                 serde_json::to_value(&msg.pdu_fields).unwrap_or(serde_json::Value::Null),
             );
         }
-        let source_fields_json = if source.is_empty() {
-            None
-        } else {
-            Some(serde_json::Value::Object(source).to_string())
-        };
+        for (k, v) in &msg.xml_fields {
+            fields
+                .entry(k.clone())
+                .or_insert_with(|| serde_json::Value::String(v.clone()));
+        }
+        if let Some(title) = convo.group_title.as_deref().filter(|t| !t.is_empty()) {
+            // Synthetic Android group label; kept as data, not used for filenames.
+            fields.insert(
+                "android_group_title".into(),
+                serde_json::Value::String(title.to_string()),
+            );
+        }
+        source.insert(
+            "xml_fields_json".into(),
+            serde_json::json!(serde_json::Value::Object(fields).to_string()),
+        );
 
-        out.push(MailMessage::sms(SmsMailFields {
-            chat_identifier: chat_id.to_string(),
-            conversation_type: convo.conversation_type.clone(),
-            group_title: convo.group_title.clone(),
-            participants: participants.clone(),
+        messages.push(IrMessage {
             guid,
             timestamp_unix_ms,
             direction: if msg.is_from_me {
-                MailDirection::Outgoing
+                IrDirection::Outgoing
             } else {
-                MailDirection::Incoming
+                IrDirection::Incoming
             },
             service: "SMS".into(),
             message_kind: message_kind.into(),
             sender_handle,
             sender_display_name,
-            owner_handle: owner_handle.to_string(),
             subject: None,
             text: msg.text.clone(),
-            android_type: if msg.android_type.is_empty() {
-                None
-            } else {
-                Some(msg.android_type.clone())
-            },
-            source_fields_json,
-            export_source: EXPORT_SOURCE.into(),
-            export_tool: EXPORT_TOOL.into(),
-            export_tool_version: EXPORT_TOOL_VERSION.into(),
             attachments,
+            imessage: None,
+            source: Some(serde_json::Value::Object(source)),
+        });
+    }
+
+    Ok(ConversationDocument {
+        schema_version: SCHEMA_VERSION,
+        export: ExportMeta {
+            source: EXPORT_SOURCE.into(),
+            tool: EXPORT_TOOL.into(),
+            tool_version: EXPORT_TOOL_VERSION.into(),
+            owner_handle: Some(owner_handle.to_string()),
+        },
+        conversation: ConversationMeta {
+            chat_identifier: chat_id.to_string(),
+            conversation_type: convo.conversation_type.clone(),
+            // Synthetic Android group titles are not used for filenames.
+            group_title: None,
+            participants,
             filename_suffix: None,
-        }));
-    }
-    Ok(out)
-}
-
-fn write_conversation_csv(
-    output_dir: &Path,
-    chat_id: &str,
-    convo: &PendingConversation,
-    report: &mut ExportReport,
-) -> Result<()> {
-    // Synthetic Android group titles are not used for filenames.
-    let filename = conversation_filename(
-        &convo.conversation_type,
-        chat_id,
-        None,
-        &convo.participant_e164s,
-        None,
-    );
-    let path = output_dir.join(filename);
-    let mut tmp_name = path
-        .file_name()
-        .map(|n| n.to_os_string())
-        .unwrap_or_else(|| "chat.csv".into());
-    tmp_name.push(".tmp");
-    let tmp_path = path.with_file_name(tmp_name);
-    let file = File::create(&tmp_path).with_context(|| format!("create {}", tmp_path.display()))?;
-    let mut wtr = csv::Writer::from_writer(file);
-    wtr.write_record(HEADERS)
-        .with_context(|| format!("write header {}", path.display()))?;
-
-    for msg in &convo.messages {
-        let secs = msg.sort_key as i64;
-        let (ts_local, ts_utc, ts_display) =
-            format_local_ts(secs).expect("timestamp validated above");
-        let digests: Vec<String> = msg.attachments.iter().map(|a| a.digest_hex.clone()).collect();
-        let guid = stable_guid(chat_id, &ts_local, msg.is_from_me, &msg.text, &digests);
-        let direction = if msg.is_from_me {
-            "outgoing"
-        } else {
-            "incoming"
-        };
-        let (sender_handle, sender_display_name) = if msg.is_from_me {
-            (String::new(), String::new())
-        } else {
-            (
-                msg.sender_digits
-                    .as_ref()
-                    .map(|d| to_e164(d))
-                    .unwrap_or_default(),
-                msg.sender_display_name.clone().unwrap_or_default(),
-            )
-        };
-        let attachment_cells: Vec<AttachmentCell> = msg
-            .attachments
-            .iter()
-            .map(|a| AttachmentCell {
-                path: Some(a.rel_path.clone()),
-                original_name: a.original_name.clone(),
-                mime_type: a.mime_type.clone(),
-                is_sticker: false,
-                transcription: None,
-                sticker_effect: None,
-            })
-            .collect();
-        let attachments_json = json_cell(&attachment_cells);
-        let xml_fields_json = if msg.xml_fields.is_empty() {
-            String::new()
-        } else {
-            json_cell(&msg.xml_fields)
-        };
-        let pdu_fields_json = if msg.pdu_fields.is_empty() {
-            String::new()
-        } else {
-            json_cell(&msg.pdu_fields)
-        };
-
-        wtr.write_record([
-            chat_id,
-            convo.conversation_type.as_str(),
-            convo.group_title.as_deref().unwrap_or(""),
-            guid.as_str(),
-            ts_local.as_str(),
-            ts_utc.as_str(),
-            ts_display.as_str(),
-            direction,
-            "SMS",
-            sender_handle.as_str(),
-            sender_display_name.as_str(),
-            msg.text.as_str(),
-            attachments_json.as_str(),
-            EXPORT_SOURCE,
-            EXPORT_TOOL,
-            EXPORT_TOOL_VERSION,
-            msg.source_kind,
-            msg.android_type.as_str(),
-            msg.date_ms.as_str(),
-            msg.contact_name.as_str(),
-            msg.pdu_filename.as_str(),
-            xml_fields_json.as_str(),
-            pdu_fields_json.as_str(),
-            msg.pdu_decode.as_str(),
-        ])
-        .with_context(|| format!("write row {}", path.display()))?;
-
-        if msg.is_from_me {
-            report.sent += 1;
-        } else {
-            report.received += 1;
-        }
-    }
-
-    wtr.flush()?;
-    drop(wtr);
-    fs::rename(&tmp_path, &path)
-        .with_context(|| format!("rename {} → {}", tmp_path.display(), path.display()))?;
-    Ok(())
-}
-
-fn write_conversation_mail(
-    output_dir: &Path,
-    chat_id: &str,
-    convo: &PendingConversation,
-    owner_handle: &str,
-    package: MailPackage,
-    report: &mut ExportReport,
-) -> Result<()> {
-    let messages = pending_to_mail_messages(output_dir, chat_id, convo, owner_handle, report)?;
-    write_mail_package(output_dir, package, &messages)?;
-    Ok(())
+        },
+        messages,
+    })
 }
 
 fn enrich_pending_names(book: &ContactsBook, chat_id: &str, msg: &mut PendingMessage) {
@@ -901,36 +768,8 @@ pub fn convert_export(
         if !prepare_conversation(&mut convo, &mut report) {
             continue;
         }
-        match output_format {
-            OutputFormat::Csv => {
-                write_conversation_csv(output_dir, &chat_id, &convo, &mut report)?;
-            }
-            OutputFormat::Eml => {
-                write_conversation_mail(
-                    output_dir,
-                    &chat_id,
-                    &convo,
-                    &owner_handle,
-                    MailPackage::EmlFolders,
-                    &mut report,
-                )?;
-            }
-            OutputFormat::Mbox => {
-                write_conversation_mail(
-                    output_dir,
-                    &chat_id,
-                    &convo,
-                    &owner_handle,
-                    MailPackage::Mbox,
-                    &mut report,
-                )?;
-            }
-            OutputFormat::Json => {
-                anyhow::bail!(
-                    "OutputFormat::Json is not supported yet (canonical IR is SBR-first)"
-                );
-            }
-        }
+        let doc = pending_to_document(&chat_id, &convo, &owner_handle, &mut report)?;
+        write_format(output_dir, output_format, &doc)?;
         report.conversations += 1;
     }
 
