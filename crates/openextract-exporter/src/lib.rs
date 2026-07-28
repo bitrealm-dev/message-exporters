@@ -1,4 +1,4 @@
-//! OpenExtract conversation CSV (+ VCF) → per-conversation vault-shaped CSV.
+//! OpenExtract conversation CSV (+ VCF) → shared per-chat CSV.
 //!
 //! Library entrypoints: [`run`] with [`ExporterConfig`] for the full pipeline
 //! (convert + obfuscate), or [`convert_export`] for convert-only.

@@ -58,7 +58,7 @@ Chat Session, Message Date, Sent Date, Type, Sender ID, Sender Name, Status, For
 Replying to, Text, Reactions, Attachment, Attachment type, Attachment info
 ```
 
-Canonical output `service` is always `WhatsApp`.
+Output `service` is always `WhatsApp`.
 
 ### Contacts
 
@@ -139,4 +139,4 @@ These are upstream/export constraints, not converter bugs:
 
 - Converter README: [`../README.md`](../README.md)
 - Contacts helper: [`../../message-contacts/README.md`](../../message-contacts/README.md)
-- Common message / CSV contract: [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md), [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/src/csv-output.md`](../../../docs/src/csv-output.md)
+- Common message / CSV contract: [`docs/COMMON_MESSAGE.md`](../../../docs/COMMON_MESSAGE.md), [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/src/csv-output.md`](../../../docs/src/csv-output.md)

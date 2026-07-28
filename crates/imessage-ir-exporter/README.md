@@ -35,5 +35,5 @@ GPL-3.0-or-later (same as `imessage-database` / `crabapple`).
 
 ## See also
 
-- [MESSAGE_IR.md](../../docs/MESSAGE_IR.md)
+- [COMMON_MESSAGE.md](../../docs/COMMON_MESSAGE.md)
 - [MAIL_ARCHIVE.md](../../docs/MAIL_ARCHIVE.md)

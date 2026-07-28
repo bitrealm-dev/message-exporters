@@ -4,7 +4,7 @@ Exporters can project the common message into a **single** SyncTech-style backup
 
 `{output}/smses.xml`
 
-Root shape:
+Root structure:
 
 ```xml
 <?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
@@ -37,6 +37,6 @@ Exporters use `FormatSink::open` → `write_document` per conversation → `fini
 
 ## Related
 
-- [MESSAGE_IR.md](MESSAGE_IR.md) — common message / projectors overview
+- [COMMON_MESSAGE.md](COMMON_MESSAGE.md) — common message / projectors overview
 - [common-message.md](src/common-message.md) — end-user workflow
 - [XML_CSV_MAPPING.md](../crates/sms-backup-restore-exporter/docs/XML_CSV_MAPPING.md) — XML → common message / CSV (import direction)

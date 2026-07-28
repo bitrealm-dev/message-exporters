@@ -2,7 +2,7 @@
 name = "message-ir"
 version = "0.1.0"
 edition = "2024"
-description = "Canonical conversation intermediate representation and CSV/EML/MBOX/JSON/SBR-XML projectors"
+description = "Common-message ConversationDocument and CSV/EML/MBOX/JSON/SBR-XML projectors"
 license = "MIT OR Apache-2.0"
 
 [dependencies]

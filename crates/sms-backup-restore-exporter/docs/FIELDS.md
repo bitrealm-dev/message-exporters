@@ -1,14 +1,14 @@
 # Fields in SMS Backup & Restore XML
 
-SyncTech’s **input** attribute reference for the XML backup format. How this exporter maps those attributes into IR / shared CSV: [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md). Canonical IR: [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
+SyncTech’s **input** attribute reference for the XML backup format. How this exporter maps those attributes into the common message / shared CSV: [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md). Common message schema: [`docs/COMMON_MESSAGE.md`](../../../docs/COMMON_MESSAGE.md).
 
 Source: SyncTech’s [Fields in XML backup files](https://www.synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/). Related SyncTech links:
 
 - [Sample XML](https://synctech.com.au/wp-content/uploads/2018/01/sms-sample.xml_.txt)
 - [XSD schema](https://synctech.com.au/wp-content/uploads/2018/01/sms.xsd_.txt)
-- [Date field FAQ](https://www.synctech.com.au/faqs/what-is-that-number-the-date-field-in-the-backup-file/) — dates are Java epoch milliseconds in UTC (for example `1400773261000` → 2014-05-22)
+- [Date field FAQ](https://www.synctech.com.au/faqs/what-is-that-number-the-date-field-in-the-backup-file/) — dates are Unix epoch milliseconds in UTC (for example `1400773261000` → 2014-05-22)
 
-## File shape
+## File structure
 
 Root element: `<smses>` (current) or `<allsms>` (legacy).
 
@@ -17,9 +17,9 @@ Child message elements:
 - `<sms>` — plain text SMS
 - `<mms>` — MMS with nested parts and addresses
 
-Call logs use `<calls>` / `<call>`. They are documented below for reference. This exporter ignores call records for all IR projectors (CSV, mail, JSON, Xml).
+Call logs use `<calls>` / `<call>`. They are documented below for reference. This exporter ignores call records for all output formats (CSV, mail, JSON, XML).
 
-Writing SyncTech XML from IR (`--format xml` → `smses.xml`) is documented in [`docs/SBR_XML.md`](../../../docs/SBR_XML.md).
+Writing SyncTech XML from the common message (`--format xml` → `smses.xml`) is documented in [`docs/SBR_XML.md`](../../../docs/SBR_XML.md).
 
 Field values are generally copied as-is from the Android SMS/MMS databases. The backup app does little conversion.
 
@@ -31,7 +31,7 @@ Field values are generally copied as-is from the Android SMS/MMS databases. The 
 |-----------|---------|
 | `protocol` | Protocol id; usually `0` for SMS |
 | `address` | Phone number of the other person |
-| `date` | Sent/received time as Java ms UTC |
+| `date` | Sent/received time as Unix epoch milliseconds (UTC) |
 | `type` | `1` received, `2` sent, `3` draft, `4` outbox, `5` failed, `6` queued |
 | `subject` | Subject; always null for SMS |
 | `body` | Message text |
@@ -58,7 +58,7 @@ An MMS has three layers:
 
 | Attribute | Meaning |
 |-----------|---------|
-| `date` | Sent/received time as Java ms UTC |
+| `date` | Sent/received time as Unix epoch milliseconds (UTC) |
 | `ct_t` | Message content type; usually `application/vnd.wap.multipart.related` |
 | `msg_box` | `1` received, `2` sent, `3` draft, `4` outbox |
 | `rr` | Read-report flag |
@@ -101,11 +101,11 @@ An MMS has three layers:
 |-----------|---------|
 | `number` | Phone number of the call |
 | `duration` | Duration in seconds |
-| `date` | Time as Java ms UTC |
+| `date` | Time as Unix epoch milliseconds (UTC) |
 | `type` | `1` incoming, `2` outgoing, `3` missed, `4` voicemail, `5` rejected, `6` refused list |
 | `presentation` | Caller ID: `1` allowed, `2` restricted, `3` unknown, `4` payphone |
 | `subscription_id` | Optional SIM / subscription id |
 | `readable_date` | Optional human-readable date |
 | `contact_name` | Optional contact name |
 
-Call rows can appear in the same backup XML. They are listed here so the file format is complete. The exporter ignores them (no call messages in IR / any projector).
+Call rows can appear in the same backup XML. They are listed here so the file format is complete. The exporter ignores them (no call messages in any output format).

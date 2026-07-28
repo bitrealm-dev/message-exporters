@@ -1,4 +1,4 @@
-//! iMazing Messages / WhatsApp CSV (+ Contacts CSV) → per-conversation vault-shaped CSV.
+//! iMazing Messages / WhatsApp CSV (+ Contacts CSV) → shared per-chat CSV.
 //!
 //! Library entrypoints: [`run`] with [`ExporterConfig`] for the full pipeline
 //! (convert + media + obfuscate), or [`convert_export`] for convert-only.

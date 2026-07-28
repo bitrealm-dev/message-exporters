@@ -10,7 +10,7 @@ Typical headers:
 |--------|---------|
 | `X-smssync-type` | Android SMS type; sent ≈ `{2,128,4,135,6,5}`, received ≈ `{1,132,130}` |
 | `X-smssync-address` | Counterparty phone(s); groups use `~` (or `;`, `,`, `\|`) separators |
-| `X-smssync-date` | Java epoch **milliseconds** (or seconds if small) |
+| `X-smssync-date` | Unix epoch **milliseconds** (or seconds if small) |
 | `X-smssync-id` | Stable sync id (optional) |
 | `Subject` | `SMS with {contact name}` |
 | `From` / `To` | Often `*@sms-backup-plus.local` or owner Gmail |

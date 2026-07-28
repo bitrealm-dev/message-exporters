@@ -1,6 +1,6 @@
 # Common message
 
-Every exporter builds the same per-conversation shape before writing files. That shape is the **common message**: one structured conversation (participants, timestamps, text, attachment metadata, and source-specific extras) that all packaging formats share.
+Every exporter builds the same per-conversation structure before writing files. That structure is the **common message**: one structured conversation (participants, timestamps, text, attachment metadata, and source-specific extras) that all packaging formats share.
 
 JSON is the default on-disk packaging of the common message. CSV, EML, MBOX, JSON Lines, and XML are other packaging choices projected from it—not separate parse pipelines.
 
@@ -44,4 +44,4 @@ JSON (and JSON Lines) store the common message with the least loss for later con
 ## See also
 
 - [Formats in detail](formats.md)
-- Schema and field details for contributors: [MESSAGE_IR.md](../MESSAGE_IR.md) (crate still named `message-ir`)
+- Schema and field details for contributors: [COMMON_MESSAGE.md](../COMMON_MESSAGE.md) (crate still named `message-ir`)

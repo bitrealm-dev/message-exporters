@@ -17,7 +17,7 @@ sms-backup-restore-exporter --input <PATH> --output <DIR> --owner-phone <PHONE>.
 
 # DESCRIPTION
 
-Converts SyncTech **SMS Backup & Restore** XML into a common message per conversation, then projects JSON (default), JSONL, CSV, EML, MBOX, or SyncTech XML (`--format`). See [common-message.md](../../../docs/src/common-message.md), [MESSAGE_IR.md](../../../docs/MESSAGE_IR.md), and [MAIL_ARCHIVE.md](../../../docs/MAIL_ARCHIVE.md). MMS media is written under `attachments/` when enabled; for EML/MBOX, attachment bytes are embedded.
+Converts SyncTech **SMS Backup & Restore** XML into a common message per conversation, then projects JSON (default), JSONL, CSV, EML, MBOX, or SyncTech XML (`--format`). See [common-message.md](../../../docs/src/common-message.md), [COMMON_MESSAGE.md](../../../docs/COMMON_MESSAGE.md), and [MAIL_ARCHIVE.md](../../../docs/MAIL_ARCHIVE.md). MMS media is written under `attachments/` when enabled; for EML/MBOX, attachment bytes are embedded.
 
 Owner phone(s) are required so MMS chat keys and direction resolve correctly. Encrypted ZIP backups must be unlocked/extracted before use. Media convert/compress and obfuscation apply through FormatSink for every format.
 

@@ -1,6 +1,6 @@
 # Common message (schema / JSON / JSONL)
 
-**Common message** is the shared per-conversation shape after source parse and before packaging (CSV / EML / MBOX / JSON / JSONL / XML). End-user overview: [`docs/src/common-message.md`](src/common-message.md).
+**Common message** is the shared per-conversation structure after source parse and before packaging (CSV / EML / MBOX / JSON / JSONL / XML). End-user overview: [`docs/src/common-message.md`](src/common-message.md).
 
 Typed model: [`crates/message-ir/`](../crates/message-ir/) (crate name still `message-ir`; type `ConversationDocument`). On-disk forms:
 
@@ -17,7 +17,7 @@ Pipeline: `backup → common message → FormatSink → user-picked format`.
 - **Media + obfuscate** run inside `FormatSink::finish` for every format (`ExportTransforms`: none / copy / convert / compress, plus optional obfuscate). Exporters pass transforms from `ExporterConfig.media` / `.obfuscate`; there is no CSV-only post-step. EML / MBOX / XML embed media and drop the staged `attachments/` directory afterward.
 - **Schema version 3 only** (breaking). Typed enums/bags, filled outgoing identity, conversation stats, stable null/`[]` keys. Older common-message JSON is not read — regenerate exports after schema changes.
 
-## Document shape (`schema_version: 3`)
+## Document schema (`schema_version: 3`)
 
 ```json
 {

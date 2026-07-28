@@ -10,7 +10,7 @@ Library (`ExporterConfig` / `run`) for the GUI; thin CLI for standalone use. CLI
 
 SMS Backup+ can copy Android SMS and MMS into email (for example Gmail). People often download or archive those emails as `.eml` files — ordinary email files on disk. This converter reads a folder of those files. It does **not** sign in to email or talk to IMAP.
 
-Backups usually show up in two shapes:
+Backups usually show up in two layouts:
 
 - **One file per message** — a short email that holds a single text or MMS
 - **Archive emails** — a longer email that holds many messages from the same conversation in the body

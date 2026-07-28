@@ -12,7 +12,7 @@ imessage-ir-exporter --output <DIR> [--format json|jsonl|csv|eml|mbox|xml] [opti
 
 ## Description
 
-Reads Apple Messages from a macOS `chat.db` or an iOS backup, builds a [common message](../../../docs/src/common-message.md) ([`message-ir`](../../../docs/MESSAGE_IR.md)) per conversation, and projects JSON (default) / JSONL / CSV / EML / MBOX / XML.
+Reads Apple Messages from a macOS `chat.db` or an iOS backup, builds a [common message](../../../docs/src/common-message.md) ([`message-ir`](../../../docs/COMMON_MESSAGE.md)) per conversation, and projects JSON (default) / JSONL / CSV / EML / MBOX / XML.
 
 ## Options
 

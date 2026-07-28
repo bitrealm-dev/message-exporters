@@ -2,7 +2,7 @@
 
 Design for a human-viewable export: **one folder per conversation**, **one `.eml` per message**, with structured `X-ME-*` headers for machine fidelity. Intended as an archive / interchange path before vault exists. Mail clients can open individual messages; translators can recover SMS, group MMS, and (later) iMessage semantics without relying on CSV.
 
-**Status:** Writer in [`message-mail`](../crates/message-mail/). All GUI exporters support `--format eml` / `mbox`. All exporters (including iMessage via [`imessage-ir-exporter`](../crates/imessage-ir-exporter/)) go backup → [common message](src/common-message.md) ([`message-ir`](../crates/message-ir/)) → packaging (see [MESSAGE_IR.md](MESSAGE_IR.md)). JSON is the default packaging. iMessage emits extension headers; handwriting attaches SVG. See also [csv-output.md](src/csv-output.md).
+**Status:** Writer in [`message-mail`](../crates/message-mail/). All GUI exporters support `--format eml` / `mbox`. All exporters (including iMessage via [`imessage-ir-exporter`](../crates/imessage-ir-exporter/)) go backup → [common message](src/common-message.md) ([`message-ir`](../crates/message-ir/)) → packaging (see [COMMON_MESSAGE.md](COMMON_MESSAGE.md)). JSON is the default packaging. iMessage emits extension headers; handwriting attaches SVG. See also [csv-output.md](src/csv-output.md).
 
 ## Goals
 
@@ -17,7 +17,7 @@ Design for a human-viewable export: **one folder per conversation**, **one `.eml
 - Vault import/export
 - Replacing CSV as the default exporter output
 - IMAP sync or SMS Backup+ wire compatibility
-- Writing `.mbox` as the canonical form (derived export is available; folders of `.eml` remain canonical)
+- Treating `.mbox` as the preferred packaging (derived export is available; folders of `.eml` remain preferred)
 - Replaying send-effect animations or handwriting ink in clients
 
 ## Packaging
@@ -37,7 +37,7 @@ output/
 
 Each file is one RFC 5322 message. Prefer writing via a MIME builder (e.g. `mail-builder`) when implemented.
 
-### Why not one `.mbox` per conversation (canonical)
+### Why not one `.mbox` per conversation
 
 | Concern | Folder of `.eml` | Single `.mbox` |
 |---------|------------------|----------------|
@@ -47,7 +47,7 @@ Each file is one RFC 5322 message. Prefer writing via a MIME builder (e.g. `mail
 | Large chats | Open one message | Some clients load the whole file |
 | Thunderbird “mailbox” UX | Import/drag varies | Often smoother import-as-folder |
 
-**Canonical form = folder of EMLs.** Derived **mboxrd** (`OutputFormat::Mbox` / GUI **MBOX**) is also available: one `<conversation-stem>.mbox` per chat, same MIME/`X-ME-*` payload as the `.eml` files. Outlook has poor native support for both; do not optimize the canonical format for Outlook.
+**Preferred packaging is a folder of EMLs.** Derived **mboxrd** (`OutputFormat::Mbox` / GUI **MBOX**) is also available: one `<conversation-stem>.mbox` per chat, same MIME/`X-ME-*` payload as the `.eml` files. Outlook has poor native support for both; do not optimize the preferred packaging for Outlook.
 
 ### Explicit anti-pattern: SMS Backup+ archive EML
 
@@ -114,7 +114,7 @@ Reverse import (EML/MBOX → common-message JSON) is available via [`message-ir`
 
 Prefix: **`X-ME-`** (Message Exporters). JSON header values are compact single-line JSON.
 
-| Header | Values / shape | Notes |
+| Header | Values | Notes |
 |--------|----------------|-------|
 | `X-ME-Chat-Identifier` | string | Same role as CSV `chat_identifier` |
 | `X-ME-Conversation-Type` | `individual` \| `group` | |
@@ -219,7 +219,7 @@ Ordinary SMS leaves reply headers unset (no fake threads).
 
 Apple stores tapbacks as separate `message` rows (`associated_message_type` 2000–2005 add, 3000–3005 remove, plus sticker associations).
 
-**Canonical form: one `.eml` per tapback.**
+**Preferred: one `.eml` per tapback.**
 
 | Header | Values |
 |--------|--------|

@@ -109,7 +109,7 @@ Convert/Compress need `ffmpeg`/`ffprobe` on PATH. **Do not copy** skips writing 
 
 \* Required unless filled from Plus `config/owner.toml` (source-relative today); GUI collects fields explicitly.
 
-‡ Default packaging is **JSON** (common message). Schema v3 for all exporters, including iMessage (`imessage-ir-exporter`). See [common-message.md](src/common-message.md) and [MESSAGE_IR.md](MESSAGE_IR.md). Attachment modes and obfuscate apply to every output format via `FormatSink`.
+‡ Default packaging is **JSON** (common message). Schema v3 for all exporters, including iMessage (`imessage-ir-exporter`). See [common-message.md](src/common-message.md) and [COMMON_MESSAGE.md](COMMON_MESSAGE.md). Attachment modes and obfuscate apply to every output format via `FormatSink`.
 
 †† OpenExtract has no media in its source CSVs yet, so attachment modes are a no-op for files; the control is still shown.
 

@@ -2,7 +2,7 @@
 
 How flat and archive `.eml` messages map into the common message and the shared CSV projector written by `sms-backup-plus-exporter` (`--format csv`).
 
-Deeper EML format notes: [`FORMAT.md`](FORMAT.md). Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). Common message: [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
+Deeper EML format notes: [`FORMAT.md`](FORMAT.md). Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). Common message: [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/COMMON_MESSAGE.md`](../../../docs/COMMON_MESSAGE.md).
 
 ## Goal / non-goal
 
@@ -15,7 +15,7 @@ Source EML → `ConversationDocument` → [`message_ir::FormatSink`](../../messa
 
 With `--format csv`: one file per conversation (header + one row per message after dedupe). MIME attachments under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). Peers with no usable phone number are written to `unknown.csv`. `--format xml` writes a single SyncTech `smses.xml`.
 
-## EML shapes
+## EML layouts
 
 ### Flat (one SMS/MMS per file)
 

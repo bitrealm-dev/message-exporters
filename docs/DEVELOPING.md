@@ -1,6 +1,6 @@
 # Developer notes
 
-End-user documentation for the docs site lives in [`docs/src/`](src/) (start with [`common-message.md`](src/common-message.md)). Contributor design notes: [`GUI.md`](GUI.md), [`EXPORTER_MATRIX.md`](EXPORTER_MATRIX.md), [`MESSAGE_IR.md`](MESSAGE_IR.md).
+End-user documentation for the docs site lives in [`docs/src/`](src/) (start with [`common-message.md`](src/common-message.md)). Contributor design notes: [`GUI.md`](GUI.md), [`EXPORTER_MATRIX.md`](EXPORTER_MATRIX.md), [`COMMON_MESSAGE.md`](COMMON_MESSAGE.md).
 
 ## Cutting a release
 

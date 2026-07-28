@@ -2,7 +2,7 @@
 
 How `gosms_sys*.xml` `<SMS>` elements and `I_*.pdu` MMS files map into the common message and the shared CSV projector written by `go-sms-pro-exporter` (`--format csv`).
 
-Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). Common message: [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
+Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). Common message: [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/COMMON_MESSAGE.md`](../../../docs/COMMON_MESSAGE.md).
 
 ## Goal / non-goal
 
@@ -17,7 +17,7 @@ With `--format csv`: one file per conversation. PDU media under `attachments/` w
 
 Diagnostic skip lists (`skipped_invalid_address.csv`, `skipped_empty_pdu.csv`, `skipped_no_party.csv`) are **not** conversation CSVs; they use their own small headers (see [Skip counters](#skip-counters-cli-summary)).
 
-## XML shape
+## XML structure
 
 ```xml
 <GoSms>

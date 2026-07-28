@@ -2,7 +2,7 @@
 
 How SyncTech `<sms>` / `<mms>` elements map into the common message (`ConversationDocument`) and the shared CSV projector written by `sms-backup-restore-exporter` (`--format csv`).
 
-Attribute meanings (SyncTech **input** reference): [FIELDS.md](FIELDS.md). Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). Common message: [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
+Attribute meanings (SyncTech **input** reference): [FIELDS.md](FIELDS.md). Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). Common message: [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/COMMON_MESSAGE.md`](../../../docs/COMMON_MESSAGE.md).
 
 ## Goal / non-goal
 
@@ -24,7 +24,7 @@ With `--format csv`: one file per conversation (header + one row per message). D
 | `group_title` | Derived for groups; empty for 1:1 |
 | `participants_json` | Peer handles from SMS address / MMS `<addr>` list |
 | `guid` | Deterministic SHA-256 fingerprint |
-| `timestamp` / `timestamp_utc` / `timestamp_display` / `timestamp_unix_ms` | From `date` (Java ms UTC) |
+| `timestamp` / `timestamp_utc` / `timestamp_display` / `timestamp_unix_ms` | From `date` (Unix epoch milliseconds, UTC) |
 | `direction` | `incoming` / `outgoing` from SMS `type` or MMS `msg_box` / From addr |
 | `service` | Always `SMS` |
 | `sender_handle` / `sender_display_name` | Incoming peer; outgoing uses export owner (`owner_*`) |
@@ -86,10 +86,10 @@ Example group address string: `+15555550101~+15555550102` with two From/To addrs
 
 For each `<part>` that has a `data` attribute, the bag stores `data_len` and `data_sha256` of the **decoded** bytes and **omits** the base64 `data` string (binaries live under `attachments/` or are embedded for mail/Xml). Other part attributes (`seq`, `ct`, `name`, `cl`, `chset`, `text`, …) are kept as-is.
 
-## Reverse: IR → XML
+## Reverse: common message → XML
 
-Exporters can write a SyncTech `smses.xml` via `--format xml` ([`docs/SBR_XML.md`](../../../docs/SBR_XML.md)). When `source.fields` still holds the `kind`/`attrs`/`parts`/`addrs` bag from this importer, those attributes are preferred. Otherwise SMS/MMS elements are synthesized from IR core fields. iMessage-only IR is lossy (Apple bags dropped).
+Exporters can write a SyncTech `smses.xml` via `--format xml` ([`docs/SBR_XML.md`](../../../docs/SBR_XML.md)). When `source.fields` still holds the `kind`/`attrs`/`parts`/`addrs` bag from this importer, those attributes are preferred. Otherwise SMS/MMS elements are synthesized from common-message core fields. iMessage-only common messages are lossy (Apple bags dropped).
 
 ## Not exported
 
-`<call>` / call-log rows in the same backup file are ignored (no IR messages for any projector).
+`<call>` / call-log rows in the same backup file are ignored (no call messages in any output format).

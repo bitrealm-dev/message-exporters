@@ -1,4 +1,4 @@
-//! WhatsApp (via KnugiHK wtsexporter JSON) → per-conversation vault-shaped CSV.
+//! WhatsApp (via KnugiHK wtsexporter JSON) → shared per-chat CSV.
 //!
 //! Library entrypoints: [`run`] with [`ExporterConfig`] for the full pipeline
 //! (wtsexporter/JSON convert + media + obfuscate), or [`convert_json`] for convert-only.
