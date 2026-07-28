@@ -2,7 +2,7 @@
 
 Design for a human-viewable export: **one folder per conversation**, **one `.eml` per message**, with structured `X-ME-*` headers for machine fidelity. Intended as an archive / interchange path before vault exists. Mail clients can open individual messages; translators can recover SMS, group MMS, and (later) iMessage semantics without relying on CSV.
 
-**Status:** Writer in [`message-mail`](../crates/message-mail/). All GUI exporters support `--format eml` / `mbox`. All exporters (including iMessage via [`imessage-ir-exporter`](../crates/imessage-ir-exporter/)) go backup → [common message](src/common-message.md) ([`message-ir`](../crates/message-ir/)) → packaging (see [COMMON_MESSAGE.md](COMMON_MESSAGE.md)). JSON is the default packaging. iMessage emits extension headers; handwriting attaches SVG. See also [csv-output.md](src/csv-output.md).
+**Status:** Writer in [`message-mail`](../crates/message-mail/). All GUI exporters support `--format eml` / `mbox`. All exporters (including iMessage via [`imessage-ir-exporter`](../crates/imessage-ir-exporter/)) go backup → [shared conversation structure](src/content/docs/understand-output/export-structure.md) ([`message-ir`](../crates/message-ir/)) → output format (see [COMMON_MESSAGE.md](COMMON_MESSAGE.md)). JSON is the default format. iMessage writes extension headers; handwriting attaches SVG. See also [CSV columns](src/content/docs/understand-output/csv-columns.md).
 
 ## Goals
 
@@ -343,7 +343,7 @@ Normal sticker sends: image MIME part + `X-ME-Attachment-Meta` (`is_sticker`, `s
 
 ## Related docs
 
-- [CSV output conventions](src/csv-output.md)
+- [CSV output conventions](src/content/docs/understand-output/csv-columns.md)
 - [Exporter capability matrix](EXPORTER_MATRIX.md)
 - [SMS Backup+ EML input notes](../crates/sms-backup-plus-exporter/docs/FORMAT.md)
 - [SBR XML → common message / CSV mapping](../crates/sms-backup-restore-exporter/docs/XML_CSV_MAPPING.md)

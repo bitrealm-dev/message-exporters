@@ -25,27 +25,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install mdBook
-        uses: peaceiris/actions-mdbook@v2
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          mdbook-version: "latest"
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
 
-      - name: Install mdbook-mermaid
-        uses: baptiste0928/cargo-install@v3
-        with:
-          crate: mdbook-mermaid
-          # Pinned so a future mdbook major bump cannot break the build;
-          # bump alongside mdbook (0.17.x targets mdbook 0.5).
-          version: "0.17.0"
+      - name: Install documentation dependencies
+        run: npm ci
+        working-directory: docs
 
-      - name: Build book
-        run: mdbook build
+      - name: Check documentation
+        run: npm run check
+        working-directory: docs
+
+      - name: Build documentation
+        run: npm run build
         working-directory: docs
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/book
+          path: docs/dist
 
   deploy:
     needs: build

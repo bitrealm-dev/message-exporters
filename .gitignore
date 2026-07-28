@@ -28,5 +28,9 @@ config/export-to-vault.sh
 /data/*
 !/data/.gitkeep
 
-# mdBook output
-/docs/book/
+# Starlight documentation output and generated content
+/docs/.astro/
+/docs/dist/
+/docs/node_modules/
+/docs/src/content/docs/reference/cli/*.md
+!/docs/src/content/docs/reference/cli/index.md

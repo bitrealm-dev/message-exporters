@@ -2,7 +2,7 @@
 
 How `gosms_sys*.xml` `<SMS>` elements and `I_*.pdu` MMS files map into the common message and the shared CSV projector written by `go-sms-pro-exporter` (`--format csv`).
 
-Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). Common message: [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/COMMON_MESSAGE.md`](../../../docs/COMMON_MESSAGE.md).
+Shared CSV contract: [CSV columns](../../../docs/src/content/docs/understand-output/csv-columns.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). Common message: [export structure](../../../docs/src/content/docs/understand-output/export-structure.md), [`docs/COMMON_MESSAGE.md`](../../../docs/COMMON_MESSAGE.md).
 
 ## Goal / non-goal
 

@@ -1,0 +1,45 @@
+---
+title: Message Exporters
+description: Turn Apple, Android, and existing message exports into files you can keep and use.
+template: splash
+hero:
+  title: Keep your messages in files you control
+  tagline: Convert phone backups into JSON, CSV, mail archives, or Android XML with the desktop app.
+  actions:
+    - text: Make your first export
+      link: /get-started/first-export/
+      icon: right-arrow
+      variant: primary
+    - text: Install the app
+      link: /get-started/install/
+      icon: download
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+## Choose what you want to do
+
+<CardGrid>
+  <Card title="Export from Apple">
+    Use an iPhone backup or a Mac `chat.db` to export Messages, or use an iPhone backup for WhatsApp. [Choose an Apple path](/apple/).
+  </Card>
+  <Card title="Export from Android">
+    Use SMS Backup & Restore XML for text messages, or provide a WhatsApp database or encrypted backup with its key. [Choose an Android path](/android/).
+  </Card>
+  <Card title="Convert an existing export">
+    Change a Message Exporters folder from JSON, JSONL, CSV, EML, MBOX, or XML into another format. [Convert the format](/work-with-exports/convert-format/).
+  </Card>
+  <Card title="Install the desktop app">
+    Download the release for Linux, Windows, or macOS and keep the helper programs with the app. [Install Message Exporters](/get-started/install/).
+  </Card>
+  <Card title="Make a first export">
+    Learn what each tab does, run one export, and check the log. [Follow the first-export guide](/get-started/first-export/).
+  </Card>
+  <Card title="Protect private information">
+    Choose whether to copy media, convert it, compress it, or replace personal data before sharing. [Review media and privacy options](/work-with-exports/media-and-privacy/).
+  </Card>
+</CardGrid>
+
+<Aside title="Supported paths and limited rescue imports">
+  The supported paths are Apple Messages from `chat.db` or an iPhone backup, Android SMS/MMS from SMS Backup & Restore XML, and WhatsApp through `wtsexporter`. GO SMS Pro, iMazing CSV, OpenExtract, and SMS Backup+ are rescue imports for files you already have. Their source formats can omit identity, group, attachment, reply, or reaction details, so those imports cannot always recreate the original messages.
+</Aside>

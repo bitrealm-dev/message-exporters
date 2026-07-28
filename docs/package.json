@@ -1,0 +1,24 @@
+{
+  "name": "message-exporters-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync:cli": "node scripts/sync-cli-reference.mjs",
+    "predev": "npm run sync:cli",
+    "dev": "astro dev",
+    "precheck": "npm run sync:cli",
+    "check": "astro check",
+    "prebuild": "npm run sync:cli",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.41.5",
+    "astro": "^7.1.5",
+    "starlight-base-path": "^0.2.1"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "typescript": "^6.0.3"
+  }
+}

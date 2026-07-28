@@ -109,7 +109,7 @@ Convert/Compress need `ffmpeg`/`ffprobe` on PATH. **Do not copy** skips writing 
 
 \* Required unless filled from Plus `config/owner.toml` (source-relative today); GUI collects fields explicitly.
 
-‡ Default packaging is **JSON** (common message). Schema v3 for all exporters, including iMessage (`imessage-ir-exporter`). See [common-message.md](src/common-message.md) and [COMMON_MESSAGE.md](COMMON_MESSAGE.md). Attachment modes and obfuscate apply to every output format via `FormatSink`.
+‡ Default packaging is **JSON** (common message). Schema v3 applies to every exporter, including iMessage (`imessage-ir-exporter`). See [What’s inside an export](src/content/docs/understand-output/export-structure.md) and [COMMON_MESSAGE.md](COMMON_MESSAGE.md). Attachment modes and obfuscate apply to every output format via `FormatSink`.
 
 †† OpenExtract has no media in its source CSVs yet, so attachment modes are a no-op for files; the control is still shown.
 
@@ -147,7 +147,7 @@ Product: [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/)
 | Contacts CSV / VCF | file | no† | `--contacts` / `--vcf` |
 | Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro); all formats |
 
-Encrypted ZIP backups must be unlocked/extracted before selecting input. Builds a [common message](src/common-message.md) then projects the chosen format. Media modes and obfuscate apply through FormatSink for every format.
+Encrypted ZIP backups must be unlocked/extracted before selecting input. The exporter builds the [shared conversation structure](src/content/docs/understand-output/export-structure.md), then writes the chosen format. Media modes and obfuscate apply through FormatSink for every format.
 
 ### SMS Backup+ — `sms-backup-plus-exporter convert`
 
@@ -271,7 +271,7 @@ Tabs: Contacts | Message | Re-export | Log
            → message-reexporter::run → log
 ```
 
-End-user walkthrough: [`docs/src/desktop-app.md`](src/desktop-app.md).
+End-user walkthrough: [First export with the app](src/content/docs/get-started/first-export.mdx).
 
 ## Known gaps
 

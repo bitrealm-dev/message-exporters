@@ -38,5 +38,5 @@ Exporters use `FormatSink::open` → `write_document` per conversation → `fini
 ## Related
 
 - [COMMON_MESSAGE.md](COMMON_MESSAGE.md) — common message / projectors overview
-- [common-message.md](src/common-message.md) — end-user workflow
+- [What’s inside an export](src/content/docs/understand-output/export-structure.md) — end-user workflow
 - [XML_CSV_MAPPING.md](../crates/sms-backup-restore-exporter/docs/XML_CSV_MAPPING.md) — XML → common message / CSV (import direction)

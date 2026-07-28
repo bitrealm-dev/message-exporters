@@ -2,7 +2,7 @@
 
 Phone backups are easy to make. Reading the messages later is harder.
 
-This project turns vendor backups into a shared [common message](docs/src/common-message.md) per conversation, then packages the format you pick (default **JSON**)—one size does not fit all:
+This project turns vendor backups into a shared [conversation structure](docs/src/content/docs/understand-output/export-structure.md), then packages each conversation in the format you pick (default **JSON**):
 
 - **JSON** / **JSON Lines** — default packaging; machine-readable archives
 - **CSV** — one spreadsheet file per conversation
@@ -18,7 +18,7 @@ Read the full guide (install, desktop app, supported backups, CSV layout):
 
 **https://bitrealm-dev.github.io/message-exporters/**
 
-Source Markdown lives in [`docs/src/`](docs/src/) (mdBook end-user guides).
+Source Markdown lives in [`docs/src/content/docs/`](docs/src/content/docs/) and is published with Astro Starlight.
 
 ## Quick start
 

@@ -1,6 +1,6 @@
 # Developer notes
 
-End-user documentation for the docs site lives in [`docs/src/`](src/) (start with [`common-message.md`](src/common-message.md)). Contributor design notes: [`GUI.md`](GUI.md), [`EXPORTER_MATRIX.md`](EXPORTER_MATRIX.md), [`COMMON_MESSAGE.md`](COMMON_MESSAGE.md).
+End-user documentation for the docs site lives in [`docs/src/content/docs/`](src/content/docs/) (start with [What’s inside an export](src/content/docs/understand-output/export-structure.md)). Contributor design notes remain in [`GUI.md`](GUI.md), [`EXPORTER_MATRIX.md`](EXPORTER_MATRIX.md), and [`COMMON_MESSAGE.md`](COMMON_MESSAGE.md).
 
 ## Cutting a release
 
@@ -52,7 +52,7 @@ To quiet that: [Notification settings](https://github.com/settings/notifications
 
 ## Documentation site (GitHub Pages)
 
-User-facing docs are an [mdBook](https://rust-lang.github.io/mdBook/) under [`docs/`](.) , deployed by [`.github/workflows/docs.yml`](../.github/workflows/docs.yml).
+User-facing docs use [Astro Starlight](https://starlight.astro.build/) under [`docs/`](.), deployed by [`.github/workflows/docs.yml`](../.github/workflows/docs.yml).
 
 ### Enable Pages (one-time)
 
@@ -61,4 +61,12 @@ User-facing docs are an [mdBook](https://rust-lang.github.io/mdBook/) under [`do
 3. Push to `main` or run the **Docs** workflow under **Actions**.
 4. Site URL: `https://bitrealm-dev.github.io/message-exporters/`.
 
-Local preview: `cargo install mdbook && cd docs && mdbook serve --open`.
+Local preview:
+
+```bash
+cd docs
+npm ci
+npm run dev
+```
+
+Run `npm run check` and `npm run build` before publishing documentation changes.

@@ -67,7 +67,7 @@ Wide address-book CSV (`First Name`, `Mobile Phone`, …, `Notes`). Phones may a
 
 ## Output policy
 
-- Pipeline: iMazing CSV → `ConversationDocument` → [`message_ir::FormatSink`](../../message-ir/src/format_sink.rs) (`--format csv|eml|mbox|json|jsonl|xml`). Shared header: [`CSV_HEADERS`](../../message-ir/src/lib.rs) / [`docs/src/csv-output.md`](../../../docs/src/csv-output.md).
+- Pipeline: iMazing CSV → `ConversationDocument` → [`message_ir::FormatSink`](../../message-ir/src/format_sink.rs) (`--format csv|eml|mbox|json|jsonl|xml`). Shared header: [`CSV_HEADERS`](../../message-ir/src/lib.rs) / [CSV columns](../../../docs/src/content/docs/understand-output/csv-columns.md).
 - SMS + iMessage for the same peer merge into one conversation (Messages family).
 - WhatsApp for the same peer is a **separate** file (`…__whatsapp.csv` / matching stem suffix for other formats).
 - Notification rows keep `imazing_type=Notification` in `source_fields_json`; direction is emitted as `incoming`.
@@ -139,4 +139,4 @@ These are upstream/export constraints, not converter bugs:
 
 - CLI: [`MANPAGE.md`](MANPAGE.md)
 - Contacts helper: [`../../message-contacts/README.md`](../../message-contacts/README.md)
-- Common message / CSV contract: [`docs/COMMON_MESSAGE.md`](../../../docs/COMMON_MESSAGE.md), [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/src/csv-output.md`](../../../docs/src/csv-output.md)
+- Common message / CSV contract: [`docs/COMMON_MESSAGE.md`](../../../docs/COMMON_MESSAGE.md), [export structure](../../../docs/src/content/docs/understand-output/export-structure.md), [CSV columns](../../../docs/src/content/docs/understand-output/csv-columns.md)

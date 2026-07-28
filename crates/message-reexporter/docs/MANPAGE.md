@@ -1,11 +1,11 @@
 # NAME
 
-message-reexport - convert an existing Message Exporters output directory to another packaging format
+message-reexporter - convert an existing Message Exporters output directory to another packaging format
 
 # SYNOPSIS
 
 ```text
-message-reexport --input <DIR> --output <DIR>
+message-reexporter --input <DIR> --output <DIR>
     [--format json|jsonl|csv|eml|mbox|xml]
     [--media-mode disabled|clone|convert|compress]
     [--media-max-resolution 720p|1080p|4k] [--media-max-fps <N>]
@@ -42,7 +42,7 @@ Auto-detects a single input format among `csv`, `eml`, `mbox`, `json`, `jsonl`, 
 # EXAMPLES
 
 ```bash
-cargo run -p message-reexport -- \
+cargo run -p message-reexporter -- \
   --input /path/to/prior-export \
   --output /path/to/new-export \
   --format eml

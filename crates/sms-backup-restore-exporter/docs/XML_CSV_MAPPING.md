@@ -2,7 +2,7 @@
 
 How SyncTech `<sms>` / `<mms>` elements map into the common message (`ConversationDocument`) and the shared CSV projector written by `sms-backup-restore-exporter` (`--format csv`).
 
-Attribute meanings: [FIELDS.md](FIELDS.md). Shared CSV columns: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md).
+Attribute meanings: [FIELDS.md](FIELDS.md). Shared CSV columns: [CSV columns](../../../docs/src/content/docs/understand-output/csv-columns.md).
 
 ## Pipeline
 
