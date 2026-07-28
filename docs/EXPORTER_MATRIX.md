@@ -61,3 +61,5 @@ All converters write **one CSV file per conversation**. Across the board:
 | iMazing | [`crates/imazing-exporter/docs/DESIGN.md`](../crates/imazing-exporter/docs/DESIGN.md) |
 | WhatsApp | [`crates/whatsapp-exporter/README.md`](../crates/whatsapp-exporter/README.md) |
 | iMessage Exporter | [`crates/imessage-exporter/README.md`](../crates/imessage-exporter/README.md) |
+
+**Future archive format (spec only):** per-conversation folders of `.eml` with `X-ME-*` headers — see [`MAIL_ARCHIVE.md`](MAIL_ARCHIVE.md). Not implemented as an exporter output yet; CSV remains the current path.

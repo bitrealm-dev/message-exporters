@@ -2,6 +2,8 @@
 
 All converters write **one CSV file per conversation**, plus an `attachments/` directory when media is copied.
 
+A future **mail archive** path (folder of `.eml` per conversation, `X-ME-*` headers) is specified in [`MAIL_ARCHIVE.md`](../MAIL_ARCHIVE.md). It is not wired to exporters yet; this page describes the current CSV output only.
+
 ## Shared conventions
 
 - Peer identity is `chat_identifier` (there is no separate receiver-phone column).
