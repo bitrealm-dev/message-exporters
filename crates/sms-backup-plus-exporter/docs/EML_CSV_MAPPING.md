@@ -1,17 +1,19 @@
-# SMS Backup+ EML → CSV mapping
+# SMS Backup+ EML → IR / CSV mapping
 
-How flat and archive `.eml` messages map to per-conversation CSV rows written by `sms-backup-plus-exporter`.
+How flat and archive `.eml` messages map into canonical IR and the shared CSV projector written by `sms-backup-plus-exporter`.
 
-Deeper EML format notes: [`FORMAT.md`](FORMAT.md).
+Deeper EML format notes: [`FORMAT.md`](FORMAT.md). Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). IR overview: [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
 
 ## Goal / non-goal
 
-- **Goal:** Emit columns Backup+ can fill. Where a concept matches iMessage CSV, reuse that field name.
-- **Non-goal:** A universal CSV schema shared with every exporter, or a full iMessage column skeleton with empty placeholders. Unused iMessage-only fields are omitted.
+- **Goal:** Document how Backup+ EML fields fill shared IR/CSV cells (and the vendor bag).
+- **Non-goal:** A private per-exporter CSV header, or omitting unused Apple columns. All IR exporters write the full [`CSV_HEADERS`](../../message-ir/src/lib.rs); Apple-only cells are empty for this source.
 
-## Output
+## Pipeline / output
 
-One CSV file per conversation (header + one row per message after dedupe), plus MIME attachments under `attachments/`. Filenames: 1:1 → `+14075551234.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). Peers with no usable phone number are written to `unknown.csv`.
+Source EML → `ConversationDocument` → [`message_ir::FormatSink`](../../message-ir/src/format_sink.rs) (`--format csv|eml|mbox|json|jsonl|xml`).
+
+Default CSV: one file per conversation (header + one row per message after dedupe) plus `<stem>.meta.json`. MIME attachments under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). Peers with no usable phone number are written to `unknown.csv`. `--format xml` writes a single SyncTech `smses.xml`.
 
 ## EML shapes
 
@@ -23,32 +25,36 @@ Typical headers: `X-smssync-type`, `X-smssync-address`, `X-smssync-date`, `X-sms
 
 `Subject: SMS archive …`, body lines `YYYY-MM-DD HH:MM:SS - {Sender}` then text; sender `Me` = outgoing.
 
-## Columns (imessage names where shared)
+## Source → shared cells
 
-| CSV column | EML source |
-|------------|------------|
+| CSV / IR cell | EML source |
+|---------------|------------|
 | `chat_identifier` | Peer E.164 or `chat-group-…` |
 | `conversation_type` | `individual` / `group` from address list |
 | `group_title` | Derived for groups (empty for 1:1) |
+| `participants_json` | Peer handles for the conversation |
 | `guid` | Deterministic SHA-256 fingerprint |
-| `timestamp` / `timestamp_utc` / `timestamp_display` | Flat: `X-smssync-date` / `Date`; archive: body timestamp |
+| `timestamp` / `timestamp_utc` / `timestamp_display` / `timestamp_unix_ms` | Flat: `X-smssync-date` / `Date`; archive: body timestamp |
 | `direction` | `incoming` / `outgoing` from `X-smssync-type` or archive sender |
 | `service` | Always `SMS` |
-| `sender_handle` / `sender_display_name` | Empty when outgoing |
+| `sender_handle` / `sender_display_name` | Outgoing uses export owner; incoming may use Subject / name hint |
 | `text` | First `text/plain` (flat) or archive body text |
 | `attachments_json` | Non-text MIME parts under `attachments/` |
-
-## Backup+-only fields
-
-Shared header: [`message-ir::CSV_HEADERS`](../../message-ir/src/lib.rs).
-
-| Field | Where |
-|-------|--------|
-| `export_source` / `export_tool` / `export_tool_version` | CSV provenance (`sms-backup-plus` / `SMS Backup+` / `1.5.11`) |
-| `timestamp_unix_ms` | Epoch ms |
+| `message_kind` | `sms` or `mms` |
+| `export_source` / `export_tool` / `export_tool_version` | `sms-backup-plus` / `SMS Backup+` / `1.5.11` |
+| `owner_handle` / `owner_display_name` | Export owner |
 | `android_type` | Raw `X-smssync-type` when present |
-| `source_kind` / `smssync_id` / `eml_path` | Inside `source_fields_json` |
-| Subject / name hint | `sender_display_name` (incoming); not a separate column |
+| `source_fields_json` | Vendor bag (below) |
+
+Apple-only columns stay empty.
+
+## `source_fields_json`
+
+| Bag key | Meaning |
+|---------|---------|
+| `source_kind` | `flat` or `archive` |
+| `smssync_id` | `X-smssync-id` when present |
+| `eml_path` | Relative path to the source `.eml` |
 
 ## Deduplication
 

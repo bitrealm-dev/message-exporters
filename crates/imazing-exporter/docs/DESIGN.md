@@ -7,7 +7,7 @@ Living design notes for [`imazing-exporter`](../). Append dated findings; do not
 ## Goals
 
 - Accept either one iMazing Messages/WhatsApp CSV **or** a folder at any level of a device export tree.
-- Emit vault-shaped per-conversation CSV, with WhatsApp kept separate from SMS/iMessage.
+- Emit canonical IR → shared [`CSV_HEADERS`](../../message-ir/src/lib.rs) (and other formats via `FormatSink`), with WhatsApp kept separate from SMS/iMessage.
 - Resolve phones/names through an optional iMazing Contacts CSV.
 - Document export limitations that cannot be fixed in the converter.
 
@@ -67,13 +67,18 @@ Wide address-book CSV (`First Name`, `Mobile Phone`, …, `Notes`). Phones may a
 
 ## Output policy
 
+- Pipeline: iMazing CSV → `ConversationDocument` → [`message_ir::FormatSink`](../../message-ir/src/format_sink.rs) (`--format csv|eml|mbox|json|jsonl|xml`). Shared header: [`CSV_HEADERS`](../../message-ir/src/lib.rs) / [`docs/src/csv-output.md`](../../../docs/src/csv-output.md).
 - SMS + iMessage for the same peer merge into one conversation (Messages family).
-- WhatsApp for the same peer is a **separate** CSV (`…__whatsapp.csv`).
-- Notification rows keep `imazing_type=Notification`; direction is emitted as `incoming`.
-- Vendor-lossy fields are preserved as columns: `imazing_type`, `replying_to`, `forwarded`,
-  `attachment_info`, `delivered_date`, `read_date`, `edited_date`, `deleted_date`, `sent_date`.
+- WhatsApp for the same peer is a **separate** file (`…__whatsapp.csv` / matching stem suffix for other formats).
+- Notification rows keep `imazing_type=Notification` in `source_fields_json`; direction is emitted as `incoming`.
+- Vendor-lossy fields live in `source_fields_json` (not top-level CSV columns): `imazing_type`,
+  `imazing_status`, `replying_to`, `forwarded`, `attachment_info`, `reactions`, `delivered_date`,
+  `read_date`, `edited_date`, `deleted_date`, `sent_date`, plus `group_title` when the session
+  string is a display title.
+- `participants_json` is always written (unified header).
 - Deduplication key includes attachment identity so same-time/text with different media are kept.
-- Attachments are recorded by CSV filename only in this version (no media copy / suffix join yet).
+- With `--media-mode` copy (and always for mail / Xml), attachments are resolved by basename or
+  suffix-match against files beside the source CSV and copied under `output/attachments/`.
 - Untitled group files are `group_+A_+B_….csv` (max 10 phones; if more, append a 16-hex hash of
   the full roster). WhatsApp adds `__whatsapp` before `.csv`. The `chat_identifier` cell is unchanged.
 
@@ -110,11 +115,11 @@ These are upstream/export constraints, not converter bugs:
 4. **Name-only chat sessions** — many 1:1 chats use a display name as `Chat Session`.
 5. **Timezone-less timestamps** — `Message Date` is naive; importer requires `--timezone` or host local.
 6. **Folder/label truncation** — long group folder names may end mid-name with `-`.
-7. **Attachment rename mismatch** — CSV basename ≠ on-disk filename; converter does not yet
-   join by suffix or copy media.
+7. **Attachment rename mismatch** — CSV basename often ≠ on-disk filename; suffix join helps but
+   can still miss when labels diverge.
 8. **Contact phone gaps** — many contacts lack phone columns; some phones only in Notes.
 9. **Replies / reactions are free text** — not structured objects; reaction times use US `M/D/YYYY`.
-10. **Edited / deleted** — rare Messages columns / `Recently deleted` status; preserved as raw fields.
+10. **Edited / deleted** — rare Messages columns / `Recently deleted` status; preserved in `source_fields_json`.
 11. **No group GUID** — only display strings and inferred handles.
 12. **Email iMessage chats** — uncommon; `Sender ID` may be an email.
 
@@ -127,12 +132,11 @@ These are upstream/export constraints, not converter bugs:
 
 ## Future work (not yet implemented)
 
-- Copy/link attachments by suffix-matching disk filenames in the chat folder.
 - Optional owner-phone flag to annotate outgoing sender handle.
 - Structured parse of reactions / replies if a stable grammar is confirmed.
-- Emit `participants_json` when vault ingest expects it.
 
 ## Related docs
 
 - Converter README: [`../README.md`](../README.md)
 - Contacts helper: [`../../message-contacts/README.md`](../../message-contacts/README.md)
+- IR / CSV contract: [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md), [`docs/src/csv-output.md`](../../../docs/src/csv-output.md)

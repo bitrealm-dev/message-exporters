@@ -1,6 +1,6 @@
 # Fields in SMS Backup & Restore XML
 
-SyncTech’s attribute reference for the XML backup format. How this exporter maps those attributes into CSV: [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md).
+SyncTech’s **input** attribute reference for the XML backup format. How this exporter maps those attributes into IR / shared CSV: [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md). Canonical IR: [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
 
 Source: SyncTech’s [Fields in XML backup files](https://www.synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/). Related SyncTech links:
 
@@ -17,7 +17,7 @@ Child message elements:
 - `<sms>` — plain text SMS
 - `<mms>` — MMS with nested parts and addresses
 
-Call logs use `<calls>` / `<call>`. They are documented below for reference. This exporter does not write call records.
+Call logs use `<calls>` / `<call>`. They are documented below for reference. This exporter ignores call records for all IR projectors (CSV, mail, JSON, Xml).
 
 Writing SyncTech XML from IR (`--format xml` → `smses.xml`) is documented in [`docs/SBR_XML.md`](../../../docs/SBR_XML.md).
 
@@ -108,4 +108,4 @@ An MMS has three layers:
 | `readable_date` | Optional human-readable date |
 | `contact_name` | Optional contact name |
 
-Call rows can appear in the same backup XML. They are listed here so the file format is complete. The exporter ignores them (no call rows in the CSV).
+Call rows can appear in the same backup XML. They are listed here so the file format is complete. The exporter ignores them (no call messages in IR / any projector).

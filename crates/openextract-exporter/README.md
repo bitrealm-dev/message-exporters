@@ -19,7 +19,7 @@ If a contact is only known by name and the VCF has no phone for them, the conver
 
 Attachment sidecar CSVs (`*_attachments.csv`) are ignored in this version; `attachments_json` is empty.
 
-Example output: [`sample-output/`](sample-output/).
+Shared CSV columns: [`docs/src/csv-output.md`](../../docs/src/csv-output.md).
 
 ## What you need
 

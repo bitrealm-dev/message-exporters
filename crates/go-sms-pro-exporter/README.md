@@ -28,7 +28,7 @@ For a detailed walkthrough of how each message becomes a spreadsheet row, see [d
 - Each row is one message: who it was with, when it was sent or received, the text, and whether media was attached
 - Diagnostic CSVs when skips occur: `skipped_invalid_address.csv`, `skipped_empty_pdu.csv`, `skipped_no_party.csv`
 
-Example output from a small test backup: [`sample-output/`](sample-output/).
+Shared CSV columns: [`docs/src/csv-output.md`](../../docs/src/csv-output.md).
 
 ## What you need
 

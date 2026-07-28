@@ -1,13 +1,21 @@
-# GO SMS Pro XML → CSV mapping
+# GO SMS Pro XML / PDU → IR / CSV mapping
 
-How `gosms_sys*.xml` `<SMS>` elements map to per-conversation CSV rows written by `go-sms-pro-exporter`.
+How `gosms_sys*.xml` `<SMS>` elements and `I_*.pdu` MMS files map into canonical IR and the shared CSV projector written by `go-sms-pro-exporter`.
 
-PDU (`I_*.pdu`) rows use the same CSV columns; see [PDU notes](#pdu-rows) at the end.
+Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). IR overview: [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
 
 ## Goal / non-goal
 
-- **Goal:** Emit columns GO SMS Pro can fill. Where a concept matches iMessage CSV, reuse that field name.
-- **Non-goal:** A universal CSV schema shared with every exporter, or a full iMessage column skeleton with empty placeholders.
+- **Goal:** Document how GO SMS Pro fields fill shared IR/CSV cells (and the vendor bag).
+- **Non-goal:** A private per-exporter CSV header. All IR exporters use one header; Apple-only cells are empty for this source.
+
+## Pipeline / output
+
+Source XML/PDU → `ConversationDocument` → [`message_ir::FormatSink`](../../message-ir/src/format_sink.rs) (`--format csv|eml|mbox|json|jsonl|xml`).
+
+Default CSV: one file per conversation plus `<stem>.meta.json`. PDU media under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). `--format xml` writes a single SyncTech `smses.xml`.
+
+Diagnostic skip lists (`skipped_invalid_address.csv`, `skipped_empty_pdu.csv`, `skipped_no_party.csv`) are **not** conversation CSVs; they use their own small headers (see [Skip counters](#skip-counters-cli-summary)).
 
 ## XML shape
 
@@ -25,40 +33,56 @@ PDU (`I_*.pdu`) rows use the same CSV columns; see [PDU notes](#pdu-rows) at the
 </GoSms>
 ```
 
-Each `<SMS>` becomes one CSV data row. The `chat_identifier` column holds the peer’s E.164 handle. On disk, 1:1 files are `+14075551234.csv`; untitled groups are `group_+A_+B_….csv` (max 10 phones, then a hash).
+Each `<SMS>` becomes one IR message / CSV data row. The `chat_identifier` cell holds the peer’s E.164 handle.
 
-## Known XML children → CSV
+## Known XML children → shared cells
 
-| XML child | CSV column(s) | Notes |
-|-----------|---------------|--------|
+| XML child | CSV / IR cell(s) | Notes |
+|-----------|------------------|--------|
 | `<address>` | `chat_identifier`, `sender_handle` | Digits sanitized then E.164. For sent (`type=2`), address is the peer (not the sender). For received (`type=1`), address is also `sender_handle` unless Google Voice voicemail parsing overrides it from `<body>`. |
 | `<contactName>` | `sender_display_name` | Display name filled for incoming when present. |
-| `<date>` | `timestamp_unix_ms`, `timestamp`, `timestamp_utc`, `timestamp_display` | Raw ms string in `timestamp_unix_ms`. Converted to local/UTC RFC3339 and a human display string. |
+| `<date>` | `timestamp_unix_ms`, `timestamp`, `timestamp_utc`, `timestamp_display` | Raw ms in `timestamp_unix_ms`. Converted to local/UTC RFC3339 and a human display string. |
 | `<type>` | `android_type`, `direction` | `1` → `incoming`, `2` → `outgoing`. Other values are skipped. |
 | `<body>` | `text` | GO SMS emoji codes (e.g. `+g1f602`) decoded to Unicode. |
-| *(all children)* | `source_fields_json` | Full map of every child element name → text (includes the five above plus extras such as `read`, `status`, `date_sent`, …). |
+| *(all children)* | `source_fields_json` | Child element name → text (plus `source_kind`, see below). |
 
-## Columns (imessage names where shared)
+## Other shared cells
 
-| CSV column | Source |
-|------------|--------|
+| CSV / IR cell | Source |
+|---------------|--------|
 | `conversation_type` | Always `individual` for XML SMS; `group` from PDU PLMN lists |
 | `group_title` | Derived for PDU groups; empty for XML |
+| `participants_json` | Peer handles for the conversation |
 | `guid` | SHA-256 of chat id + local timestamp + direction + text + attachment digests |
 | `service` | Always `SMS` |
-| `sender_handle` / `sender_display_name` | Empty when `direction=outgoing` |
+| `sender_handle` / `sender_display_name` | Outgoing uses export owner; incoming from address / contactName |
 | `attachments_json` | `[]` for XML; media paths for PDU |
-
-## SMS-Pro-only columns
-
-| CSV column | Meaning |
-|------------|---------|
-| `export_source` | Always `go-sms-pro` |
-| `export_tool` | Always `GO SMS Pro` |
-| `export_tool_version` | Empty until a target app version is pinned |
+| `message_kind` | `sms` or `mms` (PDU with attachments → `mms`) |
+| `export_source` / `export_tool` / `export_tool_version` | `go-sms-pro` / `GO SMS Pro` / (empty until pinned) |
+| `owner_handle` / `owner_display_name` | Export owner |
 | `android_type` | Raw `<type>` (`1`/`2`); empty for PDU |
-| `timestamp_unix_ms` | From `<date>` ms (also on shared header) |
-| `source_fields_json` | Vendor bag: XML children and/or `source_kind` / `pdu_*` keys |
+| `source_fields_json` | Vendor bag (below) |
+
+Apple-only columns stay empty.
+
+## `source_fields_json`
+
+Always includes `source_kind`: `"xml"` or `"pdu"`.
+
+**XML rows:** every `<SMS>` child name → text (for example `address`, `body`, `read`, `status`, `date_sent`, …), merged with `source_kind`.
+
+**PDU rows** additionally may include:
+
+| Bag key | Meaning |
+|---------|---------|
+| `pdu_filename` | Source PDU basename |
+| `pdu_decode` | `structured` / `mixed` / `heuristic` confidence for body, attachments, and direction |
+| `pdu_fields` | Optional MMS headers object (keys below) |
+| `android_group_title` | Synthetic group label when present (data only; not used for filenames) |
+
+`pdu_fields` keys when present: `subject`, `message_id`, `message_type`, `mms_version`, `message_size`, `message_class`, `transaction_id`, `priority`, `delivery_report`, `read_report`, `report_allowed`, `delivery_time`, `expiry`, `status`, `response_status`, `response_text`, `sender_visibility`, `bcc` (comma-joined), plus `app:<name>` for non-well-known MMS application headers.
+
+`message_size` is the WAP-209 Message-Size long-integer (advisory octets). GO SMS Pro `0x8e` + `filename\0` named parts are unrelated and are not decoded as Message-Size.
 
 ## Skip counters (CLI summary)
 
@@ -76,23 +100,16 @@ Printed only when non-zero:
 
 ## PDU rows
 
-MMS from `I_<unix>_*.pdu` files use the same header. Differences:
+MMS from `I_<unix>_*.pdu` files use the same conversation CSV header. Differences:
 
-| CSV column | PDU behavior |
-|------------|--------------|
-| `source_kind` | `pdu` |
+| CSV / IR cell | PDU behavior |
+|---------------|--------------|
 | `chat_identifier` / `conversation_type` / `group_title` | From PLMN participants; groups use `chat-group-…` ids |
-| `timestamp*` | MMS `Date` header when present; else filename `I_<unix>_` (seconds). Filename still required to accept the file. |
+| `timestamp*` / `timestamp_unix_ms` | MMS `Date` header when present; else filename `I_<unix>_` (seconds). Filename still required to accept the file. |
 | `text` | Content-Location text parts / multipart `text/*` (emoji-decoded); marker/`</smil>` fallback if needed |
 | `attachments_json` | Named/typed media parts, else magic-byte splits under `attachments/` |
-| `android_type`, `timestamp_unix_ms`, `source_fields_json` | Empty |
-| `pdu_filename` | Source PDU basename |
-| `pdu_fields_json` | Optional MMS headers (see below); empty for XML |
-| `pdu_decode` | `structured` / `mixed` / `heuristic` confidence for body, attachments, and direction; empty for XML |
-
-`pdu_fields_json` keys when present: `subject`, `message_id`, `message_type`, `mms_version`, `message_size`, `message_class`, `transaction_id`, `priority`, `delivery_report`, `read_report`, `report_allowed`, `delivery_time`, `expiry`, `status`, `response_status`, `response_text`, `sender_visibility`, `bcc` (comma-joined), plus `app:<name>` for non-well-known MMS application headers.
-
-`message_size` is the WAP-209 Message-Size long-integer (advisory octets). GO SMS Pro `0x8e` + `filename\0` named parts are unrelated and are not decoded as Message-Size.
+| `android_type` | Empty |
+| `source_fields_json` | `source_kind=pdu` plus `pdu_filename` / `pdu_decode` / `pdu_fields` as above |
 
 ### MMS parse path
 

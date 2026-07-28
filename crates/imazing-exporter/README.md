@@ -24,7 +24,7 @@ Unresolved name-only chats still write (name-based filename). That is not fatal 
 
 This is **not** the same as [`imessage-ir-exporter`](../imessage-ir-exporter), which reads Apple’s `chat.db` on a Mac.
 
-Example output: [`sample-output/`](sample-output/).
+Shared CSV columns: [`docs/src/csv-output.md`](../../docs/src/csv-output.md). Design notes: [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## What you need
 

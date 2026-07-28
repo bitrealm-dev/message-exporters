@@ -1,58 +1,55 @@
-# SMS Backup & Restore XML → CSV mapping
+# SMS Backup & Restore XML → IR / CSV mapping
 
-How SyncTech `<sms>` / `<mms>` elements map to per-conversation CSV rows written by `sms-backup-restore-exporter`.
+How SyncTech `<sms>` / `<mms>` elements map into canonical IR (`ConversationDocument`) and the shared CSV projector written by `sms-backup-restore-exporter`.
 
-Attribute meanings (SyncTech reference): [FIELDS.md](FIELDS.md).
+Attribute meanings (SyncTech **input** reference): [FIELDS.md](FIELDS.md). Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). IR overview: [`docs/MESSAGE_IR.md`](../../../docs/MESSAGE_IR.md).
 
 ## Goal / non-goal
 
-- **Goal:** Emit columns SBR can fill. Where a concept matches iMessage CSV, reuse that field name.
-- **Non-goal:** A universal CSV schema shared with every exporter, or a full iMessage column skeleton with empty placeholders.
+- **Goal:** Document how SyncTech fields fill shared IR/CSV cells (and the vendor bag).
+- **Non-goal:** A private per-exporter CSV header. All IR exporters use one header; Apple-only cells are empty for this source.
 
-## Output
+## Pipeline / output
 
-One CSV file per conversation (header + one row per message), plus decoded MMS media under `attachments/`. Filenames: 1:1 → `+15555550101.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). The `chat_identifier` column may still use `chat-group-…` for groups.
+Source XML → `ConversationDocument` → [`message_ir::FormatSink`](../../message-ir/src/format_sink.rs) (`--format csv|eml|mbox|json|jsonl|xml`).
 
-## Columns (imessage names where shared)
+Default CSV: one file per conversation (header + one row per message) plus `<stem>.meta.json`. Decoded MMS media under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). The `chat_identifier` cell may still use `chat-group-…` for groups. `--format xml` writes a single SyncTech `smses.xml` ([`docs/SBR_XML.md`](../../../docs/SBR_XML.md)).
 
-| CSV column | SMS / MMS source |
-|------------|------------------|
+## Source → shared cells
+
+| CSV / IR cell | SMS / MMS source |
+|---------------|------------------|
 | `chat_identifier` | Peer E.164, or `chat-group-…` for groups |
 | `conversation_type` | `individual` / `group` |
 | `group_title` | Derived for groups; empty for 1:1 |
+| `participants_json` | Peer handles from SMS address / MMS `<addr>` list |
 | `guid` | Deterministic SHA-256 fingerprint |
-| `timestamp` / `timestamp_utc` / `timestamp_display` | From `date` (Java ms UTC) |
+| `timestamp` / `timestamp_utc` / `timestamp_display` / `timestamp_unix_ms` | From `date` (Java ms UTC) |
 | `direction` | `incoming` / `outgoing` from SMS `type` or MMS `msg_box` / From addr |
 | `service` | Always `SMS` |
-| `sender_handle` / `sender_display_name` | Empty when outgoing |
+| `sender_handle` / `sender_display_name` | Incoming peer; outgoing uses export owner (`owner_*`) |
 | `subject` | SMS `subject`, or MMS `sub` |
 | `text` | SMS `body`, or MMS text/plain parts (HTML entities decoded) |
 | `attachments_json` | Extracted MMS media paths |
-
-## SBR-only columns
-
-| CSV column | Meaning |
-|------------|---------|
-| `export_source` | Always `sms-backup-restore` |
-| `export_tool` | Always `SMS Backup & Restore` |
-| `export_tool_version` | Always `10.26.003` (targeted Android app version) |
 | `message_kind` | `sms` or `mms` |
-| `timestamp_unix_ms` | Epoch ms from `date` |
+| `export_source` / `export_tool` / `export_tool_version` | `sms-backup-restore` / `SMS Backup & Restore` / `10.26.003` |
+| `owner_handle` / `owner_display_name` | Export owner |
 | `android_type` | SMS `type`, or MMS `msg_box` |
 | `source_fields_json` | Full fidelity JSON (below) |
-| `owner_handle` / `owner_display_name` | Export owner; also used for outgoing `sender_*` |
+
+Apple-only columns (`parts_json`, tapbacks, balloons, …) stay empty.
 
 ## How the exporter uses SMS fields
 
 - `address` → `chat_identifier` / participant handle (after phone normalization)
-- `date` → `timestamp*` columns and `timestamp_unix_ms` (invalid or missing dates are skipped)
+- `date` → `timestamp*` and `timestamp_unix_ms` (invalid or missing dates are skipped)
 - `type` `1` / `2` → `direction` incoming / outgoing; other types are skipped; raw value in `android_type`
 - `body` → `text` (HTML entities decoded)
 - `subject` → `subject` when present
 - `contact_name` → `sender_display_name` for incoming (not a separate CSV column)
 - **Every** `<sms>` attribute → `source_fields_json.attrs`
 
-Example: `<sms address="+15555550101" date="1400773261000" type="1" body="hello &amp; hi" contact_name="Sam" />` becomes an incoming CSV row with `chat_identifier=+15555550101` (file `+15555550101.csv`) and text `hello & hi`.
+Example: `<sms address="+15555550101" date="1400773261000" type="1" body="hello &amp; hi" contact_name="Sam" />` becomes an incoming row with `chat_identifier=+15555550101` and text `hello & hi`.
 
 ## How the exporter uses MMS fields
 
@@ -87,7 +84,7 @@ Example group address string: `+15555550101~+15555550102` with two From/To addrs
 }
 ```
 
-For each `<part>` that has a `data` attribute, CSV stores `data_len` and `data_sha256` of the **decoded** bytes and **omits** the base64 `data` string (binaries live under `attachments/`). Other part attributes (`seq`, `ct`, `name`, `cl`, `chset`, `text`, …) are kept as-is.
+For each `<part>` that has a `data` attribute, the bag stores `data_len` and `data_sha256` of the **decoded** bytes and **omits** the base64 `data` string (binaries live under `attachments/` or are embedded for mail/Xml). Other part attributes (`seq`, `ct`, `name`, `cl`, `chset`, `text`, …) are kept as-is.
 
 ## Reverse: IR → XML
 
@@ -95,4 +92,4 @@ Exporters can write a SyncTech `smses.xml` via `--format xml` ([`docs/SBR_XML.md
 
 ## Not exported
 
-`<call>` / call-log rows in the same backup file are ignored.
+`<call>` / call-log rows in the same backup file are ignored (no IR messages for any projector).
