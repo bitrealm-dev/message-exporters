@@ -10,7 +10,7 @@ use message_exporters_core::OutputFormat;
 use message_ir::{
     owner_sender, write_format, ConversationDocument, ConversationMeta, ConversationStats,
     ExportMeta, IrConversationType, IrDirection, IrMessage, IrMessageKind, IrParticipant,
-    IrService, IrSource, SCHEMA_VERSION,
+    IrService, IrSource, SbrBackupSession, SCHEMA_VERSION,
 };
 use serde_json::{json, Map};
 use message_mail::clean_previous_mail_output;
@@ -68,6 +68,11 @@ pub fn convert_export(
 ) -> Result<ExportReport> {
     fs::create_dir_all(output).with_context(|| format!("create {}", output.display()))?;
     clean_previous_output(output)?;
+    let mut sbr = if output_format.is_sbr_xml() {
+        Some(SbrBackupSession::create(output)?)
+    } else {
+        None
+    };
 
     let files = discover_csv_files(input)?;
     let mut report = ExportReport::default();
@@ -148,8 +153,15 @@ pub fn convert_export(
             continue;
         }
         let doc = pending_to_document(&chat_id, &convo, &mut report)?;
-        write_format(output, output_format, &doc)?;
+        if let Some(session) = sbr.as_mut() {
+            session.append_document(&doc)?;
+        } else {
+            write_format(output, output_format, &doc)?;
+        }
         report.conversations += 1;
+    }
+    if let Some(session) = sbr {
+        session.finish()?;
     }
 
     Ok(report)
@@ -166,7 +178,10 @@ fn clean_previous_output(output_dir: &Path) -> Result<()> {
                 || name.ends_with(".json")
                 || name.ends_with(".json.tmp")
                 || name.ends_with(".jsonl")
-                || name.ends_with(".jsonl.tmp"))
+                || name.ends_with(".jsonl.tmp")
+                || name == "smses.xml"
+                || name.ends_with(".xml.tmp")
+                || name.ends_with(".xml.sbrbody"))
         {
             fs::remove_file(&path)
                 .with_context(|| format!("remove previous {}", path.display()))?;

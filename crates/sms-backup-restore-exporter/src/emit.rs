@@ -1,4 +1,4 @@
-//! Convert SMS Backup & Restore XML → canonical IR → CSV / EML / MBOX / JSON.
+//! Convert SMS Backup & Restore XML → canonical IR → CSV / EML / MBOX / JSON / XML.
 
 use crate::cancel::{check_cancel, CancelFlag};
 use crate::xml::{parse_xml_file, AttachmentBlob, ConvType, ParsedMessage};
@@ -9,7 +9,7 @@ use message_exporters_core::OutputFormat;
 use message_ir::{
     owner_sender, parse_android_type, parse_json_value, write_format, ConversationDocument,
     ConversationMeta, ConversationStats, ExportMeta, IrAttachment, IrConversationType, IrDirection,
-    IrMessage, IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION,
+    IrMessage, IrMessageKind, IrParticipant, IrService, IrSource, SbrBackupSession, SCHEMA_VERSION,
 };
 use message_mail::clean_previous_mail_output;
 use message_phone::{to_e164, OwnerPhoneSet};
@@ -364,7 +364,10 @@ fn clean_previous_output(output_dir: &Path) -> Result<()> {
                 || name.ends_with(".json")
                 || name.ends_with(".json.tmp")
                 || name.ends_with(".jsonl")
-                || name.ends_with(".jsonl.tmp"))
+                || name.ends_with(".jsonl.tmp")
+                || name == "smses.xml"
+                || name.ends_with(".xml.tmp")
+                || name.ends_with(".xml.sbrbody"))
         {
             let _ = fs::remove_file(&path);
         }
@@ -430,7 +433,7 @@ pub fn convert_export(
 ) -> Result<ExportReport> {
     let owners = OwnerPhoneSet::new(owner_phones)?;
     let owner_handle = to_e164(&owners.primary_digits);
-    let keep_bytes = output_format.is_mail_archive();
+    let keep_bytes = output_format.is_mail_archive() || output_format.is_sbr_xml();
     let mut report = ExportReport::default();
     let mut conversations: BTreeMap<String, PendingConversation> = BTreeMap::new();
 
@@ -440,6 +443,11 @@ pub fn convert_export(
     if copy_attachments {
         fs::create_dir_all(&attachments_dir)?;
     }
+    let mut sbr = if output_format.is_sbr_xml() {
+        Some(SbrBackupSession::create(output_dir)?)
+    } else {
+        None
+    };
 
     for xml_path in collect_xml_paths(input)? {
         check_cancel(cancel)?;
@@ -486,8 +494,16 @@ pub fn convert_export(
             continue;
         }
         let doc = pending_to_document(&chat_id, &convo, &owner_handle, &mut report)?;
-        write_format(output_dir, output_format, &doc)?;
+        if let Some(session) = sbr.as_mut() {
+            session.append_document(&doc)?;
+        } else {
+            write_format(output_dir, output_format, &doc)?;
+        }
         report.conversations += 1;
+    }
+
+    if let Some(session) = sbr {
+        session.finish()?;
     }
 
     Ok(report)

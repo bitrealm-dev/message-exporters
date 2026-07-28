@@ -110,12 +110,17 @@ Line 1 is the header (includes `conversation.stats`; no `messages` array). Each 
 | JSONL | header + one message per line | line-oriented parse |
 | CSV | unified [`CSV_HEADERS`](../crates/message-ir/src/lib.rs) + `<stem>.meta.json` | `read_conversation_csv` |
 | EML / MBOX | IR → `MailMessage` → [`message-mail`](../crates/message-mail/) | `read_conversation_eml_dir` / `read_conversation_mbox` |
+| XML | single `smses.xml` via [`SbrBackupSession`](../crates/message-ir/) + [`message-sbr`](../crates/message-sbr/) | SBR importer (`sms-backup-restore-exporter`); not an IR reverse projector yet |
+
+**XML packaging differs:** one SyncTech backup for the whole export (not per conversation). iMessage-only fields are dropped. See [SBR_XML.md](SBR_XML.md).
 
 ## Content round-trip
 
 Library APIs support content-preserving cycles:
 
 `ConversationDocument` → CSV \| EML \| MBOX → `ConversationDocument` → JSON
+
+XML is **lossy** for non-Android IR (Apple bags omitted). SBR-origin `source.fields` can restore many SyncTech attrs on write-back.
 
 After `normalize_document_for_compare`:
 
@@ -132,5 +137,6 @@ CSV nested bags use empty string when absent (never literal `null`). See [csv-ou
 ## Related
 
 - [MAIL_ARCHIVE.md](MAIL_ARCHIVE.md) — EML/MBOX packaging
+- [SBR_XML.md](SBR_XML.md) — SyncTech `smses.xml` backup output
 - [csv-output.md](src/csv-output.md) — CSV conventions
 - [EXPORTER_MATRIX.md](EXPORTER_MATRIX.md)

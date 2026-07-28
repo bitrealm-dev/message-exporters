@@ -39,7 +39,7 @@ struct Cli {
     #[arg(long)]
     output: PathBuf,
 
-    /// Output format: `csv` (default), `eml`, `mbox`, `json`, or `jsonl` (canonical IR)
+    /// Output format: `csv` (default), `eml`, `mbox`, `json`, `jsonl`, or `xml` (SMS Backup & Restore)
     #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
     format: String,
 

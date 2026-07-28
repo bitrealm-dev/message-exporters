@@ -2519,6 +2519,7 @@ dependencies = [
  "message-csv",
  "message-exporters-core",
  "message-mail",
+ "message-sbr",
  "serde",
  "serde_json",
  "tempfile",
@@ -2569,6 +2570,15 @@ name = "message-phone"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+]
+
+[[package]]
+name = "message-sbr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "tempfile",
 ]
 
 [[package]]

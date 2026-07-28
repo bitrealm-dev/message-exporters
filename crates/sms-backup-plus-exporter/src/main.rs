@@ -39,7 +39,7 @@ enum Commands {
         #[arg(long)]
         output: PathBuf,
 
-        /// Output format: `csv` (default), `eml` (mail folders), `mbox`, `json`, or `jsonl`
+        /// Output format: `csv` (default), `eml` (mail folders), `mbox`, `json`, `jsonl`, or `xml`
         #[arg(long = "format", default_value = "csv", value_name = "FORMAT")]
         format: String,
 

@@ -15,7 +15,7 @@ All converters write **one CSV file per conversation** from IR v3 ([`CSV_HEADERS
 
 | | GO SMS Pro | SMS Backup & Restore | SMS Backup+ | OpenExtract | iMazing | WhatsApp | iMessage |
 |---|---|---|---|---|---|---|---|
-| **Output** | Per-chat CSV / EML / MBOX / **JSON IR** | Per-chat CSV / EML / MBOX / **JSON IR** | Per-chat CSV / EML / MBOX / **JSON IR** | Per-chat CSV / EML / MBOX / **JSON IR** | Per-chat CSV / EML / MBOX / **JSON IR** (`__whatsapp` for WA) | Per-chat CSV / EML / MBOX / **JSON IR** (`__whatsapp`) | Per-chat CSV / EML / MBOX / **JSON IR** |
+| **Output** | Per-chat CSV / EML / MBOX / JSON(+L) / **XML** | Per-chat CSV / EML / MBOX / JSON(+L) / **XML** | Per-chat CSV / EML / MBOX / JSON(+L) / **XML** | Per-chat CSV / EML / MBOX / JSON(+L) / **XML** | Per-chat CSV / EML / MBOX / JSON(+L) / **XML** (`__whatsapp` for WA) | Per-chat CSV / EML / MBOX / JSON(+L) / **XML** (`__whatsapp`) | Per-chat CSV / EML / MBOX / JSON(+L) / **XML** |
 | **Peer phone** (`chat_identifier`) | yes | yes | yes (or `unknown`) | partial (name stem if unresolved) | partial (name stem if unresolved) | yes (JID → E.164) | yes (Apple chat id) |
 | **Sender phone** (`sender_handle`, incoming) | yes | yes | yes | yes | yes | yes (groups via sender JID) | yes |
 | **Names** | yes (XML + contacts) | yes (XML + contacts) | yes (contacts + name-mapping) | partial (contacts critical) | yes (Contacts CSV) | yes (`wa.db` via wtsexporter) | yes (AddressBook / backup) |
@@ -62,4 +62,4 @@ All converters write **one CSV file per conversation** from IR v3 ([`CSV_HEADERS
 | WhatsApp | [`crates/whatsapp-exporter/README.md`](../crates/whatsapp-exporter/README.md) |
 | iMessage | [`crates/imessage-ir-exporter/README.md`](../crates/imessage-ir-exporter/README.md) |
 
-**Canonical IR:** [`MESSAGE_IR.md`](MESSAGE_IR.md) (`message-ir`, schema v3). All exporters (including iMessage) parse to `ConversationDocument` then project CSV/EML/MBOX/JSON/JSONL via `message_ir::write_format`. Mail packaging: [`MAIL_ARCHIVE.md`](MAIL_ARCHIVE.md). CSV remains the default. Convert/compress/obfuscate stay CSV-only.
+**Canonical IR:** [`MESSAGE_IR.md`](MESSAGE_IR.md) (`message-ir`, schema v3). All exporters parse to `ConversationDocument` then project CSV/EML/MBOX/JSON/JSONL via `message_ir::write_format`, or a single SyncTech `smses.xml` via `SbrBackupSession` (`--format xml`). Mail packaging: [`MAIL_ARCHIVE.md`](MAIL_ARCHIVE.md). SBR XML: [`SBR_XML.md`](SBR_XML.md). CSV remains the default. Convert/compress/obfuscate stay CSV-only.

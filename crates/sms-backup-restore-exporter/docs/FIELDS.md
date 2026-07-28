@@ -19,6 +19,8 @@ Child message elements:
 
 Call logs use `<calls>` / `<call>`. They are documented below for reference. This exporter does not write call records.
 
+Writing SyncTech XML from IR (`--format xml` → `smses.xml`) is documented in [`docs/SBR_XML.md`](../../../docs/SBR_XML.md).
+
 Field values are generally copied as-is from the Android SMS/MMS databases. The backup app does little conversion.
 
 ---

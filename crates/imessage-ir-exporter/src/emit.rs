@@ -31,7 +31,7 @@ use message_exporters_core::OutputFormat;
 use message_ir::{
     owner_sender, parse_json_value, write_format, ConversationDocument, ConversationMeta,
     ExportMeta, IrAttachment, IrConversationType, IrDirection, IrImessage, IrMessage,
-    IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION,
+    IrMessageKind, IrParticipant, IrService, SbrBackupSession, SCHEMA_VERSION,
 };
 use message_mail::{Direction as MailDirection, MailAttachment, MailMessage, Participant};
 use sha2::{Digest, Sha256};
@@ -76,7 +76,7 @@ pub fn run_export(session: &MailSession) -> Result<(), RuntimeError> {
     let attachments_dir = session.options.export_path.join("attachments");
     if matches!(
         format,
-        OutputFormat::Csv | OutputFormat::Json | OutputFormat::Jsonl
+        OutputFormat::Csv | OutputFormat::Json | OutputFormat::Jsonl | OutputFormat::Xml
     ) && session.options.attachment_embed == AttachmentEmbed::Embed
     {
         fs::create_dir_all(&attachments_dir)?;
@@ -136,6 +136,15 @@ pub fn run_export(session: &MailSession) -> Result<(), RuntimeError> {
 
     let total_conversations = conversations.len() as u64;
     eprintln!("Writing {total_conversations} conversation file(s)...");
+    let mut sbr = if format.is_sbr_xml() {
+        Some(
+            SbrBackupSession::create(&session.options.export_path).map_err(|e| {
+                RuntimeError::InvalidOptions(format!("create smses.xml session: {e:#}"))
+            })?,
+        )
+    } else {
+        None
+    };
     let mut written = 0u64;
     for (chat_identifier, convo) in conversations {
         written += 1;
@@ -179,16 +188,30 @@ pub fn run_export(session: &MailSession) -> Result<(), RuntimeError> {
             messages,
             packaging_stem_suffix: None,
         };
-        write_format(&session.options.export_path, format, &doc).map_err(|e| {
-            RuntimeError::InvalidOptions(format!(
-                "write {} for {}: {e:#}",
-                format.as_str(),
-                doc.conversation.chat_identifier
-            ))
-        })?;
+        if let Some(session_xml) = sbr.as_mut() {
+            session_xml.append_document(&doc).map_err(|e| {
+                RuntimeError::InvalidOptions(format!(
+                    "append xml for {}: {e:#}",
+                    doc.conversation.chat_identifier
+                ))
+            })?;
+        } else {
+            write_format(&session.options.export_path, format, &doc).map_err(|e| {
+                RuntimeError::InvalidOptions(format!(
+                    "write {} for {}: {e:#}",
+                    format.as_str(),
+                    doc.conversation.chat_identifier
+                ))
+            })?;
+        }
         if written.is_multiple_of(50) || written == total_conversations {
             eprintln!("  wrote {written}/{total_conversations} conversations");
         }
+    }
+    if let Some(session_xml) = sbr {
+        session_xml.finish().map_err(|e| {
+            RuntimeError::InvalidOptions(format!("finish smses.xml: {e:#}"))
+        })?;
     }
 
     Ok(())
@@ -247,7 +270,7 @@ fn mail_message_to_ir(
 ) -> Result<IrMessage, RuntimeError> {
     let persist_to_disk = matches!(
         format,
-        OutputFormat::Csv | OutputFormat::Json | OutputFormat::Jsonl
+        OutputFormat::Csv | OutputFormat::Json | OutputFormat::Jsonl | OutputFormat::Xml
     );
 
     let mut attachments = Vec::with_capacity(mail.attachments.len());

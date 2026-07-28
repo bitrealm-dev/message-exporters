@@ -26,6 +26,8 @@ pub enum OutputFormat {
     Json,
     /// Per-conversation IR as JSON Lines (header + one message per line).
     Jsonl,
+    /// Single SMS Backup & Restore XML backup (`smses.xml`).
+    Xml,
 }
 
 impl fmt::Display for OutputFormat {
@@ -36,6 +38,7 @@ impl fmt::Display for OutputFormat {
             Self::Mbox => "MBOX (per conversation)",
             Self::Json => "JSON (canonical IR)",
             Self::Jsonl => "JSONL (canonical IR lines)",
+            Self::Xml => "XML (SMS Backup & Restore)",
         })
     }
 }
@@ -48,6 +51,7 @@ impl OutputFormat {
             Self::Mbox => "mbox",
             Self::Json => "json",
             Self::Jsonl => "jsonl",
+            Self::Xml => "xml",
         }
     }
 
@@ -58,8 +62,9 @@ impl OutputFormat {
             "mbox" => Ok(Self::Mbox),
             "json" => Ok(Self::Json),
             "jsonl" | "ndjson" => Ok(Self::Jsonl),
+            "xml" | "sbr" | "smses" => Ok(Self::Xml),
             other => Err(format!(
-                "unknown output format '{other}' (expected csv, eml, mbox, json, or jsonl)"
+                "unknown output format '{other}' (expected csv, eml, mbox, json, jsonl, or xml)"
             )),
         }
     }
@@ -68,22 +73,28 @@ impl OutputFormat {
     pub fn is_mail_archive(self) -> bool {
         matches!(self, Self::Eml | Self::Mbox)
     }
+
+    /// True when export writes a single SyncTech `smses.xml` (use [`message_ir::SbrBackupSession`]).
+    pub fn is_sbr_xml(self) -> bool {
+        matches!(self, Self::Xml)
+    }
 }
 
 /// Values shown in the GUI for exporters that support CSV / EML (no MBOX).
 pub const OUTPUT_FORMATS: [OutputFormat; 2] = [OutputFormat::Csv, OutputFormat::Eml];
 
 /// Values shown in the GUI for full packaging choices.
-pub const OUTPUT_FORMATS_MAIL: [OutputFormat; 5] = [
+pub const OUTPUT_FORMATS_MAIL: [OutputFormat; 6] = [
     OutputFormat::Csv,
     OutputFormat::Eml,
     OutputFormat::Mbox,
     OutputFormat::Json,
     OutputFormat::Jsonl,
+    OutputFormat::Xml,
 ];
 
 /// Alias kept for iPhone backup UI (same as [`OUTPUT_FORMATS_MAIL`]).
-pub const OUTPUT_FORMATS_IMESSAGE: [OutputFormat; 5] = OUTPUT_FORMATS_MAIL;
+pub const OUTPUT_FORMATS_IMESSAGE: [OutputFormat; 6] = OUTPUT_FORMATS_MAIL;
 
 /// Shared export inputs. Source-specific fields are in [`Self::source`].
 #[derive(Debug, Clone)]
@@ -97,7 +108,7 @@ pub struct ExporterConfig {
     /// OpenExtract uses [`MediaMode::Disabled`].
     pub media: MediaConfig,
     pub cancel: Option<CancelFlag>,
-    /// Packaging format (`csv` / `eml` / `mbox` / `json`).
+    /// Packaging format (`csv` / `eml` / `mbox` / `json` / `jsonl` / `xml`).
     pub output_format: OutputFormat,
     pub source: SourceConfig,
 }

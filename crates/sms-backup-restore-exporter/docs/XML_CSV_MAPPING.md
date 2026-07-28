@@ -89,6 +89,10 @@ Example group address string: `+15555550101~+15555550102` with two From/To addrs
 
 For each `<part>` that has a `data` attribute, CSV stores `data_len` and `data_sha256` of the **decoded** bytes and **omits** the base64 `data` string (binaries live under `attachments/`). Other part attributes (`seq`, `ct`, `name`, `cl`, `chset`, `text`, …) are kept as-is.
 
+## Reverse: IR → XML
+
+Exporters can write a SyncTech `smses.xml` via `--format xml` ([`docs/SBR_XML.md`](../../../docs/SBR_XML.md)). When `source.fields` still holds the `kind`/`attrs`/`parts`/`addrs` bag from this importer, those attributes are preferred. Otherwise SMS/MMS elements are synthesized from IR core fields. iMessage-only IR is lossy (Apple bags dropped).
+
 ## Not exported
 
 `<call>` / call-log rows in the same backup file are ignored.

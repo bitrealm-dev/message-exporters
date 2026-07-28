@@ -5,6 +5,7 @@ members = [
     "crates/message-csv",
     "crates/message-ir",
     "crates/message-mail",
+    "crates/message-sbr",
     "crates/message-contacts",
     "crates/message-obfuscate",
     "crates/message-media",

@@ -12,12 +12,14 @@
 mod normalize;
 mod read_csv;
 mod read_mail;
+mod write_sbr;
 
 pub use normalize::normalize_document_for_compare;
 pub use read_csv::read_conversation_csv;
 pub use read_mail::{
     document_from_mail_messages, read_conversation_eml_dir, read_conversation_mbox,
 };
+pub use write_sbr::{document_to_sbr_messages, SbrBackupSession};
 
 use anyhow::{bail, Context, Result};
 use message_csv::{
@@ -452,6 +454,7 @@ pub fn write_format(
         OutputFormat::Jsonl => write_conversation_jsonl(output_dir, &doc),
         OutputFormat::Eml => write_conversation_mail(output_dir, &doc, MailPackage::EmlFolders),
         OutputFormat::Mbox => write_conversation_mail(output_dir, &doc, MailPackage::Mbox),
+        OutputFormat::Xml => write_sbr::write_format_xml_unsupported(),
     }
 }
 
@@ -1197,5 +1200,55 @@ mod tests {
             let back_mbox = read_conversation_mbox(&mbox_path).unwrap();
             assert_docs_equal_after_normalize(doc, back_mbox);
         }
+    }
+
+    #[test]
+    fn sbr_xml_session_writes_smses_backup() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut session = SbrBackupSession::create(tmp.path()).unwrap();
+        session.append_document(&sample_doc()).unwrap();
+        session.append_document(&sample_imessage_doc()).unwrap();
+        let path = session.finish().unwrap();
+        assert_eq!(path.file_name().unwrap(), "smses.xml");
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains(r#"count="4""#)); // 2 SMS + 2 iMessage rows
+        assert!(text.contains("hello ir"));
+        assert!(text.contains(r#"type="1""#) || text.contains(r#"msg_box="1""#));
+        assert!(text.contains("hello imessage"));
+        // iMessage bags are not mirrored as Apple attrs.
+        assert!(!text.contains("X-ME-"));
+        assert!(!text.contains("Sent with Balloons"));
+        assert!(!text.contains("tapback_kind"));
+        // write_format(Xml) is intentionally unsupported for multi-chat.
+        assert!(write_format(tmp.path(), OutputFormat::Xml, &sample_doc()).is_err());
+    }
+
+    #[test]
+    fn sbr_xml_restores_source_fields_attrs() {
+        let mut doc = sample_doc();
+        // SyncTech-shaped bag (same as sms-backup-restore-exporter XmlFields JSON).
+        if let Some(source) = doc.messages[0].source.as_mut() {
+            let mut attrs = Map::new();
+            attrs.insert("protocol".into(), json!("0"));
+            attrs.insert("address".into(), json!("+15555550101"));
+            attrs.insert("date".into(), json!("1400773261000"));
+            attrs.insert("type".into(), json!("1"));
+            attrs.insert("body".into(), json!("hello ir"));
+            attrs.insert("service_center".into(), json!("+15550009999"));
+            attrs.insert("contact_name".into(), json!("Sam"));
+            source.fields = {
+                let mut m = Map::new();
+                m.insert("kind".into(), json!("sms"));
+                m.insert("attrs".into(), Value::Object(attrs));
+                m
+            };
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let mut session = SbrBackupSession::create(tmp.path()).unwrap();
+        session.append_document(&doc).unwrap();
+        let path = session.finish().unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains(r#"service_center="+15550009999""#));
+        assert!(text.contains("hello ir"));
     }
 }
