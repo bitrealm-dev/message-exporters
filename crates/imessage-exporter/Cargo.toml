@@ -10,6 +10,10 @@ version = "0.0.0"
 
 # Vendored from upstream ReagentX/imessage-exporter (imessage-exporter package only),
 # with a CSV export overlay. No JSON exporter in this crate.
+[lib]
+name = "imessage_exporter"
+path = "src/lib.rs"
+
 [[bin]]
 name = "imessage-exporter"
 path = "src/main.rs"
@@ -17,6 +21,7 @@ path = "src/main.rs"
 [dependencies]
 askama = "=0.16.0"
 chrono = "=0.4.44"
+# clap stays required: Options/CLI parsing is shared with the library surface.
 clap = { version = "=4.6.1", features = ["cargo"] }
 csv = "1.4.0"
 message-csv = { path = "../message-csv" }

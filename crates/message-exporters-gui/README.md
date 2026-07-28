@@ -1,10 +1,10 @@
 # Message Exporters GUI
 
-Cross-platform [egui](https://github.com/emilk/egui) / [eframe](https://github.com/emilk/egui/tree/master/crates/eframe) desktop interface for the exporters in this workspace. Most sources spawn sibling CLI binaries; **GO SMS Pro** runs via the linked `go-sms-pro-exporter` library.
+Cross-platform [egui](https://github.com/emilk/egui) / [eframe](https://github.com/emilk/egui/tree/master/crates/eframe) desktop interface for the exporters in this workspace. Convert runs via linked exporter libraries; `contacts-validate` and WhatsApp `wtsexporter` still resolve as sibling tools when needed.
 
 ## Run in development
 
-Build the exporters and GUI in the same profile so the GUI can find sibling executables (still needed for non–GO SMS Pro sources and contacts-validate):
+Build the workspace (GUI + optional sibling tools for contacts-validate / WhatsApp):
 
 ```bash
 cargo build --workspace
@@ -20,20 +20,19 @@ cargo build --workspace --release
 
 On Windows the final command is `target\release\message-exporters-gui.exe`.
 
-The GUI searches for tool binaries beside its own executable, then in
-`MESSAGE_EXPORTERS_BIN`, then on `PATH`.
+The GUI searches for helper binaries (`contacts-validate`, `wtsexporter`) beside its own executable, then in `MESSAGE_EXPORTERS_BIN`, then on `PATH`.
 
 ## Included
 
 - Top tab panel: **Validate contacts** (default) | **Export**
 - **Validate contacts**: Check (dry run) / Update (write corrected files) / Cancel
-- Backup-source picker (alphabetical) with product/tool site links
+- Backup-source picker with product/tool site links
 - Global options: Obfuscate (+ seed) and Start/End date for every source
 - Attachments: Copy / Convert / Compress on sources that emit media (Compress shows resolution/fps/min-size options; needs ffmpeg)
-- Forms for GO SMS Pro, SMS Backup & Restore, SMS Backup+, OpenExtract, iMazing, and iPhone backup
+- Forms for GO SMS Pro, SMS Backup & Restore, SMS Backup+, OpenExtract, iMazing, WhatsApp, and iPhone backup
 - Native file/folder dialogs
 - OS-appropriate default output folders under Documents/`message-exporters`
-- Exporter-specific validation; CLI args for spawned tools; in-process library run for GO SMS Pro
+- Exporter-specific validation; in-process library export for every backup source
 - Shared run log with cancel
 
 See [`../../docs/GUI.md`](../../docs/GUI.md) for the full option matrix and architecture notes.

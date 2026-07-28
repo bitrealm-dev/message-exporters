@@ -1,6 +1,6 @@
 # Fields in SMS Backup & Restore XML
 
-This page describes the XML attributes that **SMS Backup & Restore** writes, and how **sms-backup-restore-exporter** uses them.
+SyncTech’s attribute reference for the XML backup format. How this exporter maps those attributes into CSV: [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md).
 
 Source: SyncTech’s [Fields in XML backup files](https://www.synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/). Related SyncTech links:
 
@@ -41,18 +41,6 @@ Field values are generally copied as-is from the Android SMS/MMS databases. The 
 | `sub_id` | Optional SIM / subscription index (`0`, `1`, …) |
 | `readable_date` | Optional human-readable date string |
 | `contact_name` | Optional contact display name |
-
-### How the exporter uses SMS fields
-
-- `address` → `chat_identifier` / participant handle (after phone normalization)
-- `date` → `timestamp*` columns and `date_ms` (invalid or missing dates are skipped)
-- `type` `1` / `2` → `direction` incoming / outgoing; other types are skipped; raw value in `android_type`
-- `body` → `text` (HTML entities decoded)
-- `subject` → `subject` when present
-- `contact_name` → `contact_name` / display name hints
-- **Every** `<sms>` attribute → `xml_fields_json.attrs`
-
-Example: `<sms address="+15555550101" date="1400773261000" type="1" body="hello &amp; hi" contact_name="Sam" />` becomes an incoming CSV row with `chat_identifier=+15555550101` (file `+15555550101.csv`) and text `hello & hi`.
 
 ---
 
@@ -102,22 +90,6 @@ An MMS has three layers:
 | `address` | Phone number of sender or recipient |
 | `type` | `129` BCC, `130` CC, `151` To, `137` From |
 | `charset` | Character set for this entry |
-
-### How the exporter uses MMS fields
-
-- `date` → `timestamp*` / `date_ms` (bad dates skipped)
-- `msg_box` `2` → outgoing; `1` → incoming (From addr `type="137"` sets the sender when present); raw `msg_box` in `android_type`
-- `msg_box` `3` (draft) and `4` (outbox) are skipped and counted as `skipped_draft_or_outbox` (not `skipped_unknown_type`, which is for unknown SMS `type` only)
-- `sub` → `subject`
-- `address` plus `<addr>` list → participants; one other person is a 1:1 chat, more than one is a group
-- `text/plain` parts → `text`; SMIL (`application/smil`) controls text/image order when present
-- Non-text `data` → files under `attachments/` and `attachments_json`; in `xml_fields_json.parts`, `data` is replaced with `data_len` + `data_sha256`
-- Every `<mms>` / `<part>` / `<addr>` attribute → `xml_fields_json`
-- Empty participant lists and undecodable attachment base64 are skipped and counted in the run report
-
-Example group address string: `+15555550101~+15555550102` with two From/To addrs becomes a group chat titled from those two numbers.
-
-See also [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md).
 
 ---
 

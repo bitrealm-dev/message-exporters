@@ -1,5 +1,6 @@
 //! Convert iMazing Messages / WhatsApp rows → per-conversation vault-shaped CSV.
 
+use crate::cancel::{check_cancel, CancelFlag};
 use crate::parse::{discover_csv_files, parse_csv_file, RawRow, SourceKind};
 use anyhow::{Context, Result};
 use chrono::{FixedOffset, Local, NaiveDateTime, TimeZone};
@@ -132,6 +133,7 @@ impl TransportFamily {
 ///
 /// `timezone`: fixed UTC offset (e.g. `UTC-05:00`). When `None`, use the host local zone.
 /// When `copy_attachments` is true, media files are copied into `output/attachments/`.
+/// When `cancel` is set, cooperative cancellation is checked between CSV files.
 pub fn convert_export(
     input: &Path,
     output: &Path,
@@ -139,6 +141,7 @@ pub fn convert_export(
     timezone: Option<&str>,
     date_range: &DateRange,
     copy_attachments: bool,
+    cancel: Option<&CancelFlag>,
 ) -> Result<ExportReport> {
     let tz = resolve_tz(timezone)?;
     fs::create_dir_all(output).with_context(|| format!("create {}", output.display()))?;
@@ -154,6 +157,7 @@ pub fn convert_export(
     let mut conversations: BTreeMap<String, PendingConversation> = BTreeMap::new();
 
     for discovered in &files {
+        check_cancel(cancel)?;
         match discovered.kind {
             SourceKind::Messages => report.messages_files += 1,
             SourceKind::WhatsApp => report.whatsapp_files += 1,
@@ -911,7 +915,7 @@ Bob,,McRoy,+13212462167,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false).unwrap();
+        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false, None).unwrap();
         assert_eq!(report.conversations, 1);
         assert_eq!(report.unresolved_chat_phone, 0);
         assert_eq!(report.messages, 2);
@@ -941,7 +945,7 @@ Other,,Person,+15555550999,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false).unwrap();
+        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false, None).unwrap();
         assert!(report.unresolved_chat_phone >= 1);
         assert_eq!(report.conversations, 1);
         assert!(out.join("Mystery_Person.csv").is_file());
@@ -965,7 +969,7 @@ Bob,,,+15555550100,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false).unwrap();
+        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false, None).unwrap();
         assert_eq!(report.messages, 1);
         assert_eq!(report.duplicates_dropped, 1);
     }
@@ -988,7 +992,7 @@ Bob,,,+15555550100,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false).unwrap();
+        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false, None).unwrap();
         assert_eq!(report.messages, 2);
         assert_eq!(report.duplicates_dropped, 0);
     }
@@ -1013,7 +1017,7 @@ Carol,,Silent,+15555550133,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false).unwrap();
+        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false, None).unwrap();
         assert_eq!(report.conversations, 1);
         assert_eq!(report.unresolved_group_participants, 0);
         let body = fs::read_to_string(
@@ -1043,7 +1047,7 @@ Bob,,Example,+15555550122,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false).unwrap();
+        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false, None).unwrap();
         assert_eq!(report.conversations, 1);
         assert_eq!(report.unresolved_group_participants, 1);
     }
@@ -1071,7 +1075,7 @@ Bob,,,+15555550100,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false).unwrap();
+        let report = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), false, None).unwrap();
         assert_eq!(report.conversations, 2);
         assert_eq!(report.messages_files, 1);
         assert_eq!(report.whatsapp_files, 1);
@@ -1102,8 +1106,9 @@ Bob McRoy,2020-01-01 12:00:00,,,,,SMS,Incoming,+15555550100,Bob,Read,,,Hi,,image
         fs::write(chat.join("ABC123_image000000.jpg"), b"fake-jpeg-bytes").unwrap();
         let book = ContactsBook::empty();
         let out = dir.path().join("out");
-        let report = convert_export(&chat, &out, &book, Some("UTC"), &DateRange::default(), true)
-            .unwrap();
+        let report =
+            convert_export(&chat, &out, &book, Some("UTC"), &DateRange::default(), true, None)
+                .unwrap();
         assert_eq!(report.attachments_saved, 1);
         assert_eq!(report.messages, 1);
         let att_dir = out.join("attachments");

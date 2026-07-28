@@ -16,6 +16,7 @@ fn convert_fixture_json_individual_and_group() {
         &DateRange::default(),
         false,
         &[],
+        None,
     )
     .expect("convert");
 
@@ -82,6 +83,7 @@ fn copies_ios_style_media_true_data_paths() {
         &DateRange::default(),
         true,
         &[media_root.path().to_path_buf()],
+        None,
     )
     .expect("convert");
 

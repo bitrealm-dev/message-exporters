@@ -31,6 +31,7 @@ fn convert_smoke_writes_csv_not_json() {
         &DateRange::default(),
         false,
         true,
+        None,
     )
     .unwrap();
 
@@ -97,6 +98,7 @@ fn end_dedupe_collapses_duplicate_flats() {
         &DateRange::default(),
         false,
         true,
+        None,
     )
     .unwrap();
 
@@ -164,6 +166,7 @@ Will do\r\n"
         &DateRange::default(),
         false,
         true,
+        None,
     )
     .unwrap();
 

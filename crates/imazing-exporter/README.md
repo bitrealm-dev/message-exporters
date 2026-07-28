@@ -5,7 +5,7 @@ Convert [iMazing](https://imazing.com/) **Messages** and **WhatsApp** CSV export
 **Targeted upstream:** iMazing **3.5.5** (`export_tool` / `export_tool_version` on every output row).
 
 Design notes and known limitations: [`docs/DESIGN.md`](docs/DESIGN.md).  
-CLI reference (man-page style): [`docs/MANPAGE.md`](docs/MANPAGE.md).
+Library (`ExportConfig` / `run`) for the GUI; thin CLI for standalone use. CLI reference: [`docs/MANPAGE.md`](docs/MANPAGE.md).
 
 ## What this is for
 

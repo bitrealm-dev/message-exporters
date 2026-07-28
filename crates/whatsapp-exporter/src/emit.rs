@@ -1,5 +1,6 @@
 //! Convert wtsexporter JSON → per-conversation vault-shaped CSV.
 
+use crate::cancel::{check_cancel, CancelFlag};
 use crate::jid::{chat_id_from_jid, is_group_jid, jid_to_e164};
 use crate::parse::{
     load_chat_store, media_path, message_text, timestamp_secs, ChatJson, MessageJson,
@@ -89,12 +90,15 @@ struct PendingConversation {
 ///
 /// `media_search_roots` are directories tried when resolving relative media paths
 /// (typically the wtsexporter working directory / process cwd).
+///
+/// When `cancel` is set, it is checked between chats (cooperative cancellation).
 pub fn convert_json(
     json_path: &Path,
     output: &Path,
     date_range: &DateRange,
     copy_attachments: bool,
     media_search_roots: &[PathBuf],
+    cancel: Option<&CancelFlag>,
 ) -> Result<ExportReport> {
     fs::create_dir_all(output).with_context(|| format!("create {}", output.display()))?;
     clean_previous_csv(output)?;
@@ -107,6 +111,7 @@ pub fn convert_json(
     let mut conversations: BTreeMap<String, PendingConversation> = BTreeMap::new();
 
     for (jid, chat) in store {
+        check_cancel(cancel)?;
         if jid.starts_with('_') {
             // Reserved / system keys if any.
             continue;
@@ -129,6 +134,7 @@ pub fn convert_json(
     }
 
     for (chat_id, mut convo) in conversations {
+        check_cancel(cancel)?;
         write_conversation(output, &chat_id, &mut convo, &mut report)?;
     }
 

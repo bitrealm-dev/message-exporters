@@ -341,7 +341,7 @@ impl Options {
 ///
 /// When an export type is selected, the directory must not already contain
 /// files with that extension.
-fn validate_path(
+pub(crate) fn validate_path(
     export_path: Option<&String>,
     export_type: Option<&ExportType>,
 ) -> Result<PathBuf, RuntimeError> {

@@ -14,7 +14,8 @@ fn convert_all_conversations_with_vcf() {
 
     let book = ContactsBook::load_vcf(&vcf).expect("load vcf");
     let tmp = tempfile::tempdir().expect("tempdir");
-    let report = convert_export(&csv, tmp.path(), &book, &DateRange::default()).expect("convert");
+    let report =
+        convert_export(&csv, tmp.path(), &book, &DateRange::default(), None).expect("convert");
 
     assert_eq!(report.conversations, 1);
     assert_eq!(report.messages, 2);

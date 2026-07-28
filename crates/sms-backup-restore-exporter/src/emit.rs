@@ -1,5 +1,6 @@
 //! Convert SMS Backup & Restore XML → per-conversation CSV.
 
+use crate::cancel::{check_cancel, CancelFlag};
 use crate::xml::{parse_xml_file, AttachmentBlob, ConvType, ParsedMessage};
 use anyhow::{bail, Context, Result};
 use message_contacts::ContactsBook;
@@ -372,6 +373,9 @@ fn enrich_pending_names(book: &ContactsBook, chat_id: &str, msg: &mut PendingMes
 }
 
 /// Convert SMS Backup & Restore XML into per-conversation CSV.
+///
+/// When `cancel` is set, cooperative cancellation is checked between XML files
+/// and before writing. Cancelled runs return an error with message `cancelled`.
 pub fn convert_export(
     input: &Path,
     output_dir: &Path,
@@ -379,6 +383,7 @@ pub fn convert_export(
     contacts: &ContactsBook,
     date_range: &DateRange,
     copy_attachments: bool,
+    cancel: Option<&CancelFlag>,
 ) -> Result<ExportReport> {
     let owners = OwnerPhoneSet::new(owner_phones)?;
     let mut report = ExportReport::default();
@@ -392,6 +397,7 @@ pub fn convert_export(
     }
 
     for xml_path in collect_xml_paths(input)? {
+        check_cancel(cancel)?;
         match parse_xml_file(&xml_path, &owners.all_digits) {
             Ok((msgs, stats)) => {
                 report.sms_seen += stats.sms_seen;
@@ -423,6 +429,8 @@ pub fn convert_export(
             Err(err) => report.errors.push(format!("{}: {err:#}", xml_path.display())),
         }
     }
+
+    check_cancel(cancel)?;
 
     for (chat_id, mut convo) in conversations {
         for msg in &mut convo.messages {

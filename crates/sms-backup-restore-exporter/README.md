@@ -4,7 +4,7 @@ Convert an Android **SMS Backup & Restore** backup into one spreadsheet file per
 
 **Targeted upstream:** SMS Backup & Restore **10.26.003** (`export_tool` / `export_tool_version` on every output row).
 
-CLI reference (man-page style): [`docs/MANPAGE.md`](docs/MANPAGE.md).
+Library (`ExportConfig` / `run`) for the GUI; thin CLI for standalone use. CLI reference: [`docs/MANPAGE.md`](docs/MANPAGE.md).
 
 ## What this is for
 

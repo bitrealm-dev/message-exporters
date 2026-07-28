@@ -4,7 +4,7 @@ Convert WhatsApp Android/iOS databases (via [KnugiHK WhatsApp-Chat-Exporter](htt
 
 This crate shells out to the `wtsexporter` CLI, then maps its JSON into CSV. It does **not** vendor or clone that project.
 
-CLI reference (man-page style): [`docs/MANPAGE.md`](docs/MANPAGE.md).
+Library (`ExportConfig` / `run`) for the GUI; thin CLI for standalone use. Still shells out to `wtsexporter` for extract. CLI reference: [`docs/MANPAGE.md`](docs/MANPAGE.md).
 
 ## Install `wtsexporter`
 

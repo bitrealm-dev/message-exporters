@@ -330,7 +330,7 @@ impl Config {
 
     // MARK: Filters
     /// Resolve a comma-separated participant filter into chat and handle IDs.
-    pub(crate) fn resolve_filtered_handles(&mut self) {
+    pub fn resolve_filtered_handles(&mut self) {
         if let Some(conversation_filter) = &self.options.conversation_filter {
             let parsed_handle_filter = conversation_filter.split(',').collect::<Vec<&str>>();
 

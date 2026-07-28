@@ -1,14 +1,9 @@
 use std::path::PathBuf;
 
-use anyhow::{bail, Context, Result};
+use anyhow::Result;
 use clap::Parser;
-use imazing_exporter::convert_export;
-use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
-use message_contacts::ContactsBook;
-use message_csv::DateRange;
-use message_media::{
-    compress_options_from_cli, eprint_report, process_export_media, MaxResolution, MediaMode,
-};
+use imazing_exporter::{parse_date_range, run, ExportConfig};
+use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
 
 #[derive(Parser, Debug)]
 #[command(name = "imazing-exporter")]
@@ -70,96 +65,40 @@ struct Cli {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let date_range = DateRange::parse_optional_tz(
+    let date_range = parse_date_range(
         cli.start_date.as_deref(),
         cli.end_date.as_deref(),
         cli.timezone.as_deref(),
-    )
-    .map_err(anyhow::Error::msg)
-    .context("invalid date range")?;
-    let book = match cli.contacts.as_ref() {
-        Some(path) => {
-            if !path.is_file() {
-                bail!("contacts file not found: {}", path.display());
-            }
-            ContactsBook::load_imazing_contacts_csv(path)?
-        }
-        None => {
-            eprintln!(
-                "warning: no contacts file provided (--contacts); \
-                 phone numbers will not be resolved to names"
-            );
-            ContactsBook::empty()
-        }
-    };
-    let report = convert_export(
-        &cli.input,
-        &cli.output,
-        &book,
-        cli.timezone.as_deref(),
-        &date_range,
-        cli.media_mode.copies_attachments(),
     )?;
+    let compress = compress_options_from_cli(
+        cli.media_max_resolution,
+        cli.media_max_fps,
+        &cli.media_min_size,
+        cli.media_skip_efficient,
+    )?;
+    let result = run(&ExportConfig {
+        input: cli.input,
+        output: cli.output,
+        contacts: cli.contacts,
+        timezone: cli.timezone,
+        date_range,
+        media_mode: cli.media_mode,
+        compress,
+        obfuscate: cli.obfuscate,
+        obfuscate_seed: cli.obfuscate_seed,
+        cancel: None,
+    })?;
 
-    if cli.media_mode.needs_tools() {
-        let compress = compress_options_from_cli(
-            cli.media_max_resolution,
-            cli.media_max_fps,
-            &cli.media_min_size,
-            cli.media_skip_efficient,
-        )?;
-        let media = process_export_media(&cli.output, cli.media_mode, &compress)?;
-        eprint_report(&media);
-        if !media.errors.is_empty() && media.processed == 0 {
-            anyhow::bail!("media processing failed for all candidate files");
-        }
-    }
-
-    if cli.obfuscate || cli.obfuscate_seed.is_some() {
-        let mut anon = resolve_obfuscator(cli.obfuscate_seed.as_deref())?;
-        let n = obfuscate_export_dir(&cli.output, &mut anon)?;
-        eprintln!("Obfuscated {n} CSV file(s) under {}", cli.output.display());
-    }
-
-    println!("Wrote {}", cli.output.display());
-    match cli.contacts.as_ref() {
-        Some(path) => println!("  contacts from:       {}", path.display()),
-        None => println!("  contacts from:       (none)"),
-    }
-    println!("  messages CSVs:       {}", report.messages_files);
-    println!("  whatsapp CSVs:       {}", report.whatsapp_files);
-    println!("  conversations:       {}", report.conversations);
-    println!("  messages:            {}", report.messages);
-    println!("  attachments:         {}", report.attachments_saved);
-    println!("  sent / received:     {} / {}", report.sent, report.received);
-    if report.notifications > 0 {
-        println!("  notifications:       {}", report.notifications);
-    }
-    if report.duplicates_dropped > 0 {
-        println!("  duplicates dropped:  {}", report.duplicates_dropped);
-    }
-    if report.skipped_invalid_date > 0 {
-        println!("  skipped bad date:    {}", report.skipped_invalid_date);
-    }
-    if report.skipped_out_of_range > 0 {
-        println!("  skipped date range:  {}", report.skipped_out_of_range);
-    }
-    if report.unresolved_chat_phone > 0 {
-        println!(
-            "  unresolved phone:    {} (name-only chat ids; vault import may struggle)",
-            report.unresolved_chat_phone
-        );
-    }
-    if report.unresolved_group_participants > 0 {
-        println!(
-            "  unresolved members:  {} (group roster names with no phone in contacts)",
-            report.unresolved_group_participants
-        );
-    }
-    if !report.errors.is_empty() {
-        println!("  errors:              {}", report.errors.len());
-        for err in report.errors.iter().take(10) {
-            eprintln!("  - {err}");
+    for line in &result.messages {
+        if line.starts_with("Media:")
+            || line.starts_with("  media ")
+            || line.starts_with("Obfuscated ")
+            || line.starts_with("warning:")
+            || line.starts_with("  - ")
+        {
+            eprintln!("{line}");
+        } else {
+            println!("{line}");
         }
     }
     Ok(())

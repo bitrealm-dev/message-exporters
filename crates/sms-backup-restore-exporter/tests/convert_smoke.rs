@@ -26,6 +26,7 @@ fn convert_export_smoke_on_sample_fixture() {
         &contacts,
         &DateRange::default(),
         true,
+        None,
     )
     .expect("convert_export should succeed");
 
@@ -109,6 +110,7 @@ fn dedupes_overlapping_xml_files() {
         &contacts,
         &DateRange::default(),
         true,
+        None,
     )
     .unwrap();
     assert_eq!(report.sms_seen, 2);
@@ -134,6 +136,7 @@ fn rejects_owner_phone_without_digits() {
         &contacts,
         &DateRange::default(),
         true,
+        None,
     )
     .unwrap_err();
     assert!(

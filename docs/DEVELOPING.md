@@ -20,16 +20,16 @@ You need write access to the repository (to run workflows that create releases a
 
 ### What gets published
 
-For each platform, these binaries are attached to the release:
+For each platform, these binaries are attached to the release (standalone CLIs; the GUI links the exporter crates as libraries and does not need sibling exporter binaries for convert):
 
-- `go-sms-pro-exporter` (standalone CLI; the GUI links this crate as a library and does not need the sibling binary for GO SMS Pro)
+- `go-sms-pro-exporter`
 - `sms-backup-restore-exporter`
 - `sms-backup-plus-exporter`
 - `openextract-exporter`
 - `imazing-exporter`
 - `imessage-exporter`
 - `whatsapp-exporter`
-- `wtsexporter` / `wtsexporter.exe` (KnugiHK 0.13.0, for the WhatsApp bridge)
+- `wtsexporter` / `wtsexporter.exe` (KnugiHK 0.13.0, still required beside the GUI for WhatsApp extract)
 
 | Platform | Runner | Asset name suffix |
 |----------|--------|-------------------|

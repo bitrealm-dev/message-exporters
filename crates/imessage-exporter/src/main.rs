@@ -1,14 +1,9 @@
 #![forbid(unsafe_code)]
-#![doc = include_str!("../README.md")]
-mod app;
-mod exporters;
-
-pub use exporters::{csv::CSV, html::HTML, txt::TXT};
 
 use std::process::ExitCode;
 
-use app::{
-    options::{Options, from_command_line},
+use imessage_exporter::app::{
+    options::{from_command_line, Options},
     runtime::Config,
 };
 
@@ -18,7 +13,7 @@ fn main() -> ExitCode {
     // Create application options
     let options = Options::from_args(&args);
 
-    // Create app state and start
+    // Create app state and start (keep error text identical to pre-lib CLI)
     match options {
         Ok(options) => match Config::new(options) {
             Ok(mut app) => {

@@ -21,6 +21,7 @@ fn convert_messages_with_imazing_contacts() {
         Some("UTC"),
         &DateRange::default(),
         false,
+        None,
     )
     .expect("convert");
 
@@ -55,6 +56,7 @@ fn convert_whatsapp_csv_direct() {
         Some("UTC"),
         &DateRange::default(),
         false,
+        None,
     )
     .expect("convert");
 
@@ -82,6 +84,7 @@ fn convert_export_root_recursively_keeps_services_separate() {
         Some("UTC"),
         &DateRange::default(),
         false,
+        None,
     )
     .expect("convert");
 

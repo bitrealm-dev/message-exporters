@@ -4,7 +4,7 @@ Convert OpenExtract conversation CSV exports into one vault-shaped spreadsheet f
 
 **Targeted upstream:** OpenExtract **0.5.1** (`export_tool` / `export_tool_version` on every output row).
 
-CLI reference (man-page style): [`docs/MANPAGE.md`](docs/MANPAGE.md).
+Library (`ExportConfig` / `run`) for the GUI; thin CLI for standalone use. CLI reference: [`docs/MANPAGE.md`](docs/MANPAGE.md).
 
 ## What this is for
 

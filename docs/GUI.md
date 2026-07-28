@@ -8,9 +8,9 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 ## Goals
 
 - One app for Linux, macOS, and Windows with a native look and feel.
-- Drive exporters without reimplementing conversion in the UI: most sources spawn their CLI binary; **GO SMS Pro** calls the `go-sms-pro-exporter` library in-process (same pipeline as the standalone CLI).
+- Drive exporters via their Rust libraries in-process (`ExportConfig` + `run`); each crate also ships a thin standalone CLI with the same pipeline.
 - Show only the controls that apply to the selected backup source; validate before run.
-- Stream converter stdout/stderr (or library log lines) in the UI; support cancel.
+- Stream library log lines in the UI; support cancel (cooperative flags; WhatsApp’s external `wtsexporter` step is not killable mid-run).
 - Prefer plain-language labels and product site links over CLI jargon.
 
 ## Current implementation
@@ -19,15 +19,15 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 - Top tab panel: **Validate contacts** (default, first) | **Export**.
 - Typed forms and CLI argument builders for every backup source converter (`exporters.rs`).
 - Native file/folder dialogs through `rfd`.
-- Exporter / tool discovery beside the GUI executable, in `MESSAGE_EXPORTERS_BIN`, then on `PATH` (not required for GO SMS Pro).
-- Live tagged log and cancellation (mpsc poll in `update`): kill for spawned CLIs; cooperative cancel flag for in-process GO SMS Pro.
-- Exporter-specific validation before launch.
+- Export converters are linked libraries (no sibling exporter binaries required for convert). `contacts-validate` and WhatsApp’s `wtsexporter` still resolve beside the GUI, via `MESSAGE_EXPORTERS_BIN`, or on `PATH`.
+- Live tagged log and cooperative cancellation (mpsc poll in `update`).
+- Exporter-specific validation before launch (`Form::build_args` rules, then library config).
 - Backup-source titles link to the upstream product site.
 - **Global options** (Obfuscate + Start/End date) above the per-source form (Export tab).
 
 Export options persist in `export.ini` (load on start; save on Run / exit). Prefer an existing file in the working directory, else beside the GUI binary; otherwise create `./export.ini` on first save. Template: [`export.example.ini`](../crates/message-exporters-gui/export.example.ini). Backup passwords are never written.
 
-Build all sibling executables, then run:
+Build the workspace, then run:
 
 ```bash
 cargo build --workspace
@@ -67,7 +67,7 @@ Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules a
 | Input | path picker (file and/or folder) | `--input` / `-p` / etc. | Single path only |
 | Output | folder picker | `--output` / `-o` | Required; choose explicitly (not derived from input) |
 | Contacts | path picker | `--contacts` / `--vcf` / `-n` | Format depends on exporter; optional with warning |
-| Run / Cancel | actions | spawn process | Stream logs; kill on cancel |
+| Run / Cancel | actions | in-process library `run` | Stream logs; cooperative cancel |
 
 ## Show / hide by backup source
 
@@ -94,11 +94,11 @@ Convert/Compress need `ffmpeg`/`ffprobe` on PATH. **Do not copy** skips writing 
 
 ## Per-exporter options
 
-### GO SMS Pro — library (`go-sms-pro-exporter`)
+### GO SMS Pro — `go-sms-pro-exporter`
 
 Product: [GO SMS Pro](https://play.google.com/store/apps/details?id=com.jb.gosms)
 
-Runs **in-process** via `go_sms_pro_exporter::run` (no sibling `go-sms-pro-exporter` binary required). The same crate still ships a standalone CLI for non-GUI users. Cancel is cooperative (checked between XML/PDU files).
+In-process via `go_sms_pro_exporter::run`. Cancel is cooperative (between XML/PDU files).
 
 | Control | Type | Required | Library / CLI equivalent |
 |---------|------|:--------:|-----|

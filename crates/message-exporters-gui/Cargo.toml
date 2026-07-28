@@ -9,6 +9,12 @@ chrono = "0.4.44"
 eframe = "0.31"
 egui = "0.31"
 go-sms-pro-exporter = { path = "../go-sms-pro-exporter", default-features = false }
+imazing-exporter = { path = "../imazing-exporter", default-features = false }
+imessage-exporter = { path = "../imessage-exporter" }
+openextract-exporter = { path = "../openextract-exporter", default-features = false }
+sms-backup-plus-exporter = { path = "../sms-backup-plus-exporter", default-features = false }
+sms-backup-restore-exporter = { path = "../sms-backup-restore-exporter", default-features = false }
+whatsapp-exporter = { path = "../whatsapp-exporter", default-features = false }
 message-obfuscate = { path = "../message-obfuscate" }
 message-contacts = { path = "../message-contacts" }
 message-exporters-core = { path = "../message-exporters-core" }

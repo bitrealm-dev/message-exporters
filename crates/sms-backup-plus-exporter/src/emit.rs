@@ -1,6 +1,7 @@
 //! Convert SMS Backup+ `.eml` trees into per-conversation CSV.
 
 use crate::archive::parse_archive_eml_mail;
+use crate::cancel::{check_cancel, CancelFlag};
 use crate::contacts::{
     apply_name_mapping, enrich_display_names, fill_unknown_phone,
 };
@@ -397,13 +398,17 @@ fn clean_previous_csv(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn collect_eml_paths<P: AsRef<Path>>(inputs: &[P]) -> Result<Vec<PathBuf>> {
+fn collect_eml_paths<P: AsRef<Path>>(
+    inputs: &[P],
+    cancel: Option<&CancelFlag>,
+) -> Result<Vec<PathBuf>> {
     if inputs.is_empty() {
         bail!("at least one --input path is required");
     }
 
-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>, cancel: Option<&CancelFlag>) -> Result<()> {
         for entry in fs::read_dir(dir)? {
+            check_cancel(cancel)?;
             let entry = entry?;
             let ft = entry.file_type()?;
             let path = entry.path();
@@ -416,7 +421,7 @@ fn collect_eml_paths<P: AsRef<Path>>(inputs: &[P]) -> Result<Vec<PathBuf>> {
                 if matches!(name.as_str(), "duplicate" | "exclude" | ".git") {
                     continue;
                 }
-                walk(&path, out)?;
+                walk(&path, out, cancel)?;
             } else if ft.is_file()
                 && path
                     .extension()
@@ -431,6 +436,7 @@ fn collect_eml_paths<P: AsRef<Path>>(inputs: &[P]) -> Result<Vec<PathBuf>> {
 
     let mut paths = Vec::new();
     for input in inputs {
+        check_cancel(cancel)?;
         let input = input.as_ref();
         if input.is_file() {
             if input
@@ -447,7 +453,7 @@ fn collect_eml_paths<P: AsRef<Path>>(inputs: &[P]) -> Result<Vec<PathBuf>> {
         if !input.is_dir() {
             bail!("input is not a file or directory: {}", input.display());
         }
-        walk(input, &mut paths)?;
+        walk(input, &mut paths, cancel)?;
     }
 
     // Stable order for deterministic CSV dedupe winners when timestamps tie.
@@ -572,6 +578,8 @@ fn report_progress(verbose: bool, label: &str, processed: u64, total: u64) {
 ///
 /// Deduplication runs while scanning, using [`cover_identity`] (second-floored
 /// chat + direction + text) so archive and flat copies of the same SMS collapse.
+/// When `cancel` is set, cooperative cancellation is checked during the EML walk
+/// and while merging parse results.
 pub fn convert_export<P: AsRef<Path>>(
     inputs: &[P],
     output_dir: &Path,
@@ -582,6 +590,7 @@ pub fn convert_export<P: AsRef<Path>>(
     date_range: &DateRange,
     verbose: bool,
     copy_attachments: bool,
+    cancel: Option<&CancelFlag>,
 ) -> Result<ExportReport> {
     let owners = OwnerPhoneSet::new(owner_phones)?;
     let owner_emails_lc: Vec<String> = owner_emails
@@ -614,11 +623,13 @@ pub fn convert_export<P: AsRef<Path>>(
         .cloned()
         .collect();
 
-    let eml_paths = collect_eml_paths(inputs)?;
+    let eml_paths = collect_eml_paths(inputs, cancel)?;
     let total = eml_paths.len() as u64;
     vlog(verbose, format!("scanning {total} .eml files (parallel parse)"));
     // Pre-size for typical 1:1 chat counts; grows as needed.
     conversations.reserve((total / 4).min(50_000) as usize);
+
+    check_cancel(cancel)?;
 
     // Parallel: read + MIME parse + message build. Serial: attachment write + dedupe merge.
     let outcomes: Vec<ParsedEmlKind> = eml_paths
@@ -637,6 +648,7 @@ pub fn convert_export<P: AsRef<Path>>(
         .collect();
 
     for (idx, outcome) in outcomes.into_iter().enumerate() {
+        check_cancel(cancel)?;
         report_progress(verbose, "scanned", (idx + 1) as u64, total);
         match outcome {
             ParsedEmlKind::Archive {
@@ -727,6 +739,7 @@ pub fn convert_export<P: AsRef<Path>>(
     );
     let mut written = 0u64;
     for (chat_id, mut convo) in conversations {
+        check_cancel(cancel)?;
         write_conversation(output_dir, &chat_id, &mut convo, &mut report)?;
         if !convo.messages.is_empty() {
             report.conversations += 1;

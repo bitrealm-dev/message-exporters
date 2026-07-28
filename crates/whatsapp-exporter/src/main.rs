@@ -1,17 +1,9 @@
-use std::env;
-use std::fs;
 use std::path::PathBuf;
 
-use anyhow::{bail, Context, Result};
+use anyhow::Result;
 use clap::{Parser, ValueEnum};
-use message_csv::DateRange;
-use message_media::{
-    compress_options_from_cli, eprint_report, process_export_media, MaxResolution, MediaMode,
-};
-use message_obfuscate::{obfuscate_export_dir, resolve_obfuscator};
-use whatsapp_exporter::{
-    convert_json, resolve_wtsexporter, run_wtsexporter, ExportReport, Platform, WtsexporterArgs,
-};
+use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
+use whatsapp_exporter::{parse_date_range, run, ExportConfig, Platform};
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum CliPlatform {
@@ -114,141 +106,42 @@ struct Cli {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let date_range = DateRange::parse(cli.start_date.as_deref(), cli.end_date.as_deref())
-        .map_err(anyhow::Error::msg)
-        .context("invalid date range")?;
-
-    let json_path = if let Some(json) = &cli.json {
-        json.clone()
-    } else {
-        let platform = cli
-            .platform
-            .ok_or_else(|| anyhow::anyhow!("--platform is required unless --json is set"))?;
-        let input = match cli.input.clone() {
-            Some(path) => path,
-            None => env::current_dir().context("resolve current working directory")?,
-        };
-
-        let bin = resolve_wtsexporter()?;
-        fs::create_dir_all(&cli.output)
-            .with_context(|| format!("create {}", cli.output.display()))?;
-        // Scratch dir for wtsexporter cwd (iOS/Android extract) + result.json.
-        // Kept until after convert so media copy can read extracted files.
-        let work = tempfile::Builder::new()
-            .prefix("wtsexporter-")
-            .tempdir_in(&cli.output)
-            .context("create temp dir for wtsexporter")?;
-        let json_out = work.path().join("result.json");
-        let move_media = cli.media_mode.copies_attachments() && cli.media.is_some();
-        let log = run_wtsexporter(
-            &bin,
-            &WtsexporterArgs {
-                platform: platform.into(),
-                input: input.clone(),
-                work_dir: work.path().to_path_buf(),
-                key: cli.key.clone(),
-                backup: cli.backup.clone(),
-                wa: cli.wa.clone(),
-                media: cli.media.clone(),
-                db: cli.db.clone(),
-                business: cli.business,
-                move_media,
-            },
-            &json_out,
-        )?;
-        if !log.trim().is_empty() {
-            eprint!("{log}");
-            if !log.ends_with('\n') {
-                eprintln!();
-            }
-        }
-        let kept = cli.output.join("wtsexporter_result.json");
-        fs::copy(&json_out, &kept).with_context(|| format!("copy JSON to {}", kept.display()))?;
-
-        let mut media_roots = vec![work.path().to_path_buf(), input];
-        if let Ok(cwd) = env::current_dir() {
-            media_roots.push(cwd);
-        }
-        media_roots.sort();
-        media_roots.dedup();
-
-        let report = convert_json(
-            &kept,
-            &cli.output,
-            &date_range,
-            cli.media_mode.copies_attachments(),
-            &media_roots,
-        )?;
-        drop(work);
-        return finish_export(&cli, report);
-    };
-
-    if !json_path.is_file() {
-        bail!("JSON not found: {}", json_path.display());
-    }
-
-    let mut media_roots = Vec::new();
-    if let Ok(cwd) = env::current_dir() {
-        media_roots.push(cwd);
-    }
-    if let Some(input) = &cli.input {
-        media_roots.push(input.clone());
-    }
-    if let Some(parent) = json_path.parent() {
-        media_roots.push(parent.to_path_buf());
-    }
-    media_roots.sort();
-    media_roots.dedup();
-
-    let report = convert_json(
-        &json_path,
-        &cli.output,
-        &date_range,
-        cli.media_mode.copies_attachments(),
-        &media_roots,
+    let date_range = parse_date_range(cli.start_date.as_deref(), cli.end_date.as_deref())?;
+    let compress = compress_options_from_cli(
+        cli.media_max_resolution,
+        cli.media_max_fps,
+        &cli.media_min_size,
+        cli.media_skip_efficient,
     )?;
-    finish_export(&cli, report)
-}
+    let result = run(&ExportConfig {
+        input: cli.input,
+        output: cli.output,
+        platform: cli.platform.map(Into::into),
+        json: cli.json,
+        key: cli.key,
+        backup: cli.backup,
+        wa: cli.wa,
+        media: cli.media,
+        db: cli.db,
+        business: cli.business,
+        date_range,
+        media_mode: cli.media_mode,
+        compress,
+        obfuscate: cli.obfuscate,
+        obfuscate_seed: cli.obfuscate_seed,
+        cancel: None,
+    })?;
 
-fn finish_export(cli: &Cli, report: ExportReport) -> Result<()> {
-    if cli.media_mode.needs_tools() {
-        let compress = compress_options_from_cli(
-            cli.media_max_resolution,
-            cli.media_max_fps,
-            &cli.media_min_size,
-            cli.media_skip_efficient,
-        )?;
-        let media = process_export_media(&cli.output, cli.media_mode, &compress)?;
-        eprint_report(&media);
-        if !media.errors.is_empty() && media.processed == 0 {
-            bail!("media processing failed for all candidate files");
-        }
-    }
-
-    if cli.obfuscate || cli.obfuscate_seed.is_some() {
-        let mut anon = resolve_obfuscator(cli.obfuscate_seed.as_deref())?;
-        let n = obfuscate_export_dir(&cli.output, &mut anon)?;
-        eprintln!("Obfuscated {n} CSV file(s) under {}", cli.output.display());
-    }
-
-    println!("Wrote {}", cli.output.display());
-    println!("  conversations:      {}", report.conversations);
-    println!("  messages:           {}", report.messages);
-    println!("  attachments:        {}", report.attachments_saved);
-    if report.attachments_missing > 0 {
-        println!("  attachments missing:{}", report.attachments_missing);
-    }
-    println!("  sent / received:    {} / {}", report.sent, report.received);
-    if report.skipped_invalid_date > 0 {
-        println!("  skipped bad date:   {}", report.skipped_invalid_date);
-    }
-    if report.skipped_out_of_range > 0 {
-        println!("  skipped date range: {}", report.skipped_out_of_range);
-    }
-    if !report.errors.is_empty() {
-        println!("  errors:             {}", report.errors.len());
-        for err in report.errors.iter().take(10) {
-            println!("    {err}");
+    for line in &result.messages {
+        // Media / obfuscate / wtsexporter log → stderr; convert summary → stdout.
+        if line.starts_with("Media:")
+            || line.starts_with("  media ")
+            || line.starts_with("Obfuscated ")
+            || !(line.starts_with("Wrote ") || line.starts_with("  "))
+        {
+            eprintln!("{line}");
+        } else {
+            println!("{line}");
         }
     }
     Ok(())

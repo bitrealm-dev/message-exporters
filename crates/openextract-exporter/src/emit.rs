@@ -1,5 +1,6 @@
 //! Convert OpenExtract rows → per-conversation vault-shaped CSV.
 
+use crate::cancel::{check_cancel, CancelFlag};
 use crate::parse::{discover_csv_files, parse_csv_file, RawRow, SourceKind};
 use anyhow::{Context, Result};
 use chrono::DateTime;
@@ -71,11 +72,15 @@ struct PendingConversation {
 }
 
 /// Convert OpenExtract CSV(s) under `input` using `book` (from VCF/contacts).
+///
+/// When `cancel` is set, cooperative cancellation is checked between CSV files
+/// and before writing. Cancelled runs return an error with message `cancelled`.
 pub fn convert_export(
     input: &Path,
     output: &Path,
     book: &ContactsBook,
     date_range: &DateRange,
+    cancel: Option<&CancelFlag>,
 ) -> Result<ExportReport> {
     fs::create_dir_all(output).with_context(|| format!("create {}", output.display()))?;
     clean_previous_csv(output)?;
@@ -86,6 +91,7 @@ pub fn convert_export(
 
     // For per-chat files, infer peer once from all rows in that file.
     for path in &files {
+        check_cancel(cancel)?;
         let rows = match parse_csv_file(path) {
             Ok(r) => r,
             Err(e) => {
@@ -150,6 +156,8 @@ pub fn convert_export(
             });
         }
     }
+
+    check_cancel(cancel)?;
 
     for (chat_id, mut convo) in conversations {
         write_conversation(output, &chat_id, &mut convo, &mut report)?;
@@ -429,7 +437,7 @@ TEL;TYPE=CELL:+1-555-555-0122\nEND:VCARD\n",
         );
         let book = ContactsBook::load_vcf(&vcf).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, &DateRange::default()).unwrap();
+        let report = convert_export(dir.path(), &out, &book, &DateRange::default(), None).unwrap();
         assert_eq!(report.conversations, 1);
         assert_eq!(report.unresolved_chat_phone, 0);
         let csv_path = out.join("+15555550122.csv");
@@ -456,7 +464,7 @@ TEL:+15555550999\nEND:VCARD\n",
         );
         let book = ContactsBook::load_vcf(&vcf).unwrap();
         let out = dir.path().join("out");
-        let report = convert_export(dir.path(), &out, &book, &DateRange::default()).unwrap();
+        let report = convert_export(dir.path(), &out, &book, &DateRange::default(), None).unwrap();
         assert!(report.unresolved_chat_phone >= 1);
         assert_eq!(report.conversations, 1);
         let csv_path = out.join("Cathy_Arp.csv");
@@ -479,7 +487,7 @@ TEL:+15555550999\nEND:VCARD\n",
         let range =
             DateRange::parse_optional_tz(Some("2020-01-01"), Some("2020-01-02"), Some("UTC"))
                 .unwrap();
-        let report = convert_export(dir.path(), &out, &book, &range).unwrap();
+        let report = convert_export(dir.path(), &out, &book, &range, None).unwrap();
         assert_eq!(report.skipped_out_of_range, 2);
         assert_eq!(report.messages, 1);
         let body = fs::read_to_string(out.join("+15555550122.csv")).unwrap();
