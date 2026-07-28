@@ -1,41 +1,35 @@
-## Introduction
+# Introduction
 
-*message-exporters* converts message backups and existing export-tool output into a consistent, portable CSV format. It produces one file per conversation and saves attachments alongside the exported messages.
+Message Exporters turns phone message backups into plain files a spreadsheet, mail program, or other tool can open. Each conversation becomes its own file (or folder), with photos and other media saved beside the messages when the chosen format needs them.
 
-The project does not try to replace the specialist tools that extract data from phones and backups. Instead, it builds on their work: it wraps, normalizes, and converts their output so the result is easier to archive, search, transform, or use in another application.
+The app does not replace the tools that pull data off a phone. Use those tools (or a vendor backup) first, then run Message Exporters to normalize the result into a format that is easy to archive, search, or move elsewhere.
 
-## Motivation
+## Output formats
 
-Phone backups are made for restoring a device—not for letting people read or reuse their message history.
+| Format | Best for |
+|--------|----------|
+| **CSV** | Spreadsheets, scripts, and vault-style import |
+| **EML** | Reading threads in a mail client (one folder per chat) |
+| **MBOX** | One mailbox file per chat |
+| **JSON** / **JSON Lines** | Machine-readable archives and round-trips |
+| **XML** | One SyncTech `smses.xml` backup for restore-oriented workflows |
 
-iCloud and Google backups generally cannot be browsed as an archive; they are meant to be restored to a phone. Apple’s local iTunes/Finder backups give users a copy of their data, but the messages still require separate tools to extract. On Android, complete application-data backups are usually unavailable without root, leaving users dependent on app-specific backup and export options.
+See [Choose an output format](formats.md) for guidance.
 
-Once messages are extracted, every tool has its own format and limitations. One may produce HTML, another XML, a database, or an incomplete export. Attachments, sender phone numbers, group participants, timestamps, and conversation titles may be missing or difficult to use. The output may look fine in a browser but be unsuitable for filtering, searching, analysis, custom rendering, or conversion to JSON or XML.
+## Supported backups
 
-`message-exporters` avoids reinventing that extraction process. It provides a common CSV-based output that preserves the message data and available metadata from existing tools, giving users a format they can inspect and use however they want.
+These paths are the recommended Message-tab sources:
 
-## Why CSV?
+1. **iPhone backup** — Apple Messages (`chat.db` / iOS backup)
+2. **SMS Backup & Restore** — SyncTech XML
+3. **WhatsApp** — native database or encrypted `crypt` backup (via `wtsexporter`)
 
-JSON is good for programs but difficult for humans to skim. HTML is easy to browse but awkward to sort, filter, or reuse as data.
+Experimental converters (GO SMS Pro, iMazing CSV, OpenExtract, SMS Backup+) ship in the same release for cases where those are the only backups available. See [Experimental backups](exporters/experimental.md).
 
-CSV is the middle ground: plain text, easy to check, and supported by spreadsheets, scripts, databases, and archival tools. One row per message makes conversations simple to sort, filter, validate, convert, and import elsewhere—including message-vault-rs.
+Already exported once? Use [Re-export between formats](reexport.md) to convert an existing output folder without re-reading the phone backup.
 
-It is not meant to preserve every source-specific detail. It is a simple, portable common format that users can keep and use without relying on the original backup tool.
+## Next steps
 
-## Supported vs. Experimental
-
-The desktop app focuses on 3 supported import paths:
-
-1. **iPhone backups** — Apple Messages exports produced by `imessage-ir-exporter`
-2. **SMS Backup & Restore** — SyncTech XML backups
-3. **WhatsApp** — native databases and encrypted `crypt` backups processed by `wtsexporter`
-
-Converters for:
-
-- GO SMS Pro
-- iMazing CSV
-- OpenExtract
-- SMS Backup+
-   
-are also included in the release ZIP, but are considered **experimental**. They are available for cases where those are the only backups you have, rather than recommended import methods.
-
+1. [Install](install.md) the desktop app from a GitHub Release.
+2. [Use the desktop app](desktop-app.md) for a first successful export.
+3. Open the guide for the backup type in hand under **Export**.

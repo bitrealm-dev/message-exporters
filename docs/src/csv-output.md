@@ -1,83 +1,55 @@
-# CSV output
+# CSV columns
 
-All converters write **one CSV file per conversation**, plus an `attachments/` directory when media is copied, and a `<stem>.meta.json` sidecar for conversation/export header.
+CSV exports write one spreadsheet file per conversation, a `<stem>.meta.json` header sidecar, and an `attachments/` directory when media is copied. Use this page when inspecting or importing CSV rows.
 
-CSV is projected from [canonical IR](../MESSAGE_IR.md) (`schema_version` 3) via `message_ir::FormatSink` / `write_format`. Reverse import: `message_ir::read_conversation_csv`. A **mail archive** path is specified in [`MAIL_ARCHIVE.md`](../MAIL_ARCHIVE.md).
+## Conventions
 
-## Shared conventions
-
-- Peer identity is `chat_identifier` (there is no separate receiver-phone column).
-- Direction is `direction` (`incoming` / `outgoing`).
-- Outgoing rows fill `sender_handle` / `sender_display_name` from `owner_handle` / `owner_display_name` (display defaults to `"Me"` when a handle is known).
+- Peer identity is `chat_identifier` (no separate receiver-phone column).
+- Direction is `direction`: `incoming` or `outgoing`.
+- Outgoing rows fill `sender_handle` / `sender_display_name` from the export owner (display defaults to `Me` when a handle is known).
 - Every row includes `export_source`, `export_tool`, `export_tool_version`, and owner columns.
-- All exporters share one header set ([`CSV_HEADERS`](../../crates/message-ir/src/lib.rs)). Apple-only cells are empty for non-iMessage sources.
+- All backup sources share one header set. Apple-only cells stay empty for non-iMessage sources.
 
-## Nested bag cells
+## Nested JSON cells
 
-`source_fields_json`, `parts_json`, `edits_json`, `tapbacks_json`, `app_json`:
+Columns such as `source_fields_json`, `parts_json`, `edits_json`, `tapbacks_json`, and `app_json`:
 
-- **Absent** → empty string (never the literal `null`)
+- **Absent** → empty string (never the literal word `null`)
 - **Present** → compact JSON
 
-Booleans (`is_deleted`, `is_reply`, `is_announcement`) are always `"true"` / `"false"`.
+Booleans (`is_deleted`, `is_reply`, `is_announcement`) are always `true` or `false` as text.
 
 ## Meta sidecar
 
-Alongside `<stem>.csv`, writers emit `<stem>.meta.json` with the same shape as a JSONL header:
+Beside `<stem>.csv`, the exporter writes `<stem>.meta.json` with schema version, export identity, and conversation header. Tools that re-read CSV prefer this sidecar when present.
 
-```json
-{
-  "schema_version": 3,
-  "export": { … },
-  "conversation": { … }
-}
-```
+## Column list
 
-Readers prefer the sidecar; if missing, they reconstruct from the first data row.
-
-## Column contract
-
-| Column | Notes |
-|--------|--------|
+| Column | Meaning |
+|--------|---------|
 | `chat_identifier` | Conversation id |
-| `conversation_type` | `individual` / `group` |
+| `conversation_type` | `individual` or `group` |
 | `group_title` | Empty when none |
 | `participants_json` | `[{handle, display_name}, …]` |
 | `guid` | Stable message id |
 | `timestamp` / `timestamp_utc` / `timestamp_display` | Local RFC3339, UTC RFC3339, human display |
-| `timestamp_unix_ms` | Unix epoch milliseconds (replaces legacy `date_ms`) |
+| `timestamp_unix_ms` | Unix epoch milliseconds |
 | `direction` | `incoming` / `outgoing` |
 | `service` | `sms` / `imessage` / `whatsapp` / `rcs` / `unknown` |
 | `sender_handle` / `sender_display_name` | Peer or owner (outgoing) |
 | `subject` / `text` | Message body fields |
-| `attachments_json` | Array of `{path, original_name, mime_type, digest_sha256?, …}` |
+| `attachments_json` | Array of attachment objects (`path`, `original_name`, `mime_type`, digests when present) |
 | `message_kind` | `sms` / `mms` / `imessage` / `tapback` / … |
 | `export_source` / `export_tool` / `export_tool_version` | Provenance |
 | `owner_handle` / `owner_display_name` | Export owner identity |
-| `android_type` | Android Telephony type as integer string, else empty |
-| `source_fields_json` | Vendor leftover object (replaces `xml_fields_json`) |
-| `read_receipt` … `tapback_action` | iMessage extensions; empty cells for SMS |
+| `android_type` | Android Telephony type as an integer string, else empty |
+| `source_fields_json` | Vendor leftover object |
+| `read_receipt` … `tapback_action` | iMessage extensions; empty for SMS |
 
-Removed legacy columns: `date_ms`, `contact_name`, `xml_fields_json`.
-
-## Attachments / media modes
-
-Every IR exporter supports `--media-mode` for **all** output formats (applied in `FormatSink` before projection):
-
-| Mode | Behavior |
-|------|----------|
-| `disabled` | No media files |
-| `clone` (default) | Copy originals |
-| `convert` | Standardize to `.jpg` / `.mp4` / `.mp3` (needs ffmpeg) |
-| `compress` | Re-encode with optional max resolution / fps / min size (needs ffmpeg) |
-
-Details: [`crates/message-media`](https://github.com/bitrealm-dev/message-exporters/tree/main/crates/message-media).
-
-## Obfuscate
-
-Add `--obfuscate` (optional `--obfuscate-seed` with exactly 8 hex characters) to rewrite names, numbers, message text (same length), and media into a shareable structure without PII. Applies to every format via `FormatSink`. See [`crates/message-obfuscate`](https://github.com/bitrealm-dev/message-exporters/tree/main/crates/message-obfuscate).
+Legacy columns `date_ms`, `contact_name`, and `xml_fields_json` are not written.
 
 ## Related
 
-- [MESSAGE_IR.md](../MESSAGE_IR.md)
-- [exporter overview](exporters/overview.md)
+- [Choose an output format](formats.md)
+- [Attachments and privacy](attachments-privacy.md)
+- Developer IR specification: [MESSAGE_IR.md](../MESSAGE_IR.md)

@@ -2,19 +2,25 @@
 
 [Introduction](introduction.md)
 [Install](install.md)
-[Desktop GUI](gui.md)
+[Use the desktop app](desktop-app.md)
+[Choose an output format](formats.md)
 
-# Exporters
+# Export
 
 - [Overview](exporters/overview.md)
-- [iPhone backup](exporters/imessage.md)
-- [SMS Backup & Restore](exporters/sms-backup-restore.md)
-- [WhatsApp](exporters/whatsapp.md)
-- [Experimental](exporters/experimental.md)
+- [Export an iPhone backup](exporters/imessage.md)
+- [Export SMS Backup & Restore](exporters/sms-backup-restore.md)
+- [Export WhatsApp](exporters/whatsapp.md)
+- [Check and update contacts](contacts.md)
+- [Re-export between formats](reexport.md)
+- [Attachments and privacy](attachments-privacy.md)
+- [Experimental backups](exporters/experimental.md)
 
-- [CSV output](csv-output.md)
+# Reference
 
-# Reference (CLI man pages)
+- [CSV columns](csv-output.md)
+
+# CLI reference
 
 - [go-sms-pro-exporter](reference/go-sms-pro.md)
 - [sms-backup-restore-exporter](reference/sms-backup-restore.md)
@@ -23,5 +29,8 @@
 - [imazing-exporter](reference/imazing.md)
 - [whatsapp-exporter](reference/whatsapp.md)
 - [imessage-ir-exporter](reference/imessage.md)
+- [message-reexporter](reference/message-reexport.md)
+
+# For maintainers
 
 - [Developing / releases](developing.md)

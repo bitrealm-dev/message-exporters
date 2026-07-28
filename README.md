@@ -18,7 +18,7 @@ Read the full guide (install, desktop app, supported backups, CSV layout):
 
 **https://bitrealm-dev.github.io/message-exporters/**
 
-Source Markdown lives in [`docs/`](docs/) (mdBook). Chapters also pull in crate READMEs.
+Source Markdown lives in [`docs/src/`](docs/src/) (mdBook end-user guides).
 
 ## Quick start
 

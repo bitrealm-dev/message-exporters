@@ -1,42 +1,49 @@
 # Install
 
-## Prebuilt binaries (recommended)
+Install the desktop app from a GitHub Release so Message Exporters and its helper tools stay in one folder.
+
+## Download
 
 1. Open the latest [GitHub Release](https://github.com/bitrealm-dev/message-exporters/releases).
-2. Download the archive for your OS:
-   - Linux: `*-x86_64-unknown-linux-gnu`
-   - Windows: `*-x86_64-pc-windows-msvc.exe`
-   - macOS (Apple Silicon): `*-aarch64-apple-darwin`
-3. Keep the GUI and exporter binaries in the **same folder** (the GUI finds siblings first).
-4. For WhatsApp, also keep `wtsexporter` (or `wtsexporter.exe`) next to `whatsapp-exporter`—it is attached to the same release.
+2. Download the archive for the machine:
+   - **Linux:** `*-x86_64-unknown-linux-gnu`
+   - **Windows:** `*-x86_64-pc-windows-msvc` (`.exe` files)
+   - **macOS (Apple Silicon):** `*-aarch64-apple-darwin`
+3. Extract the archive to a permanent folder (for example under Documents).
+4. Keep every extracted file in that **same folder**. Do not move the GUI away from the helpers.
 
-Then run `message-exporters-gui` (or the `.exe` on Windows).
+Helpers that still run as separate programs:
 
-Optional: put the folder on your `PATH`, or set `MESSAGE_EXPORTERS_BIN` to that directory.
+| Helper | Needed for |
+|--------|------------|
+| `contacts-validate` | Contacts tab Check / Update |
+| `wtsexporter` | WhatsApp extraction |
 
-## Build from source
+Export converters for other backup types run inside the GUI; keeping them in the folder is still useful for standalone CLI use.
 
-You need [Rust](https://www.rust-lang.org/tools/install) (`cargo`).
+## Run the desktop app
 
-```bash
-git clone https://github.com/bitrealm-dev/message-exporters.git
-cd message-exporters
-cargo build --workspace --release
-cargo run --release -p message-exporters-gui
-```
+1. Open the install folder.
+2. Start `message-exporters-gui` (Windows: `message-exporters-gui.exe`).
+3. If the OS blocks an unsigned download, allow the app once through the security prompt (SmartScreen / Gatekeeper), then start it again.
 
-Binaries land under `target/release/`.
+Optional:
 
-### WhatsApp helper (`wtsexporter`)
+- Add the install folder to `PATH`, or
+- Set `MESSAGE_EXPORTERS_BIN` to that folder so helpers are found when the working directory differs.
 
-Either use the binary from the GitHub Release, or:
+## WhatsApp helper
 
-```bash
-pip install 'whatsapp-chat-exporter[android_backup,crypt15]'
-```
+Keep `wtsexporter` (or `wtsexporter.exe`) next to the GUI. It is attached to the same Release.
 
-Override discovery with `WTSEXPORTER=/path/to/wtsexporter`.
+To override discovery, set `WTSEXPORTER` to the full path of the helper binary.
 
-### Media convert / compress
+## Convert and compress media
 
-`convert` and `compress` attachment modes need **ffmpeg** and **ffprobe** on `PATH`.
+Attachment **Convert** and **Compress** need `ffmpeg` and `ffprobe` on `PATH`. Install a current ffmpeg build for the OS before using those modes. See [Attachments and privacy](attachments-privacy.md).
+
+## Result
+
+The desktop app opens with tabs **Contacts**, **Message**, **Re-export**, and **Log**. Continue with [Use the desktop app](desktop-app.md).
+
+Build-from-source instructions for contributors are under [Developing / releases](developing.md).

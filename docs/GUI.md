@@ -23,7 +23,8 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 - Live tagged log and cooperative cancellation (mpsc poll in `update`).
 - Exporter-specific validation before launch (`Form::to_config`), then in-process `run(&ExporterConfig)`.
 - Backup-source titles link to the upstream product site.
-- **Global options** (Obfuscate + Start/End date) above the per-source form (Export tab).
+- **Global options** (Obfuscate + Start/End date) on the Message tab per-source form.
+- **Re-export** tab converts a prior output folder via `message-reexporter` (INI section `[message-reexport]`).
 
 Export options persist in `export.ini` (load on start; save on Run / exit). Prefer an existing file in the working directory, else beside the GUI binary; otherwise create `./export.ini` on first save. Template: [`export.example.ini`](../crates/message-exporters-gui/export.example.ini). Backup passwords are never written.
 
@@ -47,7 +48,7 @@ cargo run -p message-exporters-gui
 4. **Re-export:** convert a prior Message Exporters output (`message-reexporter`) — input dir, output dir, output format, attachments, obfuscate. Input format is auto-detected.
 5. Shared run log (Log tab / full-window log view)
 
-### Validate contacts
+### Contacts
 
 Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules as exporters).
 
@@ -262,11 +263,15 @@ Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox
 ## Form flow
 
 ```text
-Tabs: Validate contacts | Export
-  Validate → contacts file, USA checkbox → Check / Update / Cancel → shared log
-  Export → pick backup source → global Obfuscate/dates → per-source form
-        → Form::to_config → ExporterConfig → library run / Cancel → shared log
+Tabs: Contacts | Message | Re-export | Log
+  Contacts → contacts file, USA checkbox → Check / Update / Cancel → log
+  Message → pick backup source → Obfuscate/dates → per-source form
+         → Form::to_config → ExporterConfig → library run / Cancel → log
+  Re-export → input dir → output format → output dir → media/obfuscate
+           → message-reexporter::run → log
 ```
+
+End-user walkthrough: [`docs/src/desktop-app.md`](src/desktop-app.md).
 
 ## Known gaps
 

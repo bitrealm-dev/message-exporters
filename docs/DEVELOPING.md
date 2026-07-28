@@ -1,5 +1,7 @@
 # Developer notes
 
+End-user documentation for the docs site lives in [`docs/src/`](src/). Contributor design notes: [`GUI.md`](GUI.md), [`EXPORTER_MATRIX.md`](EXPORTER_MATRIX.md), [`MESSAGE_IR.md`](MESSAGE_IR.md).
+
 ## Cutting a release
 
 Prebuilt binaries are published only by a **manual** GitHub Actions workflow. Nothing builds or releases on push, PR, or tag by default.
