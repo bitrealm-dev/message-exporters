@@ -43,5 +43,5 @@ JSON (and JSON Lines) store the common message with the least loss for later con
 
 ## See also
 
-- [Choose an output format](formats.md)
+- [Formats in detail](formats.md)
 - Schema and field details for contributors: [MESSAGE_IR.md](../MESSAGE_IR.md) (crate still named `message-ir`)

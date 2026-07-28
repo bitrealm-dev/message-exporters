@@ -58,4 +58,4 @@ The output directory holds the new packaging. The log reports the detected input
 - **Same path** — choose a distinct output directory.
 - **XML owner issues** — outgoing MMS owner is inferred when possible; SMS-only backups usually still load.
 
-XML re-export can drop Apple-only fields. Prefer JSON when preserving iMessage detail matters. See [Common message](common-message.md) and [Choose an output format](formats.md).
+XML re-export can drop Apple-only fields. Prefer JSON when preserving iMessage detail matters. See [Common message](common-message.md) and [Formats in detail](formats.md).

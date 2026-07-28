@@ -36,5 +36,5 @@ Per-conversation files (or one `smses.xml`) appear under the output directory. M
 
 ## Related
 
-- [Choose an output format](../formats.md)
+- [Formats in detail](../formats.md)
 - [CLI man page](../reference/imessage.md)

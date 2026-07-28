@@ -37,5 +37,5 @@ Conversation files use a WhatsApp packaging suffix where applicable. Media is st
 ## Related
 
 - [Install](../install.md)
-- [Choose an output format](../formats.md)
+- [Formats in detail](../formats.md)
 - [CLI man page](../reference/whatsapp.md)

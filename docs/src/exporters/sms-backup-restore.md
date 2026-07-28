@@ -35,6 +35,6 @@ One artifact per conversation for the chosen format (or one merged `smses.xml` w
 
 ## Related
 
-- [Choose an output format](../formats.md)
+- [Formats in detail](../formats.md)
 - [Check and update contacts](../contacts.md)
 - [CLI man page](../reference/sms-backup-restore.md)

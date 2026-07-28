@@ -50,7 +50,7 @@ Legacy columns `date_ms`, `contact_name`, and `xml_fields_json` are not written.
 
 ## Related
 
-- [Choose an output format](formats.md)
+- [Formats in detail](formats.md)
 - [Attachments and privacy](attachments-privacy.md)
 - Common message schema (contributors): [MESSAGE_IR.md](../MESSAGE_IR.md)
 - End-user overview: [Common message](common-message.md)

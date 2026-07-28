@@ -13,7 +13,7 @@ The app does not replace the tools that pull data off a phone. Use those tools (
 | **EML** / **MBOX** | Reading threads in a mail client |
 | **XML** | Android-compatible format |
 
-See [Common message](common-message.md) and [Choose an output format](formats.md).
+See [Common message](common-message.md) and [Formats in detail](formats.md).
 
 ## Supported backups
 

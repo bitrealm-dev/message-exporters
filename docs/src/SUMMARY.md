@@ -4,7 +4,7 @@
 [Common message](common-message.md)
 [Install](install.md)
 [Use the desktop app](desktop-app.md)
-[Choose an output format](formats.md)
+[Formats in detail](formats.md)
 
 # Export
 

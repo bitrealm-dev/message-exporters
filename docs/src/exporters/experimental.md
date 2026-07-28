@@ -33,5 +33,5 @@ Each source still writes the shared output formats (CSV, EML, MBOX, JSON, JSON L
 ## Related
 
 - [Use the desktop app](desktop-app.md)
-- [Choose an output format](formats.md)
+- [Formats in detail](formats.md)
 - CLI details under [CLI reference](../reference/go-sms-pro.md)

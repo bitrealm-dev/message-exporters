@@ -1,23 +1,12 @@
-# Choose an output format
+# Formats in detail
 
-Pick the format that matches your needs. The Message tab and Re-export tab write the same set of formats with default being **JSON**.
+Pick the format that matches your needs. The Message tab and Re-export tab write the same set of formats; the default is **JSON**.
 
-## Quick chooser
+## Attachments
 
-| Need | Format |
-|------|--------|
-| Keep a faithful machine archive for later conversion (default) | **JSON** or **JSON Lines** |
-| Open chats in Excel, Numbers, or Google Sheets | **CSV** |
-| Import into a vault or custom script that expects rows | **CSV** |
-| Read threads in Apple Mail, Thunderbird, or Outlook | **EML** |
-| One mailbox file per chat | **MBOX** |
-| Produce a SyncTech-style `smses.xml` backup | **XML** |
+Attachment handling depends on the Attachments control (Copy / Convert / Compress / Do not copy). The trees below assume media copy is on. Do not copy skips media entirely. JSON / JSONL / CSV keep media in a sidecar `attachments/` folder; EML / MBOX / XML transform media then embed it and leave no sidecar.
 
-## Formats in detail
-
-Attachment handling depends on the Attachments control (Copy / Convert / Compress / Do not copy). The trees below assume media copy is on. **Do not copy** skips media entirely. JSON / JSONL / CSV keep media in a sidecar `attachments/` folder; EML / MBOX / XML transform media then **embed** it and leave no sidecar—the output folder is the archive. WhatsApp chats use a `__whatsapp` stem suffix (for example `+15555550101__whatsapp.json`).
-
-### CSV
+## CSV
 
 Writes one `.csv` file per conversation.
 
@@ -35,7 +24,7 @@ output/
 
 Use CSV for inspection, filtering, and tools that ingest tabular message data. Column meanings: [CSV columns](csv-output.md).
 
-### EML
+## EML
 
 Writes one folder per conversation containing individual `.eml` messages.
 
@@ -54,7 +43,7 @@ Use EML when the mail client imports a folder of individual message files.
 
 **Note:** In a mail client, EML and MBOX both usually become one folder (or mailbox) per conversation with the messages inside. Pick whichever packaging your client imports best.
 
-### MBOX
+## MBOX
 
 Writes one `.mbox` file per conversation.
 
@@ -72,7 +61,7 @@ Use MBOX when the mail client prefers a single mailbox file per conversation.
 
 **Note:** In a mail client, EML and MBOX both usually become one folder (or mailbox) per conversation with the messages inside. Pick whichever packaging your client imports best.
 
-### JSON
+## JSON
 
 Writes one pretty-printed `.json` document per conversation. See [Common message](common-message.md).
 
@@ -89,7 +78,7 @@ output/
 
 Use JSON as the default archive: one pretty-printed document per chat that is easy to open, inspect, and re-export. Prefer it over JSONL when you want the whole conversation as a single object.
 
-### JSON Lines (JSONL)
+## JSON Lines (JSONL)
 
 Writes one `.jsonl` file per conversation: a header line, then one message per line.
 
@@ -106,7 +95,7 @@ output/
 
 Use JSONL to allow tools (i.e. `jq`, `grep`) to stream or filter message without loading the whole conversation at once.
 
-### XML
+## XML
 
 Writes a single `smses.xml` for the whole export in SyncTech SMS Backup & Restore format. iMessage specific fields are dropped.
 
