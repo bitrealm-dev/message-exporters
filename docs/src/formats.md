@@ -1,6 +1,6 @@
 # Choose an output format
 
-Pick the packaging that matches the next tool. Every format is projected from the same [common message](common-message.md). The Message tab and Re-export tab share this set; CLI default is **JSON**.
+Pick the packaging that matches the next tool. The Message tab and Re-export tab write the same set of formats; the default is **JSON**.
 
 ## Quick chooser
 
@@ -15,9 +15,25 @@ Pick the packaging that matches the next tool. Every format is projected from th
 
 ## Formats in detail
 
+Attachment handling depends on the Attachments control (Copy / Convert / Compress / Do not copy). The trees below assume media copy is on. **Do not copy** skips writing an `attachments/` folder and does not embed media. WhatsApp chats use a `__whatsapp` stem suffix (for example `+15555550101__whatsapp.json`).
+
 ### CSV
 
-Writes one `.csv` file per conversation, a matching `.meta.json` header sidecar, and an `attachments/` folder when media is copied.
+Writes one `.csv` file per conversation plus a matching `.meta.json` header sidecar.
+
+**Attachments:** sidecar `attachments/` folder; rows reference relative paths.
+
+**Layout:**
+
+```text
+output/
+├── +15555550101.csv
+├── +15555550101.meta.json
+├── group_+15555550101_+15555550102.csv
+├── group_+15555550101_+15555550102.meta.json
+└── attachments/
+    └── IMG_0001.jpg
+```
 
 Use CSV for inspection, filtering, and tools that ingest tabular message data. Column meanings: [CSV columns](csv-output.md).
 
@@ -25,29 +41,81 @@ Use CSV for inspection, filtering, and tools that ingest tabular message data. C
 
 Writes one folder per conversation containing individual `.eml` messages.
 
-Use EML when the goal is to browse history in a mail client. Media embeds according to attachment settings.
+**Attachments:** embedded in each message (MIME parts); `attachments/` sidecar also written when media copy is enabled.
+
+**Layout:**
+
+```text
+output/
+└── +15555550101/
+    ├── 000001_2021-03-28_165031_a1b2c3d4.eml
+    └── 000002_2021-03-28_170102_e5f6a7b8.eml
+```
+
+Use EML when the goal is to browse history in a mail client.
 
 ### MBOX
 
 Writes one `.mbox` file per conversation.
 
+**Attachments:** embedded in the mailbox file (MIME parts); `attachments/` sidecar when media copy is enabled.
+
+**Layout:**
+
+```text
+output/
+├── +15555550101.mbox
+└── group_+15555550101_+15555550102.mbox
+```
+
 Use MBOX when a single mailbox file per chat is easier to archive or import than a folder of EMLs.
 
 ### JSON
 
-Writes one pretty-printed `.json` document per conversation — the common message on disk. Attachment bytes live under `attachments/`, not inside the JSON.
+Writes one pretty-printed `.json` document per conversation. See [Common message](common-message.md).
 
-Use JSON as the default archive and for later re-packaging. See [Common message](common-message.md).
+**Attachments:** sidecar `attachments/`; bytes are never inside the `.json` (documents reference paths and digests).
+
+**Layout:**
+
+```text
+output/
+├── +15555550101.json
+└── attachments/
+    └── IMG_0001.jpg
+```
+
+Use JSON as the default archive and for later re-packaging.
 
 ### JSON Lines (JSONL)
 
 Writes one `.jsonl` file per conversation: a header line, then one message per line.
+
+**Attachments:** sidecar `attachments/`; bytes are never inside the `.jsonl` (same as JSON).
+
+**Layout:**
+
+```text
+output/
+├── +15555550101.jsonl
+└── attachments/
+    └── IMG_0001.jpg
+```
 
 Use JSONL for streaming or line-oriented processing of large chats.
 
 ### XML
 
 Writes a single `smses.xml` for the whole export (SyncTech SMS Backup & Restore shape).
+
+**Attachments:** embedded as base64 inside `smses.xml` (no sidecar).
+
+**Layout:**
+
+```text
+output/
+└── smses.xml
+```
 
 XML exists for **Android compatibility**. Backing up or restoring a whole Android phone without third-party tooling requires root and often an unlocked bootloader, which is difficult on most devices. The SMS Backup & Restore app works without root, and `smses.xml` is the file it reads—so this format is the practical way to move messages onto an Android phone.
 
