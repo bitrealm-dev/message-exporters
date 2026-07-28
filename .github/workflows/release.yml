@@ -72,7 +72,8 @@ jobs:
             openextract-exporter \
             imazing-exporter \
             imessage-ir-exporter \
-            whatsapp-exporter
+            whatsapp-exporter \
+            message-reexporter
           do
             src="target/release/${bin}${EXT}"
             dst="dist/${bin}-${SUFFIX}${EXT}"
@@ -137,4 +138,4 @@ jobs:
 
           Binaries for Linux (x86_64-unknown-linux-gnu), Windows (x86_64-pc-windows-msvc), and macOS Apple Silicon (aarch64-apple-darwin).
 
-          Tools: go-sms-pro-exporter, sms-backup-restore-exporter, sms-backup-plus-exporter, openextract-exporter, imazing-exporter, imessage-ir-exporter, whatsapp-exporter (includes wtsexporter 0.13.0)."
+          Tools: go-sms-pro-exporter, sms-backup-restore-exporter, sms-backup-plus-exporter, openextract-exporter, imazing-exporter, imessage-ir-exporter, whatsapp-exporter (includes wtsexporter 0.13.0), message-reexporter."

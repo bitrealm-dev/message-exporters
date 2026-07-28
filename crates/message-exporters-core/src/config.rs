@@ -182,21 +182,28 @@ pub enum SourceConfig {
     Imazing(ImazingConfig),
     Apple(AppleConfig),
     Whatsapp(WhatsappConfig),
+    /// Existing Message Exporters output → another IR format (`message-reexporter`).
+    /// Not listed in [`crate::exporters::EXPORTERS`] (own GUI tab).
+    MessageReexport(MessageReexportConfig),
 }
 
 impl SourceConfig {
-    pub fn exporter(&self) -> Exporter {
+    pub fn exporter(&self) -> Option<Exporter> {
         match self {
-            Self::GoSmsPro(_) => Exporter::GoSmsPro,
-            Self::SmsBackupRestore(_) => Exporter::SmsBackupRestore,
-            Self::SmsBackupPlus(_) => Exporter::SmsBackupPlus,
-            Self::OpenExtract(_) => Exporter::OpenExtract,
-            Self::Imazing(_) => Exporter::Imazing,
-            Self::Apple(_) => Exporter::Imessage,
-            Self::Whatsapp(_) => Exporter::Whatsapp,
+            Self::GoSmsPro(_) => Some(Exporter::GoSmsPro),
+            Self::SmsBackupRestore(_) => Some(Exporter::SmsBackupRestore),
+            Self::SmsBackupPlus(_) => Some(Exporter::SmsBackupPlus),
+            Self::OpenExtract(_) => Some(Exporter::OpenExtract),
+            Self::Imazing(_) => Some(Exporter::Imazing),
+            Self::Apple(_) => Some(Exporter::Imessage),
+            Self::Whatsapp(_) => Some(Exporter::Whatsapp),
+            Self::MessageReexport(_) => None,
         }
     }
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct MessageReexportConfig {}
 
 #[derive(Debug, Clone)]
 pub struct GoSmsProConfig {

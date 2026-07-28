@@ -16,6 +16,7 @@ members = [
     "crates/imazing-exporter",
     "crates/imessage-ir-exporter",
     "crates/whatsapp-exporter",
+    "crates/message-reexporter",
     "crates/message-exporters-core",
     "crates/message-exporters-gui",
 ]

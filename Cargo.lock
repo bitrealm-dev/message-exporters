@@ -2502,6 +2502,7 @@ dependencies = [
  "message-exporters-core",
  "message-media",
  "message-obfuscate",
+ "message-reexporter",
  "open",
  "openextract-exporter",
  "rfd",
@@ -2572,6 +2573,21 @@ name = "message-phone"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+]
+
+[[package]]
+name = "message-reexporter"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "csv",
+ "message-exporters-core",
+ "message-ir",
+ "message-media",
+ "serde_json",
+ "sms-backup-restore-exporter",
+ "tempfile",
 ]
 
 [[package]]

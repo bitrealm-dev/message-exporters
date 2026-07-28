@@ -14,6 +14,8 @@ pub(crate) mod smil;
 pub(crate) mod xml;
 
 pub use cancel::{is_cancelled, CancelFlag};
-pub use emit::{convert_export, ExportReport};
+pub use emit::{
+    convert_export, infer_owner_phones_from_xml, load_documents_from_xml, ExportReport,
+};
 pub use message_exporters_core::{ExporterConfig, OutputFormat};
 pub use run::{parse_date_range, report_summary_lines, run, RunResult};

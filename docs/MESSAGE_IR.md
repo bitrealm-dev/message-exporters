@@ -107,11 +107,13 @@ Line 1 is the header (includes `conversation.stats`; no `messages` array). Each 
 
 | Format | Writer | Reader |
 |--------|--------|--------|
-| JSON | pretty-printed `ConversationDocument` | `serde_json` |
-| JSONL | header + one message per line | line-oriented parse |
+| JSON | pretty-printed `ConversationDocument` | `read_conversation_json` |
+| JSONL | header + one message per line | `read_conversation_jsonl` |
 | CSV | unified [`CSV_HEADERS`](../crates/message-ir/src/lib.rs) + `<stem>.meta.json` | `read_conversation_csv` |
 | EML / MBOX | IR → `MailMessage` → [`message-mail`](../crates/message-mail/) | `read_conversation_eml_dir` / `read_conversation_mbox` |
-| XML | single `smses.xml` via [`FormatSink`](../crates/message-ir/) + [`message-sbr`](../crates/message-sbr/) | SBR importer (`sms-backup-restore-exporter`); not an IR reverse projector yet |
+| XML | single `smses.xml` via [`FormatSink`](../crates/message-ir/) + [`message-sbr`](../crates/message-sbr/) | `sms_backup_restore_exporter::load_documents_from_xml` (owner inferred when omitted) |
+
+**Directory convert:** [`message-reexporter`](../crates/message-reexporter/) auto-detects one format in an export folder and writes another via `FormatSink` (GUI **Re-export** tab / CLI).
 
 **XML packaging differs:** one SyncTech backup for the whole export (not per conversation). iMessage-only fields are dropped. See [SBR_XML.md](SBR_XML.md).
 
@@ -119,7 +121,9 @@ Line 1 is the header (includes `conversation.stats`; no `messages` array). Each 
 
 Library APIs support content-preserving cycles:
 
-`ConversationDocument` → CSV \| EML \| MBOX → `ConversationDocument` → JSON
+`ConversationDocument` → CSV \| EML \| MBOX \| JSON \| JSONL → `ConversationDocument`
+
+Use [`message-reexporter`](../crates/message-reexporter/) to convert a whole export directory between formats.
 
 XML is **lossy** for non-Android IR (Apple bags omitted). SBR-origin `source.fields` can restore many SyncTech attrs on write-back.
 

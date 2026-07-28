@@ -7,11 +7,11 @@ mod process;
 
 pub use config::{
     AppleConfig, ContactsConfig, ExporterConfig, GoSmsProConfig, ImazingConfig, MediaConfig,
-    ObfuscateConfig, OpenExtractConfig, OutputFormat, SmsBackupPlusConfig, SmsBackupRestoreConfig,
-    SourceConfig, WhatsappConfig, OUTPUT_FORMATS_MAIL,
+    MessageReexportConfig, ObfuscateConfig, OpenExtractConfig, OutputFormat, SmsBackupPlusConfig,
+    SmsBackupRestoreConfig, SourceConfig, WhatsappConfig, OUTPUT_FORMATS_MAIL,
 };
 pub use export_ini::{
-    resolve_export_ini_path, ExportIniState, ExporterSection, EXPORT_INI_NAME,
+    resolve_export_ini_path, ExportIniState, ExporterSection, ReexportSection, EXPORT_INI_NAME,
 };
 pub use exporters::{
     contacts_kind_from_path, ensure_output_dir, ApplePlatform, AttachmentMedia, ContactsKind,

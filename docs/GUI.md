@@ -16,7 +16,7 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 ## Current implementation
 
 - Pure Rust egui/eframe desktop app for Linux, macOS, and Windows.
-- Top tab panel: **Validate contacts** (default, first) | **Export**.
+- Top tab panel: **Contacts** (default) | **Message** | **Re-export** | **Log**.
 - Typed UI `Form` plus shared `ExporterConfig` / `SourceConfig` in `message-exporters-core` (`Form::to_config`).
 - Native file/folder dialogs through `rfd`.
 - Export converters are linked libraries (no sibling exporter binaries required for convert). `contacts-validate` and WhatsApp’s `wtsexporter` still resolve beside the GUI, via `MESSAGE_EXPORTERS_BIN`, or on `PATH`.
@@ -41,10 +41,11 @@ cargo run -p message-exporters-gui
 
 ## Layout
 
-1. Top tabs — **Validate contacts** | **Export**
-2. **Validate contacts:** contacts file, USA numbers checkbox, Check / Update / Cancel
-3. **Export:** backup source picker + global options + per-source form
-4. Shared run log (bottom panel)
+1. Top tabs — **Contacts** | **Message** | **Re-export** | **Log**
+2. **Contacts:** contacts file, USA numbers checkbox, Check / Update / Cancel
+3. **Message:** backup source picker + global options + per-source form
+4. **Re-export:** convert a prior Message Exporters output (`message-reexporter`) — input dir, output dir, output format, attachments, obfuscate. Input format is auto-detected.
+5. Shared run log (Log tab / full-window log view)
 
 ### Validate contacts
 
@@ -53,6 +54,20 @@ Spawns [`contacts-validate`](../crates/message-contacts) (same discovery rules a
 - **Check** (`--check`): dry run — no files written; the run log shows the same UNCERTAIN / DUPLICATE / summary content as a validate log.
 - **Update**: write `<stem>-update.<ext>` (or `<stem>-update-N` when re-updating) (+ `.log`; CSV also `.vcf`). Only unambiguous phones are rewritten; uncertain values stay as-is.
 - **Cancel**: stop the running job.
+
+### Re-export — `message-reexporter`
+
+Top tab (not a Message backup type). Converts a prior Message Exporters output folder to another IR format.
+
+| Control | Type | Required | CLI |
+|---------|------|:--------:|-----|
+| Input directory | folder | yes | `--input` (auto-detect csv/eml/mbox/json/jsonl/xml) |
+| Output format | enum | no | `--format` |
+| Output directory | folder | yes | `--output` |
+| Attachments | enum | no | `--media-mode` |
+| Obfuscate / seed | checkbox + text | no | `--obfuscate` / `--obfuscate-seed` |
+
+Persists under `[message-reexport]` in `export.ini`. Mixed or unrecognized input dirs fail with a clear error. See [`crates/message-reexporter/README.md`](../crates/message-reexporter/README.md).
 
 ## Shared / global controls
 

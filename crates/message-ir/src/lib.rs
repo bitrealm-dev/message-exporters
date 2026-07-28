@@ -15,6 +15,7 @@ mod export_transforms;
 mod format_sink;
 mod normalize;
 mod read_csv;
+mod read_json;
 mod read_mail;
 mod util;
 mod write_sbr;
@@ -24,6 +25,7 @@ pub use export_transforms::ExportTransforms;
 pub use format_sink::{FormatSink, FormatSinkResult};
 pub use normalize::normalize_document_for_compare;
 pub use read_csv::read_conversation_csv;
+pub use read_json::{read_conversation_json, read_conversation_jsonl};
 pub use read_mail::{
     document_from_mail_messages, read_conversation_eml_dir, read_conversation_mbox,
 };
@@ -1176,6 +1178,21 @@ mod tests {
 
             let back = read_conversation_csv(&csv_path).unwrap();
             assert_docs_equal_after_normalize(doc, back);
+        }
+    }
+
+    #[test]
+    fn roundtrip_json_and_jsonl() {
+        for doc in [sample_doc(), sample_imessage_doc()] {
+            let tmp = tempfile::tempdir().unwrap();
+            let json_path = write_format(tmp.path(), OutputFormat::Json, &doc).unwrap();
+            let back_json = read_conversation_json(&json_path).unwrap();
+            assert_docs_equal_after_normalize(doc.clone(), back_json);
+
+            let _ = clean_previous_ir_output(tmp.path());
+            let jsonl_path = write_format(tmp.path(), OutputFormat::Jsonl, &doc).unwrap();
+            let back_jsonl = read_conversation_jsonl(&jsonl_path).unwrap();
+            assert_docs_equal_after_normalize(doc, back_jsonl);
         }
     }
 

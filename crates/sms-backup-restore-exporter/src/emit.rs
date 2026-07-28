@@ -2,7 +2,7 @@
 
 use crate::cancel::{check_cancel, CancelFlag};
 use crate::xml::{parse_xml_file, AttachmentBlob, ConvType, ParsedMessage};
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use message_contacts::ContactsBook;
 use message_csv::{format_local_ts, json_cell, stable_guid, DateRange};
 use message_exporters_core::OutputFormat;
@@ -393,6 +393,165 @@ fn enrich_pending_names(book: &ContactsBook, chat_id: &str, msg: &mut PendingMes
             msg.sender_display_name = Some(name);
         }
     }
+}
+
+/// Infer owner phone(s) from outgoing MMS `addrs` (`msg_box=2`, addr `type=137`).
+///
+/// SMS-only backups often have no recoverable owner address; callers may then
+/// parse with an empty owner set (SMS direction uses `type`, not owners).
+pub fn infer_owner_phones_from_xml(path: &Path) -> Result<Vec<String>> {
+    use quick_xml::events::Event;
+    use quick_xml::Reader;
+
+    let file = fs::File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let mut reader = Reader::from_reader(std::io::BufReader::new(file));
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    let mut in_sent_mms = false;
+    let mut counts: HashMap<String, u64> = HashMap::new();
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_ascii_lowercase();
+                match tag.as_str() {
+                    "mms" => {
+                        let attrs = attr_map_quick(&e);
+                        in_sent_mms = attrs.get("msg_box").map(|s| s.trim()) == Some("2");
+                    }
+                    "addrs" if in_sent_mms => {
+                        let attrs = attr_map_quick(&e);
+                        if attrs.get("type").map(|s| s.trim()) == Some("137") {
+                            if let Some(addr) = attrs.get("address") {
+                                if let Some(digits) = message_phone::sanitize_number(addr) {
+                                    if digits != "0" && !addr.eq_ignore_ascii_case("insert-address-token")
+                                    {
+                                        *counts.entry(to_e164(&digits)).or_default() += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::End(e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_ascii_lowercase();
+                if tag == "mms" {
+                    in_sent_mms = false;
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(err) => bail!("parse {}: {err}", path.display()),
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    let mut ranked: Vec<(String, u64)> = counts.into_iter().collect();
+    ranked.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    Ok(ranked.into_iter().map(|(p, _)| p).collect())
+}
+
+fn attr_map_quick(e: &quick_xml::events::BytesStart<'_>) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    for attr in e.attributes().flatten() {
+        let key = String::from_utf8_lossy(attr.key.as_ref()).to_ascii_lowercase();
+        let value = String::from_utf8_lossy(&attr.value).into_owned();
+        map.insert(key, value);
+    }
+    map
+}
+
+/// Load SMS Backup & Restore XML into IR documents without writing output.
+///
+/// When `owner_phones` is empty, owners are inferred from outgoing MMS addresses.
+/// Attachment bytes are written under `attachments_dir` when provided (and
+/// `copy_attachments` is true); otherwise attachment metadata is kept with
+/// in-memory bytes when available.
+pub fn load_documents_from_xml(
+    input: &Path,
+    owner_phones: &[String],
+    attachments_dir: Option<&Path>,
+    copy_attachments: bool,
+) -> Result<(Vec<ConversationDocument>, ExportReport)> {
+    let xml_paths = collect_xml_paths(input)?;
+    let mut owners_list: Vec<String> = owner_phones.to_vec();
+    if owners_list.is_empty() {
+        for path in &xml_paths {
+            owners_list.extend(infer_owner_phones_from_xml(path)?);
+        }
+        owners_list.sort();
+        owners_list.dedup();
+    }
+
+    let (owners_digits, owner_handle) = if owners_list.is_empty() {
+        (HashSet::new(), String::new())
+    } else {
+        let owners = OwnerPhoneSet::new(&owners_list)?;
+        (owners.all_digits.clone(), to_e164(&owners.primary_digits))
+    };
+
+    if copy_attachments {
+        if let Some(dir) = attachments_dir {
+            fs::create_dir_all(dir)?;
+        }
+    }
+
+    let keep_bytes = !copy_attachments || attachments_dir.is_none();
+    let mut report = ExportReport::default();
+    let mut conversations: BTreeMap<String, PendingConversation> = BTreeMap::new();
+    let empty_book = ContactsBook::empty();
+
+    for xml_path in xml_paths {
+        match parse_xml_file(&xml_path, &owners_digits) {
+            Ok((msgs, stats)) => {
+                report.sms_seen += stats.sms_seen;
+                report.mms_seen += stats.mms_seen;
+                report.skipped_invalid_date += stats.skipped_invalid_date;
+                report.skipped_unknown_address += stats.skipped_unknown_address;
+                report.skipped_unknown_type += stats.skipped_unknown_type;
+                report.skipped_draft_or_outbox += stats.skipped_draft_or_outbox;
+                report.skipped_empty_participants += stats.skipped_empty_participants;
+                report.skipped_bad_attachment += stats.skipped_bad_attachment;
+                for msg in msgs {
+                    let atts = if let Some(dir) = attachments_dir {
+                        write_attachments(
+                            &msg.attachments,
+                            dir,
+                            &mut report,
+                            copy_attachments,
+                            keep_bytes,
+                        )?
+                    } else {
+                        write_attachments(
+                            &msg.attachments,
+                            Path::new("."),
+                            &mut report,
+                            false,
+                            true,
+                        )?
+                    };
+                    add_message(&mut conversations, msg, atts);
+                }
+            }
+            Err(err) => report.errors.push(format!("{}: {err:#}", xml_path.display())),
+        }
+    }
+
+    let mut docs = Vec::new();
+    for (chat_id, mut convo) in conversations {
+        for msg in &mut convo.messages {
+            enrich_pending_names(&empty_book, &chat_id, msg);
+        }
+        if !prepare_conversation(&mut convo, &mut report)? {
+            continue;
+        }
+        let doc = pending_to_document(&chat_id, &convo, &owner_handle, &mut report)?;
+        docs.push(doc);
+        report.conversations += 1;
+    }
+    Ok((docs, report))
 }
 
 /// Convert SMS Backup & Restore XML into IR, then CSV / EML / MBOX / JSON.

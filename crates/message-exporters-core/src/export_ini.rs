@@ -14,7 +14,16 @@ use crate::exporters::{
 };
 
 const COMMON: &str = "common";
+const MESSAGE_REEXPORT: &str = "message-reexport";
 pub const EXPORT_INI_NAME: &str = "export.ini";
+
+/// Fields for the Re-export top-level tab (`message-reexporter`).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReexportSection {
+    pub input: String,
+    pub output: String,
+    pub output_format: OutputFormat,
+}
 
 /// Per-exporter path / type-specific fields kept when switching backup types.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -42,6 +51,7 @@ pub struct ExportIniState {
     pub path: PathBuf,
     pub exporter: Exporter,
     sections: [ExporterSection; 7],
+    pub reexport: ReexportSection,
 }
 
 impl ExportIniState {
@@ -63,6 +73,7 @@ impl ExportIniState {
                     path,
                     exporter: Exporter::default(),
                     sections: Default::default(),
+                    reexport: ReexportSection::default(),
                 };
                 let mut form = Form::default();
                 state.apply_section_to_form(&mut form);
@@ -89,11 +100,13 @@ impl ExportIniState {
         for (i, exp) in EXPORTERS.iter().copied().enumerate() {
             sections[i] = read_section(&ini, exp);
         }
+        let reexport = read_reexport_section(&ini);
 
         let state = Self {
             path: path.to_path_buf(),
             exporter,
             sections,
+            reexport,
         };
         state.apply_section_to_form(&mut form);
         Ok((state, form))
@@ -344,7 +357,23 @@ fn build_ini(state: &ExportIniState, form: &Form) -> Ini {
             _ => {}
         }
     }
+
+    {
+        let mut s = ini.with_section(Some(MESSAGE_REEXPORT));
+        s.set("input", state.reexport.input.trim())
+            .set("output", state.reexport.output.trim())
+            .set("output_format", state.reexport.output_format.as_str());
+    }
     ini
+}
+
+fn read_reexport_section(ini: &Ini) -> ReexportSection {
+    let format = get(ini, Some(MESSAGE_REEXPORT), "output_format");
+    ReexportSection {
+        input: get(ini, Some(MESSAGE_REEXPORT), "input"),
+        output: get(ini, Some(MESSAGE_REEXPORT), "output"),
+        output_format: OutputFormat::parse(&format).unwrap_or_default(),
+    }
 }
 
 fn parse_bool(s: &str, default: bool) -> bool {
@@ -400,6 +429,7 @@ mod tests {
             path: PathBuf::from("unused"),
             exporter: Exporter::GoSmsPro,
             sections: Default::default(),
+            reexport: ReexportSection::default(),
         };
         state.capture_form_section(&form);
         state.switch_exporter(Exporter::SmsBackupPlus, &mut form);
@@ -449,6 +479,7 @@ mod tests {
             path: PathBuf::from("unused"),
             exporter: Exporter::GoSmsPro,
             sections: Default::default(),
+            reexport: ReexportSection::default(),
         };
         state.capture_form_section(&form);
         state.switch_exporter(Exporter::Imazing, &mut form);

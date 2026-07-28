@@ -63,3 +63,5 @@ All converters write **one CSV file per conversation** from IR v3 ([`CSV_HEADERS
 | iMessage | [`crates/imessage-ir-exporter/README.md`](../crates/imessage-ir-exporter/README.md) |
 
 **Canonical IR:** [`MESSAGE_IR.md`](MESSAGE_IR.md) (`message-ir`, schema v3). All exporters parse to `ConversationDocument` then project via `message_ir::FormatSink` (per-chat CSV/EML/MBOX/JSON/JSONL, or one SyncTech `smses.xml` with `--format xml`). Mail packaging: [`MAIL_ARCHIVE.md`](MAIL_ARCHIVE.md). SBR XML: [`SBR_XML.md`](SBR_XML.md). Pick the output format that fits the job. Attachment modes (none / copy / convert / compress) and obfuscate apply through `FormatSink` for every format.
+
+**Re-export:** [`message-reexporter`](../crates/message-reexporter/) converts an existing Message Exporters output directory to another IR format (auto-detect input; GUI **Re-export** tab). Not a vendor backup source.

@@ -13,10 +13,12 @@ use imazing_exporter::run as run_imazing;
 use imessage_ir_exporter::run as run_imessage;
 use message_exporters_core::{
     ensure_output_dir, resolve_binary, spawn, spawn_job, AttachmentMedia, ContactsKind,
-    ExportIniState, Exporter, ExporterConfig, Form, ProcessControl, ProcessEvent,
-    WhatsappPlatform, APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS,
-    OUTPUT_FORMATS_MAIL, WHATSAPP_PLATFORMS,
+    ExportIniState, Exporter, ExporterConfig, Form, MediaConfig, MessageReexportConfig,
+    ObfuscateConfig, ProcessControl, ProcessEvent, SourceConfig, WhatsappPlatform,
+    APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS, OUTPUT_FORMATS_MAIL,
+    WHATSAPP_PLATFORMS,
 };
+use message_reexporter::run as run_reexport;
 use openextract_exporter::run as run_openextract;
 use sms_backup_plus_exporter::run as run_sms_plus;
 use sms_backup_restore_exporter::run as run_sms_restore;
@@ -92,6 +94,7 @@ enum AppMode {
     #[default]
     ValidateContacts,
     Export,
+    Reexport,
 }
 
 struct App {
@@ -242,6 +245,97 @@ impl App {
         }
     }
 
+    fn start_reexport(&mut self) {
+        if self.running {
+            return;
+        }
+        let _ = self.export_ini.save(&self.form);
+
+        let mut errors = Vec::new();
+        let input = self.export_ini.reexport.input.trim().to_string();
+        let output = self.export_ini.reexport.output.trim().to_string();
+        if input.is_empty() {
+            errors.push("Input directory is required.".into());
+        } else if !PathBuf::from(&input).is_dir() {
+            errors.push(format!("Input directory does not exist: {input}"));
+        }
+        if output.is_empty() {
+            errors.push("Output directory is required.".into());
+        }
+        if self.form.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available() {
+            errors.push("Convert/Compress require ffmpeg and ffprobe on PATH.".into());
+        }
+        let seed = self.form.obfuscate_seed.trim();
+        let obfuscate_seed = if seed.is_empty() {
+            None
+        } else if seed.len() == 8 && seed.chars().all(|c| c.is_ascii_hexdigit()) {
+            Some(seed.to_string())
+        } else {
+            errors.push("Obfuscate seed must be exactly 8 hex characters.".into());
+            None
+        };
+        let compress = if matches!(
+            self.form.attachment_media,
+            AttachmentMedia::Compress
+        ) {
+            match self.form.compress_options() {
+                Ok(options) => options,
+                Err(error) => {
+                    errors.push(error);
+                    message_media::CompressOptions::default()
+                }
+            }
+        } else {
+            message_media::CompressOptions::default()
+        };
+        if !errors.is_empty() {
+            self.errors = errors;
+            return;
+        }
+
+        let output_path = PathBuf::from(&output);
+        if let Err(error) = ensure_output_dir(&output_path) {
+            self.errors = vec![error.clone()];
+            self.begin_session_log();
+            self.push_log(format!("Error: {error}"));
+            self.show_log = true;
+            return;
+        }
+
+        let config = ExporterConfig {
+            inputs: vec![PathBuf::from(input)],
+            output: output_path,
+            date_range: Default::default(),
+            contacts: None,
+            obfuscate: ObfuscateConfig {
+                enabled: self.form.obfuscate || obfuscate_seed.is_some(),
+                seed: obfuscate_seed,
+            },
+            media: MediaConfig {
+                mode: self.form.attachment_media.media_mode(),
+                compress,
+            },
+            cancel: None,
+            output_format: self.export_ini.reexport.output_format,
+            source: SourceConfig::MessageReexport(MessageReexportConfig {}),
+        };
+
+        let label = "message-reexporter (library)".to_string();
+        let job: LibraryJob = Box::new(move |cancel, tx| {
+            let mut config = config;
+            config.cancel = Some(cancel);
+            run_and_log(run_reexport(&config), tx)
+        });
+
+        self.errors.clear();
+        self.running = true;
+        self.begin_session_log();
+        self.show_log = true;
+        let (tx, rx) = mpsc::channel();
+        self.rx = Some(rx);
+        spawn_job(self.control.clone(), tx, label, job);
+    }
+
     fn start_export(&mut self) {
         if self.running {
             return;
@@ -340,6 +434,12 @@ impl App {
                 }
                 if ui
                     .selectable_value(&mut self.mode, AppMode::Export, "Message")
+                    .clicked()
+                {
+                    self.show_log = false;
+                }
+                if ui
+                    .selectable_value(&mut self.mode, AppMode::Reexport, "Re-export")
                     .clicked()
                 {
                     self.show_log = false;
@@ -709,6 +809,90 @@ impl App {
             if clear.clicked() {
                 self.clear_active_exporter();
             }
+        });
+    }
+
+    fn ui_reexport(&mut self, ui: &mut egui::Ui) {
+        egui::Frame::NONE
+            .inner_margin(egui::Margin::same(18))
+            .show(ui, |ui| {
+                ui.heading("Re-export");
+                ui.add_space(8.0);
+                ui.label(
+                    "Convert a prior Message Exporters output directory to another format. \
+                     Input format is auto-detected (csv, eml, mbox, json, jsonl, or xml).",
+                );
+                ui.add_space(16.0);
+
+                path_or_text(
+                    ui,
+                    "Input directory",
+                    &mut self.export_ini.reexport.input,
+                    "Prior export folder",
+                    false,
+                    true,
+                );
+                self.ui_reexport_output_format(ui);
+                path_or_text(
+                    ui,
+                    "Output directory",
+                    &mut self.export_ini.reexport.output,
+                    "Path",
+                    false,
+                    true,
+                );
+                self.ui_attachment_media(ui, true);
+
+                self.ui_errors(ui);
+
+                ui.add_space(10.0);
+                ui.separator();
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    form_label(ui, "Obfuscate");
+                    ui.checkbox(&mut self.form.obfuscate, "");
+                });
+                if self.form.obfuscate || !self.form.obfuscate_seed.is_empty() {
+                    labeled_text(
+                        ui,
+                        "Seed",
+                        &mut self.form.obfuscate_seed,
+                        "Optional 8-hex seed",
+                        PATH_W,
+                    );
+                }
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    let run = ui.add_enabled(!self.running, egui::Button::new("Run re-export"));
+                    if run.clicked() {
+                        self.start_reexport();
+                    }
+                    let clear = ui.add_enabled(!self.running, egui::Button::new("Clear"));
+                    if clear.clicked() {
+                        self.export_ini.reexport = Default::default();
+                        let _ = self.export_ini.save(&self.form);
+                    }
+                });
+            });
+    }
+
+    fn ui_reexport_output_format(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            form_label(ui, "Output format");
+            with_field_width(ui, PATH_W, |ui| {
+                egui::ComboBox::from_id_salt("reexport_output_format")
+                    .selected_text(self.export_ini.reexport.output_format.to_string())
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        for format in OUTPUT_FORMATS_MAIL {
+                            ui.selectable_value(
+                                &mut self.export_ini.reexport.output_format,
+                                format,
+                                format.to_string(),
+                            );
+                        }
+                    });
+            });
         });
     }
 
@@ -1181,6 +1365,7 @@ impl eframe::App for App {
                     match self.mode {
                         AppMode::ValidateContacts => self.ui_validate(ui),
                         AppMode::Export => self.ui_export(ui),
+                        AppMode::Reexport => self.ui_reexport(ui),
                     }
                 });
             }
@@ -1474,4 +1659,5 @@ impl_has_messages!(
     imazing_exporter::RunResult,
     imessage_ir_exporter::RunResult,
     whatsapp_exporter::RunResult,
+    message_reexporter::RunResult,
 );
