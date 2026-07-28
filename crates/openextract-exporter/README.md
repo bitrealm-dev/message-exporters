@@ -1,46 +1,7 @@
-# OpenExtract → common message → packaging
+# openextract-exporter
 
-Convert OpenExtract conversation CSV exports into the [common message](../../docs/src/common-message.md), then package as JSON (default), CSV, EML, MBOX, JSONL, or XML. Enriches phone numbers and names from the contacts `.vcf` that ships with the export.
+Convert **OpenExtract** conversation CSV (+ optional VCF) via the common message to JSON, CSV, EML, MBOX, JSONL, or XML.
 
-**Targeted upstream:** OpenExtract **0.5.1** (`export_tool` / `export_tool_version` on every output row).
+**CLI:** [docs/MANPAGE.md](docs/MANPAGE.md)
 
-Library (`ExporterConfig` / `run`) for the GUI; thin CLI for standalone use. CLI reference: [`docs/MANPAGE.md`](docs/MANPAGE.md).
-
-## What this is for
-
-OpenExtract writes thin CSV files such as:
-
-- Per chat: `conversation_123.csv` with columns `Date,Sender,Text,Is From Me,Has Attachments`
-- Combined: `all_conversations.csv` with extra `Conversation` and `Direction` columns
-
-`Sender` may be a phone number, a display name, or `me`. That is enough to read the thread, but vault import wants stable phone chat ids and display names. Pass the export’s `.vcf` so phones resolve to names (and names to phones when possible).
-
-If a contact is only known by name and the VCF has no phone for them, the converter still writes a CSV (name-based filename). That is not treated as a fatal error here, but vault ingest may struggle until the contact book is complete.
-
-Attachment sidecar CSVs (`*_attachments.csv`) are ignored in this version; `attachments_json` is empty.
-
-Shared CSV columns: [`docs/src/csv-output.md`](../../docs/src/csv-output.md).
-
-## What you need
-
-1. OpenExtract conversation CSV file(s) — one file or a folder
-2. The contacts `.vcf` from the same export (or an iMazing Contacts `--contacts` CSV) — recommended; without either, a warning is printed and names/phones are left unresolved
-
-## How to run
-
-From the [message-exporters](../..) repository root:
-
-```bash
-cargo run --release -p openextract-exporter -- \
-  --input /path/to/openextract_csv_dir \
-  --output ./staging/openextract \
-  --vcf /path/to/contacts.vcf
-```
-
-`--input` may be a single `conversation_*.csv`, an `all_conversations.csv`, or a directory of those files. `*_attachments.csv` files are skipped automatically.
-
-Full CLI (dates, obfuscate): [`docs/MANPAGE.md`](docs/MANPAGE.md).
-
-## License
-
-MIT.
+License: MIT

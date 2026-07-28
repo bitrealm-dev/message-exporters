@@ -17,11 +17,11 @@ go-sms-pro-exporter --input <DIR> --output <DIR> --owner-phone <PHONE>...
 
 # DESCRIPTION
 
-Reads a GO SMS Pro local backup folder (`gosms_sys*.xml` plus `I_*.pdu` files), builds a common message per conversation, and projects JSON (default) or another `--format` under `--output`, with optional media under `attachments/`.
+Reads a **GO SMS Pro** (GOMO / Jiubang) backup folder — `gosms_sys*.xml` for SMS and `I_*.pdu` for MMS — into a common message per conversation, then projects JSON (default) or another `--format`. Media lands under `attachments/` when enabled. Skip diagnostics may write `skipped_invalid_address.csv`, `skipped_empty_pdu.csv`, `skipped_no_party.csv`.
 
-This binary is a thin CLI over the `go-sms-pro-exporter` library (`ExporterConfig` + `run`). The desktop GUI calls that library in-process; this command remains for standalone use.
+PDU decoding is heuristic (MMS Encapsulation / WSP-inspired); many stub PDUs are empty. Owner phone(s) are required for PDU direction and chat grouping — wrong values flip sent/received. Pass `--contacts` or `--vcf` to fill display names.
 
-Owner phone(s) are required: they determine message direction for PDU MMS. Wrong owner values flip sent/received.
+Library API: `ExporterConfig` / `run` (desktop GUI). Thanks: [python-messaging](https://github.com/pmarti/python-messaging).
 
 # OPTIONS
 
@@ -99,10 +99,4 @@ go-sms-pro-exporter \
 
 # NOTES
 
-Experimental in the desktop GUI. Proprietary PDU decoding is heuristic; many stub PDUs are empty. SMS attachments are not always present in the XML. Field mapping: [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md).
-
-# SEE ALSO
-
-[README.md](../README.md), [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md),
-[message-contacts](../../message-contacts), [message-media](../../message-media),
-[message-obfuscate](../../message-obfuscate)
+Experimental in the desktop GUI. Field mapping and skip counters: [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md).

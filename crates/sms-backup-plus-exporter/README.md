@@ -1,64 +1,9 @@
-# SMS Backup+ → common message → packaging
+# sms-backup-plus-exporter
 
-Convert [SMS Backup+](https://github.com/jberkel/sms-backup-plus) email exports into the [common message](../../docs/src/common-message.md), then package as JSON (default), CSV, EML, MBOX, JSONL, or XML, plus any photos or other media stored in those emails.
+Convert **SMS Backup+** `.eml` exports via the common message to JSON, CSV, EML, MBOX, JSONL, or XML.
 
-**Targeted upstream:** SMS Backup+ **1.5.11** (`export_tool` / `export_tool_version` on every output row).
+**CLI:** [docs/MANPAGE.md](docs/MANPAGE.md)
 
-Library (`ExporterConfig` / `run`) for the GUI; thin CLI for standalone use. CLI reference: [`docs/MANPAGE.md`](docs/MANPAGE.md).
+**EML layouts:** [docs/FORMAT.md](docs/FORMAT.md) · **mapping:** [docs/EML_CSV_MAPPING.md](docs/EML_CSV_MAPPING.md)
 
-## What this is for
-
-SMS Backup+ can copy Android SMS and MMS into email (for example Gmail). People often download or archive those emails as `.eml` files — ordinary email files on disk. This converter reads a folder of those files. It does **not** sign in to email or talk to IMAP.
-
-Backups usually show up in two layouts:
-
-- **One file per message** — a short email that holds a single text or MMS
-- **Archive emails** — a longer email that holds many messages from the same conversation in the body
-
-How those emails are structured: [docs/FORMAT.md](docs/FORMAT.md). How each message becomes a spreadsheet row: [docs/EML_CSV_MAPPING.md](docs/EML_CSV_MAPPING.md).
-
-## What you get
-
-- One CSV file per conversation (a CSV is a plain table you can open in Excel, Numbers, or Google Sheets)
-- An `attachments/` folder for media taken from the emails
-- Each row is one message: who it was with, when it was sent or received, the text, and whether media was attached
-
-If the same message appears more than once (for example in both a one-message file and an archive), the converter keeps a single copy. Details are in the [mapping doc](docs/EML_CSV_MAPPING.md).
-
-Shared CSV columns: [`docs/src/csv-output.md`](../../docs/src/csv-output.md).
-
-## What you need
-
-1. A folder of `.eml` files from SMS Backup+
-2. **Your phone number** — so the converter can tell which messages you sent
-3. **Your email address** — the address SMS Backup+ used when it mailed the texts (needed when the email does not clearly mark sent vs received)
-4. **Contacts** (recommended) — `--contacts` (VCF or iMazing Contacts CSV) or `--vcf` for name↔phone resolution; without either, a warning is printed and names are left unresolved
-
-Pass owner phone/email on the command line, or put them in `config/owner.toml` next to this converter (`phones = […]` and `emails = […]`; see `config/owner.example.toml`). Optional `--name-mapping` still defaults to `config/name-mapping.csv` when that file exists (crate-relative). Repeat `--owner-phone` or `--owner-email` if you used more than one number or address.
-
-Also useful:
-
-- `--name-mapping` — CSV of `Phone,Incorrect Name` mapping EML nicknames to a phone (contacts book then fills the display name)
-- `-v` / `--verbose` — progress messages while large folders are scanned
-- `--start-date` / `--end-date` — `YYYY-MM-DD` window `[start, end)` at host local midnight (end exclusive)
-
-Contacts resolve **name → phone** when the EML has a name but no peer number, and **phone → name** when the display name is blank. Vault csv-ingest does not look up contacts.
-
-## How to run
-
-From the [message-exporters](../..) repository root:
-
-```bash
-cargo run --release -p sms-backup-plus-exporter -- convert \
-  --input /path/to/eml_export \
-  --output ./staging/sms-backup-plus \
-  --owner-phone +15555550100 \
-  --owner-email you@example.com \
-  --contacts /path/to/contacts.csv
-```
-
-`--input` is the folder of `.eml` files. Full CLI (dates, media modes, obfuscate, `--vcf`): [`docs/MANPAGE.md`](docs/MANPAGE.md).
-
-## License
-
-MIT.
+License: MIT

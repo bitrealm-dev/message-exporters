@@ -1,6 +1,6 @@
 # Fields in SMS Backup & Restore XML
 
-SyncTech’s **input** attribute reference for the XML backup format. How this exporter maps those attributes into the common message / shared CSV: [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md). Common message schema: [`docs/COMMON_MESSAGE.md`](../../../docs/COMMON_MESSAGE.md).
+SyncTech’s **input** attribute reference for the XML backup format. Mapping into the common message / shared CSV: [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md).
 
 Source: SyncTech’s [Fields in XML backup files](https://www.synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/). Related SyncTech links:
 
@@ -17,9 +17,7 @@ Child message elements:
 - `<sms>` — plain text SMS
 - `<mms>` — MMS with nested parts and addresses
 
-Call logs use `<calls>` / `<call>`. They are documented below for reference. This exporter ignores call records for all output formats (CSV, mail, JSON, XML).
-
-Writing SyncTech XML from the common message (`--format xml` → `smses.xml`) is documented in [`docs/SBR_XML.md`](../../../docs/SBR_XML.md).
+**Call logs are not supported.** Any `<calls>` / `<call>` elements in the backup are ignored.
 
 Field values are generally copied as-is from the Android SMS/MMS databases. The backup app does little conversion.
 
@@ -92,20 +90,3 @@ An MMS has three layers:
 | `address` | Phone number of sender or recipient |
 | `type` | `129` BCC, `130` CC, `151` To, `137` From |
 | `charset` | Character set for this entry |
-
----
-
-## Call logs (`<call>`) — not exported
-
-| Attribute | Meaning |
-|-----------|---------|
-| `number` | Phone number of the call |
-| `duration` | Duration in seconds |
-| `date` | Time as Unix epoch milliseconds (UTC) |
-| `type` | `1` incoming, `2` outgoing, `3` missed, `4` voicemail, `5` rejected, `6` refused list |
-| `presentation` | Caller ID: `1` allowed, `2` restricted, `3` unknown, `4` payphone |
-| `subscription_id` | Optional SIM / subscription id |
-| `readable_date` | Optional human-readable date |
-| `contact_name` | Optional contact name |
-
-Call rows can appear in the same backup XML. They are listed here so the file format is complete. The exporter ignores them (no call messages in any output format).

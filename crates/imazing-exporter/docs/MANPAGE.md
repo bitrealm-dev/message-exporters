@@ -17,9 +17,9 @@ imazing-exporter --input <PATH> --output <DIR>
 
 # DESCRIPTION
 
-Normalizes iMazing-exported Messages and/or WhatsApp CSV into a common message per conversation, then projects JSON (default) or another `--format`. WhatsApp chats use the `__whatsapp` filename suffix. Prefer exporting from iMazing’s **All backup** view when attachment filenames matter.
+Normalizes **iMazing** Messages and/or WhatsApp CSV exports (targeted **3.5.5**) into a common message per conversation, then projects JSON (default) or another `--format`. WhatsApp chats use the `__whatsapp` filename suffix and stay separate from SMS/iMessage.
 
-Distinct from `imessage-ir-exporter`, which reads Apple `chat.db` directly.
+`Chat Session` is often a name, not a phone — pass `--contacts` from the same backup so chat ids become E.164 when possible. Prefer iMazing’s **All backup** export when attachment filenames matter. Distinct from `imessage-ir-exporter`, which reads Apple `chat.db` directly.
 
 # OPTIONS
 
@@ -79,11 +79,4 @@ imazing-exporter \
 
 # NOTES
 
-Experimental in the GUI. Outgoing sender identity, WhatsApp group roster, and reaction/reply fidelity are limited by the upstream CSV. Details: [DESIGN.md](DESIGN.md).
-
-# SEE ALSO
-
-[README.md](../README.md), [DESIGN.md](DESIGN.md),
-[whatsapp-exporter](../../whatsapp-exporter) (native WhatsApp path),
-[imessage-ir-exporter](../../imessage-ir-exporter) (`chat.db` path),
-[message-media](../../message-media), [message-obfuscate](../../message-obfuscate)
+Experimental in the GUI. Outgoing sender identity, WhatsApp group roster, and reaction/reply fidelity are limited by the upstream CSV. Design notes and limitations: [DESIGN.md](DESIGN.md).

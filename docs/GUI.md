@@ -68,7 +68,7 @@ Top tab (not a Message backup type). Converts a prior Message Exporters output f
 | Attachments | enum | no | `--media-mode` |
 | Obfuscate / seed | checkbox + text | no | `--obfuscate` / `--obfuscate-seed` |
 
-Persists under `[message-reexport]` in `export.ini`. Mixed or unrecognized input dirs fail with a clear error. See [`crates/message-reexporter/README.md`](../crates/message-reexporter/README.md).
+Persists under `[message-reexport]` in `export.ini`. Mixed or unrecognized input dirs fail with a clear error. See [`crates/message-reexporter/docs/MANPAGE.md`](../crates/message-reexporter/docs/MANPAGE.md).
 
 ## Shared / global controls
 

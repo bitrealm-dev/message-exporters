@@ -17,9 +17,15 @@ sms-backup-restore-exporter --input <PATH> --output <DIR> --owner-phone <PHONE>.
 
 # DESCRIPTION
 
-Converts SyncTech **SMS Backup & Restore** XML into a common message per conversation, then projects JSON (default), JSONL, CSV, EML, MBOX, or SyncTech XML (`--format`). See [common-message.md](../../../docs/src/common-message.md), [COMMON_MESSAGE.md](../../../docs/COMMON_MESSAGE.md), and [MAIL_ARCHIVE.md](../../../docs/MAIL_ARCHIVE.md). MMS media is written under `attachments/` when enabled; for EML/MBOX, attachment bytes are embedded.
+Reads SyncTech **SMS Backup & Restore** XML (`sms-….xml`, targeted **10.26.003**) into a common message per conversation, then writes JSON (default), JSONL, CSV, EML, MBOX, or SyncTech XML (`--format`).
 
-Owner phone(s) are required so MMS chat keys and direction resolve correctly. Encrypted ZIP backups must be unlocked/extracted before use. Media convert/compress and obfuscation apply through FormatSink for every format.
+`--input` may be one XML file or a directory of `.xml` backups (combined into one export). Encrypted `.zip` backups must be unlocked and unzipped first; this tool does not open them.
+
+**Owner phone(s) are required** so MMS chat keys, group membership, and senders resolve correctly. For ordinary SMS, sent vs received also comes from the backup `type` field. Pass `--contacts` or `--vcf` to fill blank display names; without either, a warning is printed and names stay unresolved.
+
+MMS media lands under `attachments/` when media copy is enabled; EML/MBOX embed bytes instead. Media convert/compress need `ffmpeg`/`ffprobe`. Call logs are not supported. Drafts, failed, and queued messages are skipped.
+
+Library API: `ExporterConfig` / `run` (used by the desktop GUI).
 
 # OPTIONS
 
@@ -30,7 +36,7 @@ Owner phone(s) are required so MMS chat keys and direction resolve correctly. En
 : Destination for packaging output and `attachments/`.
 
 **--format** *json|jsonl|csv|eml|mbox|xml*
-: Output packaging from the common message. `json` (default) one common-message file per conversation; `jsonl` lines; `csv` one CSV per conversation; `eml` / `mbox` mail archives; `xml` one `smses.xml`.
+: Output packaging. `json` (default) one file per conversation; `jsonl` lines; `csv` one CSV per conversation; `eml` / `mbox` mail archives; `xml` one `smses.xml`.
 
 **--owner-phone** *PHONE*
 : Owner number (E.164 or digits). Repeat for multiple. Required.
@@ -48,7 +54,7 @@ Owner phone(s) are required so MMS chat keys and direction resolve correctly. En
 : Include messages before this local date (exclusive).
 
 **--media-mode** *MODE*
-: `disabled`, `clone` (default), `convert`, or `compress`. Convert/compress need ffmpeg/ffprobe.
+: `disabled`, `clone` (default), `convert`, or `compress`.
 
 **--media-max-resolution** *RES*
 : Compress only: max long edge (`720p`, `1080p` default, `4k`).
@@ -75,10 +81,10 @@ Exits non-zero on invalid arguments, missing input, convert failure, or total me
 # FILES
 
 **Input**
-: SyncTech XML with embedded or referenced MMS parts.
+: SyncTech XML with SMS/MMS (and optional embedded MMS parts).
 
 **Output**
-: With `--format json` (default): one `*.json` per conversation; `attachments/` for copied MMS media. With `--format csv`: one `*.csv` per conversation. With `--format eml`: one directory per conversation of `*.eml` files.
+: Per-conversation packaging for the chosen format; `attachments/` when media is copied.
 
 # ENVIRONMENT
 
@@ -88,7 +94,7 @@ Exits non-zero on invalid arguments, missing input, convert failure, or total me
 # EXAMPLES
 
 ```bash
-sms-backup-restore-exporter \
+cargo run --release -p sms-backup-restore-exporter -- \
   --input /path/to/sms-20210328165031.xml \
   --output ./staging/sms-backup-restore \
   --owner-phone +15555550100 \
@@ -97,4 +103,4 @@ sms-backup-restore-exporter \
 
 # NOTES
 
-Supported exporter (documented XML schema). Call logs, drafts, failed, and queued messages are skipped. See [FIELDS.md](FIELDS.md) and [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md).
+XML attribute reference: [FIELDS.md](FIELDS.md). Source → common-message mapping: [XML_CSV_MAPPING.md](XML_CSV_MAPPING.md).

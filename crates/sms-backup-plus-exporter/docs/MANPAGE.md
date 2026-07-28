@@ -20,9 +20,11 @@ sms-backup-plus-exporter [-v|--verbose] [--no-summary] convert
 
 # DESCRIPTION
 
-Converts offline **SMS Backup+** `.eml` trees (IMAP-style `Archive/`, `Sent/`, …) into a common message per conversation, then projects JSON (default) or another `--format`. Multiple `--input` roots are merged and path-deduped.
+Converts offline **SMS Backup+** `.eml` exports (targeted **1.5.11**) into a common message per conversation, then projects JSON (default) or another `--format`. This tool does **not** sign in to email or talk to IMAP — only files on disk.
 
-Owner phone and email may come from flags or `config/owner.toml` beside the crate. The GUI always runs the `convert` subcommand with `--verbose`.
+Backups appear as **one file per message** or **archive emails** (many messages in one body). Multiple `--input` roots are merged and path-deduped; duplicate messages are kept once.
+
+Owner phone and email may come from flags or `config/owner.toml` (`phones`, `emails`, optional `source_dirs`). Optional `--name-mapping` defaults to `config/name-mapping.csv` when present. Contacts resolve name↔phone; without `--contacts`/`--vcf`, a warning is printed. The GUI always runs `convert` with `--verbose`.
 
 # OPTIONS
 
@@ -105,10 +107,4 @@ sms-backup-plus-exporter -v convert \
 
 # NOTES
 
-Experimental in the GUI. Attachment→message pairing in archives is heuristic. See [FORMAT.md](FORMAT.md) and [EML_CSV_MAPPING.md](EML_CSV_MAPPING.md).
-
-# SEE ALSO
-
-[README.md](../README.md), [FORMAT.md](FORMAT.md), [EML_CSV_MAPPING.md](EML_CSV_MAPPING.md),
-[message-contacts](../../message-contacts), [message-media](../../message-media),
-[message-obfuscate](../../message-obfuscate)
+Experimental in the GUI. Attachment→message pairing in archives is heuristic. EML layouts: [FORMAT.md](FORMAT.md). Field mapping: [EML_CSV_MAPPING.md](EML_CSV_MAPPING.md).

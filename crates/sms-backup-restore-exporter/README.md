@@ -1,50 +1,9 @@
-# SMS Backup & Restore → common message → packaging
+# sms-backup-restore-exporter
 
-Convert an Android **SMS Backup & Restore** backup into the [common message](../../docs/src/common-message.md), then package as JSON (default), CSV, EML, MBOX, JSONL, or SyncTech XML.
+Convert SyncTech **SMS Backup & Restore** XML via the common message to JSON, CSV, EML, MBOX, JSONL, or SyncTech XML.
 
-**Targeted upstream:** SMS Backup & Restore **10.26.003** (`export_tool` / `export_tool_version` on every output row).
+**CLI:** [docs/MANPAGE.md](docs/MANPAGE.md)
 
-Library (`ExporterConfig` / `run`) for the GUI; thin CLI for standalone use. CLI reference: [`docs/MANPAGE.md`](docs/MANPAGE.md).
+**XML fields:** [docs/FIELDS.md](docs/FIELDS.md) · **mapping:** [docs/XML_CSV_MAPPING.md](docs/XML_CSV_MAPPING.md)
 
-## What this is for
-
-[SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/) (by SyncTech) writes a backup file whose name looks like `sms-20210328165031.xml`. That file holds SMS and MMS from the phone’s messaging database.
-
-This converter reads that XML into a common message per conversation, then writes the format you pick (`--format`; default `json`). CSV is one packaging option for spreadsheets.
-
-- What the backup XML contains: [docs/FIELDS.md](docs/FIELDS.md)
-- How each message becomes a spreadsheet row: [docs/XML_CSV_MAPPING.md](docs/XML_CSV_MAPPING.md)
-
-## What you get
-
-- One file (or mail folder) per conversation in the chosen format (default JSON)
-- An `attachments/` folder for pictures and other media that were inside MMS messages when media copy is enabled
-- For CSV packaging: each row is one message (shared columns: [`docs/src/csv-output.md`](../../docs/src/csv-output.md))
-
-## What you need
-
-1. Either one `sms-….xml` file, or a folder that contains several `.xml` backups (all of them are combined into one export)
-2. **Your phone number** — the number that owned the messages on that phone (required; there is no demo default)
-3. **Contacts** (recommended) — `--contacts` (VCF or iMazing Contacts CSV) or `--vcf` so blank display names can be filled from phone numbers; without either, a warning is printed and names are left unresolved
-
-For ordinary SMS, sent vs received comes from the backup’s own type field. Your number is still required so MMS chat keys, group membership, and senders are correct. For example, if your number is `+1 555 555 0100`, pass that (or the same digits without spaces) as `--owner-phone`.
-
-If the backup app gave you an encrypted `.zip` file, unlock and unzip it first. Point `--input` at the XML file inside the unzipped folder. This converter does not open encrypted archives.
-
-## How to run
-
-From the [message-exporters](../..) repository root:
-
-```bash
-cargo run --release -p sms-backup-restore-exporter -- \
-  --input /path/to/sms-20210328165031.xml \
-  --output ./staging/sms-backup-restore \
-  --owner-phone +15555550100 \
-  --contacts /path/to/contacts.csv
-```
-
-`--input` may be a single XML file or a directory of XML files. Full CLI (dates, media modes, obfuscate): [`docs/MANPAGE.md`](docs/MANPAGE.md).
-
-## License
-
-MIT.
+License: MIT

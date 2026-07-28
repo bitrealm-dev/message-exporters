@@ -19,9 +19,11 @@ whatsapp-exporter --output <DIR> --platform android|ios
 
 # DESCRIPTION
 
-Shells out to KnugiHK **wtsexporter**, then maps its JSON into the common message and projects JSON (default) or another `--format` (stems use `__whatsapp`). Extraction runs in a temporary directory under `--output` (removed after convert) so the process launch directory is not polluted.
+Shells out to KnugiHK **wtsexporter** ([WhatsApp-Chat-Exporter](https://github.com/KnugiHK/WhatsApp-Chat-Exporter) ≥ 0.13), then maps its JSON into the common message and projects JSON (default) or another `--format`. Conversation stems use the `__whatsapp` suffix.
 
-`--platform` is required unless `--json` is used (convert-only, no Python). The GUI does not pass `--input`.
+Extraction runs in a temp directory under `--output` (removed afterward). `--platform` is required unless `--json` (convert-only, no extract). The GUI does not pass `--input`.
+
+Install the helper with `pip install 'whatsapp-chat-exporter[android_backup,crypt15]'`, use the release-bundled binary beside this tool, or set `WTSEXPORTER`. Prefer this over iMazing WhatsApp CSV when you have the native DB/backup.
 
 # OPTIONS
 
@@ -120,11 +122,4 @@ whatsapp-exporter \
 
 # NOTES
 
-Supported exporter. Install helper with `pip install 'whatsapp-chat-exporter[android_backup,crypt15]'` or use the release-bundled binary. Prefer this over iMazing WhatsApp CSV when you have the native DB/backup.
-
-# SEE ALSO
-
-[README.md](../README.md),
-[KnugiHK WhatsApp-Chat-Exporter](https://github.com/KnugiHK/WhatsApp-Chat-Exporter),
-[imazing-exporter](../../imazing-exporter) (CSV path),
-[message-media](../../message-media), [message-obfuscate](../../message-obfuscate)
+Supported exporter. Android needs an already extracted / decryptable database or crypt backup; iOS uses a WhatsApp-capable iPhone backup path.

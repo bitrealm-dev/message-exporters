@@ -2,19 +2,13 @@
 
 How SyncTech `<sms>` / `<mms>` elements map into the common message (`ConversationDocument`) and the shared CSV projector written by `sms-backup-restore-exporter` (`--format csv`).
 
-Attribute meanings (SyncTech **input** reference): [FIELDS.md](FIELDS.md). Shared CSV contract: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md), [`message_ir::CSV_HEADERS`](../../message-ir/src/lib.rs). Common message: [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/COMMON_MESSAGE.md`](../../../docs/COMMON_MESSAGE.md).
+Attribute meanings: [FIELDS.md](FIELDS.md). Shared CSV columns: [`docs/src/csv-output.md`](../../../docs/src/csv-output.md).
 
-## Goal / non-goal
+## Pipeline
 
-- **Goal:** Document how SyncTech fields fill shared common-message / CSV cells (and the vendor bag).
-- **Non-goal:** A private per-exporter CSV header. All exporters use one CSV header; Apple-only cells are empty for this source.
+Source XML → `ConversationDocument` → packaging (`--format json|jsonl|csv|eml|mbox|xml`; default `json`).
 
-## Pipeline / output
-
-Source XML → `ConversationDocument` → [`message_ir::FormatSink`](../../message-ir/src/format_sink.rs) (`--format json|jsonl|csv|eml|mbox|xml`; default `json`).
-
-With `--format csv`: one file per conversation (header + one row per message). Decoded MMS media under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv` (max 10 phones, then a hash). The `chat_identifier` cell may still use `chat-group-…` for groups. `--format xml` writes a single SyncTech `smses.xml` ([`docs/SBR_XML.md`](../../../docs/SBR_XML.md)).
-
+With `--format csv`: one file per conversation. Decoded MMS media under `attachments/` when copying/embedding. Filenames: 1:1 → `+E164.csv`; untitled groups → `group_+A_+B_….csv`. `--format xml` writes a single SyncTech `smses.xml`.
 ## Source → shared cells
 
 | CSV / common-message cell | SMS / MMS source |
@@ -88,8 +82,4 @@ For each `<part>` that has a `data` attribute, the bag stores `data_len` and `da
 
 ## Reverse: common message → XML
 
-Exporters can write a SyncTech `smses.xml` via `--format xml` ([`docs/SBR_XML.md`](../../../docs/SBR_XML.md)). When `source.fields` still holds the `kind`/`attrs`/`parts`/`addrs` bag from this importer, those attributes are preferred. Otherwise SMS/MMS elements are synthesized from common-message core fields. iMessage-only common messages are lossy (Apple bags dropped).
-
-## Not exported
-
-`<call>` / call-log rows in the same backup file are ignored (no call messages in any output format).
+`--format xml` writes `smses.xml`. When `source.fields` still holds the importer bag (`kind`/`attrs`/`parts`/`addrs`), those attributes are preferred; otherwise SMS/MMS elements are synthesized from common-message core fields. Apple-only fields are dropped. Call logs are not supported.

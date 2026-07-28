@@ -137,6 +137,6 @@ These are upstream/export constraints, not converter bugs:
 
 ## Related docs
 
-- Converter README: [`../README.md`](../README.md)
+- CLI: [`MANPAGE.md`](MANPAGE.md)
 - Contacts helper: [`../../message-contacts/README.md`](../../message-contacts/README.md)
 - Common message / CSV contract: [`docs/COMMON_MESSAGE.md`](../../../docs/COMMON_MESSAGE.md), [`docs/src/common-message.md`](../../../docs/src/common-message.md), [`docs/src/csv-output.md`](../../../docs/src/csv-output.md)

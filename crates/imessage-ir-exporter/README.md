@@ -1,39 +1,7 @@
 # imessage-ir-exporter
 
-Export Apple Messages (`chat.db` / iOS backup) to **per-conversation CSV, EML, MBOX, JSON, or JSONL** via [`imessage-database`](https://crates.io/crates/imessage-database) and [`message-ir`](../message-ir/).
+Export Apple Messages (`chat.db` / iOS backup) via the common message to JSON, CSV, EML, MBOX, JSONL, or XML.
 
-Pipeline: `chat.db` → `MailMessage` → `ConversationDocument` → `message_ir::FormatSink`.
+**CLI:** [docs/MANPAGE.md](docs/MANPAGE.md)
 
-## CLI
-
-```bash
-cargo run -p imessage-ir-exporter -- \
-  --output ./out \
-  --format json
-```
-
-Formats: `json` (default), `jsonl`, `csv`, `eml`, `mbox`, `xml` (common message schema v3).
-
-## Library
-
-```rust
-use imessage_ir_exporter::run;
-use message_exporters_core::ExporterConfig;
-
-let result = run(&config)?;
-```
-
-Requires `SourceConfig::Apple`.
-
-## GUI
-
-**iPhone backup** dispatches here for all output formats. Media modes and obfuscate apply through `FormatSink` for every format.
-
-## License
-
-GPL-3.0-or-later (same as `imessage-database` / `crabapple`).
-
-## See also
-
-- [COMMON_MESSAGE.md](../../docs/COMMON_MESSAGE.md)
-- [MAIL_ARCHIVE.md](../../docs/MAIL_ARCHIVE.md)
+License: GPL-3.0-or-later

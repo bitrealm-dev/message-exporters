@@ -14,9 +14,9 @@ openextract-exporter --input <PATH> --output <DIR>
 
 # DESCRIPTION
 
-Reads OpenExtract conversation CSV (`all_conversations.csv` or `conversation_*.csv`, file or directory), builds a common message per conversation, and projects JSON (default) or another `--format`. Contacts (`--vcf` or `--contacts`) are recommended so names and phones resolve; without them export still runs with a warning.
+Reads **OpenExtract** conversation CSV (targeted **0.5.1**) — `all_conversations.csv` or `conversation_*.csv`, file or directory — into a common message per conversation, then projects JSON (default) or another `--format`. `*_attachments.csv` sidecars are ignored; this converter does not extract binary media.
 
-This converter does not extract binary media attachments.
+`Sender` may be a phone, a display name, or `me`. Pass `--vcf` or `--contacts` so phones and names resolve; without either, a warning is printed. Name-only chats still write (name-based filename) but may be weak for later ingest.
 
 # OPTIONS
 
@@ -74,10 +74,4 @@ openextract-exporter \
 
 # NOTES
 
-Experimental in the GUI. Thin source format: no groups, no media extraction; contacts strongly recommended. See the crate README for sample output.
-
-# SEE ALSO
-
-[README.md](../README.md),
-[message-contacts](../../message-contacts),
-[message-obfuscate](../../message-obfuscate)
+Experimental in the GUI. Thin source format: no groups, no media extraction; contacts strongly recommended.

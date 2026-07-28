@@ -57,10 +57,10 @@ All converters build a **common message** per conversation (`ConversationDocumen
 | GO SMS Pro | [`crates/go-sms-pro-exporter/docs/XML_CSV_MAPPING.md`](../crates/go-sms-pro-exporter/docs/XML_CSV_MAPPING.md) |
 | SMS Backup & Restore | [`crates/sms-backup-restore-exporter/docs/XML_CSV_MAPPING.md`](../crates/sms-backup-restore-exporter/docs/XML_CSV_MAPPING.md) |
 | SMS Backup+ | [`crates/sms-backup-plus-exporter/docs/EML_CSV_MAPPING.md`](../crates/sms-backup-plus-exporter/docs/EML_CSV_MAPPING.md) |
-| OpenExtract | [`crates/openextract-exporter/README.md`](../crates/openextract-exporter/README.md) |
+| OpenExtract | [`crates/openextract-exporter/docs/MANPAGE.md`](../crates/openextract-exporter/docs/MANPAGE.md) |
 | iMazing | [`crates/imazing-exporter/docs/DESIGN.md`](../crates/imazing-exporter/docs/DESIGN.md) |
-| WhatsApp | [`crates/whatsapp-exporter/README.md`](../crates/whatsapp-exporter/README.md) |
-| iMessage | [`crates/imessage-ir-exporter/README.md`](../crates/imessage-ir-exporter/README.md) |
+| WhatsApp | [`crates/whatsapp-exporter/docs/MANPAGE.md`](../crates/whatsapp-exporter/docs/MANPAGE.md) |
+| iMessage | [`crates/imessage-ir-exporter/docs/MANPAGE.md`](../crates/imessage-ir-exporter/docs/MANPAGE.md) |
 
 **Common message:** end-user [common-message.md](src/common-message.md); schema [`COMMON_MESSAGE.md`](COMMON_MESSAGE.md) (`message-ir`, schema v3). All exporters parse to `ConversationDocument` then project via `message_ir::FormatSink` (per-chat JSON/JSONL/CSV/EML/MBOX, or one SyncTech `smses.xml` with `--format xml`). Mail packaging: [`MAIL_ARCHIVE.md`](MAIL_ARCHIVE.md). SBR XML: [`SBR_XML.md`](SBR_XML.md). Attachment modes (none / copy / convert / compress) and obfuscate apply through `FormatSink` for every format.
 
