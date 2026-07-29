@@ -1,0 +1,136 @@
+//! Headless CLI: push a message-ir JSONL export folder to Message Vault.
+
+use std::path::PathBuf;
+use std::process::ExitCode;
+
+use anyhow::{Result, bail};
+use clap::Parser;
+use message_vault_client::{DEFAULT_BATCH_SIZE, ProgressEvent, VaultPushConfig, authenticate, run};
+
+#[derive(Debug, Parser)]
+#[command(
+    name = "vault-push",
+    about = "Push a Message Exporters JSONL folder into Message Vault",
+    long_about = "Reads per-conversation .jsonl files (message-ir schema v3) plus \
+attachments/, uploads media by SHA-256, then imports message batches.\n\n\
+Prefer VAULT_KEY for the vault key. Prefer Message Exporters → Vault for a GUI."
+)]
+struct Cli {
+    /// Vault base URL (e.g. http://127.0.0.1:8080)
+    #[arg(long, env = "VAULT_URL")]
+    url: String,
+
+    /// Vault account username
+    #[arg(long)]
+    username: String,
+
+    /// Per-account Import API token (Vault key). Prefer VAULT_KEY env.
+    #[arg(long, env = "VAULT_KEY")]
+    key: String,
+
+    /// Export directory containing .jsonl files and attachments/
+    #[arg(long)]
+    input: PathBuf,
+
+    /// Import mode: append (resume-safe) or replace
+    #[arg(long, default_value = "append")]
+    mode: String,
+
+    /// Continue after a failed conversation
+    #[arg(long, default_value_t = true)]
+    continue_on_error: bool,
+
+    /// Ignore journal; re-upload assets and re-import messages
+    #[arg(long)]
+    force: bool,
+
+    /// Max retries for transient HTTP errors
+    #[arg(long, default_value_t = 3)]
+    max_retries: u32,
+
+    /// Messages per import request
+    #[arg(long, default_value_t = DEFAULT_BATCH_SIZE)]
+    batch_size: usize,
+
+    /// Authenticate only; do not import
+    #[arg(long)]
+    auth_only: bool,
+
+    /// Report JSON path (default: <input>/vault-push-report.json)
+    #[arg(long)]
+    report: Option<PathBuf>,
+
+    /// Log path (default: <input>/vault-push.log)
+    #[arg(long)]
+    log: Option<PathBuf>,
+
+    /// Journal path (default: <input>/.vault-import-state.jsonl)
+    #[arg(long)]
+    journal: Option<PathBuf>,
+}
+
+fn main() -> ExitCode {
+    match real_main() {
+        Ok(code) => code,
+        Err(e) => {
+            eprintln!("error: {e:#}");
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn real_main() -> Result<ExitCode> {
+    let cli = Cli::parse();
+    match cli.mode.as_str() {
+        "append" | "replace" => {}
+        other => bail!("invalid --mode {other:?} (expected append or replace)"),
+    }
+    if cli.key.trim().is_empty() {
+        bail!("vault key is required (--key or VAULT_KEY)");
+    }
+    if cli.auth_only {
+        let auth = authenticate(&cli.url, &cli.key, &cli.username)?;
+        println!(
+            "ok account={} username={}",
+            auth.account_id,
+            auth.username.unwrap_or_default()
+        );
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let cfg = VaultPushConfig {
+        input: cli.input,
+        base_url: cli.url,
+        username: cli.username,
+        key: cli.key,
+        mode: cli.mode,
+        continue_on_error: cli.continue_on_error,
+        force: cli.force,
+        max_retries: cli.max_retries,
+        batch_size: cli.batch_size,
+        report_path: cli.report,
+        log_path: cli.log,
+        journal_path: cli.journal,
+        cancel: None,
+    };
+
+    let mut on_progress = |event: ProgressEvent| {
+        if let ProgressEvent::Log(line) = event {
+            println!("{line}");
+        }
+    };
+    let report = run(&cfg, Some(&mut on_progress))?;
+    println!(
+        "done ok={} conversations_ok={} failed={} skipped={} messages={}",
+        report.ok,
+        report.conversations_ok,
+        report.conversations_failed,
+        report.conversations_skipped,
+        report.messages
+    );
+    Ok(if report.ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    })
+}

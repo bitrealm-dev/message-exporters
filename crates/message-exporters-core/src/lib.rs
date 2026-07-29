@@ -10,7 +10,7 @@ pub use config::{
     MessageReexportConfig, OUTPUT_FORMATS_MAIL, ObfuscateConfig, OpenExtractConfig, OutputFormat,
     SmsBackupPlusConfig, SmsBackupRestoreConfig, SourceConfig, WhatsappConfig,
 };
-pub use export_ini::{ExportIniState, ReexportSection};
+pub use export_ini::{ExportIniState, ReexportSection, VaultSection};
 pub use exporters::{
     APPLE_PLATFORMS, ATTACHMENT_MEDIA, ApplePlatform, AttachmentMedia, ContactsKind, EXPORTERS,
     Exporter, Form, MAX_RESOLUTIONS, WHATSAPP_PLATFORMS, WhatsappPlatform, contacts_kind_from_path,

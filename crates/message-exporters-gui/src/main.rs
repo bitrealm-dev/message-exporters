@@ -15,10 +15,14 @@ use jobs::{LibraryJob, library_job_for_exporter, run_and_log};
 use message_exporters_core::{
     APPLE_PLATFORMS, ATTACHMENT_MEDIA, AttachmentMedia, EXPORTERS, ExportIniState, Exporter,
     ExporterConfig, Form, MAX_RESOLUTIONS, OUTPUT_FORMATS_MAIL, ProcessControl, ProcessEvent,
-    WHATSAPP_PLATFORMS, WhatsappPlatform, contacts_kind_from_path, ensure_output_dir,
+    VaultSection, WHATSAPP_PLATFORMS, WhatsappPlatform, contacts_kind_from_path, ensure_output_dir,
     resolve_binary, spawn, spawn_job,
 };
 use message_ir::reexport::run as run_reexport;
+use message_vault_client::{
+    ProgressEvent as VaultProgressEvent, VaultPushConfig, authenticate as vault_authenticate,
+    detect_source as vault_detect_source, run as run_vault_push,
+};
 use widgets::{
     COMBO_W, PATH_W, SHORT_W, advanced_options_toggle, combo_enum, combo_enum_with_id,
     form_action_button, form_action_row, form_label, labeled_text, path_or_text,
@@ -90,6 +94,7 @@ enum AppMode {
     ValidateContacts,
     Export,
     Reexport,
+    Vault,
     Log,
 }
 
@@ -106,6 +111,10 @@ struct App {
     owner_email_rows: Vec<String>,
     validate_input: String,
     validate_usa: bool,
+    /// Memory-only vault key (Import API token); never written to export.ini.
+    vault_key: String,
+    vault_auth_label: String,
+    vault_source_note: String,
     running: bool,
     control: ProcessControl,
     logs: Vec<String>,
@@ -135,6 +144,9 @@ impl Default for App {
             owner_email_rows,
             validate_input: String::new(),
             validate_usa: true,
+            vault_key: String::new(),
+            vault_auth_label: String::new(),
+            vault_source_note: String::new(),
             running: false,
             control: ProcessControl::default(),
             logs: Vec::new(),
@@ -265,6 +277,32 @@ impl App {
         self.save_export_ini();
     }
 
+    fn reset_vault(&mut self) {
+        self.export_ini.vault = VaultSection {
+            continue_on_error: true,
+            ..VaultSection::default()
+        };
+        self.vault_key.clear();
+        self.vault_auth_label.clear();
+        self.vault_source_note.clear();
+        self.errors.clear();
+    }
+
+    fn clear_vault(&mut self) {
+        self.reset_vault();
+        self.save_export_ini();
+    }
+
+    fn prefill_vault_input_from_export(&mut self) {
+        if !self.export_ini.vault.input.trim().is_empty() {
+            return;
+        }
+        let from_export = self.form.output.trim();
+        if !from_export.is_empty() {
+            self.export_ini.vault.input = from_export.to_string();
+        }
+    }
+
     fn validate_config(
         &mut self,
         result: Result<ExporterConfig, Vec<String>>,
@@ -319,6 +357,139 @@ impl App {
             let mut config = config;
             config.cancel = Some(cancel);
             run_and_log(run_reexport(&config), tx)
+        });
+        self.start_library_job(label, job);
+    }
+
+    fn start_vault_auth(&mut self) {
+        if self.running {
+            return;
+        }
+        let url = self.export_ini.vault.url.trim().to_string();
+        let username = self.export_ini.vault.username.trim().to_string();
+        let key = self.vault_key.trim().to_string();
+        let mut errors = Vec::new();
+        if url.is_empty() {
+            errors.push("Vault URL is required.".into());
+        }
+        if username.is_empty() {
+            errors.push("Vault username is required.".into());
+        }
+        if key.is_empty() {
+            errors.push("Vault key is required.".into());
+        }
+        if !errors.is_empty() {
+            self.errors = errors;
+            return;
+        }
+        if !self.save_export_ini() {
+            return;
+        }
+        let label = "vault-push auth".to_string();
+        let job: LibraryJob = Box::new(move |_cancel, tx| {
+            let _ = tx.send(ProcessEvent::Log(format!(
+                "Authenticating {username}@{url}…"
+            )));
+            match vault_authenticate(&url, &key, &username) {
+                Ok(auth) => {
+                    let name = auth.username.unwrap_or_else(|| auth.account_id.clone());
+                    let _ = tx.send(ProcessEvent::Log(format!(
+                        "Authenticated as {name} ({})",
+                        auth.account_id
+                    )));
+                    Ok(())
+                }
+                Err(e) => Err(format!("{e:#}")),
+            }
+        });
+        self.start_library_job(label, job);
+    }
+
+    fn start_vault_import(&mut self) {
+        if self.running {
+            return;
+        }
+        let url = self.export_ini.vault.url.trim().to_string();
+        let username = self.export_ini.vault.username.trim().to_string();
+        let key = self.vault_key.trim().to_string();
+        let input = self.export_ini.vault.input.trim().to_string();
+        let mut errors = Vec::new();
+        if url.is_empty() {
+            errors.push("Vault URL is required.".into());
+        }
+        if username.is_empty() {
+            errors.push("Vault username is required.".into());
+        }
+        if key.is_empty() {
+            errors.push("Vault key is required.".into());
+        }
+        if input.is_empty() {
+            errors.push("Input directory is required.".into());
+        }
+        if !errors.is_empty() {
+            self.errors = errors;
+            return;
+        }
+        if !self.save_export_ini() {
+            return;
+        }
+
+        let continue_on_error = self.export_ini.vault.continue_on_error;
+        let force = self.export_ini.vault.force;
+        let label = "vault-push (library)".to_string();
+        let job: LibraryJob = Box::new(move |cancel, tx| {
+            let cfg = VaultPushConfig {
+                input: PathBuf::from(input),
+                base_url: url,
+                username,
+                key,
+                mode: "append".into(),
+                continue_on_error,
+                force,
+                max_retries: 3,
+                batch_size: message_vault_client::DEFAULT_BATCH_SIZE,
+                report_path: None,
+                log_path: None,
+                journal_path: None,
+                cancel: Some(cancel),
+            };
+            let mut on_progress = |event: VaultProgressEvent| match event {
+                VaultProgressEvent::Log(line) => {
+                    let _ = tx.send(ProcessEvent::Log(line));
+                }
+                VaultProgressEvent::Auth {
+                    account_id,
+                    username,
+                } => {
+                    let _ = tx.send(ProcessEvent::Log(format!(
+                        "Authenticated as {username} ({account_id})"
+                    )));
+                }
+                VaultProgressEvent::FileStart { index, total, file } => {
+                    let _ = tx.send(ProcessEvent::Log(format!("File {index}/{total}: {file}")));
+                }
+                VaultProgressEvent::FileDone { file, status } => {
+                    let _ = tx.send(ProcessEvent::Log(format!("{status}: {file}")));
+                }
+                VaultProgressEvent::Finished(report) => {
+                    let _ = tx.send(ProcessEvent::Log(format!(
+                        "Import finished ok={} conversations_ok={} failed={} skipped={} messages={}",
+                        report.ok,
+                        report.conversations_ok,
+                        report.conversations_failed,
+                        report.conversations_skipped,
+                        report.messages
+                    )));
+                }
+            };
+            match run_vault_push(&cfg, Some(&mut on_progress)) {
+                Ok(report) if report.ok => Ok(()),
+                Ok(report) => Err(format!(
+                    "import completed with failures (failed={})",
+                    report.conversations_failed
+                )),
+                Err(e) => Err(format!("{e:#}")),
+            }
         });
         self.start_library_job(label, job);
     }
@@ -407,6 +578,7 @@ impl App {
                 ui.selectable_value(&mut self.mode, AppMode::ValidateContacts, "Contacts");
                 ui.selectable_value(&mut self.mode, AppMode::Export, "Message");
                 ui.selectable_value(&mut self.mode, AppMode::Reexport, "Re-export");
+                ui.selectable_value(&mut self.mode, AppMode::Vault, "Vault");
             });
             ui.selectable_value(&mut self.mode, AppMode::Log, "Log");
         });
@@ -652,6 +824,107 @@ impl App {
             &OUTPUT_FORMATS_MAIL,
             PATH_W,
         );
+    }
+
+    fn ui_vault(&mut self, ui: &mut egui::Ui) {
+        self.prefill_vault_input_from_export();
+        egui::Frame::NONE
+            .inner_margin(egui::Margin::same(18))
+            .show(ui, |ui| {
+                ui.heading("Vault");
+                required_field_note(ui);
+                ui.add_space(6.0);
+                ui.label(
+                    "Step 2: import a Message Exporters JSONL folder into Message Vault. \
+                     Export with JSONL in the Message tab first. Uses your Import API token \
+                     (Vault key) from Vault Settings.",
+                );
+                ui.add_space(16.0);
+
+                required_labeled_text(
+                    ui,
+                    "Vault URL",
+                    &mut self.export_ini.vault.url,
+                    "http://127.0.0.1:8080",
+                    PATH_W,
+                );
+                required_labeled_text(
+                    ui,
+                    "Username",
+                    &mut self.export_ini.vault.username,
+                    "vault username",
+                    PATH_W,
+                );
+                ui.horizontal(|ui| {
+                    let width = responsive_field_width(ui, PATH_W, 0);
+                    let label = required_field_label(ui, "Vault key");
+                    form_label(ui, label);
+                    with_field_width(ui, width, |ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.vault_key)
+                                .password(true)
+                                .desired_width(width)
+                                .hint_text("Import API token (not saved)"),
+                        );
+                    });
+                });
+                ui.label(
+                    egui::RichText::new("Vault key is never written to export.ini.")
+                        .small()
+                        .weak(),
+                );
+                ui.add_space(8.0);
+                required_path_or_text(
+                    ui,
+                    "Input directory",
+                    &mut self.export_ini.vault.input,
+                    "JSONL export folder",
+                    false,
+                    true,
+                );
+                if !self.vault_source_note.is_empty() {
+                    ui.label(egui::RichText::new(&self.vault_source_note).small());
+                } else if let Ok(Some(source)) =
+                    vault_detect_source(std::path::Path::new(self.export_ini.vault.input.trim()))
+                {
+                    self.vault_source_note = format!("Detected source: {source}");
+                    ui.label(egui::RichText::new(&self.vault_source_note).small());
+                }
+                if !self.vault_auth_label.is_empty() {
+                    ui.label(egui::RichText::new(&self.vault_auth_label).strong());
+                }
+
+                ui.add_space(10.0);
+                ui.checkbox(
+                    &mut self.export_ini.vault.continue_on_error,
+                    "Continue on error",
+                );
+                ui.checkbox(
+                    &mut self.export_ini.vault.force,
+                    "Force re-upload (ignore journal)",
+                );
+
+                self.ui_errors(ui);
+
+                ui.add_space(10.0);
+                form_action_row(ui, |ui| {
+                    let auth = form_action_button(ui, "Authenticate", true);
+                    if auth.clicked() {
+                        self.start_vault_auth();
+                    }
+                    let run = form_action_button(ui, "Import to vault", true);
+                    if run.clicked() {
+                        self.start_vault_import();
+                    }
+                    let clear = form_action_button(ui, "Clear", true).on_hover_text(format!(
+                        "Clear Vault fields from {}",
+                        self.export_ini.path.display()
+                    ));
+                    if clear.clicked() {
+                        self.clear_vault();
+                    }
+                });
+            });
     }
 
     fn ui_backup_source(&mut self, ui: &mut egui::Ui) {
@@ -1154,12 +1427,16 @@ impl eframe::App for App {
                     ui.set_min_size(ui.available_size());
                     self.ui_log_panel(ui);
                 }
-                AppMode::ValidateContacts | AppMode::Export | AppMode::Reexport => {
+                AppMode::ValidateContacts
+                | AppMode::Export
+                | AppMode::Reexport
+                | AppMode::Vault => {
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         ui.add_enabled_ui(!self.running, |ui| match mode {
                             AppMode::ValidateContacts => self.ui_validate(ui),
                             AppMode::Export => self.ui_export(ui),
                             AppMode::Reexport => self.ui_reexport(ui),
+                            AppMode::Vault => self.ui_vault(ui),
                             AppMode::Log => unreachable!(),
                         });
                     });
@@ -1205,6 +1482,7 @@ mod tests {
         assert!(!app.mode_selectable(AppMode::ValidateContacts));
         assert!(!app.mode_selectable(AppMode::Export));
         assert!(!app.mode_selectable(AppMode::Reexport));
+        assert!(!app.mode_selectable(AppMode::Vault));
     }
 
     #[test]
@@ -1215,6 +1493,7 @@ mod tests {
             AppMode::ValidateContacts,
             AppMode::Export,
             AppMode::Reexport,
+            AppMode::Vault,
             AppMode::Log,
         ] {
             assert!(app.mode_selectable(mode));

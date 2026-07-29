@@ -18,4 +18,5 @@ members = [
     "crates/whatsapp-exporter",
     "crates/message-exporters-core",
     "crates/message-exporters-gui",
+    "crates/message-vault-client",
 ]

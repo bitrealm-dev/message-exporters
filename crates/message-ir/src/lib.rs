@@ -28,7 +28,7 @@ pub use format_sink::{FormatSink, FormatSinkResult};
 #[cfg(test)]
 use normalize::normalize_document_for_compare;
 use read_csv::read_conversation_csv;
-use read_json::{read_conversation_json, read_conversation_jsonl};
+pub use read_json::{read_conversation_json, read_conversation_jsonl};
 use read_mail::{read_conversation_eml_dir, read_conversation_mbox};
 pub use read_sbr::{SbrReadOptions, SbrReadReport, read_sbr_documents};
 #[cfg(test)]
@@ -479,7 +479,7 @@ fn write_conversation_json(output_dir: &Path, doc: &ConversationDocument) -> Res
 
 /// JSONL header line (schema + export + conversation; no messages).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct ConversationHeader {
+pub struct ConversationHeader {
     pub schema_version: u32,
     pub export: ExportMeta,
     pub conversation: ConversationMeta,

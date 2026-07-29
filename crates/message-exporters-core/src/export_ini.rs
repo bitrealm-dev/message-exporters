@@ -15,6 +15,7 @@ use crate::exporters::{
 
 const COMMON: &str = "common";
 const MESSAGE_REEXPORT: &str = "message-reexport";
+const VAULT: &str = "vault";
 const EXPORT_INI_NAME: &str = "export.ini";
 
 /// Fields for the Re-export top-level tab (`message-reexporter`).
@@ -23,6 +24,16 @@ pub struct ReexportSection {
     pub input: String,
     pub output: String,
     pub output_format: OutputFormat,
+}
+
+/// Fields for the Vault top-level tab (`vault-push`). The vault key is never persisted.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct VaultSection {
+    pub url: String,
+    pub username: String,
+    pub input: String,
+    pub continue_on_error: bool,
+    pub force: bool,
 }
 
 /// Per-exporter path / type-specific fields kept when switching backup types.
@@ -52,6 +63,7 @@ pub struct ExportIniState {
     pub exporter: Exporter,
     sections: [ExporterSection; 7],
     pub reexport: ReexportSection,
+    pub vault: VaultSection,
 }
 
 impl ExportIniState {
@@ -89,6 +101,10 @@ impl ExportIniState {
             exporter: Exporter::default(),
             sections: Default::default(),
             reexport: ReexportSection::default(),
+            vault: VaultSection {
+                continue_on_error: true,
+                ..VaultSection::default()
+            },
         };
         let mut form = Form::default();
         state.apply_section_to_form(&mut form);
@@ -114,12 +130,14 @@ impl ExportIniState {
             sections[i] = read_section(&ini, exp);
         }
         let reexport = read_reexport_section(&ini);
+        let vault = read_vault_section(&ini);
 
         let state = Self {
             path: path.to_path_buf(),
             exporter,
             sections,
             reexport,
+            vault,
         };
         state.apply_section_to_form(&mut form);
         Ok((state, form))
@@ -364,6 +382,15 @@ fn build_ini(state: &ExportIniState, form: &Form) -> Ini {
             .set("output", state.reexport.output.trim())
             .set("output_format", state.reexport.output_format.as_str());
     }
+    {
+        let mut s = ini.with_section(Some(VAULT));
+        s.set("url", state.vault.url.trim())
+            .set("username", state.vault.username.trim())
+            .set("input", state.vault.input.trim())
+            .set("continue_on_error", bool_str(state.vault.continue_on_error))
+            .set("force", bool_str(state.vault.force));
+        // vault key intentionally omitted
+    }
     ini
 }
 
@@ -373,6 +400,16 @@ fn read_reexport_section(ini: &Ini) -> ReexportSection {
         input: get(ini, Some(MESSAGE_REEXPORT), "input"),
         output: get(ini, Some(MESSAGE_REEXPORT), "output"),
         output_format: OutputFormat::parse(&format).unwrap_or_default(),
+    }
+}
+
+fn read_vault_section(ini: &Ini) -> VaultSection {
+    VaultSection {
+        url: get(ini, Some(VAULT), "url"),
+        username: get(ini, Some(VAULT), "username"),
+        input: get(ini, Some(VAULT), "input"),
+        continue_on_error: parse_bool(&get(ini, Some(VAULT), "continue_on_error"), true),
+        force: parse_bool(&get(ini, Some(VAULT), "force"), false),
     }
 }
 
@@ -429,6 +466,10 @@ mod tests {
             exporter: Exporter::GoSmsPro,
             sections: Default::default(),
             reexport: ReexportSection::default(),
+            vault: VaultSection {
+                continue_on_error: true,
+                ..VaultSection::default()
+            },
         };
         state.capture_form_section(&form);
         state.switch_exporter(Exporter::SmsBackupPlus, &mut form);
@@ -477,6 +518,10 @@ mod tests {
             exporter: Exporter::GoSmsPro,
             sections: Default::default(),
             reexport: ReexportSection::default(),
+            vault: VaultSection {
+                continue_on_error: true,
+                ..VaultSection::default()
+            },
         };
         state.capture_form_section(&form);
         state.switch_exporter(Exporter::Imazing, &mut form);

@@ -59,6 +59,7 @@ jobs:
         run: |
           cargo build --workspace --release
           cargo build --release -p message-ir --bin message-reexporter --features cli
+          cargo build --release -p message-vault-client --bin vault-push --features cli
 
       - name: Stage named binaries
         shell: bash
@@ -75,7 +76,8 @@ jobs:
             imazing-exporter \
             imessage-ir-exporter \
             whatsapp-exporter \
-            message-reexporter
+            message-reexporter \
+            vault-push
           do
             src="target/release/${bin}${EXT}"
             dst="dist/${bin}-${SUFFIX}${EXT}"

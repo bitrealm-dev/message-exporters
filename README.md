@@ -41,7 +41,9 @@ cargo run --release -p message-exporters-gui
 
 Experimental converters also ship in the GUI and release zip: GO SMS Pro, iMazing CSV, OpenExtract, and SMS Backup+. Use those when they are the only backup on hand. Details: the [docs site](https://bitrealm-dev.github.io/message-exporters/) and [exporter capability matrix](docs/maintainers/exporter-matrix.md).
 
-Already exported? The GUI **Re-export** tab ([`message-reexporter`](crates/message-ir/docs/REEXPORT.md)) converts a prior output folder to another format (CSV ↔ EML ↔ MBOX ↔ JSON ↔ JSONL ↔ XML).
+Already exported? The GUI **Re-export** tab ([`message-reexport`](crates/message-ir/docs/REEXPORT.md)) converts a prior output folder to another format (CSV ↔ EML ↔ MBOX ↔ JSON ↔ JSONL ↔ XML).
+
+Import into Message Vault with the GUI **Vault** tab or the [`vault-push`](crates/message-vault-client/docs/MANPAGE.md) CLI (JSONL export folder + Import API token).
 
 ## Releases
 

@@ -19,5 +19,6 @@ message-contacts = { path = "../message-contacts" }
 message-exporters-core = { path = "../message-exporters-core" }
 message-ir = { path = "../message-ir", default-features = false }
 message-media = { path = "../message-media" }
+message-vault-client = { path = "../message-vault-client", default-features = false }
 open = "5"
 rfd = "0.15"

@@ -42,6 +42,13 @@ const pages = [
     source: 'crates/message-ir/docs/MESSAGE_REEXPORTER.md',
   },
   {
+    slug: 'vault-push',
+    title: 'Push to Message Vault',
+    description:
+      'Command-line options for importing a JSONL export folder into Message Vault.',
+    source: 'crates/message-vault-client/docs/MANPAGE.md',
+  },
+  {
     slug: 'go-sms-pro-exporter',
     title: 'GO SMS Pro',
     description:
