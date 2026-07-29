@@ -1,11 +1,12 @@
 //! Full export pipeline (wtsexporter/JSON convert) for CLI and GUI.
 
-use crate::cancel::check_cancel;
 use crate::emit::{ExportReport, convert_json};
 use crate::wtsexporter::{Platform, WtsexporterArgs, resolve_wtsexporter, run_wtsexporter};
 use anyhow::{Context, Result, bail};
 use message_csv::DateRange;
-use message_exporters_core::{ExporterConfig, SourceConfig, WhatsappPlatform as CorePlatform};
+use message_exporters_core::{
+    CancelFlag, ExporterConfig, SourceConfig, WhatsappPlatform as CorePlatform,
+};
 use message_ir::ExportTransforms;
 use std::env;
 use std::fs;
@@ -179,4 +180,8 @@ pub fn parse_date_range(start_date: Option<&str>, end_date: Option<&str>) -> Res
     DateRange::parse(start_date, end_date)
         .map_err(anyhow::Error::msg)
         .context("invalid date range")
+}
+
+fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
+    message_exporters_core::check_cancel(cancel).map_err(anyhow::Error::msg)
 }

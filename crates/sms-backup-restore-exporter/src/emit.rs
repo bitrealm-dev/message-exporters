@@ -1,11 +1,10 @@
 //! Convert SMS Backup & Restore XML → common message → packaging via FormatSink.
 
-use crate::cancel::{CancelFlag, check_cancel};
 use crate::xml::{AttachmentBlob, ConvType, ParsedMessage, parse_xml_file};
 use anyhow::{Context, Result, bail};
 use message_contacts::ContactsBook;
 use message_csv::{DateRange, format_local_ts, json_cell, stable_guid};
-use message_exporters_core::OutputFormat;
+use message_exporters_core::{CancelFlag, OutputFormat};
 use message_ir::{
     ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
     FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
@@ -21,6 +20,10 @@ use std::sync::Arc;
 const EXPORT_SOURCE: &str = "sms-backup-restore";
 const EXPORT_TOOL: &str = "SMS Backup & Restore";
 const EXPORT_TOOL_VERSION: &str = "10.26.003";
+
+fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
+    message_exporters_core::check_cancel(cancel).map_err(anyhow::Error::msg)
+}
 
 #[derive(Debug, Default)]
 pub struct ExportReport {

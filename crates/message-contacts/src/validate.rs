@@ -1,5 +1,6 @@
 //! Copy a contacts VCF/CSV and rewrite phones that [`normalize_certain`] accepts.
 
+use crate::imazing_csv::ImazingContactsColumns;
 use crate::name::collapse_inner_whitespace;
 use anyhow::{Context, Result, bail};
 use message_phone::{PhoneRegion, normalize_certain, normalize_uncertain_reason};
@@ -647,26 +648,7 @@ fn rewrite_imazing_csv(
     let file = File::open(input).with_context(|| format!("open {}", input.display()))?;
     let mut rdr = csv::ReaderBuilder::new().flexible(true).from_reader(file);
     let headers = rdr.headers()?.clone();
-    let header_l: Vec<String> = headers
-        .iter()
-        .map(|h| h.trim().to_ascii_lowercase())
-        .collect();
-
-    let first_i = header_l.iter().position(|h| h == "first name");
-    let middle_i = header_l.iter().position(|h| h == "middle name");
-    let last_i = header_l.iter().position(|h| h == "last name");
-    let phone_cols: Vec<usize> = [
-        "mobile phone",
-        "home phone",
-        "work phone",
-        "other phone",
-        "home fax",
-        "work fax",
-        "other fax",
-    ]
-    .iter()
-    .filter_map(|name| header_l.iter().position(|h| h == *name))
-    .collect();
+    let cols = ImazingContactsColumns::from_headers(headers.iter());
 
     let mut wtr = if write {
         let out_file =
@@ -680,9 +662,9 @@ fn rewrite_imazing_csv(
 
     for (idx, rec) in rdr.records().enumerate() {
         let rec = rec.with_context(|| format!("row {}", idx + 2))?;
-        let first = first_i.and_then(|i| rec.get(i)).unwrap_or("").trim();
-        let middle = middle_i.and_then(|i| rec.get(i)).unwrap_or("").trim();
-        let last = last_i.and_then(|i| rec.get(i)).unwrap_or("").trim();
+        let first = cols.first.and_then(|i| rec.get(i)).unwrap_or("").trim();
+        let middle = cols.middle.and_then(|i| rec.get(i)).unwrap_or("").trim();
+        let last = cols.last.and_then(|i| rec.get(i)).unwrap_or("").trim();
         let mut parts = Vec::new();
         if !first.is_empty() {
             parts.push(first);
@@ -703,7 +685,7 @@ fn rewrite_imazing_csv(
             fields.push(String::new());
         }
         let mut phones = Vec::new();
-        for &i in &phone_cols {
+        for &i in &cols.phones {
             if let Some(cell) = fields.get_mut(i) {
                 if cell.trim().is_empty() {
                     continue;

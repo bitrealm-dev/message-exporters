@@ -47,8 +47,6 @@ pub(crate) struct Probe {
     pub codec: String,
     pub width: u32,
     pub height: u32,
-    #[allow(dead_code)]
-    pub fps: f32,
     pub bitrate: u64,
 }
 
@@ -60,7 +58,7 @@ pub(crate) fn probe_video(path: &std::path::Path) -> Result<Probe> {
             "-select_streams",
             "v:0",
             "-show_entries",
-            "stream=codec_name,width,height,r_frame_rate,bit_rate",
+            "stream=codec_name,width,height,bit_rate",
             "-of",
             "csv=p=0",
             path.to_str().unwrap_or(""),
@@ -75,24 +73,11 @@ pub(crate) fn probe_video(path: &std::path::Path) -> Result<Probe> {
     let codec = parts.first().copied().unwrap_or("").to_ascii_lowercase();
     let width = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
     let height = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
-    let fps = parts.get(3).map(|s| parse_rate(s)).unwrap_or(0.0);
-    let bitrate = parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let bitrate = parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0);
     Ok(Probe {
         codec,
         width,
         height,
-        fps,
         bitrate,
     })
-}
-
-fn parse_rate(s: &str) -> f32 {
-    if let Some((a, b)) = s.split_once('/') {
-        let num: f32 = a.parse().unwrap_or(0.0);
-        let den: f32 = b.parse().unwrap_or(1.0);
-        if den > 0.0 {
-            return num / den;
-        }
-    }
-    s.parse().unwrap_or(0.0)
 }

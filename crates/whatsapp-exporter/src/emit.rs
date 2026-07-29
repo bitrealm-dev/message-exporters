@@ -1,13 +1,12 @@
 //! Convert wtsexporter JSON → common message → packaging via FormatSink.
 
-use crate::cancel::{CancelFlag, check_cancel};
 use crate::jid::{chat_id_from_jid, is_group_jid, jid_to_e164};
 use crate::parse::{
     ChatJson, MessageJson, load_chat_store, media_path, message_text, timestamp_secs,
 };
 use anyhow::{Context, Result};
 use message_csv::{DateRange, format_local_ts, json_cell, stable_guid};
-use message_exporters_core::OutputFormat;
+use message_exporters_core::{CancelFlag, OutputFormat};
 use message_ir::{
     ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
     FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
@@ -24,6 +23,10 @@ const EXPORT_SOURCE: &str = "whatsapp";
 const EXPORT_TOOL: &str = "WhatsApp Chat Exporter";
 /// Pinned documented upstream version (JSON convert path; shell-out may differ).
 pub const EXPORT_TOOL_VERSION: &str = "0.13.0";
+
+fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
+    message_exporters_core::check_cancel(cancel).map_err(anyhow::Error::msg)
+}
 
 #[derive(Debug, Default)]
 pub struct ExportReport {

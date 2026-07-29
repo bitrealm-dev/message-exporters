@@ -136,7 +136,8 @@ fn is_sent(headers: &MailHeaders, owner_emails: &[String]) -> bool {
         .any(|e| !e.is_empty() && from.contains(e.as_str()))
 }
 
-fn extract_body(mail: &ParsedMail<'_>) -> String {
+/// First `text/plain` body in the MIME tree, with newlines normalized to `\n`.
+pub(crate) fn extract_plain_text_body(mail: &ParsedMail<'_>) -> String {
     fn walk(m: &ParsedMail<'_>) -> Option<String> {
         let ctype = m.ctype.mimetype.to_ascii_lowercase();
         if ctype == "text/plain"
@@ -240,7 +241,7 @@ pub(crate) fn parse_flat_eml_mail(
 
     let name_hint = subject_name.clone();
     let sent = is_sent(headers, owner_emails);
-    let body = extract_body(mail);
+    let body = extract_plain_text_body(mail);
 
     let file_key = hex::encode(Sha256::digest(path.to_string_lossy().as_bytes()));
     let file_key = &file_key[..12.min(file_key.len())];

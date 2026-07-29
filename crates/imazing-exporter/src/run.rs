@@ -22,21 +22,23 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     };
     let input = config.require_input().map_err(anyhow::Error::msg)?;
     let mut messages = Vec::new();
-    let (contacts_csv, _) = config.contacts_csv_vcf();
-    let book = match contacts_csv.as_ref() {
-        Some(path) => {
+    let (contacts_csv, contacts_vcf) = config.contacts_csv_vcf();
+    let (book, contacts_path) = match (contacts_csv, contacts_vcf) {
+        (Some(path), None) | (None, Some(path)) => {
             if !path.is_file() {
                 bail!("contacts file not found: {}", path.display());
             }
-            ContactsBook::load_imazing_contacts_csv(path)?
+            let book = ContactsBook::load_contacts_file(&path)?;
+            (book, Some(path))
         }
-        None => {
+        (Some(_), Some(_)) => bail!("contacts config must be CSV or VCF, not both"),
+        (None, None) => {
             messages.push(
                 "warning: no contacts file provided (--contacts); \
                  phone numbers will not be resolved to names"
                     .to_string(),
             );
-            ContactsBook::empty()
+            (ContactsBook::empty(), None)
         }
     };
 
@@ -60,7 +62,7 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     messages.extend(report_summary_lines(
         &report,
         &config.output,
-        contacts_csv.as_deref(),
+        contacts_path.as_deref(),
     ));
     Ok(RunResult { report, messages })
 }

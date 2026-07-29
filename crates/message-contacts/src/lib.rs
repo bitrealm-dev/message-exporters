@@ -7,6 +7,7 @@
 //! (First Name, Last Name, phone columns).
 
 mod book;
+mod imazing_csv;
 mod mapping;
 mod name;
 mod validate;

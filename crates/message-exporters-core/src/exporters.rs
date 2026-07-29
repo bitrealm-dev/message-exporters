@@ -563,10 +563,7 @@ impl Form {
                 DateRange::default()
             }
         };
-        let contacts = non_empty_path(&self.contacts).map(|path| ContactsConfig {
-            path,
-            kind: ContactsKind::Csv,
-        });
+        let contacts = self.contacts_config(errors);
         ExporterConfig {
             inputs: input.into_iter().collect(),
             output: PathBuf::from(self.output.trim()),
@@ -1093,6 +1090,24 @@ mod tests {
             panic!("expected Imazing");
         };
         assert_eq!(imazing.timezone.as_deref(), Some("UTC-05:00"));
+    }
+
+    #[test]
+    fn imazing_honors_vcf_contacts_kind() {
+        let form = Form {
+            input: std::env::current_dir().unwrap().display().to_string(),
+            output: "out".into(),
+            contacts: "/tmp/contacts.vcf".into(),
+            contacts_kind: ContactsKind::Vcf,
+            ..Form::default()
+        };
+        let config = form.to_config(Exporter::Imazing).unwrap();
+        let contacts = config.contacts.as_ref().expect("contacts");
+        assert_eq!(contacts.kind, ContactsKind::Vcf);
+        assert_eq!(contacts.path, PathBuf::from("/tmp/contacts.vcf"));
+        let (csv, vcf) = config.contacts_csv_vcf();
+        assert!(csv.is_none());
+        assert_eq!(vcf, Some(PathBuf::from("/tmp/contacts.vcf")));
     }
 
     #[test]

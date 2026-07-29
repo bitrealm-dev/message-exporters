@@ -94,20 +94,6 @@ impl Name {
     }
 }
 
-#[cfg(test)]
-impl Name {
-    /// Build a fake name for tests.
-    pub fn fake_name(name: &str) -> Name {
-        Name {
-            first: String::new(),
-            last: String::new(),
-            full: String::new(),
-            details: name.to_string(),
-            handle_ids: HashSet::new(),
-        }
-    }
-}
-
 // MARK: Index
 #[derive(Debug, Default)]
 /// Contacts index keyed by normalized phone number or email address.

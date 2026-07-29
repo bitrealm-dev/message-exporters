@@ -1,7 +1,6 @@
 //! Convert SMS Backup+ `.eml` trees into the common message → packaging via FormatSink.
 
 use crate::archive::parse_archive_eml_mail;
-use crate::cancel::{CancelFlag, check_cancel};
 use crate::contacts::{apply_name_mapping, enrich_display_names, fill_unknown_phone};
 use crate::flat_eml::{MailHeaders, is_archive_eml, is_flat_sms_eml, parse_flat_eml_mail};
 use crate::identity::{chat_id_for, cover_identity, timestamp_ms};
@@ -9,7 +8,7 @@ use crate::types::{AttachmentBlob, ParsedMessage};
 use anyhow::{Result, bail};
 use message_contacts::{ContactsBook, NameMapping};
 use message_csv::{DateRange, format_local_ts, stable_guid};
-use message_exporters_core::OutputFormat;
+use message_exporters_core::{CancelFlag, OutputFormat};
 use message_ir::{
     ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
     FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
@@ -25,6 +24,10 @@ use std::path::{Path, PathBuf};
 const EXPORT_SOURCE: &str = "sms-backup-plus";
 const EXPORT_TOOL: &str = "SMS Backup+";
 const EXPORT_TOOL_VERSION: &str = "1.5.11";
+
+fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
+    message_exporters_core::check_cancel(cancel).map_err(anyhow::Error::msg)
+}
 
 #[derive(Debug, Default)]
 pub struct ExportReport {

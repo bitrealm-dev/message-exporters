@@ -6,7 +6,6 @@
 
 pub(crate) mod archive;
 pub(crate) mod assets;
-pub(crate) mod cancel;
 pub(crate) mod contacts;
 pub(crate) mod emit;
 pub(crate) mod flat_eml;
@@ -14,9 +13,8 @@ pub(crate) mod identity;
 pub mod run;
 pub(crate) mod types;
 
-pub use cancel::{CancelFlag, is_cancelled};
 pub use emit::{ExportReport, convert_export};
-pub use message_exporters_core::ExporterConfig;
+pub use message_exporters_core::{CancelFlag, ExporterConfig, is_cancelled};
 pub use run::{
     RunResult, parse_date_range, report_summary_lines, resolve_inputs, resolve_owner, run,
 };

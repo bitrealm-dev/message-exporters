@@ -4,8 +4,8 @@ use anyhow::Result;
 use clap::Parser;
 use imazing_exporter::{parse_date_range, run};
 use message_exporters_core::{
-    ContactsConfig, ContactsKind, ExporterConfig, ImazingConfig, MediaConfig, ObfuscateConfig,
-    OutputFormat, SourceConfig,
+    ContactsConfig, ExporterConfig, ImazingConfig, MediaConfig, ObfuscateConfig, OutputFormat,
+    SourceConfig, contacts_kind_from_path,
 };
 use message_media::{MaxResolution, MediaMode, compress_options_from_cli};
 
@@ -27,7 +27,7 @@ struct Cli {
     #[arg(long = "format", default_value = "json", value_name = "FORMAT")]
     format: String,
 
-    /// iMazing Contacts CSV from the same backup export.
+    /// Contacts CSV or VCF used to resolve phone numbers to names.
     /// Optional; without it phone numbers are not resolved to names.
     #[arg(long)]
     contacts: Option<PathBuf>,
@@ -91,9 +91,9 @@ fn main() -> Result<()> {
         &cli.media_min_size,
         cli.media_skip_efficient,
     )?;
-    let contacts = cli.contacts.map(|path| ContactsConfig {
-        path,
-        kind: ContactsKind::Csv,
+    let contacts = cli.contacts.map(|path| {
+        let kind = contacts_kind_from_path(&path.to_string_lossy());
+        ContactsConfig { path, kind }
     });
     let result = run(&ExporterConfig {
         inputs: vec![cli.input],

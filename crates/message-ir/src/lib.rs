@@ -769,18 +769,7 @@ pub fn document_to_mail_messages(
     for msg in &doc.messages {
         let mut attachments = Vec::with_capacity(msg.attachments.len());
         for a in &msg.attachments {
-            let bytes = if let Some(b) = &a.bytes {
-                b.clone()
-            } else if let Some(rel) = a.path.as_deref() {
-                let path = output_dir.join(rel);
-                if path.is_file() {
-                    fs::read(&path).with_context(|| format!("read {}", path.display()))?
-                } else {
-                    Vec::new()
-                }
-            } else {
-                Vec::new()
-            };
+            let bytes = util::load_attachment_bytes_strict(a, output_dir)?;
             attachments.push(MailAttachment {
                 bytes,
                 original_name: a.original_name.clone(),

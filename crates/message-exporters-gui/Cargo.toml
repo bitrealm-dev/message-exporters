@@ -16,7 +16,6 @@ sms-backup-plus-exporter = { path = "../sms-backup-plus-exporter", default-featu
 sms-backup-restore-exporter = { path = "../sms-backup-restore-exporter", default-features = false }
 whatsapp-exporter = { path = "../whatsapp-exporter", default-features = false }
 message-reexporter = { path = "../message-reexporter", default-features = false }
-message-obfuscate = { path = "../message-obfuscate" }
 message-contacts = { path = "../message-contacts" }
 message-exporters-core = { path = "../message-exporters-core" }
 message-media = { path = "../message-media" }

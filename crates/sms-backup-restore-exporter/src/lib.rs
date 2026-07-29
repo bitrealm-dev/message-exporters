@@ -7,15 +7,13 @@
 //! [`run`] (`--format eml`).
 
 pub(crate) mod assets;
-pub(crate) mod cancel;
 pub(crate) mod emit;
 pub mod run;
 pub(crate) mod smil;
 pub(crate) mod xml;
 
-pub use cancel::{CancelFlag, is_cancelled};
 pub use emit::{
     ExportReport, convert_export, infer_owner_phones_from_xml, load_documents_from_xml,
 };
-pub use message_exporters_core::{ExporterConfig, OutputFormat};
+pub use message_exporters_core::{CancelFlag, ExporterConfig, OutputFormat, is_cancelled};
 pub use run::{RunResult, parse_date_range, report_summary_lines, run};

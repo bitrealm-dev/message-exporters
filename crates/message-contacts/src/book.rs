@@ -1,5 +1,6 @@
 //! Bidirectional contacts index (name↔phone).
 
+use crate::imazing_csv::ImazingContactsColumns;
 use crate::name::{collapse_inner_whitespace, is_blank_or_unknown_name, normalize_name_key};
 use crate::vcf::{self, strip_tags};
 use anyhow::{Context, Result, bail};
@@ -86,27 +87,11 @@ impl ContactsBook {
             .headers()
             .with_context(|| format!("headers {}", path.display()))?
             .iter()
-            .map(|h| h.trim().to_ascii_lowercase())
+            .map(str::to_string)
             .collect::<Vec<_>>();
+        let cols = ImazingContactsColumns::from_headers(&headers);
 
-        let first_i = headers.iter().position(|h| h == "first name");
-        let middle_i = headers.iter().position(|h| h == "middle name");
-        let last_i = headers.iter().position(|h| h == "last name");
-        let notes_i = headers.iter().position(|h| h == "notes");
-        let phone_cols: Vec<usize> = [
-            "mobile phone",
-            "home phone",
-            "work phone",
-            "other phone",
-            "home fax",
-            "work fax",
-            "other fax",
-        ]
-        .iter()
-        .filter_map(|name| headers.iter().position(|h| h == *name))
-        .collect();
-
-        if first_i.is_none() && phone_cols.is_empty() {
+        if !cols.looks_like_imazing() {
             bail!(
                 "contacts CSV {} does not look like an iMazing Contacts export \
                  (expected First Name and/or phone columns)",
@@ -117,13 +102,16 @@ impl ContactsBook {
         let mut book = Self::empty();
         for (idx, rec) in rdr.records().enumerate() {
             let rec = rec.with_context(|| format!("row {} in {}", idx + 2, path.display()))?;
-            let first = first_i
+            let first = cols
+                .first
                 .map(|i| rec.get(i).unwrap_or("").trim())
                 .unwrap_or("");
-            let middle = middle_i
+            let middle = cols
+                .middle
                 .map(|i| rec.get(i).unwrap_or("").trim())
                 .unwrap_or("");
-            let last = last_i
+            let last = cols
+                .last
                 .map(|i| rec.get(i).unwrap_or("").trim())
                 .unwrap_or("");
             let mut name_parts = Vec::new();
@@ -139,10 +127,10 @@ impl ContactsBook {
             let display = collapse_inner_whitespace(&name_parts.join(" "));
 
             let mut phones = Vec::new();
-            for &i in &phone_cols {
+            for &i in &cols.phones {
                 push_phones_from_raw(rec.get(i).unwrap_or(""), &mut phones);
             }
-            if let Some(ni) = notes_i {
+            if let Some(ni) = cols.notes {
                 push_phones_from_raw(rec.get(ni).unwrap_or(""), &mut phones);
             }
             if phones.is_empty() {

@@ -14,7 +14,7 @@
 //! guesswork — see [`assign_archive_attachments`].
 
 use crate::assets::extract_attachments;
-use crate::flat_eml::{MailHeaders, is_archive_eml};
+use crate::flat_eml::{MailHeaders, extract_plain_text_body, is_archive_eml};
 use crate::types::{AttachmentBlob, ParsedMessage};
 use anyhow::{Context, Result};
 use message_phone::sanitize_number;
@@ -54,24 +54,6 @@ fn message_header_re() -> &'static Regex {
 
 fn date_only_re() -> &'static Regex {
     DATE_ONLY_RE.get_or_init(|| Regex::new(r"^\d{4}-\d{2}-\d{2}$").expect("date"))
-}
-
-fn extract_plain_body(mail: &mailparse::ParsedMail<'_>) -> String {
-    fn walk(m: &mailparse::ParsedMail<'_>) -> Option<String> {
-        let ctype = m.ctype.mimetype.to_ascii_lowercase();
-        if ctype == "text/plain"
-            && let Ok(body) = m.get_body()
-        {
-            return Some(body.replace("\r\n", "\n").replace('\r', "\n"));
-        }
-        for part in &m.subparts {
-            if let Some(b) = walk(part) {
-                return Some(b);
-            }
-        }
-        None
-    }
-    walk(mail).unwrap_or_default()
 }
 
 fn phone_from_from_header(from_hdr: &str) -> String {
@@ -189,7 +171,7 @@ pub(crate) fn parse_archive_eml_mail(
     let mime_atts = extract_attachments(mail, 0.0, Some(file_key));
     let att_queue: Vec<AttachmentBlob> = mime_atts;
 
-    let body = extract_plain_body(mail);
+    let body = extract_plain_text_body(mail);
     let lines: Vec<&str> = body.lines().collect();
 
     let mut messages = Vec::new();

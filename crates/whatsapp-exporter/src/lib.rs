@@ -4,17 +4,15 @@
 //! (wtsexporter/JSON convert + media + obfuscate), or [`convert_json`] for convert-only.
 //! The `whatsapp-exporter` binary is a thin CLI over [`run`].
 
-pub(crate) mod cancel;
 mod emit;
 mod jid;
 mod parse;
 pub mod run;
 mod wtsexporter;
 
-pub use cancel::{CancelFlag, is_cancelled};
 pub use emit::{ExportReport, convert_json};
 pub use jid::{chat_id_from_jid, is_group_jid, jid_to_e164};
-pub use message_exporters_core::ExporterConfig;
+pub use message_exporters_core::{CancelFlag, ExporterConfig, is_cancelled};
 pub use parse::{ChatStoreFile, load_chat_store};
 pub use run::{RunResult, parse_date_range, report_summary_lines, run};
 pub use wtsexporter::{Platform, WtsexporterArgs, resolve_wtsexporter, run_wtsexporter};

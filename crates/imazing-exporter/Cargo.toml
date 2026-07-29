@@ -24,7 +24,6 @@ message-contacts = { path = "../message-contacts" }
 message-csv = { path = "../message-csv" }
 message-exporters-core = { path = "../message-exporters-core" }
 message-ir = { path = "../message-ir" }
-message-mail = { path = "../message-mail" }
 message-media = { path = "../message-media" }
 message-phone = { path = "../message-phone" }
 serde_json = "1.0.150"

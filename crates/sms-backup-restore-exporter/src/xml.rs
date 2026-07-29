@@ -28,15 +28,6 @@ pub enum ConvType {
     Group,
 }
 
-impl ConvType {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Individual => "individual",
-            Self::Group => "group",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct MmsPart {
     pub ct: String,
@@ -45,7 +36,6 @@ pub struct MmsPart {
     pub fn_attr: String,
     pub text: String,
     pub data: String,
-    pub seq: String,
     /// Every `<part>` attribute as written in the backup.
     pub attrs: BTreeMap<String, String>,
 }
@@ -149,7 +139,6 @@ fn part_from_attrs(a: &HashMap<String, String>) -> MmsPart {
         fn_attr: get(a, "fn").to_string(),
         text: get(a, "text").to_string(),
         data: get(a, "data").to_string(),
-        seq: get(a, "seq").to_string(),
         attrs: to_btree(a),
     }
 }

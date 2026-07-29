@@ -1,12 +1,11 @@
 //! Convert OpenExtract rows → common message → packaging via FormatSink.
 
-use crate::cancel::{CancelFlag, check_cancel};
 use crate::parse::{RawRow, SourceKind, discover_csv_files, parse_csv_file};
 use anyhow::{Context, Result};
 use chrono::DateTime;
 use message_contacts::ContactsBook;
 use message_csv::{DateRange, format_local_ts, stable_guid};
-use message_exporters_core::OutputFormat;
+use message_exporters_core::{CancelFlag, OutputFormat};
 use message_ir::{
     ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
     FormatSink, FormatSinkResult, IrConversationType, IrDirection, IrMessage, IrMessageKind,
@@ -21,6 +20,10 @@ use std::path::Path;
 const EXPORT_SOURCE: &str = "openextract";
 const EXPORT_TOOL: &str = "OpenExtract";
 const EXPORT_TOOL_VERSION: &str = "0.5.1";
+
+fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
+    message_exporters_core::check_cancel(cancel).map_err(anyhow::Error::msg)
+}
 
 #[derive(Debug, Default)]
 pub struct ExportReport {

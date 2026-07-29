@@ -1,5 +1,6 @@
 //! Attachment media + obfuscate transforms applied before IR projection.
 
+use crate::util::read_attachment_file;
 use crate::{ConversationDocument, IrAttachment, IrDirection, IrParticipant};
 use anyhow::Result;
 use message_exporters_core::{MediaConfig, ObfuscateConfig};
@@ -9,7 +10,6 @@ use message_obfuscate::{
     resolve_obfuscator,
 };
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
 /// Options passed into [`crate::FormatSink`] for media and obfuscation.
@@ -76,11 +76,9 @@ pub(crate) fn apply_media_remap(doc: &mut ConversationDocument, remap: &HashMap<
 pub(crate) fn reload_attachment_bytes(doc: &mut ConversationDocument, output_dir: &Path) {
     for msg in &mut doc.messages {
         for att in &mut msg.attachments {
-            if let Some(rel) = att.path.as_deref() {
-                let path = output_dir.join(rel);
-                if path.is_file() {
-                    att.bytes = fs::read(&path).ok();
-                }
+            // Lenient: IO failures leave bytes unset so packaging can continue.
+            if let Ok(Some(bytes)) = read_attachment_file(att, output_dir) {
+                att.bytes = Some(bytes);
             }
         }
     }

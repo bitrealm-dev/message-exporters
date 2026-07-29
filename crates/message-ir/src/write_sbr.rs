@@ -1,5 +1,6 @@
 //! Project [`ConversationDocument`] → SMS Backup & Restore XML messages.
 
+use crate::util::load_attachment_bytes_strict;
 use crate::{
     ConversationDocument, IrAttachment, IrConversationType, IrDirection, IrMessage, IrMessageKind,
 };
@@ -241,7 +242,7 @@ fn synthesize_mms(
         seq += 1;
     }
     for att in &msg.attachments {
-        let bytes = load_attachment_bytes(att, output_dir)?;
+        let bytes = load_attachment_bytes_strict(att, output_dir)?;
         let mime = att
             .mime_type
             .as_deref()
@@ -372,19 +373,6 @@ fn contact_name_hint(doc: &ConversationDocument, msg: &IrMessage) -> Option<Stri
         .filter(|s| !s.is_empty())
 }
 
-fn load_attachment_bytes(att: &IrAttachment, output_dir: &Path) -> Result<Vec<u8>> {
-    if let Some(b) = &att.bytes {
-        return Ok(b.clone());
-    }
-    if let Some(rel) = att.path.as_deref() {
-        let path = output_dir.join(rel);
-        if path.is_file() {
-            return fs::read(&path).with_context(|| format!("read {}", path.display()));
-        }
-    }
-    Ok(Vec::new())
-}
-
 fn inject_attachment_data(
     parts: &mut [BTreeMap<String, String>],
     attachments: &[IrAttachment],
@@ -410,7 +398,7 @@ fn inject_attachment_data(
             part.remove("data_sha256");
             continue;
         }
-        let bytes = load_attachment_bytes(&attachments[att_idx], output_dir)?;
+        let bytes = load_attachment_bytes_strict(&attachments[att_idx], output_dir)?;
         att_idx += 1;
         part.remove("data_len");
         part.remove("data_sha256");
