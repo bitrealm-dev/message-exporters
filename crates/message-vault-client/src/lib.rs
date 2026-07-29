@@ -10,6 +10,6 @@ mod run;
 pub use http::AuthInfo;
 pub use journal::{JOURNAL_NAME, LOG_NAME, REPORT_NAME};
 pub use run::{
-    DEFAULT_BATCH_SIZE, FileResult, ProgressEvent, ProgressFn, PushReport, VaultPushConfig,
-    authenticate, detect_source, run,
+    DEFAULT_ASSET_UPLOAD_WORKERS, DEFAULT_BATCH_SIZE, FileResult, ProgressEvent, ProgressFn,
+    PushReport, VaultPushConfig, authenticate, detect_source, run,
 };

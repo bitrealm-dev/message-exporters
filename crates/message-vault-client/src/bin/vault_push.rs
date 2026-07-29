@@ -5,7 +5,10 @@ use std::process::ExitCode;
 
 use anyhow::{Result, bail};
 use clap::Parser;
-use message_vault_client::{DEFAULT_BATCH_SIZE, ProgressEvent, VaultPushConfig, authenticate, run};
+use message_vault_client::{
+    DEFAULT_ASSET_UPLOAD_WORKERS, DEFAULT_BATCH_SIZE, ProgressEvent, VaultPushConfig, authenticate,
+    run,
+};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -51,6 +54,10 @@ struct Cli {
     /// Messages per import request
     #[arg(long, default_value_t = DEFAULT_BATCH_SIZE)]
     batch_size: usize,
+
+    /// Simultaneous attachment uploads; message imports remain sequential
+    #[arg(long, default_value_t = DEFAULT_ASSET_UPLOAD_WORKERS)]
+    asset_upload_workers: usize,
 
     /// Authenticate only; do not import
     #[arg(long)]
@@ -108,6 +115,7 @@ fn real_main() -> Result<ExitCode> {
         force: cli.force,
         max_retries: cli.max_retries,
         batch_size: cli.batch_size,
+        asset_upload_workers: cli.asset_upload_workers,
         report_path: cli.report,
         log_path: cli.log,
         journal_path: cli.journal,

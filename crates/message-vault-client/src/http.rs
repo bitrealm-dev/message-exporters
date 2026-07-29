@@ -23,8 +23,6 @@ struct AuthCheckResponse {
     #[serde(default)]
     account_ok: Option<bool>,
     #[serde(default)]
-    admin: Option<bool>,
-    #[serde(default)]
     error: Option<String>,
 }
 
@@ -70,6 +68,19 @@ fn client(timeout_secs: u64) -> Result<reqwest::blocking::Client> {
         .context("build HTTP client")
 }
 
+fn looks_like_html(body: &str) -> bool {
+    let t = body.trim_start();
+    t.starts_with("<!DOCTYPE") || t.starts_with("<html") || t.starts_with("<HTML")
+}
+
+fn truncate(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}…", &s[..max])
+    }
+}
+
 fn encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
@@ -94,6 +105,13 @@ pub fn auth_check(base_url: &str, key: &str, username: &str) -> Result<AuthInfo>
         .with_context(|| format!("GET {url}"))?;
     let status = response.status();
     let text = response.text().context("read auth/check body")?;
+    if looks_like_html(&text) {
+        bail!(
+            "auth/check returned HTML from {url} (HTTP {status}). \
+             Vault URL must point at `message-vault-rs serve` (usually port 8080), \
+             not the Next.js browse UI (port 3000)"
+        );
+    }
     if status.as_u16() == 401 {
         bail!("invalid vault key");
     }
@@ -103,13 +121,14 @@ pub fn auth_check(base_url: &str, key: &str, username: &str) -> Result<AuthInfo>
     if !status.is_success() {
         bail!("auth/check failed (HTTP {status}): {text}");
     }
-    let parsed: AuthCheckResponse =
-        serde_json::from_str(&text).with_context(|| format!("parse auth/check JSON: {text}"))?;
+    let parsed: AuthCheckResponse = serde_json::from_str(&text).with_context(|| {
+        format!(
+            "parse auth/check JSON from {url} (HTTP {status}): {}",
+            truncate(&text, 200)
+        )
+    })?;
     if !parsed.ok {
         bail!("auth/check rejected: {}", parsed.error.unwrap_or(text));
-    }
-    if parsed.admin == Some(true) {
-        bail!("admin API token is not supported here; use a per-account vault key from Settings");
     }
     if parsed.account_ok == Some(false) {
         bail!("account not found for username {username}");
@@ -189,7 +208,7 @@ pub fn post_import(
     let response = client
         .post(&url)
         .header("Authorization", format!("Bearer {}", key.trim()))
-        .header("Content-Type", "application/x-ndjson")
+        .header("Content-Type", "application/jsonl")
         .body(ndjson)
         .send()
         .with_context(|| format!("POST {url}"))?;

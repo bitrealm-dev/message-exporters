@@ -4,6 +4,8 @@ use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
@@ -18,6 +20,8 @@ use crate::project;
 
 /// Default messages per HTTP import request.
 pub const DEFAULT_BATCH_SIZE: usize = 100;
+/// Default number of simultaneous attachment uploads.
+pub const DEFAULT_ASSET_UPLOAD_WORKERS: usize = 4;
 
 #[derive(Debug, Clone)]
 pub struct VaultPushConfig {
@@ -31,6 +35,8 @@ pub struct VaultPushConfig {
     pub force: bool,
     pub max_retries: u32,
     pub batch_size: usize,
+    /// Maximum simultaneous attachment uploads. Message import requests remain serialized.
+    pub asset_upload_workers: usize,
     pub report_path: Option<PathBuf>,
     pub log_path: Option<PathBuf>,
     pub journal_path: Option<PathBuf>,
@@ -518,45 +524,20 @@ fn push_one_file(args: PushFileArgs<'_>) -> Result<(u64, u64)> {
         per_message_digests.push(digests);
     }
 
-    for (digest, (rel, mime)) in &unique {
-        check_cancel(cfg.cancel.as_ref()).map_err(|_| anyhow::anyhow!("cancelled"))?;
-        if !cfg.force && journal.assets.contains(digest) {
-            *assets_skipped += 1;
-            continue;
-        }
-        let abs = resolve_attachment(input, rel)
-            .ok_or_else(|| anyhow::anyhow!("{name}: missing attachment {rel}"))?;
-        let resp = http::with_retries(cfg.max_retries, || {
-            http::put_asset(
-                url,
-                &cfg.key,
-                username,
-                &source,
-                digest,
-                &abs,
-                mime.as_deref(),
-            )
-        })?;
-        journal.assets.insert(digest.clone());
-        journal::append(
-            journal_path,
-            &JournalEvent::AssetOk {
-                url: url.to_string(),
-                username: username.to_string(),
-                source: source.clone(),
-                sha256: digest.clone(),
-            },
-        )?;
-        if resp.already_present {
-            *assets_skipped += 1;
-        } else {
-            *assets_uploaded += 1;
-        }
-        log.line(&format!(
-            "asset {} {digest}",
-            if resp.already_present { "skip" } else { "ok" }
-        ));
-    }
+    upload_assets(UploadAssets {
+        input,
+        name,
+        cfg,
+        url,
+        username,
+        source: &source,
+        unique: &unique,
+        journal,
+        journal_path,
+        assets_uploaded,
+        assets_skipped,
+        log,
+    })?;
 
     let header_line = project::document_conversation_line(&doc)?;
     let mut pending = header_line.clone();
@@ -623,6 +604,140 @@ fn push_one_file(args: PushFileArgs<'_>) -> Result<(u64, u64)> {
         },
     )?;
     Ok((imported, attachment_count))
+}
+
+struct AssetUploadJob {
+    digest: String,
+    path: PathBuf,
+    mime: Option<String>,
+}
+
+struct AssetUploadResult {
+    digest: String,
+    response: http::AssetPutResponse,
+}
+
+struct UploadAssets<'a> {
+    input: &'a Path,
+    name: &'a str,
+    cfg: &'a VaultPushConfig,
+    url: &'a str,
+    username: &'a str,
+    source: &'a str,
+    unique: &'a BTreeMap<String, (String, Option<String>)>,
+    journal: &'a mut JournalState,
+    journal_path: &'a Path,
+    assets_uploaded: &'a mut u64,
+    assets_skipped: &'a mut u64,
+    log: &'a mut LogWriter,
+}
+
+fn upload_assets(args: UploadAssets<'_>) -> Result<()> {
+    let UploadAssets {
+        input,
+        name,
+        cfg,
+        url,
+        username,
+        source,
+        unique,
+        journal,
+        journal_path,
+        assets_uploaded,
+        assets_skipped,
+        log,
+    } = args;
+    let mut jobs = Vec::with_capacity(unique.len());
+    for (digest, (rel, mime)) in unique {
+        check_cancel(cfg.cancel.as_ref()).map_err(|_| anyhow::anyhow!("cancelled"))?;
+        if !cfg.force && journal.assets.contains(digest) {
+            *assets_skipped += 1;
+            continue;
+        }
+        let path = resolve_attachment(input, rel)
+            .ok_or_else(|| anyhow::anyhow!("{name}: missing attachment {rel}"))?;
+        jobs.push(AssetUploadJob {
+            digest: digest.clone(),
+            path,
+            mime: mime.clone(),
+        });
+    }
+    if jobs.is_empty() {
+        return Ok(());
+    }
+
+    let worker_count = cfg.asset_upload_workers.max(1).min(jobs.len());
+    let next_job = AtomicUsize::new(0);
+    let results = Mutex::new(
+        std::iter::repeat_with(|| None)
+            .take(jobs.len())
+            .collect::<Vec<Option<Result<AssetUploadResult, String>>>>(),
+    );
+    std::thread::scope(|scope| {
+        for _ in 0..worker_count {
+            scope.spawn(|| {
+                loop {
+                    let index = next_job.fetch_add(1, Ordering::Relaxed);
+                    if index >= jobs.len() {
+                        break;
+                    }
+                    let job = &jobs[index];
+                    let result = check_cancel(cfg.cancel.as_ref())
+                        .map_err(|_| "cancelled".to_string())
+                        .and_then(|_| {
+                            http::with_retries(cfg.max_retries, || {
+                                http::put_asset(
+                                    url,
+                                    &cfg.key,
+                                    username,
+                                    source,
+                                    &job.digest,
+                                    &job.path,
+                                    job.mime.as_deref(),
+                                )
+                            })
+                            .map(|response| AssetUploadResult {
+                                digest: job.digest.clone(),
+                                response,
+                            })
+                            .map_err(|error| error.to_string())
+                        });
+                    results.lock().expect("asset result mutex poisoned")[index] = Some(result);
+                }
+            });
+        }
+    });
+
+    let mut results = results.into_inner().expect("asset result mutex poisoned");
+    for result in results.drain(..) {
+        let result = result.expect("every asset job has a result");
+        let uploaded = result.map_err(|error| anyhow::anyhow!("{name}: {error}"))?;
+        journal.assets.insert(uploaded.digest.clone());
+        journal::append(
+            journal_path,
+            &JournalEvent::AssetOk {
+                url: url.to_string(),
+                username: username.to_string(),
+                source: source.to_string(),
+                sha256: uploaded.digest.clone(),
+            },
+        )?;
+        if uploaded.response.already_present {
+            *assets_skipped += 1;
+        } else {
+            *assets_uploaded += 1;
+        }
+        log.line(&format!(
+            "asset {} {}",
+            if uploaded.response.already_present {
+                "skip"
+            } else {
+                "ok"
+            },
+            uploaded.digest
+        ));
+    }
+    Ok(())
 }
 
 struct FlushBatch<'a> {

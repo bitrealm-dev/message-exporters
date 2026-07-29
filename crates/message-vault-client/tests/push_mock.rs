@@ -111,6 +111,7 @@ fn authenticate_and_push_text_only_conversation() {
         force: false,
         max_retries: 0,
         batch_size: 50,
+        asset_upload_workers: 1,
         report_path: Some(dir.path().join("vault-push-report.json")),
         log_path: Some(dir.path().join("vault-push.log")),
         journal_path: Some(dir.path().join(".vault-import-state.jsonl")),

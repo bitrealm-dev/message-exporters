@@ -111,8 +111,6 @@ struct App {
     owner_email_rows: Vec<String>,
     validate_input: String,
     validate_usa: bool,
-    /// Memory-only vault key (Import API token); never written to export.ini.
-    vault_key: String,
     vault_auth_label: String,
     vault_source_note: String,
     running: bool,
@@ -144,7 +142,6 @@ impl Default for App {
             owner_email_rows,
             validate_input: String::new(),
             validate_usa: true,
-            vault_key: String::new(),
             vault_auth_label: String::new(),
             vault_source_note: String::new(),
             running: false,
@@ -282,7 +279,6 @@ impl App {
             continue_on_error: true,
             ..VaultSection::default()
         };
-        self.vault_key.clear();
         self.vault_auth_label.clear();
         self.vault_source_note.clear();
         self.errors.clear();
@@ -367,7 +363,7 @@ impl App {
         }
         let url = self.export_ini.vault.url.trim().to_string();
         let username = self.export_ini.vault.username.trim().to_string();
-        let key = self.vault_key.trim().to_string();
+        let key = self.export_ini.vault.key.trim().to_string();
         let mut errors = Vec::new();
         if url.is_empty() {
             errors.push("Vault URL is required.".into());
@@ -411,7 +407,7 @@ impl App {
         }
         let url = self.export_ini.vault.url.trim().to_string();
         let username = self.export_ini.vault.username.trim().to_string();
-        let key = self.vault_key.trim().to_string();
+        let key = self.export_ini.vault.key.trim().to_string();
         let input = self.export_ini.vault.input.trim().to_string();
         let mut errors = Vec::new();
         if url.is_empty() {
@@ -448,6 +444,7 @@ impl App {
                 force,
                 max_retries: 3,
                 batch_size: message_vault_client::DEFAULT_BATCH_SIZE,
+                asset_upload_workers: message_vault_client::DEFAULT_ASSET_UPLOAD_WORKERS,
                 report_path: None,
                 log_path: None,
                 journal_path: None,
@@ -855,23 +852,12 @@ impl App {
                     "vault username",
                     PATH_W,
                 );
-                ui.horizontal(|ui| {
-                    let width = responsive_field_width(ui, PATH_W, 0);
-                    let label = required_field_label(ui, "Vault key");
-                    form_label(ui, label);
-                    with_field_width(ui, width, |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.vault_key)
-                                .password(true)
-                                .desired_width(width)
-                                .hint_text("Import API token (not saved)"),
-                        );
-                    });
-                });
-                ui.label(
-                    egui::RichText::new("Vault key is never written to export.ini.")
-                        .small()
-                        .weak(),
+                required_labeled_text(
+                    ui,
+                    "Vault key",
+                    &mut self.export_ini.vault.key,
+                    "Import API token from Vault Settings",
+                    PATH_W,
                 );
                 ui.add_space(8.0);
                 required_path_or_text(

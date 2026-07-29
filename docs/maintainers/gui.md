@@ -25,7 +25,7 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 - Backup-source titles link to the upstream product site.
 - **Global options** (Obfuscate + Start/End date) on the Message tab per-source form.
 - **Re-export** tab converts a prior output folder via `message_ir::reexport` (INI section `[message-reexport]`).
-- **Vault** tab pushes a JSONL export folder via `message_vault_client` (INI section `[vault]`; vault key is memory-only).
+- **Vault** tab pushes a JSONL export folder via `message_vault_client` (INI section `[vault]`; vault key is persisted in plain text).
 
 Export options persist in `export.ini` (load on start; save on Run / exit). Prefer an existing file in the working directory, else beside the GUI binary; otherwise create `./export.ini` on first save. Template: [`export.example.ini`](../../crates/message-exporters-gui/export.example.ini). Backup passwords are never written.
 
@@ -80,12 +80,12 @@ Top tab (not a Message backup type). Two-step workflow after Message export: pus
 |---------|------|:--------:|-------|
 | Vault URL | text | yes | e.g. `http://127.0.0.1:8080` |
 | Username | text | yes | Vault account username |
-| Vault key | password | yes | Import API token from Vault Settings; **never** saved to `export.ini` |
+| Vault key | text | yes | Import API token from Vault Settings; saved to `export.ini` as `key` (plain text) |
 | Input directory | folder | yes | JSONL export folder (prefills from last Message output when empty) |
 | Continue on error | checkbox | no | Default on |
 | Force re-upload | checkbox | no | Ignore `.vault-import-state.jsonl` |
 
-Persists under `[vault]` in `export.ini` (URL / username / input / flags only). See [`crates/message-vault-client/docs/MANPAGE.md`](../../crates/message-vault-client/docs/MANPAGE.md).
+Persists under `[vault]` in `export.ini` (URL / username / key / input / flags). See [`crates/message-vault-client/docs/MANPAGE.md`](../../crates/message-vault-client/docs/MANPAGE.md).
 
 ## Shared / global controls
 

@@ -26,11 +26,13 @@ pub struct ReexportSection {
     pub output_format: OutputFormat,
 }
 
-/// Fields for the Vault top-level tab (`vault-push`). The vault key is never persisted.
+/// Fields for the Vault top-level tab (`vault-push`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct VaultSection {
     pub url: String,
     pub username: String,
+    /// Import API token (persisted in export.ini; treat the file as secret).
+    pub key: String,
     pub input: String,
     pub continue_on_error: bool,
     pub force: bool,
@@ -386,10 +388,10 @@ fn build_ini(state: &ExportIniState, form: &Form) -> Ini {
         let mut s = ini.with_section(Some(VAULT));
         s.set("url", state.vault.url.trim())
             .set("username", state.vault.username.trim())
+            .set("key", state.vault.key.trim())
             .set("input", state.vault.input.trim())
             .set("continue_on_error", bool_str(state.vault.continue_on_error))
             .set("force", bool_str(state.vault.force));
-        // vault key intentionally omitted
     }
     ini
 }
@@ -407,6 +409,7 @@ fn read_vault_section(ini: &Ini) -> VaultSection {
     VaultSection {
         url: get(ini, Some(VAULT), "url"),
         username: get(ini, Some(VAULT), "username"),
+        key: get(ini, Some(VAULT), "key"),
         input: get(ini, Some(VAULT), "input"),
         continue_on_error: parse_bool(&get(ini, Some(VAULT), "continue_on_error"), true),
         force: parse_bool(&get(ini, Some(VAULT), "force"), false),

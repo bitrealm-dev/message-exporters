@@ -12,7 +12,7 @@ Prefer `VAULT_KEY` / `VAULT_URL` environment variables over putting the key on t
 
 ## Description
 
-Reads per-conversation `.jsonl` files (message-ir schema v3) under `--input`, uploads each unique attachment by SHA-256 (`PUT /v1/assets/{sha256}`), then imports bounded vault-NDJSON message batches (`POST /v1/import`).
+Reads per-conversation `.jsonl` files (message-ir schema v3) under `--input`, uploads each unique attachment by SHA-256 (`PUT /v1/assets/{sha256}`), then imports bounded vault-NDJSON message batches (`POST /v1/import`). Attachment uploads run concurrently. Import requests stay sequential because the server reserves one temporary import area for each account.
 
 Progress and a durable journal (`.vault-import-state.jsonl`) live under the input directory so re-runs can resume. Secrets are never written to the journal or report.
 
@@ -20,7 +20,7 @@ Progress and a durable journal (`.vault-import-state.jsonl`) live under the inpu
 
 | Flag | Env | Meaning |
 |------|-----|---------|
-| `--url` | `VAULT_URL` | Vault base URL |
+| `--url` | `VAULT_URL` | Base URL of `message-vault-rs serve` (e.g. `http://host:8080`), **not** the Next.js UI on `:3000` |
 | `--username` | | Account username |
 | `--key` | `VAULT_KEY` | Per-account Import API token (Vault key) |
 | `--input` | | JSONL export directory |
@@ -29,6 +29,7 @@ Progress and a durable journal (`.vault-import-state.jsonl`) live under the inpu
 | `--force` | | Ignore journal; re-upload and re-import |
 | `--max-retries N` | | Transient HTTP retries (default 3) |
 | `--batch-size N` | | Messages per import request (default 100) |
+| `--asset-upload-workers N` | | Simultaneous attachment uploads (default 4). Use `1` to disable parallel uploads. Message imports always remain sequential. |
 | `--auth-only` | | Authenticate and exit |
 | `--report` / `--log` / `--journal` | | Override artifact paths |
 
