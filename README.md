@@ -43,7 +43,7 @@ Experimental converters also ship in the GUI and release zip: GO SMS Pro, iMazin
 
 Already exported? The GUI **Re-export** tab ([`message-reexport`](crates/message-ir/docs/REEXPORT.md)) converts a prior output folder to another format (CSV ↔ EML ↔ MBOX ↔ JSON ↔ JSONL ↔ XML).
 
-Import into Message Vault with the GUI **Vault** tab or the [`vault-push`](crates/message-vault-client/docs/MANPAGE.md) CLI (JSONL export folder + Import API token).
+Import into Message Vault with the GUI **Vault** tab or the [`vault-push`](crates/vault-push/docs/MANPAGE.md) CLI (JSONL export folder + Import API token).
 
 ## Releases
 

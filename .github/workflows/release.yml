@@ -59,7 +59,7 @@ jobs:
         run: |
           cargo build --workspace --release
           cargo build --release -p message-ir --bin message-reexporter --features cli
-          cargo build --release -p message-vault-client --bin vault-push --features cli
+          cargo build --release -p vault-push --features cli
 
       - name: Stage named binaries
         shell: bash

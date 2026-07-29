@@ -9,7 +9,7 @@ use message_ir::{
     ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, IrConversationType,
     IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION,
 };
-use message_vault_client::{VaultPushConfig, authenticate, run};
+use vault_push::{VaultPushConfig, authenticate, run};
 use serde_json::json;
 use tempfile::tempdir;
 

@@ -5,7 +5,7 @@ use std::process::ExitCode;
 
 use anyhow::{Result, bail};
 use clap::Parser;
-use message_vault_client::{
+use vault_push::{
     DEFAULT_ASSET_UPLOAD_WORKERS, DEFAULT_BATCH_SIZE, ProgressEvent, VaultPushConfig, authenticate,
     run,
 };

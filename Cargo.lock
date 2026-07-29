@@ -2954,12 +2954,12 @@ dependencies = [
  "message-exporters-core",
  "message-ir",
  "message-media",
- "message-vault-client",
  "open",
  "openextract-exporter",
  "rfd",
  "sms-backup-plus-exporter",
  "sms-backup-restore-exporter",
+ "vault-push",
  "whatsapp-exporter",
 ]
 
@@ -3041,24 +3041,6 @@ dependencies = [
  "quick-xml 0.41.0",
  "regex",
  "serde",
- "sha2 0.11.0",
- "tempfile",
-]
-
-[[package]]
-name = "message-vault-client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "hex",
- "httpmock",
- "message-csv",
- "message-exporters-core",
- "message-ir",
- "reqwest",
- "serde",
- "serde_json",
  "sha2 0.11.0",
  "tempfile",
 ]
@@ -5356,6 +5338,24 @@ name = "value-bag"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef73bfbaf3216cb59c205d7176bee1194e0d84348979da31f4a71fefe3c2054e"
+
+[[package]]
+name = "vault-push"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "hex",
+ "httpmock",
+ "message-csv",
+ "message-exporters-core",
+ "message-ir",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+]
 
 [[package]]
 name = "vcpkg"

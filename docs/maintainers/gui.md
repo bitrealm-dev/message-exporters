@@ -25,7 +25,7 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 - Backup-source titles link to the upstream product site.
 - **Global options** (Obfuscate + Start/End date) on the Message tab per-source form.
 - **Re-export** tab converts a prior output folder via `message_ir::reexport` (INI section `[message-reexport]`).
-- **Vault** tab pushes a JSONL export folder via `message_vault_client` (INI section `[vault]`; vault key is persisted in plain text).
+- **Vault** tab pushes a JSONL export folder via `vault_push` (INI section `[vault]`; vault key is persisted in plain text).
 
 Export options persist in `export.ini` (load on start; save on Run / exit). Prefer an existing file in the working directory, else beside the GUI binary; otherwise create `./export.ini` on first save. Template: [`export.example.ini`](../../crates/message-exporters-gui/export.example.ini). Backup passwords are never written.
 
@@ -85,7 +85,7 @@ Top tab (not a Message backup type). Two-step workflow after Message export: pus
 | Continue on error | checkbox | no | Default on |
 | Force re-upload | checkbox | no | Ignore `.vault-import-state.jsonl` |
 
-Persists under `[vault]` in `export.ini` (URL / username / key / input / flags). See [`crates/message-vault-client/docs/MANPAGE.md`](../../crates/message-vault-client/docs/MANPAGE.md).
+Persists under `[vault]` in `export.ini` (URL / username / key / input / flags). See [`crates/vault-push/docs/MANPAGE.md`](../../crates/vault-push/docs/MANPAGE.md).
 
 ## Shared / global controls
 

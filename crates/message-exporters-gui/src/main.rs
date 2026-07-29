@@ -19,7 +19,7 @@ use message_exporters_core::{
     resolve_binary, spawn, spawn_job,
 };
 use message_ir::reexport::run as run_reexport;
-use message_vault_client::{
+use vault_push::{
     ProgressEvent as VaultProgressEvent, VaultPushConfig, authenticate as vault_authenticate,
     detect_source as vault_detect_source, run as run_vault_push,
 };
@@ -443,8 +443,8 @@ impl App {
                 continue_on_error,
                 force,
                 max_retries: 3,
-                batch_size: message_vault_client::DEFAULT_BATCH_SIZE,
-                asset_upload_workers: message_vault_client::DEFAULT_ASSET_UPLOAD_WORKERS,
+                batch_size: vault_push::DEFAULT_BATCH_SIZE,
+                asset_upload_workers: vault_push::DEFAULT_ASSET_UPLOAD_WORKERS,
                 report_path: None,
                 log_path: None,
                 journal_path: None,
