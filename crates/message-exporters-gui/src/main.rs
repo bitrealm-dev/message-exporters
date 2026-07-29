@@ -28,8 +28,9 @@ const LABEL_W: f32 = 190.0;
 const PATH_W: f32 = 400.0;
 const COMBO_W: f32 = 200.0;
 const SHORT_W: f32 = 140.0;
+const MIN_FIELD_W: f32 = 160.0;
+const PICKER_BUTTON_W: f32 = 72.0;
 const LOG_PLACEHOLDER: &str = "(no log output)";
-const CONTACTS_FIELD_INDENT: f32 = 12.0;
 /// First row plus up to 9 added rows.
 const MAX_OWNER_PHONES: usize = 10;
 
@@ -434,66 +435,37 @@ impl App {
             .inner_margin(egui::Margin::same(18))
             .show(ui, |ui| {
                 ui.heading("Validate Contacts");
-                ui.add_space(20.0);
+                required_field_note(ui);
+                ui.add_space(6.0);
 
-                ui.label("Contacts file");
-                ui.add_space(4.0);
+                let contacts_label = required_field_label(ui, "Contacts file");
+                path_or_text_labeled(
+                    ui,
+                    contacts_label,
+                    "validate_contacts_file",
+                    &mut self.validate_input,
+                    ".vcf or .csv",
+                    true,
+                    false,
+                );
                 ui.horizontal(|ui| {
-                    ui.add_space(CONTACTS_FIELD_INDENT);
-                    if ui
-                        .add_enabled(!self.running, egui::Button::new("File…"))
-                        .clicked()
-                    {
-                        let dialog =
-                            rfd::FileDialog::new().add_filter("Contacts", &["csv", "vcf", "vcard"]);
-                        if let Some(path) = dialog.pick_file() {
-                            self.validate_input = path.display().to_string();
-                        }
-                    }
-                    let path_w = (ui.available_width() - 8.0).max(160.0);
-                    let response = ui.add(
-                        egui::TextEdit::singleline(&mut self.validate_input)
-                            .id_salt("validate_contacts_file")
-                            .desired_width(path_w)
-                            .clip_text(true)
-                            .hint_text(".vcf or .csv"),
-                    );
-                    if !self.validate_input.is_empty() {
-                        response.on_hover_text(self.validate_input.as_str());
-                    }
-                });
-
-                ui.add_space(18.0);
-                ui.label("Phone number format");
-                ui.add_space(4.0);
-                ui.horizontal(|ui| {
-                    ui.add_space(CONTACTS_FIELD_INDENT);
+                    form_label(ui, "Phone number format");
                     ui.vertical(|ui| {
-                        ui.add_enabled_ui(!self.running, |ui| {
-                            ui.radio_value(&mut self.validate_usa, true, "USA");
-                            ui.radio_value(&mut self.validate_usa, false, "International");
-                        });
+                        ui.radio_value(&mut self.validate_usa, true, "USA");
+                        ui.radio_value(&mut self.validate_usa, false, "International");
                     });
                 });
 
                 self.ui_errors(ui);
 
-                ui.add_space(24.0);
-                ui.horizontal(|ui| {
-                    ui.add_space(CONTACTS_FIELD_INDENT);
-                    let btn_size = egui::vec2(72.0, ui.spacing().interact_size.y);
-                    let check = ui.add_enabled(
-                        !self.running,
-                        egui::Button::new("Check").min_size(btn_size),
-                    );
+                ui.add_space(16.0);
+                form_action_row(ui, |ui| {
+                    let can_validate = !self.validate_input.trim().is_empty();
+                    let check = form_action_button(ui, "Check", can_validate);
                     if check.clicked() {
                         self.start_validate(true);
                     }
-                    let can_update = !self.running && !self.validate_input.trim().is_empty();
-                    let update = ui.add_enabled(
-                        can_update,
-                        egui::Button::new("Update").min_size(btn_size),
-                    );
+                    let update = form_action_button(ui, "Update", can_validate);
                     if update.clicked() {
                         self.start_validate(false);
                     }
@@ -509,7 +481,8 @@ impl App {
 
     fn ui_export_content(&mut self, ui: &mut egui::Ui) {
         ui.heading("Export");
-        ui.add_space(8.0);
+        required_field_note(ui);
+        ui.add_space(6.0);
 
         self.ui_backup_source(ui);
         self.ui_output_format(ui);
@@ -529,7 +502,7 @@ impl App {
         // come before Attachments (see below).
         if self.exporter != Exporter::Whatsapp {
             self.ui_common_input(ui);
-            path_or_text(
+            required_path_or_text(
                 ui,
                 "Output directory",
                 &mut self.form.output,
@@ -542,7 +515,7 @@ impl App {
         // WhatsApp: Output format → Platform → backup / contacts → Output → Attachments → Advanced.
         if self.exporter == Exporter::Whatsapp {
             if self.form.whatsapp_platform == WhatsappPlatform::Ios {
-                path_or_text(
+                required_path_or_text(
                     ui,
                     "Backup path",
                     &mut self.form.whatsapp_backup,
@@ -552,16 +525,16 @@ impl App {
                 );
                 path_or_text(
                     ui,
-                    "Contacts",
+                    "Contacts (optional)",
                     &mut self.form.whatsapp_wa,
-                    "Optional ContactsV2.sqlite",
+                    "ContactsV2.sqlite",
                     true,
                     false,
                 );
             } else {
                 path_or_text(
                     ui,
-                    "Backup path",
+                    "Backup path (optional)",
                     &mut self.form.whatsapp_backup,
                     "msgstore.db.crypt12 / .crypt14 / .crypt15",
                     true,
@@ -569,14 +542,14 @@ impl App {
                 );
                 path_or_text(
                     ui,
-                    "Contacts",
+                    "Contacts (optional)",
                     &mut self.form.whatsapp_wa,
-                    "Optional wa.db",
+                    "wa.db",
                     true,
                     false,
                 );
             }
-            path_or_text(
+            required_path_or_text(
                 ui,
                 "Output directory",
                 &mut self.form.output,
@@ -603,7 +576,7 @@ impl App {
                 self.ui_owner_emails(ui);
                 path_or_text(
                     ui,
-                    "Name mapping",
+                    "Name mapping (optional)",
                     &mut self.form.name_mapping,
                     "Phone,Incorrect Name CSV",
                     true,
@@ -643,17 +616,17 @@ impl App {
                     if self.form.whatsapp_platform == WhatsappPlatform::Android {
                         path_or_text(
                             ui,
-                            "Media folder",
+                            "Media folder (optional)",
                             &mut self.form.whatsapp_media,
-                            "Optional WhatsApp media directory",
+                            "WhatsApp media directory",
                             false,
                             true,
                         );
                         path_or_text(
                             ui,
-                            "Message Database",
+                            "Message database (optional)",
                             &mut self.form.whatsapp_db,
-                            "Optional msgstore.db override",
+                            "msgstore.db override",
                             true,
                             false,
                         );
@@ -691,12 +664,13 @@ impl App {
                         PATH_W,
                     );
                     ui.horizontal(|ui| {
-                        form_label(ui, "Backup password");
-                        with_field_width(ui, PATH_W, |ui| {
+                        let width = responsive_field_width(ui, PATH_W, 0);
+                        form_label(ui, "Backup password (optional)");
+                        with_field_width(ui, width, |ui| {
                             ui.add(
                                 egui::TextEdit::singleline(&mut self.form.backup_password)
                                     .password(true)
-                                    .desired_width(PATH_W)
+                                    .desired_width(width)
                                     .clip_text(true)
                                     .hint_text("Encrypted iOS backup password"),
                             );
@@ -704,7 +678,7 @@ impl App {
                     });
                     path_or_text(
                         ui,
-                        "Apple AddressBook DB",
+                        "Apple AddressBook DB (optional)",
                         &mut self.form.apple_contacts,
                         "Path",
                         true,
@@ -712,7 +686,7 @@ impl App {
                     );
                     path_or_text(
                         ui,
-                        "Attachment root",
+                        "Attachment root (optional)",
                         &mut self.form.attachment_root,
                         "Path",
                         false,
@@ -720,7 +694,7 @@ impl App {
                     );
                     path_or_text(
                         ui,
-                        "Conversation filter",
+                        "Conversation filter (optional)",
                         &mut self.form.conversation_filter,
                         "Names, numbers, or emails (comma-separated)",
                         false,
@@ -728,17 +702,6 @@ impl App {
                     );
                 }
             }
-        }
-
-        if self.exporter == Exporter::GoSmsPro {
-            ui.add_space(6.0);
-            ui.allocate_ui_with_layout(
-                egui::vec2(ui.available_width(), ui.spacing().interact_size.y),
-                egui::Layout::right_to_left(egui::Align::Center),
-                |ui| {
-                    ui.label(optional_field_footnote(ui));
-                },
-            );
         }
 
         self.ui_errors(ui);
@@ -768,21 +731,19 @@ impl App {
         if self.form.obfuscate || !self.form.obfuscate_seed.is_empty() {
             labeled_text(
                 ui,
-                "Seed",
+                "Seed (optional)",
                 &mut self.form.obfuscate_seed,
-                "Optional 8-hex seed",
+                "8-hex seed",
                 PATH_W,
             );
         }
         ui.add_space(10.0);
-        ui.horizontal(|ui| {
-            let run = ui.add_enabled(!self.running, egui::Button::new("Run exporter"));
+        form_action_row(ui, |ui| {
+            let run = form_action_button(ui, "Run exporter", true);
             if run.clicked() {
                 self.start_export();
             }
-            let clear = ui
-                .add_enabled(!self.running, egui::Button::new("Clear"))
-                .on_hover_text(format!(
+            let clear = form_action_button(ui, "Clear", true).on_hover_text(format!(
                     "Clear {} fields and remove them from {}",
                     self.exporter.display_name(),
                     self.export_ini.path.display()
@@ -798,14 +759,15 @@ impl App {
             .inner_margin(egui::Margin::same(18))
             .show(ui, |ui| {
                 ui.heading("Re-export");
-                ui.add_space(8.0);
+                required_field_note(ui);
+                ui.add_space(6.0);
                 ui.label(
                     "Convert a prior Message Exporters output directory to another format. \
                      Input format is auto-detected (csv, eml, mbox, json, jsonl, or xml).",
                 );
                 ui.add_space(16.0);
 
-                path_or_text(
+                required_path_or_text(
                     ui,
                     "Input directory",
                     &mut self.export_ini.reexport.input,
@@ -814,7 +776,7 @@ impl App {
                     true,
                 );
                 self.ui_reexport_output_format(ui);
-                path_or_text(
+                required_path_or_text(
                     ui,
                     "Output directory",
                     &mut self.export_ini.reexport.output,
@@ -836,19 +798,19 @@ impl App {
                 if self.form.obfuscate || !self.form.obfuscate_seed.is_empty() {
                     labeled_text(
                         ui,
-                        "Seed",
+                        "Seed (optional)",
                         &mut self.form.obfuscate_seed,
-                        "Optional 8-hex seed",
+                        "8-hex seed",
                         PATH_W,
                     );
                 }
                 ui.add_space(10.0);
-                ui.horizontal(|ui| {
-                    let run = ui.add_enabled(!self.running, egui::Button::new("Run re-export"));
+                form_action_row(ui, |ui| {
+                    let run = form_action_button(ui, "Run re-export", true);
                     if run.clicked() {
                         self.start_reexport();
                     }
-                    let clear = ui.add_enabled(!self.running, egui::Button::new("Clear"));
+                    let clear = form_action_button(ui, "Clear", true);
                     if clear.clicked() {
                         self.export_ini.reexport = Default::default();
                         let _ = self.export_ini.save(&self.form);
@@ -859,8 +821,9 @@ impl App {
 
     fn ui_reexport_output_format(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
+            let width = responsive_field_width(ui, PATH_W, 0);
             form_label(ui, "Output format");
-            with_field_width(ui, PATH_W, |ui| {
+            with_field_width(ui, width, |ui| {
                 egui::ComboBox::from_id_salt("reexport_output_format")
                     .selected_text(self.export_ini.reexport.output_format.to_string())
                     .width(ui.available_width())
@@ -880,11 +843,12 @@ impl App {
     fn ui_backup_source(&mut self, ui: &mut egui::Ui) {
         let previous = self.exporter;
         ui.horizontal(|ui| {
+            let width = responsive_field_width(ui, PATH_W, 0);
             form_label(ui, "Backup type");
-            with_field_width(ui, PATH_W, |ui| {
+            with_field_width(ui, width, |ui| {
                 egui::ComboBox::from_id_salt("exporter")
                     .selected_text(self.exporter.dropdown_label())
-                    .width(PATH_W)
+                    .width(width)
                     .show_ui(ui, |ui| {
                         let mut saw_experimental = false;
                         for exporter in EXPORTERS {
@@ -900,6 +864,8 @@ impl App {
                         }
                     });
             });
+        });
+        form_action_row(ui, |ui| {
             let link_text = format!("↗ {}", self.exporter.link_label());
             if ui
                 .link(link_text)
@@ -926,7 +892,7 @@ impl App {
         if self.exporter == Exporter::Imessage {
             path_or_text(
                 ui,
-                "Database / iOS backup path",
+                "Database / iOS backup path (optional)",
                 &mut self.form.db_path,
                 "Path",
                 true,
@@ -946,21 +912,22 @@ impl App {
         } else {
             "Input directory"
         };
-        path_or_text(ui, input_label, &mut self.form.input, "Path", file, folder);
+        required_path_or_text(ui, input_label, &mut self.form.input, "Path", file, folder);
     }
 
     fn ui_timezone(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            form_label(ui, "Timezone");
+            let width = responsive_field_width(ui, PATH_W, 0);
+            form_label(ui, "Timezone (optional)");
             let selected = if self.form.timezone.trim().is_empty() {
                 "Local time".to_string()
             } else {
                 self.form.timezone.clone()
             };
-            with_field_width(ui, PATH_W, |ui| {
+            with_field_width(ui, width, |ui| {
                 egui::ComboBox::from_id_salt("timezone")
                     .selected_text(selected)
-                    .width(PATH_W)
+                    .width(width)
                     .show_ui(ui, |ui| {
                         if ui
                             .selectable_label(self.form.timezone.trim().is_empty(), "Local time")
@@ -990,19 +957,21 @@ impl App {
         let row_count = self.owner_phone_rows.len();
         for i in 0..row_count {
             ui.horizontal(|ui| {
+                let width = responsive_field_width(ui, PATH_W, 1);
                 if i == 0 {
-                    form_label(ui, "Your phone number(s)");
+                    let label = required_field_label(ui, "Your phone number(s)");
+                    form_label(ui, label);
                 } else {
                     ui.allocate_exact_size(
                         egui::vec2(LABEL_W, ui.spacing().interact_size.y),
                         egui::Sense::hover(),
                     );
                 }
-                with_field_width(ui, PATH_W, |ui| {
+                with_field_width(ui, width, |ui| {
                     ui.add(
                         egui::TextEdit::singleline(&mut self.owner_phone_rows[i])
                             .id_salt(("owner_phone", i))
-                            .desired_width(PATH_W)
+                            .desired_width(width)
                             .clip_text(true)
                             .hint_text("+19995551234"),
                     );
@@ -1048,19 +1017,21 @@ impl App {
         let row_count = self.owner_email_rows.len();
         for i in 0..row_count {
             ui.horizontal(|ui| {
+                let width = responsive_field_width(ui, PATH_W, 1);
                 if i == 0 {
-                    form_label(ui, "Backup email address");
+                    let label = required_field_label(ui, "Backup email address");
+                    form_label(ui, label);
                 } else {
                     ui.allocate_exact_size(
                         egui::vec2(LABEL_W, ui.spacing().interact_size.y),
                         egui::Sense::hover(),
                     );
                 }
-                with_field_width(ui, PATH_W, |ui| {
+                with_field_width(ui, width, |ui| {
                     ui.add(
                         egui::TextEdit::singleline(&mut self.owner_email_rows[i])
                             .id_salt(("owner_email", i))
-                            .desired_width(PATH_W)
+                            .desired_width(width)
                             .clip_text(true)
                             .hint_text("you@example.com"),
                     );
@@ -1099,18 +1070,12 @@ impl App {
 
     fn ui_contacts(&mut self, ui: &mut egui::Ui, enabled: bool) {
         ui.add_enabled_ui(enabled, |ui| {
-            // GO SMS Pro: superscript * marks optional contacts (blank names fill).
-            let label: egui::WidgetText = if self.exporter == Exporter::GoSmsPro {
-                starred_contacts_file_label(ui).into()
-            } else {
-                "Contacts file".into()
-            };
             // iPhone backup: keep the row for layout, but show an empty field so a
             // shared [common] contacts path does not look like it applies here.
             if enabled {
                 path_or_text_labeled(
                     ui,
-                    label,
+                    "Contacts file (optional)",
                     "Contacts file",
                     &mut self.form.contacts,
                     ".csv or .vcf",
@@ -1121,7 +1086,7 @@ impl App {
                 let mut blank = String::new();
                 path_or_text_labeled(
                     ui,
-                    label,
+                    "Contacts file",
                     "Contacts file",
                     &mut blank,
                     "Not used — set Apple AddressBook under Advanced",
@@ -1178,8 +1143,14 @@ impl App {
                     &MAX_RESOLUTIONS,
                     COMBO_W,
                 );
-                labeled_text(ui, "Max fps", &mut self.form.media_max_fps, "e.g. 30", SHORT_W);
-                labeled_text(
+                required_labeled_text(
+                    ui,
+                    "Max fps",
+                    &mut self.form.media_max_fps,
+                    "e.g. 30",
+                    SHORT_W,
+                );
+                required_labeled_text(
                     ui,
                     "Min size",
                     &mut self.form.media_min_size,
@@ -1395,26 +1366,18 @@ fn form_label(ui: &mut egui::Ui, label: impl Into<egui::WidgetText>) {
     );
 }
 
-fn append_raised_star(job: &mut egui::text::LayoutJob, style: &egui::Style, color: egui::Color32) {
-    egui::RichText::new("*")
+fn required_field_label(ui: &egui::Ui, text: &str) -> egui::text::LayoutJob {
+    let style = ui.style();
+    let mut job = egui::text::LayoutJob::default();
+    egui::RichText::new(text).append_to(
+        &mut job,
+        style,
+        egui::FontSelection::Default,
+        egui::Align::Center,
+    );
+    egui::RichText::new(" *")
         .small_raised()
-        .color(color)
-        .append_to(
-            job,
-            style,
-            egui::FontSelection::Default,
-            egui::Align::Center,
-        );
-}
-
-/// `*Contacts file` with a small raised star (optional for GO SMS Pro).
-fn starred_contacts_file_label(ui: &egui::Ui) -> egui::text::LayoutJob {
-    let style = ui.style();
-    let color = style.visuals.text_color();
-    let mut job = egui::text::LayoutJob::default();
-    append_raised_star(&mut job, style, color);
-    egui::RichText::new("Contacts file")
-        .color(color)
+        .color(style.visuals.error_fg_color)
         .append_to(
             &mut job,
             style,
@@ -1424,25 +1387,38 @@ fn starred_contacts_file_label(ui: &egui::Ui) -> egui::text::LayoutJob {
     job
 }
 
-/// Bottom-right of the Export field block: raised star means the field is optional.
-fn optional_field_footnote(ui: &egui::Ui) -> egui::text::LayoutJob {
-    let style = ui.style();
-    let color = style.visuals.weak_text_color();
-    let mut job = egui::text::LayoutJob::default();
-    append_raised_star(&mut job, style, color);
-    egui::RichText::new(" Optional field")
-        .size(14.0)
-        .color(color)
-        .append_to(
-            &mut job,
-            style,
-            egui::FontSelection::Default,
-            egui::Align::Center,
-        );
-    job
+fn required_field_note(ui: &mut egui::Ui) {
+    ui.label(
+        egui::RichText::new("* Required field")
+            .small()
+            .color(ui.visuals().weak_text_color()),
+    );
 }
 
-/// Reserve an exact field width so trailing buttons cannot shrink the control.
+fn form_action_row(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    ui.horizontal(|ui| {
+        form_label(ui, "");
+        add(ui);
+    });
+}
+
+fn form_action_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> egui::Response {
+    ui.add_enabled(
+        enabled,
+        egui::Button::new(label).min_size(egui::vec2(88.0, ui.spacing().interact_size.y)),
+    )
+}
+
+fn responsive_field_width(ui: &egui::Ui, max_width: f32, trailing_buttons: usize) -> f32 {
+    let spacing = ui.spacing().item_spacing.x;
+    let trailing_width =
+        trailing_buttons as f32 * (PICKER_BUTTON_W + spacing) + LABEL_W + spacing;
+    (ui.available_width() - trailing_width)
+        .max(MIN_FIELD_W.min(max_width))
+        .min(max_width)
+}
+
+/// Reserve an exact field width so sibling controls cannot shrink it unexpectedly.
 fn with_field_width(ui: &mut egui::Ui, width: f32, add: impl FnOnce(&mut egui::Ui)) {
     ui.allocate_ui_with_layout(
         egui::vec2(width, ui.spacing().interact_size.y),
@@ -1453,6 +1429,37 @@ fn with_field_width(ui: &mut egui::Ui, width: f32, add: impl FnOnce(&mut egui::U
 
 fn labeled_text(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &str, width: f32) {
     ui.horizontal(|ui| {
+        let width = responsive_field_width(ui, width, 0);
+        form_label(ui, label);
+        let mut response = None;
+        with_field_width(ui, width, |ui| {
+            response = Some(
+                ui.add(
+                    egui::TextEdit::singleline(value)
+                        .desired_width(width)
+                        .clip_text(true)
+                        .hint_text(hint),
+                ),
+            );
+        });
+        if let Some(response) = response {
+            if !value.is_empty() {
+                response.on_hover_text(value.as_str());
+            }
+        }
+    });
+}
+
+fn required_labeled_text(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut String,
+    hint: &str,
+    width: f32,
+) {
+    ui.horizontal(|ui| {
+        let width = responsive_field_width(ui, width, 0);
+        let label = required_field_label(ui, label);
         form_label(ui, label);
         let mut response = None;
         with_field_width(ui, width, |ui| {
@@ -1484,6 +1491,26 @@ fn path_or_text(
     path_or_text_labeled(ui, label, label, value, hint, allow_file, allow_folder);
 }
 
+fn required_path_or_text(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut String,
+    hint: &str,
+    allow_file: bool,
+    allow_folder: bool,
+) {
+    let display_label = required_field_label(ui, label);
+    path_or_text_labeled(
+        ui,
+        display_label,
+        label,
+        value,
+        hint,
+        allow_file,
+        allow_folder,
+    );
+}
+
 fn path_or_text_labeled(
     ui: &mut egui::Ui,
     label: impl Into<egui::WidgetText>,
@@ -1494,14 +1521,16 @@ fn path_or_text_labeled(
     allow_folder: bool,
 ) {
     ui.horizontal(|ui| {
+        let picker_count = usize::from(allow_file) + usize::from(allow_folder);
+        let width = responsive_field_width(ui, PATH_W, picker_count);
         form_label(ui, label);
         let mut response = None;
-        with_field_width(ui, PATH_W, |ui| {
+        with_field_width(ui, width, |ui| {
             response = Some(
                 ui.add(
                     egui::TextEdit::singleline(value)
                         .id_salt(id_salt)
-                        .desired_width(PATH_W)
+                        .desired_width(width)
                         .clip_text(true)
                         .hint_text(hint),
                 ),
@@ -1514,8 +1543,11 @@ fn path_or_text_labeled(
         }
         if allow_file
             && ui
-                .button("📄")
-                .on_hover_text("Choose file…")
+                .add_sized(
+                    [PICKER_BUTTON_W, ui.spacing().interact_size.y],
+                    egui::Button::new("File…"),
+                )
+                .on_hover_text("Choose file")
                 .clicked()
         {
             let mut dialog = rfd::FileDialog::new();
@@ -1528,8 +1560,11 @@ fn path_or_text_labeled(
         }
         if allow_folder
             && ui
-                .button("📁")
-                .on_hover_text("Choose folder…")
+                .add_sized(
+                    [PICKER_BUTTON_W, ui.spacing().interact_size.y],
+                    egui::Button::new("Folder…"),
+                )
+                .on_hover_text("Choose folder")
                 .clicked()
         {
             if let Some(path) = rfd::FileDialog::new().pick_folder() {
@@ -1547,6 +1582,7 @@ fn combo_enum<T: Copy + PartialEq + std::fmt::Display>(
     width: f32,
 ) {
     ui.horizontal(|ui| {
+        let width = responsive_field_width(ui, width, 0);
         form_label(ui, label);
         with_field_width(ui, width, |ui| {
             egui::ComboBox::from_id_salt(label)
