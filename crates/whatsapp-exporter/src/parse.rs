@@ -8,13 +8,11 @@ use std::fs;
 use std::path::Path;
 
 /// Top-level JSON: map of JID → chat.
-pub type ChatStoreFile = BTreeMap<String, ChatJson>;
+pub(crate) type ChatStoreFile = BTreeMap<String, ChatJson>;
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct ChatJson {
+pub(crate) struct ChatJson {
     pub name: Option<String>,
-    #[serde(rename = "type")]
-    pub device_type: Option<String>,
     /// Prefix for relative media `data` paths (iOS often `AppDomainGroup-…/`).
     #[serde(default)]
     pub media_base: Option<String>,
@@ -23,7 +21,7 @@ pub struct ChatJson {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct MessageJson {
+pub(crate) struct MessageJson {
     #[serde(default)]
     pub from_me: bool,
     /// Unix seconds (or ms — normalized in emit).
@@ -43,7 +41,7 @@ pub struct MessageJson {
     pub reactions: Value,
 }
 
-pub fn load_chat_store(path: &Path) -> Result<ChatStoreFile> {
+pub(crate) fn load_chat_store(path: &Path) -> Result<ChatStoreFile> {
     let text = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
     serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))
 }
@@ -60,7 +58,7 @@ fn is_missing_media_placeholder(s: &str) -> bool {
 ///
 /// When `media` is true, wtsexporter stores the file path in `data`, so only
 /// `caption` (if any) is treated as message text.
-pub fn message_text(msg: &MessageJson) -> String {
+pub(crate) fn message_text(msg: &MessageJson) -> String {
     if media_flag_true(msg) {
         return msg.caption.clone().unwrap_or_default();
     }
@@ -87,7 +85,7 @@ pub fn message_text(msg: &MessageJson) -> String {
 ///
 /// Upstream sets `media: true` and puts the path in `data` (Android/iOS). Older
 /// or alternate dumps may put a path string directly in `media`.
-pub fn media_path(msg: &MessageJson) -> Option<&str> {
+pub(crate) fn media_path(msg: &MessageJson) -> Option<&str> {
     match &msg.media {
         Value::String(s) if !s.is_empty() && !is_missing_media_placeholder(s) => Some(s.as_str()),
         Value::Bool(true) => match &msg.data {
@@ -101,7 +99,7 @@ pub fn media_path(msg: &MessageJson) -> Option<&str> {
 }
 
 /// Normalize wtsexporter timestamp to Unix seconds.
-pub fn timestamp_secs(ts: f64) -> i64 {
+pub(crate) fn timestamp_secs(ts: f64) -> i64 {
     if ts > 9_999_999_999.0 {
         (ts / 1000.0) as i64
     } else {

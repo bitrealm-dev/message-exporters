@@ -16,6 +16,4 @@ mod options;
 mod run;
 mod session;
 
-pub use error::RuntimeError;
-pub use message_exporters_core::{ExporterConfig, OutputFormat};
 pub use run::{RunResult, run};

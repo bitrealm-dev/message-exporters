@@ -14,7 +14,7 @@ use std::fs;
 use std::path::Path;
 
 /// Scan a conversation directory of `.eml` files into IR.
-pub fn read_conversation_eml_dir(dir: &Path) -> Result<ConversationDocument> {
+pub(crate) fn read_conversation_eml_dir(dir: &Path) -> Result<ConversationDocument> {
     if !dir.is_dir() {
         bail!("not a directory: {}", dir.display());
     }
@@ -53,7 +53,7 @@ pub fn read_conversation_eml_dir(dir: &Path) -> Result<ConversationDocument> {
 }
 
 /// Read a conversation `.mbox` (mboxrd) into IR.
-pub fn read_conversation_mbox(path: &Path) -> Result<ConversationDocument> {
+pub(crate) fn read_conversation_mbox(path: &Path) -> Result<ConversationDocument> {
     let mut mail_messages = mail_messages_from_mbox(path)?;
     if mail_messages.is_empty() {
         bail!("mbox has no messages: {}", path.display());
@@ -72,7 +72,7 @@ pub fn read_conversation_mbox(path: &Path) -> Result<ConversationDocument> {
 }
 
 /// Map [`MailMessage`] list (same conversation) into a [`ConversationDocument`].
-pub fn document_from_mail_messages(
+fn document_from_mail_messages(
     messages: &[MailMessage],
     packaging_stem_suffix: Option<String>,
 ) -> Result<ConversationDocument> {

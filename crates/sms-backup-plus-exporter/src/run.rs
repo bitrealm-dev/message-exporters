@@ -13,7 +13,6 @@ use std::path::{Path, PathBuf};
 /// Result of [`run`]: convert report plus human-readable log lines.
 #[derive(Debug)]
 pub struct RunResult {
-    pub report: ExportReport,
     pub messages: Vec<String>,
 }
 
@@ -60,7 +59,7 @@ fn load_owner_config() -> Result<OwnerConfig> {
 }
 
 /// Resolve owner phones/emails from CLI values or `config/owner.toml`.
-pub fn resolve_owner(
+fn resolve_owner(
     cli_phones: Vec<String>,
     cli_emails: Vec<String>,
 ) -> Result<(Vec<String>, Vec<String>, Vec<PathBuf>)> {
@@ -87,7 +86,7 @@ pub fn resolve_owner(
 }
 
 /// Resolve input roots from CLI values or `source_dirs` in owner.toml.
-pub fn resolve_inputs(cli_inputs: Vec<PathBuf>, defaults: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
+fn resolve_inputs(cli_inputs: Vec<PathBuf>, defaults: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
     let inputs = if !cli_inputs.is_empty() {
         cli_inputs
     } else {
@@ -149,11 +148,11 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     if source.include_summary {
         messages.extend(report_summary_lines(&report, &config.output));
     }
-    Ok(RunResult { report, messages })
+    Ok(RunResult { messages })
 }
 
 /// Format the convert summary the same way the CLI prints it.
-pub fn report_summary_lines(report: &ExportReport, output: &Path) -> Vec<String> {
+fn report_summary_lines(report: &ExportReport, output: &Path) -> Vec<String> {
     let mut lines = vec![
         format!("Wrote {}", output.display()),
         format!("  conversations:     {}", report.conversations),

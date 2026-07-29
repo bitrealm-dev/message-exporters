@@ -37,7 +37,7 @@ pub enum Direction {
 }
 
 impl Direction {
-    pub fn as_str(self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             Self::Incoming => "incoming",
             Self::Outgoing => "outgoing",
@@ -63,32 +63,6 @@ pub struct MailAttachment {
     pub is_sticker: bool,
     pub transcription: Option<String>,
     pub sticker_effect: Option<String>,
-}
-
-impl MailAttachment {
-    /// Read attachment bytes from disk for embedding in MIME.
-    pub fn read_file(
-        path: &Path,
-        original_name: Option<String>,
-        mime_type: Option<String>,
-        digest_sha256: Option<String>,
-        is_sticker: bool,
-    ) -> Result<Self> {
-        let bytes = if path.is_file() {
-            fs::read(path).with_context(|| format!("read attachment {}", path.display()))?
-        } else {
-            Vec::new()
-        };
-        Ok(Self {
-            bytes,
-            original_name,
-            mime_type,
-            digest_sha256,
-            is_sticker,
-            transcription: None,
-            sticker_effect: None,
-        })
-    }
 }
 
 /// How to package a conversation for mail-archive export.
@@ -289,7 +263,7 @@ struct AttachmentMetaCell<'a> {
 }
 
 /// Conversation directory stem (CSV filename without `.csv`).
-pub fn conversation_stem(msg: &MailMessage) -> String {
+fn conversation_stem(msg: &MailMessage) -> String {
     let participant_handles: Vec<String> =
         msg.participants.iter().map(|p| p.handle.clone()).collect();
     let csv_name = conversation_filename(
@@ -308,7 +282,7 @@ pub fn conversation_stem(msg: &MailMessage) -> String {
 /// Write a single `.eml` into an existing conversation directory.
 ///
 /// `sequence` is 1-based (`000001_…`). Creates `conv_dir` if missing.
-pub fn write_message_file(conv_dir: &Path, sequence: u32, msg: &MailMessage) -> Result<PathBuf> {
+fn write_message_file(conv_dir: &Path, sequence: u32, msg: &MailMessage) -> Result<PathBuf> {
     if sequence == 0 {
         bail!("write_message_file sequence must be >= 1");
     }
@@ -331,7 +305,7 @@ pub fn write_message_file(conv_dir: &Path, sequence: u32, msg: &MailMessage) -> 
 ///
 /// Returns the conversation directory path. Messages are sorted by timestamp,
 /// then guid, before emit.
-pub fn write_conversation(output_root: &Path, messages: &[MailMessage]) -> Result<PathBuf> {
+fn write_conversation(output_root: &Path, messages: &[MailMessage]) -> Result<PathBuf> {
     if messages.is_empty() {
         bail!("write_conversation requires at least one message");
     }
@@ -354,7 +328,7 @@ pub fn write_conversation(output_root: &Path, messages: &[MailMessage]) -> Resul
 }
 
 /// Path to the per-conversation mboxrd file (`<stem>.mbox` under `output_root`).
-pub fn conversation_mbox_path(output_root: &Path, msg: &MailMessage) -> PathBuf {
+fn conversation_mbox_path(output_root: &Path, msg: &MailMessage) -> PathBuf {
     output_root.join(format!("{}.mbox", conversation_stem(msg)))
 }
 
@@ -362,7 +336,7 @@ pub fn conversation_mbox_path(output_root: &Path, msg: &MailMessage) -> PathBuf 
 ///
 /// Creates parent directories and the file if missing. Messages should be
 /// appended in chronological order for a usable mailbox.
-pub fn append_message_mbox(mbox_path: &Path, msg: &MailMessage) -> Result<()> {
+fn append_message_mbox(mbox_path: &Path, msg: &MailMessage) -> Result<()> {
     if let Some(parent) = mbox_path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("create mbox parent {}", parent.display()))?;
@@ -383,7 +357,7 @@ pub fn append_message_mbox(mbox_path: &Path, msg: &MailMessage) -> Result<()> {
 /// Write one conversation `.mbox` under `output_root` (mboxrd).
 ///
 /// Returns the `.mbox` path. Messages are sorted by timestamp, then guid.
-pub fn write_conversation_mbox(output_root: &Path, messages: &[MailMessage]) -> Result<PathBuf> {
+fn write_conversation_mbox(output_root: &Path, messages: &[MailMessage]) -> Result<PathBuf> {
     if messages.is_empty() {
         bail!("write_conversation_mbox requires at least one message");
     }
@@ -409,7 +383,7 @@ pub fn write_conversation_mbox(output_root: &Path, messages: &[MailMessage]) -> 
 }
 
 /// Escape a single line for mboxrd: lines matching `^>*From ` get a leading `>`.
-pub fn escape_mboxrd_line(line: &str) -> String {
+fn escape_mboxrd_line(line: &str) -> String {
     let bytes = line.as_bytes();
     let mut i = 0;
     while i < bytes.len() && bytes[i] == b'>' {
@@ -507,7 +481,7 @@ fn guid_prefix8(guid: &str) -> String {
 ///
 /// Phones → `+E164@sms.local`. Email / other handles containing `@` →
 /// `local=domain@handle.local` (MAIL_ARCHIVE encoding).
-pub fn synthetic_address(handle: &str, display_name: Option<&str>) -> Address<'static> {
+fn synthetic_address(handle: &str, display_name: Option<&str>) -> Address<'static> {
     let handle = handle.trim();
     let email = if handle.is_empty() {
         format!("unknown@{SMS_ADDRESS_DOMAIN}")

@@ -52,13 +52,13 @@ struct UnableEntry {
 
 /// Formats accepted by contacts-validate and by [`crate::ContactsBook::load_contacts_file`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ContactsFormat {
+pub(crate) enum ContactsFormat {
     Vcf,
     ImazingCsv,
 }
 
 /// Short red-box message when CSV/VCF content is not a known contacts format.
-pub const UNRECOGNIZED_CONTACTS_FORMAT: &str = "Unrecognized contacts format.";
+const UNRECOGNIZED_CONTACTS_FORMAT: &str = "Unrecognized contacts format.";
 
 /// Probe failure for GUI preflight (short `message` + optional log `details`).
 #[derive(Debug, Clone)]
@@ -94,17 +94,6 @@ impl ContactsInputError {
 /// Probe that `path` exists and is a contacts `.csv` / `.vcf` this crate can validate.
 pub fn probe_contacts_input(path: &Path) -> Result<(), ContactsInputError> {
     detect_format(path).map(|_| ())
-}
-
-/// Ensure `path` exists and is a contacts `.csv` / `.vcf` this crate can validate.
-pub fn ensure_contacts_input(path: &Path) -> Result<()> {
-    probe_contacts_input(path).map_err(|e| {
-        if e.details.is_empty() {
-            anyhow::anyhow!("{}", e.message)
-        } else {
-            anyhow::anyhow!("{} ({})", e.message, e.details.join("; "))
-        }
-    })
 }
 
 /// Validate contacts beside `input`.
@@ -287,7 +276,7 @@ fn is_phone_header(h: &str) -> bool {
 }
 
 /// Detect VCF or iMazing Contacts CSV (First Name, Last Name, phone columns).
-pub fn detect_contacts_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> {
+pub(crate) fn detect_contacts_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> {
     detect_format(path)
 }
 

@@ -1,13 +1,16 @@
 //! Normalize IR documents before content equality checks.
 
-use crate::{ConversationDocument, IrAttachment, IrImessage, IrSource};
+#[cfg(test)]
+use crate::{ConversationDocument, IrAttachment};
+use crate::{IrImessage, IrSource};
 
 /// Prepare a document for content equality after round-trip.
 ///
 /// - Recomputes conversation stats
 /// - Collapses empty `source` / `imessage` bags to `None`
 /// - Clears packaging stem suffix and attachment bytes (not part of JSON content)
-pub fn normalize_document_for_compare(doc: &mut ConversationDocument) {
+#[cfg(test)]
+pub(crate) fn normalize_document_for_compare(doc: &mut ConversationDocument) {
     for msg in &mut doc.messages {
         if let Some(source) = msg.source.take() {
             msg.source = source.into_option();
@@ -38,6 +41,7 @@ pub fn normalize_document_for_compare(doc: &mut ConversationDocument) {
     doc.finalize_stats();
 }
 
+#[cfg(test)]
 fn clear_attachment_ephemera(att: &mut IrAttachment) {
     att.bytes = None;
     empty_to_none(&mut att.path);
@@ -48,6 +52,7 @@ fn clear_attachment_ephemera(att: &mut IrAttachment) {
     empty_to_none(&mut att.sticker_effect);
 }
 
+#[cfg(test)]
 fn empty_to_none(v: &mut Option<String>) {
     if let Some(s) = v.as_ref() {
         if s.trim().is_empty() {

@@ -3,7 +3,7 @@
 use message_phone::{sanitize_number, to_e164};
 
 /// True for `@g.us` group JIDs.
-pub fn is_group_jid(jid: &str) -> bool {
+pub(crate) fn is_group_jid(jid: &str) -> bool {
     jid.trim().ends_with("@g.us")
 }
 
@@ -12,7 +12,7 @@ pub fn is_group_jid(jid: &str) -> bool {
 /// - `15551234567@s.whatsapp.net` → `+15551234567`
 /// - bare digits / `+E164` → normalized via [`sanitize_number`] / [`to_e164`]
 /// - otherwise `None`
-pub fn jid_to_e164(jid: &str) -> Option<String> {
+pub(crate) fn jid_to_e164(jid: &str) -> Option<String> {
     let jid = jid.trim();
     if jid.is_empty() {
         return None;
@@ -29,7 +29,7 @@ pub fn jid_to_e164(jid: &str) -> Option<String> {
 }
 
 /// Chat identifier for CSV: E.164 for 1:1 user JIDs; otherwise the raw JID.
-pub fn chat_id_from_jid(jid: &str) -> String {
+pub(crate) fn chat_id_from_jid(jid: &str) -> String {
     if is_group_jid(jid) {
         jid.trim().to_string()
     } else {

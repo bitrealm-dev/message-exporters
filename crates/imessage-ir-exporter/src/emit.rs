@@ -65,7 +65,7 @@ struct PendingConversation {
 }
 
 /// Stream chat.db into per-conversation CSV, EML, MBOX, JSON, or JSONL.
-pub fn run_export(session: &MailSession) -> Result<FormatSinkResult, RuntimeError> {
+pub(crate) fn run_export(session: &MailSession) -> Result<FormatSinkResult, RuntimeError> {
     let format = session.options.output_format;
     eprintln!(
         "Exporting to {} as {}...",

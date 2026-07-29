@@ -97,5 +97,5 @@ impl_has_messages!(
     imazing_exporter::RunResult,
     imessage_ir_exporter::RunResult,
     whatsapp_exporter::RunResult,
-    message_reexporter::RunResult,
+    message_ir::reexport::RunResult,
 );

@@ -18,7 +18,7 @@ use message_exporters_core::{
     WHATSAPP_PLATFORMS, WhatsappPlatform, contacts_kind_from_path, ensure_output_dir,
     resolve_binary, spawn, spawn_job,
 };
-use message_reexporter::run as run_reexport;
+use message_ir::reexport::run as run_reexport;
 use widgets::{
     COMBO_W, PATH_W, SHORT_W, advanced_options_toggle, combo_enum, combo_enum_with_id,
     form_action_button, form_action_row, form_label, labeled_text, path_or_text,

@@ -3,6 +3,7 @@ name = "imazing-exporter"
 version = "0.1.0"
 edition = "2024"
 description = "Convert iMazing Messages / WhatsApp CSV (+ Contacts CSV) to shared per-chat CSV"
+autotests = false
 
 [features]
 default = ["cli"]

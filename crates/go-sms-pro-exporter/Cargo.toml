@@ -2,6 +2,7 @@
 name = "go-sms-pro-exporter"
 version = "0.1.0"
 edition = "2024"
+autotests = false
 
 [features]
 default = ["cli"]

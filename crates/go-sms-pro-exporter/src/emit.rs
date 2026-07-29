@@ -29,7 +29,7 @@ fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
 }
 
 #[derive(Debug, Default)]
-pub struct ExportReport {
+pub(crate) struct ExportReport {
     pub conversations: u64,
     /// XML `<SMS>` rows seen while parsing (before write / dedupe).
     pub xml_messages_seen: u64,
@@ -60,13 +60,13 @@ pub struct ExportReport {
 
 /// Diagnostic row for an empty/stub PDU file.
 #[derive(Debug, Clone)]
-pub struct SkippedEmptyPduDetail {
+pub(crate) struct SkippedEmptyPduDetail {
     pub pdu_filename: String,
 }
 
 /// Diagnostic row when a non-group PDU has no non-owner peer.
 #[derive(Debug, Clone)]
-pub struct SkippedNoPartyDetail {
+pub(crate) struct SkippedNoPartyDetail {
     pub pdu_filename: String,
     pub participants: String,
     pub is_sent: bool,
@@ -639,7 +639,7 @@ fn enrich_pending_names(book: &ContactsBook, chat_id: &str, msg: &mut PendingMes
 ///
 /// When `cancel` is set, cooperative cancellation is checked between XML files
 /// and between PDU files. Cancelled runs return an error with message `cancelled`.
-pub fn convert_export(
+pub(crate) fn convert_export(
     input_dir: &Path,
     output_dir: &Path,
     owner_phones: &[String],

@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::csv_rewrite::rewrite_attachment_paths;
 use crate::tools::{Probe, probe_video, require_ffmpeg, run_ffmpeg};
 use crate::{CompressOptions, MediaMode};
 
@@ -56,17 +55,6 @@ pub fn process_attachments_dir(
     remove_msgmedia_temps(&attachments)?;
 
     Ok((report, remap))
-}
-
-/// Convert or compress media under `output_dir/attachments` and rewrite CSV paths.
-pub fn process_export_media(
-    output_dir: &Path,
-    mode: MediaMode,
-    compress: &CompressOptions,
-) -> Result<MediaReport> {
-    let (mut report, remap) = process_attachments_dir(output_dir, mode, compress)?;
-    report.csv_files_updated = rewrite_attachment_paths(output_dir, &remap)?;
-    Ok(report)
 }
 
 enum Outcome {
@@ -548,9 +536,10 @@ mod tests {
     #[test]
     fn clone_is_noop() {
         let dir = tempfile::tempdir().unwrap();
-        let report =
-            process_export_media(dir.path(), MediaMode::Clone, &CompressOptions::default())
+        let (report, remap) =
+            process_attachments_dir(dir.path(), MediaMode::Clone, &CompressOptions::default())
                 .unwrap();
         assert_eq!(report.processed, 0);
+        assert!(remap.is_empty());
     }
 }

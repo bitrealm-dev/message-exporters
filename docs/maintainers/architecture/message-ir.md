@@ -113,9 +113,9 @@ Line 1 is the header (includes `conversation.stats`; no `messages` array). Each 
 | JSONL | header + one message per line | `read_conversation_jsonl` |
 | CSV | unified [`CSV_HEADERS`](../../../crates/message-ir/src/lib.rs) (header from first data row on read) | `read_conversation_csv` |
 | EML / MBOX | common message → `MailMessage` → [`message-mail`](../../../crates/message-mail/) | `read_conversation_eml_dir` / `read_conversation_mbox` |
-| XML | single `smses.xml` via [`FormatSink`](../../../crates/message-ir/) + [`message-sbr`](../../../crates/message-sbr/) | `sms_backup_restore_exporter::load_documents_from_xml` (owner inferred when omitted) |
+| XML | single `smses.xml` via [`FormatSink`](../../../crates/message-ir/) + [`message-sbr`](../../../crates/message-sbr/) | `message_ir::read_sbr_documents` (owner inferred when omitted) |
 
-**Directory convert:** [`message-reexporter`](../../../crates/message-reexporter/) auto-detects one format in an export folder and writes another via `FormatSink` (GUI **Re-export** tab / CLI).
+**Directory convert:** [`message-ir::reexport`](../../../crates/message-ir/src/reexport/) powers the `message-reexporter` command. It auto-detects one format in an export folder and writes another via `FormatSink` (GUI **Re-export** tab / CLI).
 
 **XML packaging differs:** one SyncTech backup for the whole export (not per conversation). iMessage-only fields are dropped. See [SMS Backup & Restore XML output](../formats/sms-backup-restore-xml.md).
 
@@ -125,7 +125,7 @@ Library APIs support content-preserving cycles:
 
 `ConversationDocument` → CSV \| EML \| MBOX \| JSON \| JSONL → `ConversationDocument`
 
-Use [`message-reexporter`](../../../crates/message-reexporter/) to convert a whole export directory between formats.
+Use the [`message-reexporter` command](../../../crates/message-ir/docs/REEXPORT.md) to convert a whole export directory between formats.
 
 XML is **lossy** for non-Android common messages (Apple bags omitted). SBR-origin `source.fields` can restore many SyncTech attrs on write-back.
 

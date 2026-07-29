@@ -1,9 +1,9 @@
+use crate::emit::convert_json;
 use message_csv::DateRange;
 use message_exporters_core::OutputFormat;
 use message_ir::ExportTransforms;
 use std::fs;
 use std::path::PathBuf;
-use whatsapp_exporter::convert_json;
 
 #[test]
 fn convert_fixture_json_individual_and_group() {

@@ -24,7 +24,7 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 - Exporter-specific validation before launch (`Form::to_config`), then in-process `run(&ExporterConfig)`.
 - Backup-source titles link to the upstream product site.
 - **Global options** (Obfuscate + Start/End date) on the Message tab per-source form.
-- **Re-export** tab converts a prior output folder via `message-reexporter` (INI section `[message-reexport]`).
+- **Re-export** tab converts a prior output folder via `message_ir::reexport` (INI section `[message-reexport]`).
 
 Export options persist in `export.ini` (load on start; save on Run / exit). Prefer an existing file in the working directory, else beside the GUI binary; otherwise create `./export.ini` on first save. Template: [`export.example.ini`](../../crates/message-exporters-gui/export.example.ini). Backup passwords are never written.
 
@@ -68,7 +68,7 @@ Top tab (not a Message backup type). Converts a prior Message Exporters output f
 | Attachments | enum | no | `--media-mode` |
 | Obfuscate / seed | checkbox + text | no | `--obfuscate` / `--obfuscate-seed` |
 
-Persists under `[message-reexport]` in `export.ini`. Mixed or unrecognized input dirs fail with a clear error. See [`crates/message-reexporter/docs/MANPAGE.md`](../../crates/message-reexporter/docs/MANPAGE.md).
+Persists under `[message-reexport]` in `export.ini`. Mixed or unrecognized input dirs fail with a clear error. See [`crates/message-ir/docs/MESSAGE_REEXPORTER.md`](../../crates/message-ir/docs/MESSAGE_REEXPORTER.md).
 
 ## Shared / global controls
 
@@ -268,7 +268,7 @@ Tabs: Contacts | Message | Re-export | Log
   Message → pick backup source → Obfuscate/dates → per-source form
          → Form::to_config → ExporterConfig → library run / Cancel → log
   Re-export → input dir → output format → output dir → media/obfuscate
-           → message-reexporter::run → log
+           → message_ir::reexport::run → log
 ```
 
 End-user walkthrough: [First export with the app](../src/content/docs/get-started/first-export.mdx).

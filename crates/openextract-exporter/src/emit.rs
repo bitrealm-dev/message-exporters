@@ -26,7 +26,7 @@ fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
 }
 
 #[derive(Debug, Default)]
-pub struct ExportReport {
+pub(crate) struct ExportReport {
     pub conversations: u64,
     pub messages: u64,
     pub sent: u64,
@@ -60,7 +60,7 @@ struct PendingConversation {
 ///
 /// When `cancel` is set, cooperative cancellation is checked between CSV files
 /// and before writing. Cancelled runs return an error with message `cancelled`.
-pub fn convert_export(
+pub(crate) fn convert_export(
     input: &Path,
     output: &Path,
     book: &ContactsBook,

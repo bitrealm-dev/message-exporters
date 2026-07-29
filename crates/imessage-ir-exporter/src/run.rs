@@ -22,7 +22,7 @@ pub struct RunResult {
 }
 
 /// Build options from [`ExporterConfig`], open the DB, and write the export.
-pub fn run(config: &ExporterConfig) -> Result<RunResult, RuntimeError> {
+pub fn run(config: &ExporterConfig) -> anyhow::Result<RunResult> {
     check_cancel(config)?;
 
     let options = options_from_export_config(config)?;
@@ -37,7 +37,8 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult, RuntimeError> {
     {
         return Err(RuntimeError::InvalidOptions(
             "media processing failed for all candidate files".to_string(),
-        ));
+        )
+        .into());
     }
 
     let mut messages = sink.log_lines();

@@ -25,7 +25,7 @@ struct ParticipantCell {
 /// Read a conversation CSV written by [`crate::write_conversation_csv`].
 ///
 /// Conversation / export header is taken from the first data row.
-pub fn read_conversation_csv(path: &Path) -> Result<ConversationDocument> {
+pub(crate) fn read_conversation_csv(path: &Path) -> Result<ConversationDocument> {
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
     let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)

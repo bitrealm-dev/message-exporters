@@ -22,8 +22,9 @@ This is the same family of files that [SMS Backup & Restore](https://www.synctec
 
 | Piece | Crate / API |
 |-------|-------------|
-| Codec (write elements, finalize `count`) | [`message-sbr`](../../../crates/message-sbr/) |
-| Common message → SBR mapping + export sink | [`message_ir::FormatSink`](../../../crates/message-ir/) (XML path uses `SbrBackupSession` internally) |
+| XML codec (streaming read/write, SMIL, MMS media) | [`message-sbr`](../../../crates/message-sbr/) |
+| SBR → common message | [`message_ir::read_sbr_documents`](../../../crates/message-ir/src/read_sbr.rs) |
+| Common message → SBR + export sink | [`message_ir::FormatSink`](../../../crates/message-ir/) (XML uses `SbrBackupSession` internally) |
 | CLI / GUI | `--format xml` / `OutputFormat::Xml` |
 
 Exporters use `FormatSink::open` → `write_document` per conversation → `finish`. Do **not** call `write_format(..., Xml, …)` (returns an error — a single shared file cannot be safely rewritten per chat).

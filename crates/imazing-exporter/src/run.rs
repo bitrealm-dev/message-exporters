@@ -11,7 +11,6 @@ use std::path::Path;
 /// Result of [`run`]: convert report plus human-readable log lines.
 #[derive(Debug)]
 pub struct RunResult {
-    pub report: ExportReport,
     pub messages: Vec<String>,
 }
 
@@ -64,11 +63,11 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
         &config.output,
         contacts_path.as_deref(),
     ));
-    Ok(RunResult { report, messages })
+    Ok(RunResult { messages })
 }
 
 /// Format the convert summary the same way the CLI prints it.
-pub fn report_summary_lines(
+fn report_summary_lines(
     report: &ExportReport,
     output: &Path,
     contacts: Option<&Path>,

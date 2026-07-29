@@ -8,20 +8,12 @@ use std::process::{Command, Stdio};
 const PINNED_HINT: &str = "whatsapp-chat-exporter>=0.13";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Platform {
+pub(crate) enum Platform {
     Android,
     Ios,
 }
 
 impl Platform {
-    pub fn parse(s: &str) -> Option<Self> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "android" | "a" => Some(Self::Android),
-            "ios" | "iphone" | "ipad" | "i" => Some(Self::Ios),
-            _ => None,
-        }
-    }
-
     pub fn as_flag(self) -> &'static str {
         match self {
             Self::Android => "-a",
@@ -31,7 +23,7 @@ impl Platform {
 }
 
 #[derive(Debug, Clone)]
-pub struct WtsexporterArgs {
+pub(crate) struct WtsexporterArgs {
     pub platform: Platform,
     /// Search root for relative defaults (`msgstore.db`, `wa.db`, …). Not the process cwd.
     pub input: PathBuf,
@@ -48,7 +40,7 @@ pub struct WtsexporterArgs {
 }
 
 /// Resolve `wtsexporter`: `WTSEXPORTER` → sibling of this exe → `MESSAGE_EXPORTERS_BIN` → `PATH`.
-pub fn resolve_wtsexporter() -> Result<PathBuf> {
+pub(crate) fn resolve_wtsexporter() -> Result<PathBuf> {
     if let Some(explicit) = env::var_os("WTSEXPORTER") {
         let path = PathBuf::from(explicit);
         if path.is_file() {
@@ -110,7 +102,11 @@ pub fn resolve_wtsexporter() -> Result<PathBuf> {
 
 /// Run wtsexporter in `args.work_dir`; write JSON to `json_out`.
 /// Returns stderr+stdout for logging.
-pub fn run_wtsexporter(bin: &Path, args: &WtsexporterArgs, json_out: &Path) -> Result<String> {
+pub(crate) fn run_wtsexporter(
+    bin: &Path,
+    args: &WtsexporterArgs,
+    json_out: &Path,
+) -> Result<String> {
     if !args.work_dir.is_dir() {
         bail!("work dir does not exist: {}", args.work_dir.display());
     }

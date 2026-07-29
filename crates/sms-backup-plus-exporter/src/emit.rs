@@ -30,7 +30,7 @@ fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
 }
 
 #[derive(Debug, Default)]
-pub struct ExportReport {
+pub(crate) struct ExportReport {
     pub conversations: u64,
     pub flat_eml: u64,
     pub archive_eml: u64,
@@ -625,7 +625,7 @@ fn report_progress(verbose: bool, label: &str, processed: u64, total: u64) {
 /// chat + direction + text) so archive and flat copies of the same SMS collapse.
 /// When `cancel` is set, cooperative cancellation is checked during the EML walk
 /// and while merging parse results.
-pub fn convert_export<P: AsRef<Path>>(
+pub(crate) fn convert_export<P: AsRef<Path>>(
     inputs: &[P],
     output_dir: &Path,
     owner_phones: &[String],

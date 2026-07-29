@@ -10,7 +10,7 @@ use imessage_database::{
 use rusqlite::{Connection, Result};
 
 /// Default contacts database path inside an iOS backup.
-pub const DEFAULT_PATH_IOS: &str = "31/31bb7ba8914766d4ba40d6dfb6113c8b614be442";
+pub(crate) const DEFAULT_PATH_IOS: &str = "31/31bb7ba8914766d4ba40d6dfb6113c8b614be442";
 
 /// Minimum digits required to index a phone number.
 const MIN_PHONE_DIGITS: usize = 7;
@@ -18,7 +18,7 @@ const MIN_PHONE_DIGITS: usize = 7;
 // MARK: Name
 #[derive(Clone, Debug, PartialEq, Eq)]
 /// Contact name and the handle IDs it resolved from.
-pub struct Name {
+pub(crate) struct Name {
     /// First name.
     pub first: String,
     /// Last name.
@@ -97,7 +97,7 @@ impl Name {
 // MARK: Index
 #[derive(Debug, Default)]
 /// Contacts index keyed by normalized phone number or email address.
-pub struct ContactsIndex {
+pub(crate) struct ContactsIndex {
     /// Names keyed by normalized identifier.
     index: HashMap<String, Name>,
 }

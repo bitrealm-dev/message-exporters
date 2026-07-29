@@ -1,8 +1,8 @@
 //! Canonical conversation intermediate representation (IR).
 //!
 //! Source exporters parse vendor formats into [`ConversationDocument`], then
-//! project with [`FormatSink`] (or [`write_format`] for a single non-XML
-//! conversation). XML backups use a session inside [`FormatSink`] → `smses.xml`.
+//! project with [`FormatSink`]. XML backups use a session inside
+//! [`FormatSink`] → `smses.xml`.
 //! Reverse projectors (`read_conversation_*`) restore IR for content round-trips.
 //! See the [message-ir architecture](../../../docs/maintainers/architecture/message-ir.md).
 //!
@@ -17,19 +17,22 @@ mod normalize;
 mod read_csv;
 mod read_json;
 mod read_mail;
+mod read_sbr;
+pub mod reexport;
 mod util;
 mod write_sbr;
 
 pub use clean::clean_previous_ir_output;
 pub use export_transforms::ExportTransforms;
 pub use format_sink::{FormatSink, FormatSinkResult};
-pub use normalize::normalize_document_for_compare;
-pub use read_csv::read_conversation_csv;
-pub use read_json::{read_conversation_json, read_conversation_jsonl};
-pub use read_mail::{
-    document_from_mail_messages, read_conversation_eml_dir, read_conversation_mbox,
-};
-pub use write_sbr::SbrBackupSession;
+#[cfg(test)]
+use normalize::normalize_document_for_compare;
+use read_csv::read_conversation_csv;
+use read_json::{read_conversation_json, read_conversation_jsonl};
+use read_mail::{read_conversation_eml_dir, read_conversation_mbox};
+pub use read_sbr::{SbrReadOptions, SbrReadReport, read_sbr_documents};
+#[cfg(test)]
+use write_sbr::SbrBackupSession;
 
 use anyhow::{Context, Result, bail};
 use message_csv::{AttachmentCell, conversation_filename, format_local_ts, json_cell};
@@ -439,7 +442,7 @@ pub fn parse_json_value(s: &str) -> Value {
 ///
 /// For multi-chat exports (including XML `smses.xml`), use [`FormatSink`] instead.
 /// [`OutputFormat::Xml`] returns an error here.
-pub fn write_format(
+fn write_format(
     output_dir: &Path,
     format: OutputFormat,
     doc: &ConversationDocument,
@@ -457,7 +460,7 @@ pub fn write_format(
 }
 
 /// Per-conversation JSON artifact (`<stem>.json`).
-pub fn write_conversation_json(output_dir: &Path, doc: &ConversationDocument) -> Result<PathBuf> {
+fn write_conversation_json(output_dir: &Path, doc: &ConversationDocument) -> Result<PathBuf> {
     fs::create_dir_all(output_dir).with_context(|| format!("create {}", output_dir.display()))?;
     let path = output_dir.join(format!("{}.json", doc.filename_stem()));
     let mut tmp = path.clone();
@@ -476,7 +479,7 @@ pub fn write_conversation_json(output_dir: &Path, doc: &ConversationDocument) ->
 
 /// JSONL header line (schema + export + conversation; no messages).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConversationHeader {
+struct ConversationHeader {
     pub schema_version: u32,
     pub export: ExportMeta,
     pub conversation: ConversationMeta,
@@ -494,7 +497,7 @@ impl ConversationHeader {
 
 /// Per-conversation JSON Lines (`<stem>.jsonl`): header object, then one
 /// [`IrMessage`] per line.
-pub fn write_conversation_jsonl(output_dir: &Path, doc: &ConversationDocument) -> Result<PathBuf> {
+fn write_conversation_jsonl(output_dir: &Path, doc: &ConversationDocument) -> Result<PathBuf> {
     fs::create_dir_all(output_dir).with_context(|| format!("create {}", output_dir.display()))?;
     let path = output_dir.join(format!("{}.jsonl", doc.filename_stem()));
     let mut tmp = path.clone();
@@ -574,7 +577,7 @@ struct ParticipantCell {
 }
 
 /// Per-conversation CSV using the unified [`CSV_HEADERS`] contract.
-pub fn write_conversation_csv(output_dir: &Path, doc: &ConversationDocument) -> Result<PathBuf> {
+fn write_conversation_csv(output_dir: &Path, doc: &ConversationDocument) -> Result<PathBuf> {
     fs::create_dir_all(output_dir).with_context(|| format!("create {}", output_dir.display()))?;
     let filename = conversation_filename(
         doc.conversation.conversation_type.as_str(),
@@ -750,7 +753,7 @@ fn write_conversation_mail(
 }
 
 /// Build [`MailMessage`] list from IR (reads attachment bytes from disk when missing).
-pub fn document_to_mail_messages(
+fn document_to_mail_messages(
     doc: &ConversationDocument,
     output_dir: &Path,
 ) -> Result<Vec<MailMessage>> {
@@ -832,7 +835,7 @@ pub fn document_to_mail_messages(
 }
 
 /// Restore iMessage extension fields from [`IrImessage`] onto a [`MailMessage`].
-pub fn apply_imessage_fields(mail: &mut MailMessage, imessage: &IrImessage) {
+fn apply_imessage_fields(mail: &mut MailMessage, imessage: &IrImessage) {
     mail.is_reply = imessage.is_reply;
     mail.in_reply_to_guid = imessage.in_reply_to_guid.clone();
     mail.thread_originator_part = imessage.thread_originator_part;

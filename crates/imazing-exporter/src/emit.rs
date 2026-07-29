@@ -28,7 +28,7 @@ fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
 }
 
 #[derive(Debug, Default)]
-pub struct ExportReport {
+pub(crate) struct ExportReport {
     pub conversations: u64,
     pub messages: u64,
     pub sent: u64,
@@ -109,7 +109,7 @@ impl TransportFamily {
 /// `timezone`: fixed UTC offset (e.g. `UTC-05:00`). When `None`, use the host local zone.
 /// When `transforms` copies attachments, media files are copied into `output/attachments/`.
 /// When `cancel` is set, cooperative cancellation is checked between CSV files.
-pub fn convert_export(
+pub(crate) fn convert_export(
     input: &Path,
     output: &Path,
     book: &ContactsBook,

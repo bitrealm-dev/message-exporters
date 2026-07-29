@@ -1,4 +1,4 @@
-use go_sms_pro_exporter::convert_export;
+use crate::emit::convert_export;
 use message_contacts::ContactsBook;
 use message_csv::DateRange;
 use message_exporters_core::OutputFormat;

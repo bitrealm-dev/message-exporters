@@ -15,7 +15,7 @@ use crate::exporters::{
 
 const COMMON: &str = "common";
 const MESSAGE_REEXPORT: &str = "message-reexport";
-pub const EXPORT_INI_NAME: &str = "export.ini";
+const EXPORT_INI_NAME: &str = "export.ini";
 
 /// Fields for the Re-export top-level tab (`message-reexporter`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -27,7 +27,7 @@ pub struct ReexportSection {
 
 /// Per-exporter path / type-specific fields kept when switching backup types.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ExporterSection {
+struct ExporterSection {
     pub input: String,
     pub output: String,
     pub owner_emails: String,
@@ -214,7 +214,7 @@ impl ExportIniState {
 }
 
 /// Prefer an existing `export.ini` in cwd, then beside the executable; otherwise cwd.
-pub fn resolve_export_ini_path() -> PathBuf {
+fn resolve_export_ini_path() -> PathBuf {
     if let Ok(dir) = env::current_dir() {
         let candidate = dir.join(EXPORT_INI_NAME);
         if candidate.is_file() {

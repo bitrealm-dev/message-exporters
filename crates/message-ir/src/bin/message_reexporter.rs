@@ -5,8 +5,8 @@ use clap::Parser;
 use message_exporters_core::{
     ExporterConfig, MediaConfig, MessageReexportConfig, ObfuscateConfig, OutputFormat, SourceConfig,
 };
+use message_ir::reexport::run;
 use message_media::{MaxResolution, MediaMode, compress_options_from_cli};
-use message_reexporter::run;
 
 #[derive(Parser, Debug)]
 #[command(name = "message-reexporter")]
@@ -83,8 +83,7 @@ fn main() -> Result<()> {
         output_format,
         source: SourceConfig::MessageReexport(MessageReexportConfig {}),
     };
-    let result = run(&config)?;
-    for line in result.messages {
+    for line in run(&config)?.messages {
         println!("{line}");
     }
     Ok(())

@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
 
 /// Parse sizes like `20M`, `512k`, `100` (bytes).
-pub fn parse_size(raw: &str) -> Result<u64> {
+pub(crate) fn parse_size(raw: &str) -> Result<u64> {
     let s = raw.trim();
     if s.is_empty() {
         bail!("empty size");

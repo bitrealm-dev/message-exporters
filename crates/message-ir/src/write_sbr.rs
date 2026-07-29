@@ -17,7 +17,7 @@ const MMS_ADDR_FROM: &str = "137";
 const MMS_ADDR_TO: &str = "151";
 
 /// Session that appends conversations into a single `{output}/smses.xml`.
-pub struct SbrBackupSession {
+pub(crate) struct SbrBackupSession {
     writer: SbrBackupWriter,
     output_dir: PathBuf,
 }
@@ -35,10 +35,6 @@ impl SbrBackupSession {
             writer: SbrBackupWriter::create(&path)?,
             output_dir: output_dir.to_path_buf(),
         })
-    }
-
-    pub fn path(&self) -> &Path {
-        self.writer.path()
     }
 
     pub fn append_document(&mut self, doc: &ConversationDocument) -> Result<()> {

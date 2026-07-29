@@ -8,15 +8,13 @@
 //!
 //! Requires `ffmpeg` / `ffprobe` on `PATH` for convert/compress.
 
-mod csv_rewrite;
 mod process;
 mod size;
 mod tools;
 
-pub use csv_rewrite::rewrite_attachment_paths;
-pub use process::{MediaReport, process_attachments_dir, process_export_media};
-pub use size::parse_size;
-pub use tools::{ffmpeg_available, require_ffmpeg};
+pub use process::{MediaReport, process_attachments_dir};
+use size::parse_size;
+pub use tools::ffmpeg_available;
 
 use std::fmt;
 use std::str::FromStr;
@@ -143,23 +141,6 @@ pub fn compress_options_from_cli(
         min_size_bytes: parse_size(min_size)?,
         skip_efficient,
     })
-}
-
-/// Emit a short stderr summary after media processing.
-pub fn eprint_report(report: &MediaReport) {
-    if report.processed == 0 && report.skipped == 0 && report.errors.is_empty() {
-        return;
-    }
-    eprintln!(
-        "Media: processed {} file(s), skipped {}, updated {} CSV(s)",
-        report.processed, report.skipped, report.csv_files_updated
-    );
-    for err in report.errors.iter().take(10) {
-        eprintln!("  media warning: {err}");
-    }
-    if report.errors.len() > 10 {
-        eprintln!("  …and {} more", report.errors.len() - 10);
-    }
 }
 
 /// Options applied only when [`MediaMode::Compress`].

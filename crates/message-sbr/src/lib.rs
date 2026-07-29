@@ -3,6 +3,13 @@
 //! Writers produce a single backup file (`smses.xml`) with root
 //! `<smses count="N">`. See the [SMS Backup & Restore XML output](../../../docs/maintainers/formats/sms-backup-restore-xml.md).
 
+mod read;
+
+pub use read::{
+    AttachmentBlob, ConversationKind, ParseStats, Record, SourceFields, infer_owner_phones,
+    parse_file,
+};
+
 use anyhow::{Context, Result};
 use base64::Engine;
 use std::collections::BTreeMap;
@@ -78,10 +85,6 @@ impl SbrBackupWriter {
         self.count
     }
 
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
     pub fn write_message(&mut self, msg: &SbrMessage) -> Result<()> {
         match msg {
             SbrMessage::Sms { attrs } => {
@@ -133,7 +136,7 @@ impl SbrBackupWriter {
 }
 
 /// Escape a value for use inside a double-quoted XML attribute.
-pub fn escape_attr(value: &str) -> String {
+fn escape_attr(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     for ch in value.chars() {
         match ch {
@@ -199,7 +202,7 @@ fn write_mms(
 }
 
 /// Default filename for a full-backup projection.
-pub const DEFAULT_BACKUP_FILENAME: &str = "smses.xml";
+const DEFAULT_BACKUP_FILENAME: &str = "smses.xml";
 
 pub fn default_backup_path(output_dir: &Path) -> PathBuf {
     output_dir.join(DEFAULT_BACKUP_FILENAME)

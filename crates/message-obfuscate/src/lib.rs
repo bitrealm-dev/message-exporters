@@ -16,6 +16,7 @@ use anyhow::{Context, Result, bail};
 use hmac::{Hmac, Mac};
 use rand::RngCore;
 use regex::Regex;
+#[cfg(test)]
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
@@ -529,6 +530,7 @@ pub fn resolve_obfuscator(seed_hex: Option<&str>) -> Result<Obfuscator> {
     Ok(Obfuscator::new(key))
 }
 
+#[cfg(test)]
 const EXPORT_IDENTITY_COLS: &[&str] = &[
     "chat_identifier",
     "group_title",
@@ -544,28 +546,7 @@ const EXPORT_IDENTITY_COLS: &[&str] = &[
     "shared_location",
 ];
 
-/// Obfuscate all `*.csv` in a converter export directory and replace attachments.
-pub fn obfuscate_export_dir(output_dir: &Path, anon: &mut Obfuscator) -> Result<usize> {
-    materialize_placeholders(output_dir)?;
-    let mut count = 0usize;
-    let mut csv_paths: Vec<PathBuf> = fs::read_dir(output_dir)?
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| {
-            p.extension()
-                .and_then(|e| e.to_str())
-                .is_some_and(|e| e.eq_ignore_ascii_case("csv"))
-        })
-        .collect();
-    csv_paths.sort();
-    for path in csv_paths {
-        obfuscate_export_csv_file(&path, &path, anon)?;
-        count += 1;
-    }
-    rename_chat_csv_files(output_dir)?;
-    Ok(count)
-}
-
+#[cfg(test)]
 fn rename_chat_csv_files(output_dir: &Path) -> Result<()> {
     let mut csv_paths: Vec<PathBuf> = fs::read_dir(output_dir)?
         .filter_map(|e| e.ok())
@@ -608,6 +589,7 @@ fn rename_chat_csv_files(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
 fn obfuscate_export_csv_file(input: &Path, output: &Path, anon: &mut Obfuscator) -> Result<()> {
     let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
@@ -634,6 +616,7 @@ fn obfuscate_export_csv_file(input: &Path, output: &Path, anon: &mut Obfuscator)
     Ok(())
 }
 
+#[cfg(test)]
 fn obfuscate_export_record(
     headers: &csv::StringRecord,
     record: &csv::StringRecord,
@@ -690,6 +673,7 @@ fn obfuscate_export_record(
     Ok(out)
 }
 
+#[cfg(test)]
 fn obfuscate_participants_json(raw: &str, anon: &mut Obfuscator) -> String {
     let trimmed = raw.trim();
     if trimmed.is_empty() || trimmed == "null" || trimmed == "[]" {
@@ -717,6 +701,7 @@ fn obfuscate_participants_json(raw: &str, anon: &mut Obfuscator) -> String {
     serde_json::to_string(&value).unwrap_or_else(|_| "[]".into())
 }
 
+#[cfg(test)]
 fn obfuscate_attachments_json(raw: &str) -> String {
     let trimmed = raw.trim();
     if trimmed.is_empty() || trimmed == "null" || trimmed == "[]" {
@@ -1047,7 +1032,9 @@ mod tests {
         fs::write(dir.path().join("attachments/photo.jpg"), b"REAL").unwrap();
 
         let mut anon = Obfuscator::new(key(9));
-        obfuscate_export_dir(dir.path(), &mut anon).unwrap();
+        materialize_placeholders(dir.path()).unwrap();
+        obfuscate_export_csv_file(&csv_path, &csv_path, &mut anon).unwrap();
+        rename_chat_csv_files(dir.path()).unwrap();
 
         assert!(dir.path().join("attachments/placeholder.jpg").is_file());
         assert!(!dir.path().join("attachments/photo.jpg").exists());

@@ -71,7 +71,7 @@ pub fn json_cell(value: &impl Serialize) -> String {
 }
 
 /// Max peer phones included in an untitled group filename stem.
-pub const GROUP_FILENAME_MAX_PHONES: usize = 10;
+const GROUP_FILENAME_MAX_PHONES: usize = 10;
 
 fn sanitize_stem(value: &str) -> String {
     value
@@ -96,17 +96,6 @@ fn is_phone_handle(value: &str) -> bool {
     } else {
         value.chars().all(|c| c.is_ascii_digit())
     }
-}
-
-/// Filesystem-safe chat CSV filename (maps non `[A-Za-z0-9_+-]` to `_`).
-///
-/// Keeps leading `+` so E.164 phones match iMessage-style names
-/// (`+15551212.csv`), not a leading underscore.
-///
-/// Does not apply Plus’s empty/`unknown` stem rule — callers that need that
-/// should build the stem themselves and append `.csv`.
-pub fn safe_filename(chat_id: &str) -> String {
-    format!("{}.csv", sanitize_stem(chat_id))
 }
 
 fn with_suffix(stem: &str, suffix: Option<&str>) -> String {
@@ -177,13 +166,7 @@ pub fn conversation_filename(
 
 #[cfg(test)]
 mod tests {
-    use super::{conversation_filename, safe_filename};
-
-    #[test]
-    fn safe_filename_keeps_plus() {
-        assert_eq!(safe_filename("+15551212"), "+15551212.csv");
-        assert_eq!(safe_filename("Alice/Bob"), "Alice_Bob.csv");
-    }
+    use super::conversation_filename;
 
     #[test]
     fn individual_uses_chat_id() {

@@ -2498,8 +2498,8 @@ dependencies = [
  "imessage-ir-exporter",
  "message-contacts",
  "message-exporters-core",
+ "message-ir",
  "message-media",
- "message-reexporter",
  "open",
  "openextract-exporter",
  "rfd",
@@ -2513,12 +2513,14 @@ name = "message-ir"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
  "csv",
  "message-csv",
  "message-exporters-core",
  "message-mail",
  "message-media",
  "message-obfuscate",
+ "message-phone",
  "message-sbr",
  "serde",
  "serde_json",
@@ -2573,26 +2575,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "message-reexporter"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "csv",
- "message-exporters-core",
- "message-ir",
- "message-media",
- "serde_json",
- "sms-backup-restore-exporter",
- "tempfile",
-]
-
-[[package]]
 name = "message-sbr"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64",
+ "hex",
+ "html-escape",
+ "message-phone",
+ "quick-xml 0.41.0",
+ "regex",
+ "serde",
+ "sha2 0.11.0",
  "tempfile",
 ]
 
@@ -3995,24 +3989,13 @@ name = "sms-backup-restore-exporter"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "base64",
- "chrono",
  "clap",
- "csv",
- "hex",
- "html-escape",
  "message-contacts",
  "message-csv",
  "message-exporters-core",
  "message-ir",
  "message-media",
- "message-obfuscate",
- "message-phone",
- "quick-xml 0.41.0",
- "regex",
- "serde",
  "serde_json",
- "sha2 0.11.0",
  "tempfile",
 ]
 

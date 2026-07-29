@@ -218,9 +218,6 @@ impl fmt::Display for ContactsKind {
     }
 }
 
-pub const CONTACT_KINDS: [ContactsKind; 3] =
-    [ContactsKind::None, ContactsKind::Csv, ContactsKind::Vcf];
-
 /// Attachment media handling for every exporter that can emit media files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AttachmentMedia {

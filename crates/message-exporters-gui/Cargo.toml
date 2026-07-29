@@ -15,9 +15,9 @@ openextract-exporter = { path = "../openextract-exporter", default-features = fa
 sms-backup-plus-exporter = { path = "../sms-backup-plus-exporter", default-features = false }
 sms-backup-restore-exporter = { path = "../sms-backup-restore-exporter", default-features = false }
 whatsapp-exporter = { path = "../whatsapp-exporter", default-features = false }
-message-reexporter = { path = "../message-reexporter", default-features = false }
 message-contacts = { path = "../message-contacts" }
 message-exporters-core = { path = "../message-exporters-core" }
+message-ir = { path = "../message-ir", default-features = false }
 message-media = { path = "../message-media" }
 open = "5"
 rfd = "0.15"

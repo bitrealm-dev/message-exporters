@@ -6,7 +6,7 @@ pub fn ffmpeg_available() -> bool {
     command_ok("ffmpeg", &["-version"]) && command_ok("ffprobe", &["-version"])
 }
 
-pub fn require_ffmpeg() -> Result<()> {
+pub(crate) fn require_ffmpeg() -> Result<()> {
     if ffmpeg_available() {
         Ok(())
     } else {

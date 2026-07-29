@@ -22,14 +22,14 @@ use std::path::{Path, PathBuf};
 const EXPORT_SOURCE: &str = "whatsapp";
 const EXPORT_TOOL: &str = "WhatsApp Chat Exporter";
 /// Pinned documented upstream version (JSON convert path; shell-out may differ).
-pub const EXPORT_TOOL_VERSION: &str = "0.13.0";
+pub(crate) const EXPORT_TOOL_VERSION: &str = "0.13.0";
 
 fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
     message_exporters_core::check_cancel(cancel).map_err(anyhow::Error::msg)
 }
 
 #[derive(Debug, Default)]
-pub struct ExportReport {
+pub(crate) struct ExportReport {
     pub conversations: u64,
     pub messages: u64,
     pub sent: u64,
@@ -78,7 +78,7 @@ struct PendingConversation {
 /// (typically the wtsexporter working directory / process cwd).
 ///
 /// When `cancel` is set, it is checked between chats (cooperative cancellation).
-pub fn convert_json(
+pub(crate) fn convert_json(
     json_path: &Path,
     output: &Path,
     date_range: &DateRange,

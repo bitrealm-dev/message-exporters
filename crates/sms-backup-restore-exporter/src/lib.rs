@@ -1,19 +1,13 @@
 //! SMS Backup & Restore → per-conversation CSV or EML archive exporter.
 //!
-//! Library entrypoints: [`run`] with [`ExporterConfig`] for the full pipeline
-//! (convert + media + obfuscate), or [`convert_export`] for convert-only.
-//! Set [`ExporterConfig::output_format`] to [`OutputFormat::Eml`] for mail
-//! archive folders. The `sms-backup-restore-exporter` binary is a thin CLI over
-//! [`run`] (`--format eml`).
+//! Library entrypoint: [`run`] for the full pipeline. The
+//! `sms-backup-restore-exporter` binary is a thin CLI over it.
 
-pub(crate) mod assets;
-pub(crate) mod emit;
-pub mod run;
-pub(crate) mod smil;
-pub(crate) mod xml;
+mod emit;
+mod run;
 
-pub use emit::{
-    ExportReport, convert_export, infer_owner_phones_from_xml, load_documents_from_xml,
-};
-pub use message_exporters_core::{CancelFlag, ExporterConfig, OutputFormat, is_cancelled};
-pub use run::{RunResult, parse_date_range, report_summary_lines, run};
+pub use run::{RunResult, parse_date_range, run};
+
+#[cfg(test)]
+#[path = "../tests/convert_smoke.rs"]
+mod convert_smoke;

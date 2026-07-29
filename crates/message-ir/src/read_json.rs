@@ -7,7 +7,7 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 /// Read a conversation JSON file written by [`crate::write_conversation_json`].
-pub fn read_conversation_json(path: &Path) -> Result<ConversationDocument> {
+pub(crate) fn read_conversation_json(path: &Path) -> Result<ConversationDocument> {
     let raw = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
     let mut doc: ConversationDocument = serde_json::from_str(&raw)
         .with_context(|| format!("parse ConversationDocument {}", path.display()))?;
@@ -32,7 +32,7 @@ pub fn read_conversation_json(path: &Path) -> Result<ConversationDocument> {
 /// Read a conversation JSONL file written by [`crate::write_conversation_jsonl`].
 ///
 /// Line 1 is a [`ConversationHeader`]; each following line is one [`IrMessage`].
-pub fn read_conversation_jsonl(path: &Path) -> Result<ConversationDocument> {
+pub(crate) fn read_conversation_jsonl(path: &Path) -> Result<ConversationDocument> {
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
     let mut lines = BufReader::new(file).lines();
     let header_line = lines
