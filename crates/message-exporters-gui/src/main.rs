@@ -13,10 +13,9 @@ use imazing_exporter::run as run_imazing;
 use imessage_ir_exporter::run as run_imessage;
 use message_exporters_core::{
     ensure_output_dir, resolve_binary, spawn, spawn_job, AttachmentMedia, ContactsKind,
-    ExportIniState, Exporter, ExporterConfig, Form, MediaConfig, MessageReexportConfig,
-    ObfuscateConfig, ProcessControl, ProcessEvent, SourceConfig, WhatsappPlatform,
-    APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS, OUTPUT_FORMATS_MAIL,
-    WHATSAPP_PLATFORMS,
+    ExportIniState, Exporter, ExporterConfig, Form, ProcessControl, ProcessEvent,
+    WhatsappPlatform, APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS,
+    OUTPUT_FORMATS_MAIL, WHATSAPP_PLATFORMS,
 };
 use message_reexporter::run as run_reexport;
 use openextract_exporter::run as run_openextract;
@@ -104,6 +103,8 @@ struct App {
     exporter: Exporter,
     form: Form,
     export_ini: ExportIniState,
+    /// False after a failed load so normal shutdown does not overwrite the invalid file.
+    auto_save_export_ini: bool,
     /// Per-row owner phone inputs (always at least one). Synced into `form.owner_phones`.
     owner_phone_rows: Vec<String>,
     /// Per-row owner email inputs for SMS Backup+ (always at least one). Synced into `form.owner_emails`.
@@ -124,7 +125,8 @@ struct App {
 
 impl Default for App {
     fn default() -> Self {
-        let (export_ini, form) = ExportIniState::load_or_default();
+        let (export_ini, form, load_error) = ExportIniState::load_or_default();
+        let auto_save_export_ini = load_error.is_none();
         let exporter = export_ini.exporter;
         let owner_phone_rows = rows_from_multiline(&form.owner_phones);
         let owner_email_rows = rows_from_multiline(&form.owner_emails);
@@ -133,6 +135,7 @@ impl Default for App {
             exporter,
             form,
             export_ini,
+            auto_save_export_ini,
             owner_phone_rows,
             owner_email_rows,
             validate_input: String::new(),
@@ -143,7 +146,7 @@ impl Default for App {
             log_text: LOG_PLACEHOLDER.to_string(),
             session_log_name: None,
             session_log_path: None,
-            errors: Vec::new(),
+            errors: load_error.into_iter().collect(),
             rx: None,
         }
     }
@@ -223,97 +226,100 @@ impl App {
     }
 
     fn persist_export_ini(&mut self) {
+        if !self.auto_save_export_ini {
+            return;
+        }
         self.sync_owner_phones();
         self.sync_owner_emails();
         self.export_ini.exporter = self.exporter;
-        if let Err(error) = self.export_ini.save(&self.form) {
-            self.errors = vec![error];
+        self.save_export_ini();
+    }
+
+    fn save_export_ini(&mut self) -> bool {
+        match self.export_ini.save(&self.form) {
+            Ok(()) => {
+                self.auto_save_export_ini = true;
+                true
+            }
+            Err(error) => {
+                self.errors = vec![error];
+                false
+            }
         }
     }
 
     /// Reset the active exporter's form fields and wipe its INI section.
-    fn clear_active_exporter(&mut self) {
+    fn reset_active_exporter(&mut self) {
         self.sync_owner_phones();
         self.sync_owner_emails();
         self.export_ini.exporter = self.exporter;
         self.export_ini.clear_active_section(&mut self.form);
         self.owner_email_rows = rows_from_multiline(&self.form.owner_emails);
         self.errors.clear();
-        if let Err(error) = self.export_ini.save(&self.form) {
+    }
+
+    fn clear_active_exporter(&mut self) {
+        self.reset_active_exporter();
+        self.save_export_ini();
+    }
+
+    fn reset_reexport(&mut self) {
+        self.export_ini.reexport = Default::default();
+        self.errors.clear();
+    }
+
+    fn clear_reexport(&mut self) {
+        self.reset_reexport();
+        self.save_export_ini();
+    }
+
+    fn validate_config(
+        &mut self,
+        result: Result<ExporterConfig, Vec<String>>,
+    ) -> Option<ExporterConfig> {
+        let config = match result {
+            Ok(config) => config,
+            Err(errors) => {
+                self.errors = errors;
+                return None;
+            }
+        };
+        if let Err(error) = ensure_output_dir(&config.output) {
             self.errors = vec![error];
+            return None;
         }
+        Some(config)
+    }
+
+    fn enter_busy_mode(&mut self) {
+        self.errors.clear();
+        self.running = true;
+        self.mode = AppMode::Log;
+    }
+
+    fn start_library_job(&mut self, label: String, job: LibraryJob) {
+        self.begin_session_log();
+        self.enter_busy_mode();
+        let (tx, rx) = mpsc::channel();
+        self.rx = Some(rx);
+        spawn_job(self.control.clone(), tx, label, job);
     }
 
     fn start_reexport(&mut self) {
         if self.running {
             return;
         }
-        let _ = self.export_ini.save(&self.form);
-
-        let mut errors = Vec::new();
-        let input = self.export_ini.reexport.input.trim().to_string();
-        let output = self.export_ini.reexport.output.trim().to_string();
-        if input.is_empty() {
-            errors.push("Input directory is required.".into());
-        } else if !PathBuf::from(&input).is_dir() {
-            errors.push(format!("Input directory does not exist: {input}"));
-        }
-        if output.is_empty() {
-            errors.push("Output directory is required.".into());
-        }
-        if self.form.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available() {
-            errors.push("Convert/Compress require ffmpeg and ffprobe on PATH.".into());
-        }
-        let seed = self.form.obfuscate_seed.trim();
-        let obfuscate_seed = if seed.is_empty() {
-            None
-        } else if seed.len() == 8 && seed.chars().all(|c| c.is_ascii_hexdigit()) {
-            Some(seed.to_string())
-        } else {
-            errors.push("Obfuscate seed must be exactly 8 hex characters.".into());
-            None
-        };
-        let compress = if matches!(
-            self.form.attachment_media,
-            AttachmentMedia::Compress
-        ) {
-            match self.form.compress_options() {
-                Ok(options) => options,
-                Err(error) => {
-                    errors.push(error);
-                    message_media::CompressOptions::default()
-                }
-            }
-        } else {
-            message_media::CompressOptions::default()
-        };
-        if !errors.is_empty() {
-            self.errors = errors;
+        if !self.save_export_ini() {
             return;
         }
 
-        let output_path = PathBuf::from(&output);
-        if let Err(error) = ensure_output_dir(&output_path) {
-            self.errors = vec![error];
+        let result = self.form.to_reexport_config(
+            &self.export_ini.reexport.input,
+            &self.export_ini.reexport.output,
+            self.export_ini.reexport.output_format,
+        );
+        let Some(config) = self.validate_config(result) else {
             return;
-        }
-
-        let config = ExporterConfig {
-            inputs: vec![PathBuf::from(input)],
-            output: output_path,
-            date_range: Default::default(),
-            contacts: None,
-            obfuscate: ObfuscateConfig {
-                enabled: self.form.obfuscate || obfuscate_seed.is_some(),
-                seed: obfuscate_seed,
-            },
-            media: MediaConfig {
-                mode: self.form.attachment_media.media_mode(),
-                compress,
-            },
-            cancel: None,
-            output_format: self.export_ini.reexport.output_format,
-            source: SourceConfig::MessageReexport(MessageReexportConfig {}),
         };
 
         let label = "message-reexporter (library)".to_string();
@@ -322,14 +328,7 @@ impl App {
             config.cancel = Some(cancel);
             run_and_log(run_reexport(&config), tx)
         });
-
-        self.errors.clear();
-        self.running = true;
-        self.begin_session_log();
-        self.mode = AppMode::Log;
-        let (tx, rx) = mpsc::channel();
-        self.rx = Some(rx);
-        spawn_job(self.control.clone(), tx, label, job);
+        self.start_library_job(label, job);
     }
 
     fn start_export(&mut self) {
@@ -339,30 +338,17 @@ impl App {
         self.sync_owner_phones();
         self.sync_owner_emails();
         self.export_ini.exporter = self.exporter;
-        let _ = self.export_ini.save(&self.form);
-        let config = match self.form.to_config(self.exporter) {
-            Ok(config) => config,
-            Err(errors) => {
-                self.errors = errors;
-                return;
-            }
-        };
-        let output = PathBuf::from(self.form.output.trim());
-        if let Err(error) = ensure_output_dir(&output) {
-            self.errors = vec![error];
+        if !self.save_export_ini() {
             return;
         }
+        let result = self.form.to_config(self.exporter);
+        let Some(config) = self.validate_config(result) else {
+            return;
+        };
 
         let label = format!("{} (library)", self.exporter.binary());
         let job = library_job_for_exporter(self.exporter, config);
-
-        self.errors.clear();
-        self.running = true;
-        self.begin_session_log();
-        self.mode = AppMode::Log;
-        let (tx, rx) = mpsc::channel();
-        self.rx = Some(rx);
-        spawn_job(self.control.clone(), tx, label, job);
+        self.start_library_job(label, job);
     }
 
     fn start_validate(&mut self, check_only: bool) {
@@ -419,9 +405,13 @@ impl App {
         }
     }
 
+    fn mode_selectable(&self, mode: AppMode) -> bool {
+        !self.running || mode == AppMode::Log
+    }
+
     fn ui_tabs(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.add_enabled_ui(!self.running, |ui| {
+            ui.add_enabled_ui(self.mode_selectable(AppMode::Export), |ui| {
                 ui.selectable_value(&mut self.mode, AppMode::ValidateContacts, "Contacts");
                 ui.selectable_value(&mut self.mode, AppMode::Export, "Message");
                 ui.selectable_value(&mut self.mode, AppMode::Reexport, "Re-export");
@@ -596,22 +586,7 @@ impl App {
                         PATH_W,
                     );
                 }
-                ui.horizontal(|ui| {
-                    ui.allocate_exact_size(
-                        egui::vec2(LABEL_W, ui.spacing().interact_size.y),
-                        egui::Sense::hover(),
-                    );
-                    if ui
-                        .button(if self.form.advanced {
-                            "▾ Hide advanced options"
-                        } else {
-                            "▸ Show advanced options"
-                        })
-                        .clicked()
-                    {
-                        self.form.advanced = !self.form.advanced;
-                    }
-                });
+                advanced_options_toggle(ui, &mut self.form.advanced);
                 if self.form.advanced {
                     if self.form.whatsapp_platform == WhatsappPlatform::Android {
                         path_or_text(
@@ -639,22 +614,7 @@ impl App {
             }
             Exporter::OpenExtract => {}
             Exporter::Imessage => {
-                ui.horizontal(|ui| {
-                    ui.allocate_exact_size(
-                        egui::vec2(LABEL_W, ui.spacing().interact_size.y),
-                        egui::Sense::hover(),
-                    );
-                    if ui
-                        .button(if self.form.advanced {
-                            "▾ Hide advanced options"
-                        } else {
-                            "▸ Show advanced options"
-                        })
-                        .clicked()
-                    {
-                        self.form.advanced = !self.form.advanced;
-                    }
-                });
+                advanced_options_toggle(ui, &mut self.form.advanced);
                 if self.form.advanced {
                     combo_enum(
                         ui,
@@ -724,19 +684,7 @@ impl App {
             "YYYY-MM-DD (exclusive)",
             PATH_W,
         );
-        ui.horizontal(|ui| {
-            form_label(ui, "Obfuscate");
-            ui.checkbox(&mut self.form.obfuscate, "");
-        });
-        if self.form.obfuscate || !self.form.obfuscate_seed.is_empty() {
-            labeled_text(
-                ui,
-                "Seed (optional)",
-                &mut self.form.obfuscate_seed,
-                "8-hex seed",
-                PATH_W,
-            );
-        }
+        self.ui_obfuscation_options(ui);
         ui.add_space(10.0);
         form_action_row(ui, |ui| {
             let run = form_action_button(ui, "Run exporter", true);
@@ -791,53 +739,34 @@ impl App {
                 ui.add_space(10.0);
                 ui.separator();
                 ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    form_label(ui, "Obfuscate");
-                    ui.checkbox(&mut self.form.obfuscate, "");
-                });
-                if self.form.obfuscate || !self.form.obfuscate_seed.is_empty() {
-                    labeled_text(
-                        ui,
-                        "Seed (optional)",
-                        &mut self.form.obfuscate_seed,
-                        "8-hex seed",
-                        PATH_W,
-                    );
-                }
+                ui.heading(egui::RichText::new("Options").size(16.0));
+                self.ui_obfuscation_options(ui);
                 ui.add_space(10.0);
                 form_action_row(ui, |ui| {
                     let run = form_action_button(ui, "Run re-export", true);
                     if run.clicked() {
                         self.start_reexport();
                     }
-                    let clear = form_action_button(ui, "Clear", true);
+                    let clear = form_action_button(ui, "Clear", true).on_hover_text(format!(
+                        "Clear re-export paths and format from {}",
+                        self.export_ini.path.display()
+                    ));
                     if clear.clicked() {
-                        self.export_ini.reexport = Default::default();
-                        let _ = self.export_ini.save(&self.form);
+                        self.clear_reexport();
                     }
                 });
             });
     }
 
     fn ui_reexport_output_format(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            let width = responsive_field_width(ui, PATH_W, 0);
-            form_label(ui, "Output format");
-            with_field_width(ui, width, |ui| {
-                egui::ComboBox::from_id_salt("reexport_output_format")
-                    .selected_text(self.export_ini.reexport.output_format.to_string())
-                    .width(ui.available_width())
-                    .show_ui(ui, |ui| {
-                        for format in OUTPUT_FORMATS_MAIL {
-                            ui.selectable_value(
-                                &mut self.export_ini.reexport.output_format,
-                                format,
-                                format.to_string(),
-                            );
-                        }
-                    });
-            });
-        });
+        combo_enum_with_id(
+            ui,
+            "Output format",
+            "reexport_output_format",
+            &mut self.export_ini.reexport.output_format,
+            &OUTPUT_FORMATS_MAIL,
+            PATH_W,
+        );
     }
 
     fn ui_backup_source(&mut self, ui: &mut egui::Ui) {
@@ -949,122 +878,28 @@ impl App {
     }
 
     fn ui_owner_phones(&mut self, ui: &mut egui::Ui) {
-        if self.owner_phone_rows.is_empty() {
-            self.owner_phone_rows.push(String::new());
-        }
-        let mut remove_idx = None;
-        let mut add_row = false;
-        let row_count = self.owner_phone_rows.len();
-        for i in 0..row_count {
-            ui.horizontal(|ui| {
-                let width = responsive_field_width(ui, PATH_W, 1);
-                if i == 0 {
-                    let label = required_field_label(ui, "Your phone number(s)");
-                    form_label(ui, label);
-                } else {
-                    ui.allocate_exact_size(
-                        egui::vec2(LABEL_W, ui.spacing().interact_size.y),
-                        egui::Sense::hover(),
-                    );
-                }
-                with_field_width(ui, width, |ui| {
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.owner_phone_rows[i])
-                            .id_salt(("owner_phone", i))
-                            .desired_width(width)
-                            .clip_text(true)
-                            .hint_text("+19995551234"),
-                    );
-                });
-                if i == 0 {
-                    let can_add = row_count < MAX_OWNER_PHONES;
-                    let add = ui
-                        .add_enabled(can_add, egui::Button::new("+"))
-                        .on_hover_text(if can_add {
-                            "Add phone number"
-                        } else {
-                            "Maximum of 10 phone numbers"
-                        });
-                    if add.clicked() {
-                        add_row = true;
-                    }
-                } else if ui
-                    .button("−")
-                    .on_hover_text("Remove phone number")
-                    .clicked()
-                {
-                    remove_idx = Some(i);
-                }
-            });
-        }
-        if add_row && self.owner_phone_rows.len() < MAX_OWNER_PHONES {
-            self.owner_phone_rows.push(String::new());
-        }
-        if let Some(i) = remove_idx {
-            if i > 0 && i < self.owner_phone_rows.len() {
-                self.owner_phone_rows.remove(i);
-            }
-        }
+        required_value_rows(
+            ui,
+            &mut self.owner_phone_rows,
+            "owner_phone",
+            "Your phone number(s)",
+            "+19995551234",
+            "phone number",
+            "phone numbers",
+        );
         self.sync_owner_phones();
     }
 
     fn ui_owner_emails(&mut self, ui: &mut egui::Ui) {
-        if self.owner_email_rows.is_empty() {
-            self.owner_email_rows.push(String::new());
-        }
-        let mut remove_idx = None;
-        let mut add_row = false;
-        let row_count = self.owner_email_rows.len();
-        for i in 0..row_count {
-            ui.horizontal(|ui| {
-                let width = responsive_field_width(ui, PATH_W, 1);
-                if i == 0 {
-                    let label = required_field_label(ui, "Backup email address");
-                    form_label(ui, label);
-                } else {
-                    ui.allocate_exact_size(
-                        egui::vec2(LABEL_W, ui.spacing().interact_size.y),
-                        egui::Sense::hover(),
-                    );
-                }
-                with_field_width(ui, width, |ui| {
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.owner_email_rows[i])
-                            .id_salt(("owner_email", i))
-                            .desired_width(width)
-                            .clip_text(true)
-                            .hint_text("you@example.com"),
-                    );
-                });
-                if i == 0 {
-                    let can_add = row_count < MAX_OWNER_PHONES;
-                    let add = ui
-                        .add_enabled(can_add, egui::Button::new("+"))
-                        .on_hover_text(if can_add {
-                            "Add email address"
-                        } else {
-                            "Maximum of 10 email addresses"
-                        });
-                    if add.clicked() {
-                        add_row = true;
-                    }
-                } else if ui
-                    .button("−")
-                    .on_hover_text("Remove email address")
-                    .clicked()
-                {
-                    remove_idx = Some(i);
-                }
-            });
-        }
-        if add_row && self.owner_email_rows.len() < MAX_OWNER_PHONES {
-            self.owner_email_rows.push(String::new());
-        }
-        if let Some(i) = remove_idx {
-            if i > 0 && i < self.owner_email_rows.len() {
-                self.owner_email_rows.remove(i);
-            }
-        }
+        required_value_rows(
+            ui,
+            &mut self.owner_email_rows,
+            "owner_email",
+            "Backup email address",
+            "you@example.com",
+            "email address",
+            "email addresses",
+        );
         self.sync_owner_emails();
     }
 
@@ -1163,6 +998,22 @@ impl App {
                 );
             }
         });
+    }
+
+    fn ui_obfuscation_options(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            form_label(ui, "Obfuscate");
+            ui.checkbox(&mut self.form.obfuscate, "");
+        });
+        if self.form.obfuscate || !self.form.obfuscate_seed.is_empty() {
+            labeled_text(
+                ui,
+                "Seed (optional)",
+                &mut self.form.obfuscate_seed,
+                "8-hex seed",
+                PATH_W,
+            );
+        }
     }
 
     fn ui_errors(&self, ui: &mut egui::Ui) {
@@ -1409,6 +1260,88 @@ fn form_action_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> egui::Re
     )
 }
 
+fn advanced_options_toggle(ui: &mut egui::Ui, advanced: &mut bool) {
+    form_action_row(ui, |ui| {
+        if ui
+            .button(if *advanced {
+                "▾ Hide advanced options"
+            } else {
+                "▸ Show advanced options"
+            })
+            .clicked()
+        {
+            *advanced = !*advanced;
+        }
+    });
+}
+
+fn required_value_rows(
+    ui: &mut egui::Ui,
+    rows: &mut Vec<String>,
+    id_prefix: &'static str,
+    label: &str,
+    hint: &str,
+    item_name: &str,
+    item_name_plural: &str,
+) {
+    if rows.is_empty() {
+        rows.push(String::new());
+    }
+    let mut remove_idx = None;
+    let mut add_row = false;
+    let row_count = rows.len();
+    for i in 0..row_count {
+        ui.horizontal(|ui| {
+            let width = responsive_field_width(ui, PATH_W, 1);
+            if i == 0 {
+                let label = required_field_label(ui, label);
+                form_label(ui, label);
+            } else {
+                ui.allocate_exact_size(
+                    egui::vec2(LABEL_W, ui.spacing().interact_size.y),
+                    egui::Sense::hover(),
+                );
+            }
+            with_field_width(ui, width, |ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut rows[i])
+                        .id_salt((id_prefix, i))
+                        .desired_width(width)
+                        .clip_text(true)
+                        .hint_text(hint),
+                );
+            });
+            if i == 0 {
+                let can_add = row_count < MAX_OWNER_PHONES;
+                let add = ui
+                    .add_enabled(can_add, egui::Button::new("+"))
+                    .on_hover_text(if can_add {
+                        format!("Add {item_name}")
+                    } else {
+                        format!("Maximum of {MAX_OWNER_PHONES} {item_name_plural}")
+                    });
+                if add.clicked() {
+                    add_row = true;
+                }
+            } else if ui
+                .button("−")
+                .on_hover_text(format!("Remove {item_name}"))
+                .clicked()
+            {
+                remove_idx = Some(i);
+            }
+        });
+    }
+    if add_row && rows.len() < MAX_OWNER_PHONES {
+        rows.push(String::new());
+    }
+    if let Some(i) = remove_idx {
+        if i > 0 && i < rows.len() {
+            rows.remove(i);
+        }
+    }
+}
+
 fn responsive_field_width(ui: &egui::Ui, max_width: f32, trailing_buttons: usize) -> f32 {
     let spacing = ui.spacing().item_spacing.x;
     let trailing_width =
@@ -1581,11 +1514,22 @@ fn combo_enum<T: Copy + PartialEq + std::fmt::Display>(
     options: &[T],
     width: f32,
 ) {
+    combo_enum_with_id(ui, label, label, value, options, width);
+}
+
+fn combo_enum_with_id<T: Copy + PartialEq + std::fmt::Display>(
+    ui: &mut egui::Ui,
+    label: &str,
+    id_salt: &str,
+    value: &mut T,
+    options: &[T],
+    width: f32,
+) {
     ui.horizontal(|ui| {
         let width = responsive_field_width(ui, width, 0);
         form_label(ui, label);
         with_field_width(ui, width, |ui| {
-            egui::ComboBox::from_id_salt(label)
+            egui::ComboBox::from_id_salt(id_salt)
                 .selected_text(value.to_string())
                 .width(width)
                 .show_ui(ui, |ui| {
@@ -1690,3 +1634,94 @@ impl_has_messages!(
     whatsapp_exporter::RunResult,
     message_reexporter::RunResult,
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn busy_mode_selects_log_and_preserves_only_log_navigation() {
+        let mut app = App::default();
+        app.mode = AppMode::Export;
+        app.errors = vec!["old error".into()];
+
+        app.enter_busy_mode();
+
+        assert!(app.running);
+        assert_eq!(app.mode, AppMode::Log);
+        assert!(app.errors.is_empty());
+        assert!(app.mode_selectable(AppMode::Log));
+        assert!(!app.mode_selectable(AppMode::ValidateContacts));
+        assert!(!app.mode_selectable(AppMode::Export));
+        assert!(!app.mode_selectable(AppMode::Reexport));
+    }
+
+    #[test]
+    fn idle_mode_allows_every_tab() {
+        let app = App::default();
+
+        for mode in [
+            AppMode::ValidateContacts,
+            AppMode::Export,
+            AppMode::Reexport,
+            AppMode::Log,
+        ] {
+            assert!(app.mode_selectable(mode));
+        }
+    }
+
+    #[test]
+    fn reset_active_exporter_preserves_shared_options() {
+        let mut app = App::default();
+        app.export_ini
+            .switch_exporter(Exporter::Imazing, &mut app.form);
+        app.exporter = Exporter::Imazing;
+        app.form.input = "/tmp/imazing".into();
+        app.form.output = "/tmp/output".into();
+        app.form.timezone = "UTC-05:00".into();
+        app.form.start_date = "2020-01-01".into();
+        app.form.obfuscate = true;
+
+        app.reset_active_exporter();
+
+        assert!(app.form.input.is_empty());
+        assert!(app.form.output.is_empty());
+        assert!(app.form.timezone.is_empty());
+        assert_eq!(app.form.start_date, "2020-01-01");
+        assert!(app.form.obfuscate);
+    }
+
+    #[test]
+    fn reset_reexport_preserves_shared_options() {
+        let mut app = App::default();
+        app.export_ini.reexport.input = "/tmp/input".into();
+        app.export_ini.reexport.output = "/tmp/output".into();
+        app.form.obfuscate = true;
+
+        app.reset_reexport();
+
+        assert_eq!(app.export_ini.reexport, Default::default());
+        assert!(app.form.obfuscate);
+    }
+
+    #[test]
+    fn shutdown_does_not_overwrite_configuration_after_load_failure() {
+        let path = std::env::temp_dir().join(format!(
+            "message-exporters-invalid-{}-{}.ini",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::write(&path, "[invalid").unwrap();
+        let mut app = App::default();
+        app.export_ini.path = path.clone();
+        app.auto_save_export_ini = false;
+
+        app.persist_export_ini();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "[invalid");
+        let _ = std::fs::remove_file(path);
+    }
+}

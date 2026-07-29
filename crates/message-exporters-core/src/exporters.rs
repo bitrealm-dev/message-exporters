@@ -7,8 +7,8 @@ use message_media::{MaxResolution, MediaMode};
 
 use crate::config::{
     AppleConfig, ContactsConfig, ExporterConfig, GoSmsProConfig, ImazingConfig, MediaConfig,
-    ObfuscateConfig, OpenExtractConfig, OutputFormat, SmsBackupPlusConfig, SmsBackupRestoreConfig,
-    SourceConfig, WhatsappConfig,
+    MessageReexportConfig, ObfuscateConfig, OpenExtractConfig, OutputFormat, SmsBackupPlusConfig,
+    SmsBackupRestoreConfig, SourceConfig, WhatsappConfig,
 };
 
 /// Supported exporters first, then experimental (alphabetical by display name).
@@ -403,12 +403,7 @@ impl Form {
     /// Validate the form and build a typed [`ExporterConfig`] for `exporter`.
     pub fn to_config(&self, exporter: Exporter) -> Result<ExporterConfig, Vec<String>> {
         let mut errors = Vec::new();
-
-        let obfuscate_seed = validate_obfuscate_seed(&self.obfuscate_seed, &mut errors);
-        let obfuscate = ObfuscateConfig {
-            enabled: self.obfuscate,
-            seed: obfuscate_seed,
-        };
+        let obfuscate = self.validate_obfuscate(&mut errors);
 
         let config = match exporter {
             Exporter::Imessage => self.to_imessage_config(obfuscate, &mut errors),
@@ -418,6 +413,37 @@ impl Form {
             Exporter::GoSmsPro => self.to_go_sms_pro_config(obfuscate, &mut errors),
             Exporter::SmsBackupRestore => self.to_sms_restore_config(obfuscate, &mut errors),
             Exporter::SmsBackupPlus => self.to_sms_plus_config(obfuscate, &mut errors),
+        };
+
+        if errors.is_empty() {
+            Ok(config)
+        } else {
+            Err(errors)
+        }
+    }
+
+    /// Validate shared output options and build a message re-export configuration.
+    pub fn to_reexport_config(
+        &self,
+        input: &str,
+        output: &str,
+        output_format: OutputFormat,
+    ) -> Result<ExporterConfig, Vec<String>> {
+        let mut errors = Vec::new();
+        let input = require_existing_directory(input, "Input directory", &mut errors);
+        required_text(output, "Output directory", &mut errors);
+        let obfuscate = self.validate_obfuscate(&mut errors);
+        let media = self.validate_media(&mut errors);
+        let config = ExporterConfig {
+            inputs: input.into_iter().collect(),
+            output: PathBuf::from(output.trim()),
+            date_range: DateRange::default(),
+            contacts: None,
+            obfuscate,
+            media,
+            cancel: None,
+            output_format,
+            source: SourceConfig::MessageReexport(MessageReexportConfig {}),
         };
 
         if errors.is_empty() {
@@ -720,6 +746,14 @@ impl Form {
         self.media_config_for(matches!(mode, MediaMode::Compress), errors)
     }
 
+    fn validate_obfuscate(&self, errors: &mut Vec<String>) -> ObfuscateConfig {
+        let seed = validate_obfuscate_seed(&self.obfuscate_seed, errors);
+        ObfuscateConfig {
+            enabled: self.obfuscate || seed.is_some(),
+            seed,
+        }
+    }
+
     fn media_config_for(&self, validate_compress: bool, errors: &mut Vec<String>) -> MediaConfig {
         let mode = self.attachment_media.media_mode();
         let compress = if validate_compress || matches!(mode, MediaMode::Compress) {
@@ -784,6 +818,24 @@ fn required_text(value: &str, label: &str, errors: &mut Vec<String>) {
     if value.trim().is_empty() {
         errors.push(format!("{label} is required."));
     }
+}
+
+fn require_existing_directory(
+    value: &str,
+    label: &str,
+    errors: &mut Vec<String>,
+) -> Option<PathBuf> {
+    let value = value.trim();
+    if value.is_empty() {
+        errors.push(format!("{label} is required."));
+        return None;
+    }
+    let path = PathBuf::from(value);
+    if !path.is_dir() {
+        errors.push(format!("{label} does not exist: {value}"));
+        return None;
+    }
+    Some(path)
 }
 
 fn validate_obfuscate_seed(seed: &str, errors: &mut Vec<String>) -> Option<String> {
@@ -872,10 +924,10 @@ mod tests {
             input: std::env::current_dir().unwrap().display().to_string(),
             output: "out".into(),
             obfuscate_seed: "01234567".into(),
-            obfuscate: true,
             ..Form::default()
         };
         let config = form.to_config(Exporter::OpenExtract).unwrap();
+        assert!(config.obfuscate.enabled);
         assert_eq!(config.obfuscate.seed.as_deref(), Some("01234567"));
     }
 
@@ -1101,5 +1153,48 @@ mod tests {
         ensure_output_dir(&out).unwrap();
         assert!(out.is_dir());
         let _ = fs::remove_dir_all(&out);
+    }
+
+    #[test]
+    fn reexport_config_uses_shared_output_validation() {
+        let input = tempfile::tempdir().unwrap();
+        let form = Form {
+            obfuscate_seed: "01234567".into(),
+            attachment_media: AttachmentMedia::Disabled,
+            ..Form::default()
+        };
+
+        let config = form
+            .to_reexport_config(
+                input.path().to_str().unwrap(),
+                "out",
+                OutputFormat::Json,
+            )
+            .unwrap();
+
+        assert_eq!(config.inputs, vec![input.path().to_path_buf()]);
+        assert!(config.obfuscate.enabled);
+        assert_eq!(config.obfuscate.seed.as_deref(), Some("01234567"));
+        assert!(matches!(
+            config.source,
+            SourceConfig::MessageReexport(_)
+        ));
+    }
+
+    #[test]
+    fn reexport_config_reports_paths_and_shared_options_together() {
+        let form = Form {
+            obfuscate_seed: "invalid".into(),
+            attachment_media: AttachmentMedia::Disabled,
+            ..Form::default()
+        };
+
+        let errors = form
+            .to_reexport_config("", "", OutputFormat::Json)
+            .unwrap_err();
+
+        assert!(errors.iter().any(|error| error.contains("Input directory")));
+        assert!(errors.iter().any(|error| error.contains("Output directory")));
+        assert!(errors.iter().any(|error| error.contains("Obfuscate seed")));
     }
 }

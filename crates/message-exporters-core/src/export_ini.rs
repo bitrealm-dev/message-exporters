@@ -63,23 +63,36 @@ impl ExportIniState {
         &self.sections[exporter_index(exporter)]
     }
 
-    /// Resolve path, load if present, otherwise empty defaults at the preferred path.
-    pub fn load_or_default() -> (Self, Form) {
+    /// Resolve the preferred path, loading it when present and preserving any load error.
+    pub fn load_or_default() -> (Self, Form, Option<String>) {
         let path = resolve_export_ini_path();
-        match Self::load(&path) {
-            Ok((state, form)) => (state, form),
-            Err(_) => {
-                let state = Self {
-                    path,
-                    exporter: Exporter::default(),
-                    sections: Default::default(),
-                    reexport: ReexportSection::default(),
-                };
-                let mut form = Form::default();
-                state.apply_section_to_form(&mut form);
-                (state, form)
+        Self::load_or_default_at(path)
+    }
+
+    fn load_or_default_at(path: PathBuf) -> (Self, Form, Option<String>) {
+        if path.is_file() {
+            match Self::load(&path) {
+                Ok((state, form)) => return (state, form, None),
+                Err(error) => {
+                    let (state, form) = Self::defaults_at(path);
+                    return (state, form, Some(error));
+                }
             }
         }
+        let (state, form) = Self::defaults_at(path);
+        (state, form, None)
+    }
+
+    fn defaults_at(path: PathBuf) -> (Self, Form) {
+        let state = Self {
+            path,
+            exporter: Exporter::default(),
+            sections: Default::default(),
+            reexport: ReexportSection::default(),
+        };
+        let mut form = Form::default();
+        state.apply_section_to_form(&mut form);
+        (state, form)
     }
 
     pub fn load(path: &Path) -> Result<(Self, Form), String> {
@@ -516,5 +529,34 @@ apple_platform = ios
         assert_eq!(form.db_path, "/Users/me/chat.db");
         assert!(form.input.is_empty());
         assert_eq!(form.apple_platform, ApplePlatform::Ios);
+    }
+
+    #[test]
+    fn load_or_default_reports_invalid_existing_file() {
+        let mut file = NamedTempFile::new().unwrap();
+        write!(file, "[invalid").unwrap();
+
+        let (state, form, error) =
+            ExportIniState::load_or_default_at(file.path().to_path_buf());
+
+        assert_eq!(state.path, file.path());
+        assert_eq!(state.exporter, Exporter::default());
+        assert!(form.input.is_empty());
+        assert!(form.output.is_empty());
+        assert!(error.is_some_and(|message| message.contains("Could not parse")));
+    }
+
+    #[test]
+    fn load_or_default_accepts_missing_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join(EXPORT_INI_NAME);
+
+        let (state, form, error) = ExportIniState::load_or_default_at(path.clone());
+
+        assert_eq!(state.path, path);
+        assert_eq!(state.exporter, Exporter::default());
+        assert!(form.input.is_empty());
+        assert!(form.output.is_empty());
+        assert!(error.is_none());
     }
 }
