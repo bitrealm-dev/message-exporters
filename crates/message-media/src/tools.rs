@@ -1,9 +1,11 @@
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 
 use anyhow::{Result, bail};
 
 pub fn ffmpeg_available() -> bool {
-    command_ok("ffmpeg", &["-version"]) && command_ok("ffprobe", &["-version"])
+    resolve_tool("ffmpeg").is_some() && resolve_tool("ffprobe").is_some()
 }
 
 pub(crate) fn require_ffmpeg() -> Result<()> {
@@ -12,12 +14,13 @@ pub(crate) fn require_ffmpeg() -> Result<()> {
     } else {
         bail!(
             "ffmpeg and ffprobe are required for --media-mode convert/compress. \
-             Install ffmpeg and ensure both are on PATH."
+             Keep the release-bundled tools beside this program, install ffmpeg on PATH, \
+             or set MESSAGE_EXPORTERS_BIN to a directory that contains both."
         )
     }
 }
 
-fn command_ok(bin: &str, args: &[&str]) -> bool {
+fn command_ok(bin: &Path, args: &[&str]) -> bool {
     Command::new(bin)
         .args(args)
         .stdin(Stdio::null())
@@ -28,8 +31,70 @@ fn command_ok(bin: &str, args: &[&str]) -> bool {
         .unwrap_or(false)
 }
 
+/// Resolve `ffmpeg` / `ffprobe`: sibling of current exe, then `MESSAGE_EXPORTERS_BIN`, then PATH.
+fn resolve_tool(name: &str) -> Option<PathBuf> {
+    static FFMPEG: OnceLock<Option<PathBuf>> = OnceLock::new();
+    static FFPROBE: OnceLock<Option<PathBuf>> = OnceLock::new();
+    let cache = match name {
+        "ffmpeg" => &FFMPEG,
+        "ffprobe" => &FFPROBE,
+        _ => return find_tool(name),
+    };
+    cache.get_or_init(|| find_tool(name)).clone()
+}
+
+fn find_tool(name: &str) -> Option<PathBuf> {
+    let executable = executable_name(name);
+
+    if let Ok(current) = std::env::current_exe()
+        && let Some(dir) = current.parent()
+    {
+        let sibling = dir.join(&executable);
+        if sibling.is_file() && command_ok(&sibling, &["-version"]) {
+            return Some(sibling);
+        }
+    }
+
+    if let Some(extra) = std::env::var_os("MESSAGE_EXPORTERS_BIN") {
+        let candidate = PathBuf::from(extra).join(&executable);
+        if candidate.is_file() && command_ok(&candidate, &["-version"]) {
+            return Some(candidate);
+        }
+    }
+
+    if let Some(paths) = std::env::var_os("PATH") {
+        for directory in std::env::split_paths(&paths) {
+            let candidate = directory.join(&executable);
+            if candidate.is_file() && command_ok(&candidate, &["-version"]) {
+                return Some(candidate);
+            }
+        }
+    }
+
+    // Last resort: bare name (PATH lookup by the OS / shell semantics).
+    let bare = PathBuf::from(&executable);
+    if command_ok(&bare, &["-version"]) {
+        return Some(bare);
+    }
+
+    None
+}
+
+fn executable_name(name: &str) -> String {
+    if cfg!(windows) && !name.ends_with(".exe") {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    }
+}
+
 pub(crate) fn run_ffmpeg(args: &[String]) -> Result<()> {
-    let status = Command::new("ffmpeg")
+    let ffmpeg = resolve_tool("ffmpeg").ok_or_else(|| {
+        anyhow::anyhow!(
+            "ffmpeg not found beside this program, in MESSAGE_EXPORTERS_BIN, or on PATH"
+        )
+    })?;
+    let status = Command::new(ffmpeg)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -51,7 +116,12 @@ pub(crate) struct Probe {
 }
 
 pub(crate) fn probe_video(path: &std::path::Path) -> Result<Probe> {
-    let output = Command::new("ffprobe")
+    let ffprobe = resolve_tool("ffprobe").ok_or_else(|| {
+        anyhow::anyhow!(
+            "ffprobe not found beside this program, in MESSAGE_EXPORTERS_BIN, or on PATH"
+        )
+    })?;
+    let output = Command::new(ffprobe)
         .args([
             "-v",
             "error",
@@ -80,4 +150,42 @@ pub(crate) fn probe_video(path: &std::path::Path) -> Result<Probe> {
         height,
         bitrate,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn executable_name_matches_platform() {
+        let name = executable_name("ffmpeg");
+        if cfg!(windows) {
+            assert_eq!(name, "ffmpeg.exe");
+        } else {
+            assert_eq!(name, "ffmpeg");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn find_tool_prefers_message_exporters_bin() {
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("ffmpeg");
+        fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
+        let mut perms = fs::metadata(&script).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&script, perms).unwrap();
+
+        // SAFETY: test-only env mutation for discovery path coverage.
+        unsafe {
+            std::env::set_var("MESSAGE_EXPORTERS_BIN", dir.path());
+        }
+        let found = find_tool("ffmpeg").expect("ffmpeg from MESSAGE_EXPORTERS_BIN");
+        assert_eq!(found, script);
+        unsafe {
+            std::env::remove_var("MESSAGE_EXPORTERS_BIN");
+        }
+    }
 }

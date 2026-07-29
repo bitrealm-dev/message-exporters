@@ -19,7 +19,7 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 - Top tab panel: **Contacts** (default) | **Message** | **Re-export** | **Vault** | **Log**.
 - Typed UI `Form` plus shared `ExporterConfig` / `SourceConfig` in `message-exporters-core` (`Form::to_config`).
 - Native file/folder dialogs through `rfd`.
-- Export converters are linked libraries (no sibling exporter binaries required for convert). `contacts-validate` and WhatsApp’s `wtsexporter` still resolve beside the GUI, via `MESSAGE_EXPORTERS_BIN`, or on `PATH`.
+- Export converters are linked libraries (no sibling exporter binaries required for convert). `contacts-validate`, WhatsApp’s `wtsexporter`, and media tools `ffmpeg` / `ffprobe` still resolve beside the GUI, via `MESSAGE_EXPORTERS_BIN`, or on `PATH`.
 - Live tagged log and cooperative cancellation (mpsc poll in `update`).
 - Exporter-specific validation before launch (`Form::to_config`), then in-process `run(&ExporterConfig)`.
 - Backup-source titles link to the upstream product site.

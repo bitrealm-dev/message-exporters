@@ -1,4 +1,4 @@
-# Manually cut a semantic-versioned GitHub Release with OS binaries.
+# Manually cut a semantic-versioned GitHub Release with platform ZIP archives.
 # Does not run on push/PR — only via Actions → Release → Run workflow.
 name: Release
 
@@ -61,59 +61,20 @@ jobs:
           cargo build --release -p message-ir --bin message-reexporter --features cli
           cargo build --release -p vault-push --features cli
 
-      - name: Stage named binaries
+      - name: Package platform ZIP
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist
-          EXT='${{ matrix.ext }}'
-          SUFFIX='${{ matrix.artifact_suffix }}'
-          for bin in \
-            go-sms-pro-exporter \
-            sms-backup-restore-exporter \
-            sms-backup-plus-exporter \
-            openextract-exporter \
-            imazing-exporter \
-            imessage-ir-exporter \
-            whatsapp-exporter \
-            message-reexporter \
-            vault-push
-          do
-            src="target/release/${bin}${EXT}"
-            dst="dist/${bin}-${SUFFIX}${EXT}"
-            cp "$src" "$dst"
-          done
-
-          # Bundle KnugiHK wtsexporter next to whatsapp-exporter (no Python required).
-          WTSEXPORTER_VERSION=0.13.0
-          case '${{ matrix.artifact_suffix }}' in
-            x86_64-unknown-linux-gnu)
-              WTS_ASSET="wtsexporter_linux_x64"
-              WTS_OUT="wtsexporter"
-              ;;
-            aarch64-apple-darwin)
-              WTS_ASSET="wtsexporter_macos_arm64"
-              WTS_OUT="wtsexporter"
-              ;;
-            x86_64-pc-windows-msvc)
-              WTS_ASSET="wtsexporter_win_x64.exe"
-              WTS_OUT="wtsexporter.exe"
-              ;;
-            *)
-              echo "No wtsexporter asset mapping for ${{ matrix.artifact_suffix }}"
-              exit 1
-              ;;
-          esac
-          curl -fsSL -o "dist/${WTS_OUT}" \
-            "https://github.com/KnugiHK/WhatsApp-Chat-Exporter/releases/download/${WTSEXPORTER_VERSION}/${WTS_ASSET}"
-          chmod +x "dist/${WTS_OUT}" || true
-
-          ls -la dist
+          chmod +x scripts/package-release.sh
+          scripts/package-release.sh \
+            '${{ needs.validate.outputs.version }}' \
+            '${{ matrix.artifact_suffix }}' \
+            '${{ matrix.ext }}'
 
       - uses: actions/upload-artifact@v4
         with:
-          name: binaries-${{ matrix.artifact_suffix }}
-          path: dist/*
+          name: package-${{ matrix.artifact_suffix }}
+          path: dist/message-exporters-${{ needs.validate.outputs.version }}-${{ matrix.artifact_suffix }}.zip
           if-no-files-found: error
 
   release:
@@ -126,7 +87,7 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-          pattern: binaries-*
+          pattern: package-*
 
       - name: Create GitHub Release
         env:
@@ -136,10 +97,25 @@ jobs:
         run: |
           set -euo pipefail
           ls -la dist
-          gh release create "$TAG" dist/* \
+          gh release create "$TAG" dist/*.zip \
             --title "message-exporters ${VERSION}" \
-            --notes "Release ${VERSION} of the message-exporters converters.
+            --notes "Release ${VERSION} of Message Exporters.
 
-          Binaries for Linux (x86_64-unknown-linux-gnu), Windows (x86_64-pc-windows-msvc), and macOS Apple Silicon (aarch64-apple-darwin).
+          Download the ZIP for your platform, extract the whole archive into one folder, and keep every file together. Start the desktop app:
 
-          Tools: go-sms-pro-exporter, sms-backup-restore-exporter, sms-backup-plus-exporter, openextract-exporter, imazing-exporter, imessage-ir-exporter, whatsapp-exporter (includes wtsexporter 0.13.0), message-reexporter."
+          - Linux: \`message-exporters-gui\`
+          - Windows: \`message-exporters-gui.exe\`
+          - macOS Apple Silicon: \`message-exporters-gui\`
+
+          ### Archives
+
+          - \`message-exporters-${VERSION}-x86_64-unknown-linux-gnu.zip\`
+          - \`message-exporters-${VERSION}-x86_64-pc-windows-msvc.zip\`
+          - \`message-exporters-${VERSION}-aarch64-apple-darwin.zip\`
+
+          Each archive includes the GUI, exporter CLIs, \`message-reexporter\`, \`vault-push\`, \`contacts-validate\`, \`imazing-obfuscate\`, WhatsApp \`wtsexporter\` 0.13.0, and bundled \`ffmpeg\` / \`ffprobe\` (eugeneware/ffmpeg-static \`b6.1.1\`) for Convert / Convert & compress.
+
+          ### Notes
+
+          - Builds are unsigned. Windows SmartScreen and macOS Gatekeeper may warn on first launch; allow the app once if you trust the download.
+          - See \`THIRD_PARTY_NOTICES.md\` in each archive for bundled helper provenance and licenses."

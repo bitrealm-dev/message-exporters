@@ -4,9 +4,11 @@ End-user documentation lives in the [Starlight source](../src/content/docs/) (st
 
 ## Cutting a release
 
-Prebuilt binaries are published only by a **manual** GitHub Actions workflow. Nothing builds or releases on push, PR, or tag by default.
+Prebuilt archives are published only by a **manual** GitHub Actions workflow. Nothing builds or releases on push, PR, or tag by default.
 
 Workflow file: [`.github/workflows/release.yml`](../../.github/workflows/release.yml)
+
+Packaging script: [`scripts/package-release.sh`](../../scripts/package-release.sh)
 
 ### Steps
 
@@ -14,15 +16,29 @@ Workflow file: [`.github/workflows/release.yml`](../../.github/workflows/release
 2. Open [Actions → Release](https://github.com/bitrealm-dev/message-exporters/actions/workflows/release.yml).
 3. Click **Run workflow**.
 4. Choose the branch to build from (usually `main`).
-5. Enter a semantic version **without** a leading `v`, for example `0.1.0`.
+5. Enter a semantic version **without** a leading `v`, for example `0.3.0`.
 6. Wait for all three OS jobs (Linux, Windows, macOS) to finish and for the release job to create the GitHub Release.
-7. Confirm the release at [Releases](https://github.com/bitrealm-dev/message-exporters/releases). The tag will be `v` plus your version (`0.1.0` → `v0.1.0`).
+7. Confirm the release at [Releases](https://github.com/bitrealm-dev/message-exporters/releases). The tag will be `v` plus your version (`0.3.0` → `v0.3.0`).
 
 You need write access to the repository (to run workflows that create releases and tags).
 
 ### What gets published
 
-For each platform, these binaries are attached to the release (standalone CLIs; the GUI links the exporter crates as libraries and does not need sibling exporter binaries for convert):
+Exactly **three** ZIP assets (no loose individual executables):
+
+| Archive | Runner |
+|---------|--------|
+| `message-exporters-<version>-x86_64-unknown-linux-gnu.zip` | `ubuntu-latest` |
+| `message-exporters-<version>-x86_64-pc-windows-msvc.zip` | `windows-latest` |
+| `message-exporters-<version>-aarch64-apple-darwin.zip` | `macos-latest` (Apple Silicon) |
+
+Each ZIP is a flat folder (executables at the archive root) containing:
+
+**Desktop app**
+
+- `message-exporters-gui` (`.exe` on Windows)
+
+**Exporter / utility CLIs**
 
 - `go-sms-pro-exporter`
 - `sms-backup-restore-exporter`
@@ -31,16 +47,34 @@ For each platform, these binaries are attached to the release (standalone CLIs; 
 - `imazing-exporter`
 - `imessage-ir-exporter`
 - `whatsapp-exporter`
-- `message-reexporter` (built from package `message-ir`)
-- `wtsexporter` / `wtsexporter.exe` (KnugiHK 0.13.0, still required beside the GUI for WhatsApp extract)
+- `message-reexporter` (package `message-ir`, `--features cli`)
+- `vault-push`
+- `contacts-validate`
+- `imazing-obfuscate`
 
-| Platform | Runner | Asset name suffix |
-|----------|--------|-------------------|
-| Linux | `ubuntu-latest` | `x86_64-unknown-linux-gnu` |
-| Windows | `windows-latest` | `x86_64-pc-windows-msvc` (`.exe`) |
-| macOS | `macos-latest` | `aarch64-apple-darwin` (Apple Silicon) |
+**Bundled third-party helpers** (pinned + SHA-256 checked in `scripts/package-release.sh`)
 
-Example asset: `go-sms-pro-exporter-x86_64-unknown-linux-gnu`.
+- `wtsexporter` / `wtsexporter.exe` — KnugiHK WhatsApp-Chat-Exporter `0.13.0`
+- `ffmpeg` / `ffprobe` — eugeneware/ffmpeg-static `b6.1.1` (binaries report FFmpeg `7.0.2-static`)
+
+**Notices**
+
+- `LICENSE`
+- `THIRD_PARTY_NOTICES.md`
+- `THIRD_PARTY_WTSEXPORTER.LICENSE`
+- `THIRD_PARTY_FFMPEG.LICENSE`
+
+The GUI links exporter crates as libraries for convert, but still needs sibling helpers for Contacts validation, WhatsApp extract, and media convert/compress. Keep every file from the ZIP together.
+
+### Local packaging smoke test
+
+```bash
+cargo build --workspace --release
+cargo build --release -p message-ir --bin message-reexporter --features cli
+cargo build --release -p vault-push --features cli
+scripts/package-release.sh 0.0.0-dev x86_64-unknown-linux-gnu
+unzip -l dist/message-exporters-0.0.0-dev-x86_64-unknown-linux-gnu.zip
+```
 
 Re-running the workflow with a version that already has a tag/release will fail at `gh release create`. Bump the version or delete the old release/tag first if you intentionally want to replace it.
 

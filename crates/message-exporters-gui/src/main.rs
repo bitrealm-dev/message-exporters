@@ -1101,7 +1101,7 @@ impl App {
             if self.form.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available() {
                 ui.colored_label(
                     egui::Color32::from_rgb(180, 50, 50),
-                    "Convert/Compress need ffmpeg and ffprobe on PATH.",
+                    "Convert/Compress need ffmpeg and ffprobe beside the app, in MESSAGE_EXPORTERS_BIN, or on PATH.",
                 );
             }
             if self.form.attachment_media == AttachmentMedia::Compress {

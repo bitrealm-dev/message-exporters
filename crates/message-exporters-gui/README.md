@@ -20,7 +20,7 @@ cargo build --workspace --release
 
 On Windows the final command is `target\release\message-exporters-gui.exe`.
 
-The GUI searches for helper binaries (`contacts-validate`, `wtsexporter`) beside its own executable, then in `MESSAGE_EXPORTERS_BIN`, then on `PATH`.
+The GUI searches for helper binaries (`contacts-validate`, `wtsexporter`, `ffmpeg`, `ffprobe`) beside its own executable, then in `MESSAGE_EXPORTERS_BIN`, then on `PATH`. Release ZIPs ship those helpers next to the app.
 
 ## Included
 

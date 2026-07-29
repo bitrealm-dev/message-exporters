@@ -9,9 +9,9 @@ use message_ir::{
     ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, IrConversationType,
     IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION,
 };
-use vault_push::{VaultPushConfig, authenticate, run};
 use serde_json::json;
 use tempfile::tempdir;
+use vault_push::{VaultPushConfig, authenticate, run};
 
 fn sample_doc() -> ConversationDocument {
     ConversationDocument {

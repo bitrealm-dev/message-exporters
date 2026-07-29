@@ -460,7 +460,9 @@ impl Form {
     ) -> ExporterConfig {
         required_text(&self.output, "Output directory", errors);
         if self.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available() {
-            errors.push("Convert/Compress require ffmpeg and ffprobe on PATH.".into());
+            errors.push(
+                "Convert/Compress require ffmpeg and ffprobe beside the program, in MESSAGE_EXPORTERS_BIN, or on PATH.".into(),
+            );
         }
         let media = self.media_config_for(
             matches!(self.attachment_media, AttachmentMedia::Compress),
@@ -737,7 +739,9 @@ impl Form {
     fn validate_media(&self, errors: &mut Vec<String>) -> MediaConfig {
         let mode = self.attachment_media.media_mode();
         if mode.needs_tools() && !message_media::ffmpeg_available() {
-            errors.push("Convert/Compress require ffmpeg and ffprobe on PATH.".into());
+            errors.push(
+                "Convert/Compress require ffmpeg and ffprobe beside the program, in MESSAGE_EXPORTERS_BIN, or on PATH.".into(),
+            );
         }
         self.media_config_for(matches!(mode, MediaMode::Compress), errors)
     }

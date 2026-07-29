@@ -34,3 +34,6 @@ config/export-to-vault.sh
 /docs/node_modules/
 /docs/src/content/docs/reference/cli/*.md
 !/docs/src/content/docs/reference/cli/index.md
+
+# Local release packaging output
+/dist/

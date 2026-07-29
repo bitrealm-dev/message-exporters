@@ -13,18 +13,18 @@ Open the [latest GitHub release](https://github.com/bitrealm-dev/message-exporte
 
 <Tabs>
   <TabItem label="Linux">
-    1. Download the archive whose name ends in `x86_64-unknown-linux-gnu`.
+    1. Download `message-exporters-*-x86_64-unknown-linux-gnu.zip`.
     2. Extract it to a folder you plan to keep.
     3. Run `message-exporters-gui` from that folder.
   </TabItem>
   <TabItem label="Windows">
-    1. Download the archive whose name ends in `x86_64-pc-windows-msvc`.
+    1. Download `message-exporters-*-x86_64-pc-windows-msvc.zip`.
     2. Extract the archive instead of running the app from inside it.
     3. Open the extracted folder and start `message-exporters-gui.exe`.
     4. If SmartScreen blocks the unsigned app, choose the option to allow it once, then start it again.
   </TabItem>
   <TabItem label="macOS">
-    1. On an Apple Silicon Mac, download the archive whose name ends in `aarch64-apple-darwin`.
+    1. On an Apple Silicon Mac, download `message-exporters-*-aarch64-apple-darwin.zip`.
     2. Extract it to a folder you plan to keep.
     3. Start `message-exporters-gui` from that folder.
     4. If Gatekeeper blocks the unsigned app, allow it once in the macOS security prompt, then start it again.
@@ -33,19 +33,19 @@ Open the [latest GitHub release](https://github.com/bitrealm-dev/message-exporte
 
 ## Keep the helper programs with the app
 
-Do not move the desktop app away from the other files in the release folder.
+Do not move the desktop app away from the other files in the release folder. Each platform ZIP already includes:
 
-- `contacts-validate` powers **Check** and **Update** on the Contacts tab.
-- `wtsexporter` extracts WhatsApp data before Message Exporters converts it.
+- exporter CLIs and `message-reexporter`
+- `vault-push` for Message Vault import
+- `contacts-validate` for **Check** and **Update** on the Contacts tab
+- `wtsexporter` for WhatsApp extraction
+- `ffmpeg` and `ffprobe` for **Convert** and **Convert & compress**
+- `imazing-obfuscate` for rewriting iMazing vendor CSV offline
 
 The app first looks for helpers beside its own executable. It can also find them in the directory named by `MESSAGE_EXPORTERS_BIN` or on `PATH`. To point directly to the WhatsApp helper, set `WTSEXPORTER` to its full path.
 
-<Aside type="note" title="WhatsApp helper">
-  Keep `wtsexporter` or `wtsexporter.exe` beside the desktop app. Release downloads provide it separately when it is not inside the main archive.
+<Aside type="note" title="Bundled media tools">
+  Release ZIPs ship `ffmpeg` and `ffprobe` next to the desktop app. You do not need a separate system install for Convert / Convert & compress when you keep the archive files together.
 </Aside>
-
-## Install ffmpeg only when you need it
-
-The **Convert** and **Convert & compress** attachment modes require both `ffmpeg` and `ffprobe` on `PATH`. Plain copying does not require them. Install a current ffmpeg build for your operating system before selecting either conversion mode.
 
 When the app opens, continue with [Make your first export](/get-started/first-export/).

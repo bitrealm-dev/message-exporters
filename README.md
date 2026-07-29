@@ -22,7 +22,7 @@ Source Markdown lives in [`docs/src/content/docs/`](docs/src/content/docs/) and 
 
 ## Quick start
 
-**Desktop app / binaries:** Download the latest [Release](https://github.com/bitrealm-dev/message-exporters/releases). Keep every tool from the zip in the same folder. Run `message-exporters-gui`.
+**Desktop app / binaries:** Download the platform ZIP from the latest [Release](https://github.com/bitrealm-dev/message-exporters/releases). Extract it and keep every file in the same folder. Run `message-exporters-gui`.
 
 **From source:**
 
@@ -47,7 +47,7 @@ Import into Message Vault with the GUI **Vault** tab or the [`vault-push`](crate
 
 ## Releases
 
-Prebuilt Linux, Windows, and macOS binaries: [Releases](https://github.com/bitrealm-dev/message-exporters/releases).
+Prebuilt Linux, Windows, and macOS Apple Silicon ZIPs (GUI + CLIs + helpers): [Releases](https://github.com/bitrealm-dev/message-exporters/releases).
 
 Maintainer documentation: [`docs/maintainers/`](docs/maintainers/README.md). Release steps: [Development and releases](docs/maintainers/developing.md).
 

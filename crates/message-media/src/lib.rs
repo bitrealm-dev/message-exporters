@@ -6,7 +6,8 @@
 //! - **Convert** — standardize images→`.jpg`, videos→`.mp4`, audio→`.mp3`
 //! - **Compress** — size-oriented re-encode with optional video knobs
 //!
-//! Requires `ffmpeg` / `ffprobe` on `PATH` for convert/compress.
+//! Requires `ffmpeg` / `ffprobe` for convert/compress (beside the running
+//! binary, in `MESSAGE_EXPORTERS_BIN`, or on `PATH`).
 
 mod process;
 mod size;
