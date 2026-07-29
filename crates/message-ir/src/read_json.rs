@@ -1,7 +1,7 @@
 //! Reverse projectors: JSON / JSONL → [`ConversationDocument`].
 
 use crate::{ConversationDocument, ConversationHeader, IrMessage, SCHEMA_VERSION};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -52,7 +52,8 @@ pub fn read_conversation_jsonl(path: &Path) -> Result<ConversationDocument> {
 
     let mut messages = Vec::new();
     for (i, line) in lines.enumerate() {
-        let line = line.with_context(|| format!("read JSONL line {} in {}", i + 2, path.display()))?;
+        let line =
+            line.with_context(|| format!("read JSONL line {} in {}", i + 2, path.display()))?;
         if line.trim().is_empty() {
             continue;
         }

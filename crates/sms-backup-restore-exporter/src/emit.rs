@@ -1,18 +1,18 @@
 //! Convert SMS Backup & Restore XML → common message → packaging via FormatSink.
 
-use crate::cancel::{check_cancel, CancelFlag};
-use crate::xml::{parse_xml_file, AttachmentBlob, ConvType, ParsedMessage};
-use anyhow::{bail, Context, Result};
+use crate::cancel::{CancelFlag, check_cancel};
+use crate::xml::{AttachmentBlob, ConvType, ParsedMessage, parse_xml_file};
+use anyhow::{Context, Result, bail};
 use message_contacts::ContactsBook;
-use message_csv::{format_local_ts, json_cell, stable_guid, DateRange};
+use message_csv::{DateRange, format_local_ts, json_cell, stable_guid};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    clean_previous_ir_output, owner_sender, parse_android_type, parse_json_value, ConversationDocument,
-    ConversationMeta, ConversationStats, ExportMeta, ExportTransforms, FormatSink, FormatSinkResult,
-    IrAttachment, IrConversationType, IrDirection, IrMessage, IrMessageKind, IrParticipant,
-    IrService, IrSource, SCHEMA_VERSION,
+    ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
+    FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
+    IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION, clean_previous_ir_output,
+    owner_sender, parse_android_type, parse_json_value,
 };
-use message_phone::{to_e164, OwnerPhoneSet};
+use message_phone::{OwnerPhoneSet, to_e164};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -225,7 +225,9 @@ fn display_names_for_handles(convo: &PendingConversation) -> HashMap<String, Str
             let name = msg.contact_name.trim();
             if !name.is_empty() {
                 for peer in &convo.participant_e164s {
-                    names.entry(peer.clone()).or_insert_with(|| name.to_string());
+                    names
+                        .entry(peer.clone())
+                        .or_insert_with(|| name.to_string());
                 }
             }
         }
@@ -272,7 +274,11 @@ fn pending_to_document(
         }
         let secs = msg.sort_key as i64;
         let (ts_local, _, _) = format_local_ts(secs).expect("timestamp validated above");
-        let digests: Vec<String> = msg.attachments.iter().map(|a| a.digest_hex.clone()).collect();
+        let digests: Vec<String> = msg
+            .attachments
+            .iter()
+            .map(|a| a.digest_hex.clone())
+            .collect();
         let guid = stable_guid(chat_id, &ts_local, msg.is_from_me, &msg.text, &digests);
         let timestamp_unix_ms = msg
             .date_ms
@@ -400,8 +406,8 @@ fn enrich_pending_names(book: &ContactsBook, chat_id: &str, msg: &mut PendingMes
 /// SMS-only backups often have no recoverable owner address; callers may then
 /// parse with an empty owner set (SMS direction uses `type`, not owners).
 pub fn infer_owner_phones_from_xml(path: &Path) -> Result<Vec<String>> {
-    use quick_xml::events::Event;
     use quick_xml::Reader;
+    use quick_xml::events::Event;
 
     let file = fs::File::open(path).with_context(|| format!("open {}", path.display()))?;
     let mut reader = Reader::from_reader(std::io::BufReader::new(file));
@@ -424,7 +430,8 @@ pub fn infer_owner_phones_from_xml(path: &Path) -> Result<Vec<String>> {
                         if attrs.get("type").map(|s| s.trim()) == Some("137") {
                             if let Some(addr) = attrs.get("address") {
                                 if let Some(digits) = message_phone::sanitize_number(addr) {
-                                    if digits != "0" && !addr.eq_ignore_ascii_case("insert-address-token")
+                                    if digits != "0"
+                                        && !addr.eq_ignore_ascii_case("insert-address-token")
                                     {
                                         *counts.entry(to_e164(&digits)).or_default() += 1;
                                     }
@@ -535,7 +542,9 @@ pub fn load_documents_from_xml(
                     add_message(&mut conversations, msg, atts);
                 }
             }
-            Err(err) => report.errors.push(format!("{}: {err:#}", xml_path.display())),
+            Err(err) => report
+                .errors
+                .push(format!("{}: {err:#}", xml_path.display())),
         }
     }
 
@@ -615,7 +624,9 @@ pub fn convert_export(
                     }
                 }
             }
-            Err(err) => report.errors.push(format!("{}: {err:#}", xml_path.display())),
+            Err(err) => report
+                .errors
+                .push(format!("{}: {err:#}", xml_path.display())),
         }
     }
 

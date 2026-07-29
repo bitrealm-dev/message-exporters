@@ -12,11 +12,11 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use hmac::{Hmac, Mac};
 use rand::RngCore;
 use regex::Regex;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use names::{FIRST_NAMES, LAST_NAMES};
@@ -40,9 +40,7 @@ fn email_re() -> &'static Regex {
 
 fn url_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r#"(?i)\b(?:https?://|www\.)[^\s<>"'\)\]]+"#).expect("url re")
-    })
+    RE.get_or_init(|| Regex::new(r#"(?i)\b(?:https?://|www\.)[^\s<>"'\)\]]+"#).expect("url re"))
 }
 
 fn phone_re() -> &'static Regex {
@@ -98,8 +96,7 @@ impl Obfuscator {
     }
 
     fn digest(&self, domain: &str, value: &str) -> [u8; 32] {
-        let mut mac =
-            HmacSha256::new_from_slice(&self.key).expect("HMAC accepts any key length");
+        let mut mac = HmacSha256::new_from_slice(&self.key).expect("HMAC accepts any key length");
         mac.update(domain.as_bytes());
         mac.update(b"\0");
         mac.update(value.as_bytes());
@@ -180,7 +177,7 @@ impl Obfuscator {
             return String::new();
         }
         if looks_like_email(h) {
-            let (first, last) = self.name_parts(&format!("email:{}" , h.to_ascii_lowercase()));
+            let (first, last) = self.name_parts(&format!("email:{}", h.to_ascii_lowercase()));
             return format!("{first} {last}");
         }
         let digits: String = h.chars().filter(|c| c.is_ascii_digit()).collect();
@@ -611,11 +608,7 @@ fn rename_chat_csv_files(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn obfuscate_export_csv_file(
-    input: &Path,
-    output: &Path,
-    anon: &mut Obfuscator,
-) -> Result<()> {
+fn obfuscate_export_csv_file(input: &Path, output: &Path, anon: &mut Obfuscator) -> Result<()> {
     let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
         .from_path(input)
@@ -629,8 +622,8 @@ fn obfuscate_export_csv_file(
 
     let tmp = output.with_extension("csv.tmp");
     {
-        let mut wtr = csv::Writer::from_path(&tmp)
-            .with_context(|| format!("write {}", tmp.display()))?;
+        let mut wtr =
+            csv::Writer::from_path(&tmp).with_context(|| format!("write {}", tmp.display()))?;
         wtr.write_record(&headers)?;
         for row in &rows {
             wtr.write_record(row)?;
@@ -796,10 +789,7 @@ pub fn obfuscate_imazing(input: &Path, output_dir: &Path, anon: &mut Obfuscator)
     }
     let mut n = 0usize;
     for src in inputs {
-        let dest = output_dir.join(
-            src.file_name()
-                .context("CSV path missing file name")?,
-        );
+        let dest = output_dir.join(src.file_name().context("CSV path missing file name")?);
         obfuscate_imazing_csv_file(&src, &dest, anon)?;
         n += 1;
     }
@@ -817,8 +807,8 @@ fn obfuscate_imazing_csv_file(input: &Path, output: &Path, anon: &mut Obfuscator
         let record = result?;
         rows.push(obfuscate_imazing_record(&headers, &record, anon));
     }
-    let mut wtr = csv::Writer::from_path(output)
-        .with_context(|| format!("write {}", output.display()))?;
+    let mut wtr =
+        csv::Writer::from_path(output).with_context(|| format!("write {}", output.display()))?;
     wtr.write_record(&headers)?;
     for row in &rows {
         wtr.write_record(row)?;
@@ -950,10 +940,7 @@ mod tests {
         let mut a = Obfuscator::new(key(3));
         let fake = a.obfuscate_phone("+15555550100");
         assert!(fake.starts_with('+'));
-        assert_eq!(
-            fake.chars().filter(|c| c.is_ascii_digit()).count(),
-            11
-        );
+        assert_eq!(fake.chars().filter(|c| c.is_ascii_digit()).count(), 11);
         assert!(!fake.contains("5555550100"));
     }
 
@@ -1072,7 +1059,9 @@ mod tests {
                 continue;
             }
             let text = fs::read_to_string(&path).unwrap();
-            if text.contains("15555550100") || text.contains("Alice Secret") || text.contains("Meet at 9")
+            if text.contains("15555550100")
+                || text.contains("Alice Secret")
+                || text.contains("Meet at 9")
             {
                 found_original = true;
             }
@@ -1085,7 +1074,10 @@ mod tests {
     fn seed_resolves_and_is_stable() {
         let mut a = resolve_obfuscator(Some("01234567")).unwrap();
         let mut b = resolve_obfuscator(Some("01234567")).unwrap();
-        assert_eq!(a.obfuscate_phone("+15555550100"), b.obfuscate_phone("+15555550100"));
+        assert_eq!(
+            a.obfuscate_phone("+15555550100"),
+            b.obfuscate_phone("+15555550100")
+        );
         assert_ne!(
             a.obfuscate_phone("+15555550100"),
             resolve_obfuscator(Some("fedcba98"))

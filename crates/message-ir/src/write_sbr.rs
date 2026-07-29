@@ -3,9 +3,9 @@
 use crate::{
     ConversationDocument, IrAttachment, IrConversationType, IrDirection, IrMessage, IrMessageKind,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use message_sbr::{
-    default_backup_path, encode_part_data, ensure_attr, set_attr, SbrBackupWriter, SbrMessage,
+    SbrBackupWriter, SbrMessage, default_backup_path, encode_part_data, ensure_attr, set_attr,
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -161,9 +161,8 @@ fn synthesize_sbr(
     output_dir: &Path,
 ) -> Result<SbrMessage> {
     let is_group = doc.conversation.conversation_type == IrConversationType::Group;
-    let use_mms = is_group
-        || !msg.attachments.is_empty()
-        || matches!(msg.message_kind, IrMessageKind::Mms);
+    let use_mms =
+        is_group || !msg.attachments.is_empty() || matches!(msg.message_kind, IrMessageKind::Mms);
 
     if use_mms {
         synthesize_mms(doc, msg, owner, output_dir)

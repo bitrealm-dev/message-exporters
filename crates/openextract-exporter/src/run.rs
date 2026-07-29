@@ -1,7 +1,7 @@
 //! Full export pipeline for CLI and in-process GUI.
 
-use crate::emit::{convert_export, ExportReport};
-use anyhow::{bail, Context, Result};
+use crate::emit::{ExportReport, convert_export};
+use anyhow::{Context, Result, bail};
 use message_contacts::resolve_contacts_cli;
 use message_csv::DateRange;
 use message_exporters_core::{ExporterConfig, SourceConfig};
@@ -95,10 +95,7 @@ pub fn report_summary_lines(
 }
 
 /// Helper used by CLI to parse date strings into [`DateRange`].
-pub fn parse_date_range(
-    start_date: Option<&str>,
-    end_date: Option<&str>,
-) -> Result<DateRange> {
+pub fn parse_date_range(start_date: Option<&str>, end_date: Option<&str>) -> Result<DateRange> {
     DateRange::parse(start_date, end_date)
         .map_err(anyhow::Error::msg)
         .context("invalid date range")

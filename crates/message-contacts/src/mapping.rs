@@ -36,9 +36,9 @@ impl NameMapping {
             .collect();
 
         let phone_idx = header_l.iter().position(|h| h == "phone");
-        let incorrect_idx = header_l.iter().position(|h| {
-            h == "incorrect name" || h == "incorrectname" || h == "incorrect"
-        });
+        let incorrect_idx = header_l
+            .iter()
+            .position(|h| h == "incorrect name" || h == "incorrectname" || h == "incorrect");
         let (Some(phone_idx), Some(incorrect_idx)) = (phone_idx, incorrect_idx) else {
             anyhow::bail!(
                 "name mapping CSV {} missing expected header Phone,Incorrect Name",

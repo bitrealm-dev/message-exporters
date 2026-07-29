@@ -1,7 +1,7 @@
 //! Full export pipeline for CLI and in-process GUI.
 
-use crate::emit::{convert_export, ExportReport};
-use anyhow::{bail, Context, Result};
+use crate::emit::{ExportReport, convert_export};
+use anyhow::{Context, Result, bail};
 use message_contacts::resolve_contacts_cli;
 use message_csv::DateRange;
 use message_exporters_core::{ExporterConfig, SourceConfig};
@@ -54,10 +54,7 @@ pub fn report_summary_lines(report: &ExportReport, output: &Path) -> Vec<String>
             report.sms_seen, report.mms_seen
         ),
         format!("  attachments:       {}", report.attachments_saved),
-        format!(
-            "  sent / received:   {} / {}",
-            report.sent, report.received
-        ),
+        format!("  sent / received:   {} / {}", report.sent, report.received),
     ];
     if report.skipped_invalid_date > 0 {
         lines.push(format!(

@@ -1,22 +1,20 @@
 //! Convert SMS Backup+ `.eml` trees into the common message → packaging via FormatSink.
 
 use crate::archive::parse_archive_eml_mail;
-use crate::cancel::{check_cancel, CancelFlag};
-use crate::contacts::{
-    apply_name_mapping, enrich_display_names, fill_unknown_phone,
-};
-use crate::flat_eml::{is_archive_eml, is_flat_sms_eml, MailHeaders, parse_flat_eml_mail};
+use crate::cancel::{CancelFlag, check_cancel};
+use crate::contacts::{apply_name_mapping, enrich_display_names, fill_unknown_phone};
+use crate::flat_eml::{MailHeaders, is_archive_eml, is_flat_sms_eml, parse_flat_eml_mail};
 use crate::identity::{chat_id_for, cover_identity, timestamp_ms};
 use crate::types::{AttachmentBlob, ParsedMessage};
 use anyhow::{Result, bail};
 use message_contacts::{ContactsBook, NameMapping};
-use message_csv::{format_local_ts, stable_guid, DateRange};
+use message_csv::{DateRange, format_local_ts, stable_guid};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    clean_previous_ir_output, owner_sender, parse_android_type, ConversationDocument,
-    ConversationMeta, ConversationStats, ExportMeta, ExportTransforms, FormatSink, FormatSinkResult,
-    IrAttachment, IrConversationType, IrDirection, IrMessage, IrMessageKind, IrParticipant,
-    IrService, IrSource, SCHEMA_VERSION,
+    ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
+    FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
+    IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION, clean_previous_ir_output,
+    owner_sender, parse_android_type,
 };
 use message_phone::{OwnerPhoneSet, to_e164};
 use rayon::prelude::*;
@@ -86,7 +84,11 @@ struct PendingConversation {
     by_identity: HashMap<String, usize>,
 }
 
-fn relative_eml_path(eml_path: &Path, inputs: &[PathBuf], file_inputs: &HashSet<PathBuf>) -> String {
+fn relative_eml_path(
+    eml_path: &Path,
+    inputs: &[PathBuf],
+    file_inputs: &HashSet<PathBuf>,
+) -> String {
     for root in inputs {
         if let Ok(rel) = eml_path.strip_prefix(root) {
             return rel.display().to_string();
@@ -148,7 +150,8 @@ fn ensure_convo<'a>(
             },
         );
     }
-    map.get_mut(chat_id).expect("just inserted or already present")
+    map.get_mut(chat_id)
+        .expect("just inserted or already present")
 }
 
 /// Prefer flat over archive (richer metadata); otherwise keep the earlier timestamp.
@@ -163,7 +166,10 @@ fn should_replace_kept(existing: &PendingMessage, incoming: &ParsedMessage) -> b
     }
     if incoming_flat
         && existing_flat
-        && incoming.smssync_id.as_ref().is_some_and(|s| !s.trim().is_empty())
+        && incoming
+            .smssync_id
+            .as_ref()
+            .is_some_and(|s| !s.trim().is_empty())
         && existing.smssync_id.trim().is_empty()
     {
         return true;
@@ -281,7 +287,9 @@ fn display_names_for_handles(convo: &PendingConversation) -> HashMap<String, Str
             let name = msg.contact_name.trim();
             if !name.is_empty() {
                 for peer in &convo.participant_e164s {
-                    names.entry(peer.clone()).or_insert_with(|| name.to_string());
+                    names
+                        .entry(peer.clone())
+                        .or_insert_with(|| name.to_string());
                 }
             }
         }
@@ -338,7 +346,11 @@ fn pending_to_document(
         report.messages += 1;
         let secs = msg.sort_key as i64;
         let (ts_local, _, _) = format_local_ts(secs).expect("timestamp validated above");
-        let digests: Vec<String> = msg.attachments.iter().map(|a| a.digest_hex.clone()).collect();
+        let digests: Vec<String> = msg
+            .attachments
+            .iter()
+            .map(|a| a.digest_hex.clone())
+            .collect();
         let guid = stable_guid(chat_id, &ts_local, msg.is_from_me, &msg.text, &digests);
         let timestamp_unix_ms = msg
             .date_ms
@@ -546,10 +558,7 @@ fn parse_one_eml(
     let mail = match mailparse::parse_mail(&bytes) {
         Ok(m) => m,
         Err(err) => {
-            return ParsedEmlKind::ParseError(format!(
-                "{}: parse EML: {err}",
-                eml_path.display()
-            ));
+            return ParsedEmlKind::ParseError(format!("{}: parse EML: {err}", eml_path.display()));
         }
     };
     let headers = MailHeaders::from_mail(&mail);
@@ -573,22 +582,13 @@ fn parse_one_eml(
             Err(err) => ParsedEmlKind::ParseError(format!("{path_display}: {err:#}")),
         }
     } else if is_flat_sms_eml(&headers) {
-        match parse_flat_eml_mail(
-            eml_path,
-            &mail,
-            &headers,
-            owner_digits,
-            owner_emails_lc,
-        ) {
+        match parse_flat_eml_mail(eml_path, &mail, &headers, owner_digits, owner_emails_lc) {
             Ok(Some(mut msg)) => {
                 msg.eml_path = rel_path;
                 let _ = apply_name_mapping(&mut msg, name_mapping, contacts);
                 let _ = fill_unknown_phone(&mut msg, contacts);
                 enrich_display_names(&mut msg, contacts);
-                ParsedEmlKind::Flat {
-                    msg,
-                    path_display,
-                }
+                ParsedEmlKind::Flat { msg, path_display }
             }
             Ok(None) => ParsedEmlKind::FlatNone,
             Err(err) => ParsedEmlKind::ParseError(format!("{path_display}: {err:#}")),
@@ -645,7 +645,10 @@ pub fn convert_export<P: AsRef<Path>>(
     let mut report = ExportReport::default();
     let mut conversations: HashMap<String, PendingConversation> = HashMap::new();
 
-    vlog(verbose, format!("owner phones: {}", owners.all_digits.len()));
+    vlog(
+        verbose,
+        format!("owner phones: {}", owners.all_digits.len()),
+    );
     vlog(verbose, format!("owner emails: {}", owner_emails_lc.len()));
     vlog(
         verbose,
@@ -670,7 +673,10 @@ pub fn convert_export<P: AsRef<Path>>(
 
     let eml_paths = collect_eml_paths(inputs, cancel)?;
     let total = eml_paths.len() as u64;
-    vlog(verbose, format!("scanning {total} .eml files (parallel parse)"));
+    vlog(
+        verbose,
+        format!("scanning {total} .eml files (parallel parse)"),
+    );
     // Pre-size for typical 1:1 chat counts; grows as needed.
     conversations.reserve((total / 4).min(50_000) as usize);
 
@@ -722,10 +728,7 @@ pub fn convert_export<P: AsRef<Path>>(
                     }
                 }
             }
-            ParsedEmlKind::Flat {
-                msg,
-                path_display,
-            } => {
+            ParsedEmlKind::Flat { msg, path_display } => {
                 report.flat_eml += 1;
                 if !date_range.contains_secs_f64(msg.timestamp_secs) {
                     report.skipped_out_of_range += 1;

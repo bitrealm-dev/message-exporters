@@ -241,9 +241,7 @@ fn merge_attachments(
             .unwrap_or_else(|| (Vec::new(), None, None));
         out.push(MailAttachment {
             bytes,
-            original_name: m
-                .and_then(|c| c.original_name.clone())
-                .or(name_fallback),
+            original_name: m.and_then(|c| c.original_name.clone()).or(name_fallback),
             mime_type: m.and_then(|c| c.mime_type.clone()).or(mime_fallback),
             digest_sha256: m.and_then(|c| c.digest_sha256.clone()),
             is_sticker: m.map(|c| c.is_sticker).unwrap_or(false),
@@ -256,7 +254,10 @@ fn merge_attachments(
     Ok(out)
 }
 
-fn collect_mime_attachments(mail: &ParsedMail<'_>, out: &mut Vec<(Vec<u8>, Option<String>, Option<String>)>) {
+fn collect_mime_attachments(
+    mail: &ParsedMail<'_>,
+    out: &mut Vec<(Vec<u8>, Option<String>, Option<String>)>,
+) {
     if mail.subparts.is_empty() {
         return;
     }
@@ -281,9 +282,11 @@ fn collect_mime_attachments(mail: &ParsedMail<'_>, out: &mut Vec<(Vec<u8>, Optio
             continue;
         }
         let bytes = part.get_body_raw().unwrap_or_default();
-        let name = disp.params.get("filename").cloned().or_else(|| {
-            part.ctype.params.get("name").cloned()
-        });
+        let name = disp
+            .params
+            .get("filename")
+            .cloned()
+            .or_else(|| part.ctype.params.get("name").cloned());
         out.push((bytes, Some(part.ctype.mimetype.clone()), name));
     }
 }
@@ -291,7 +294,7 @@ fn collect_mime_attachments(mail: &ParsedMail<'_>, out: &mut Vec<(Vec<u8>, Optio
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{write_message_file, Direction, MailMessage, Participant, SmsMailFields};
+    use crate::{Direction, MailMessage, Participant, SmsMailFields, write_message_file};
 
     #[test]
     fn roundtrip_eml_headers_and_body() {

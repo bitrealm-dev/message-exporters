@@ -64,8 +64,7 @@ pub fn validate_export_path(
                     match format {
                         OutputFormat::Eml => {
                             if path.is_dir() {
-                                let name =
-                                    path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                                 if name != "attachments" && dir_contains_eml(&path) {
                                     return Err(RuntimeError::InvalidOptions(format!(
                                         "Specified export path {} contains existing \"eml\" export data!",
@@ -123,8 +122,7 @@ pub fn validate_export_path(
                             }
                         }
                         OutputFormat::Xml => {
-                            let name =
-                                path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                             if name == "smses.xml"
                                 || name.ends_with(".xml.tmp")
                                 || name.ends_with(".xml.sbrbody")

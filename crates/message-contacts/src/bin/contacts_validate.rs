@@ -2,9 +2,9 @@
 
 use std::path::PathBuf;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use clap::Parser;
-use message_contacts::{validate_contacts_file, ValidateMode};
+use message_contacts::{ValidateMode, validate_contacts_file};
 use message_phone::PhoneRegion;
 
 #[derive(Parser, Debug)]
@@ -27,7 +27,10 @@ struct Cli {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let Some(region) = PhoneRegion::parse_cli(&cli.region) else {
-        bail!("unknown --region {:?} (use usa or international)", cli.region);
+        bail!(
+            "unknown --region {:?} (use usa or international)",
+            cli.region
+        );
     };
 
     let mode = if cli.check {

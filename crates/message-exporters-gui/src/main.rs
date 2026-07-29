@@ -12,10 +12,10 @@ use go_sms_pro_exporter::run as run_go_sms_pro;
 use imazing_exporter::run as run_imazing;
 use imessage_ir_exporter::run as run_imessage;
 use message_exporters_core::{
-    ensure_output_dir, resolve_binary, spawn, spawn_job, AttachmentMedia, ContactsKind,
-    ExportIniState, Exporter, ExporterConfig, Form, ProcessControl, ProcessEvent,
-    WhatsappPlatform, APPLE_PLATFORMS, ATTACHMENT_MEDIA, EXPORTERS, MAX_RESOLUTIONS,
-    OUTPUT_FORMATS_MAIL, WHATSAPP_PLATFORMS,
+    APPLE_PLATFORMS, ATTACHMENT_MEDIA, AttachmentMedia, ContactsKind, EXPORTERS, ExportIniState,
+    Exporter, ExporterConfig, Form, MAX_RESOLUTIONS, OUTPUT_FORMATS_MAIL, ProcessControl,
+    ProcessEvent, WHATSAPP_PLATFORMS, WhatsappPlatform, ensure_output_dir, resolve_binary, spawn,
+    spawn_job,
 };
 use message_reexporter::run as run_reexport;
 use openextract_exporter::run as run_openextract;
@@ -171,10 +171,7 @@ impl App {
         let mut events = Vec::new();
         if let Some(rx) = &self.rx {
             while let Ok(event) = rx.try_recv() {
-                let done = matches!(
-                    event,
-                    ProcessEvent::Finished(_) | ProcessEvent::Error(_)
-                );
+                let done = matches!(event, ProcessEvent::Finished(_) | ProcessEvent::Error(_));
                 events.push(event);
                 if done {
                     break;
@@ -692,10 +689,10 @@ impl App {
                 self.start_export();
             }
             let clear = form_action_button(ui, "Clear", true).on_hover_text(format!(
-                    "Clear {} fields and remove them from {}",
-                    self.exporter.display_name(),
-                    self.export_ini.path.display()
-                ));
+                "Clear {} fields and remove them from {}",
+                self.exporter.display_name(),
+                self.export_ini.path.display()
+            ));
             if clear.clicked() {
                 self.clear_active_exporter();
             }
@@ -831,9 +828,9 @@ impl App {
         }
         let (file, folder) = match self.exporter {
             Exporter::GoSmsPro | Exporter::Imazing | Exporter::Whatsapp => (false, true),
-            Exporter::SmsBackupRestore
-            | Exporter::SmsBackupPlus
-            | Exporter::OpenExtract => (true, true),
+            Exporter::SmsBackupRestore | Exporter::SmsBackupPlus | Exporter::OpenExtract => {
+                (true, true)
+            }
             Exporter::Imessage => unreachable!(),
         };
         let input_label = if self.exporter == Exporter::SmsBackupPlus {
@@ -1031,10 +1028,7 @@ impl App {
             .corner_radius(6.0)
             .show(ui, |ui| {
                 for error in &self.errors {
-                    ui.colored_label(
-                        egui::Color32::from_rgb(140, 40, 40),
-                        format!("• {error}"),
-                    );
+                    ui.colored_label(egui::Color32::from_rgb(140, 40, 40), format!("• {error}"));
                 }
             });
     }
@@ -1344,8 +1338,7 @@ fn required_value_rows(
 
 fn responsive_field_width(ui: &egui::Ui, max_width: f32, trailing_buttons: usize) -> f32 {
     let spacing = ui.spacing().item_spacing.x;
-    let trailing_width =
-        trailing_buttons as f32 * (PICKER_BUTTON_W + spacing) + LABEL_W + spacing;
+    let trailing_width = trailing_buttons as f32 * (PICKER_BUTTON_W + spacing) + LABEL_W + spacing;
     (ui.available_width() - trailing_width)
         .max(MIN_FIELD_W.min(max_width))
         .min(max_width)
@@ -1542,10 +1535,7 @@ fn combo_enum_with_id<T: Copy + PartialEq + std::fmt::Display>(
 }
 
 type LibraryJob = Box<
-    dyn FnOnce(
-            message_exporters_core::CancelFlag,
-            mpsc::Sender<ProcessEvent>,
-        ) -> Result<(), String>
+    dyn FnOnce(message_exporters_core::CancelFlag, mpsc::Sender<ProcessEvent>) -> Result<(), String>
         + Send,
 >;
 

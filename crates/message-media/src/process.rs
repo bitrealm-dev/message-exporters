@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use crate::csv_rewrite::rewrite_attachment_paths;
-use crate::tools::{probe_video, require_ffmpeg, run_ffmpeg, Probe};
+use crate::tools::{Probe, probe_video, require_ffmpeg, run_ffmpeg};
 use crate::{CompressOptions, MediaMode};
 
 #[derive(Debug, Default)]
@@ -193,8 +193,7 @@ fn process_one(
             if matches!(ext.as_str(), "jpg" | "jpeg" | "gif") {
                 return Ok(Outcome::Skipped);
             }
-            convert_image(path, false)
-                .map(|new_path| changed(output_dir, &old_rel, &new_path))?
+            convert_image(path, false).map(|new_path| changed(output_dir, &old_rel, &new_path))?
         }
         (Kind::Image, MediaMode::Compress) => {
             if ext == "gif" {
@@ -475,8 +474,7 @@ fn compress_video(path: &Path, opts: &CompressOptions) -> Result<Option<PathBuf>
                 "+faststart".into(),
                 path_str(&tmp),
             ]);
-            run_ffmpeg(&avc_args)
-                .with_context(|| format!("compress video {}", path.display()))?;
+            run_ffmpeg(&avc_args).with_context(|| format!("compress video {}", path.display()))?;
         }
         Ok(Some(replace_original(path, &tmp)?))
     })

@@ -18,4 +18,4 @@ mod session;
 
 pub use error::RuntimeError;
 pub use message_exporters_core::{ExporterConfig, OutputFormat};
-pub use run::{run, RunResult};
+pub use run::{RunResult, run};

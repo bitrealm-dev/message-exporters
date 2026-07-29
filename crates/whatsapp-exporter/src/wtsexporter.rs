@@ -1,6 +1,6 @@
 //! Locate and run the external `wtsexporter` CLI.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -119,8 +119,7 @@ pub fn run_wtsexporter(bin: &Path, args: &WtsexporterArgs, json_out: &Path) -> R
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
-    std::fs::create_dir_all(out_dir)
-        .with_context(|| format!("create {}", out_dir.display()))?;
+    std::fs::create_dir_all(out_dir).with_context(|| format!("create {}", out_dir.display()))?;
 
     let mut cmd = Command::new(bin);
     // Scratch cwd so iOS/Android extract does not pollute the GUI launch directory.
@@ -172,11 +171,7 @@ pub fn run_wtsexporter(bin: &Path, args: &WtsexporterArgs, json_out: &Path) -> R
         bail!(
             "wtsexporter failed ({}){}\n{}",
             output.status,
-            if combined.trim().is_empty() {
-                ""
-            } else {
-                ":"
-            },
+            if combined.trim().is_empty() { "" } else { ":" },
             combined.trim()
         );
     }
@@ -217,9 +212,7 @@ fn resolve_forwarded_paths(args: &WtsexporterArgs) -> Result<ForwardedPaths> {
             search.join("wa.db"),
             search.join("ContactsV2.sqlite"),
             search.join("AppDomainGroup-group.net.whatsapp.WhatsApp.shared/ContactsV2.sqlite"),
-            search.join(
-                "AppDomainGroup-group.net.whatsapp.WhatsAppSMB.shared/ContactsV2.sqlite",
-            ),
+            search.join("AppDomainGroup-group.net.whatsapp.WhatsAppSMB.shared/ContactsV2.sqlite"),
         ]),
     };
 

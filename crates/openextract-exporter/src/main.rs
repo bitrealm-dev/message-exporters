@@ -11,7 +11,9 @@ use openextract_exporter::{parse_date_range, run};
 
 #[derive(Parser, Debug)]
 #[command(name = "openextract-exporter")]
-#[command(about = "Convert OpenExtract conversation CSV (+ VCF) via common message to JSON/CSV/EML/MBOX/JSONL/XML")]
+#[command(
+    about = "Convert OpenExtract conversation CSV (+ VCF) via common message to JSON/CSV/EML/MBOX/JSONL/XML"
+)]
 struct Cli {
     /// OpenExtract CSV file or directory of conversation_*.csv / all_conversations.csv
     #[arg(long)]

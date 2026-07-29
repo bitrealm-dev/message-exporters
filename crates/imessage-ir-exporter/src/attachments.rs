@@ -4,7 +4,9 @@ use std::{fs, path::PathBuf};
 
 use imessage_database::tables::attachment::Attachment;
 
-use crate::{backup::decrypt_file, error::RuntimeError, options::AttachmentEmbed, session::MailSession};
+use crate::{
+    backup::decrypt_file, error::RuntimeError, options::AttachmentEmbed, session::MailSession,
+};
 
 /// Read attachment bytes for embedding. Empty when embed is disabled or read fails.
 pub fn load_attachment_bytes(

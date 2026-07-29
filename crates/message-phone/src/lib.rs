@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::fmt;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 /// Minimum digit length after stripping formatting.
 ///
@@ -150,8 +150,8 @@ impl OwnerPhoneSet {
                 .with_context(|| format!("owner phone has no usable digits: {phone}"))?;
             all_digits.insert(d);
         }
-        let primary_digits = sanitize_number(&phones[0])
-            .context("owner phone has no usable digits")?;
+        let primary_digits =
+            sanitize_number(&phones[0]).context("owner phone has no usable digits")?;
         Ok(Self {
             all_digits,
             primary_digits,

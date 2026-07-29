@@ -44,8 +44,7 @@ pub struct MessageJson {
 }
 
 pub fn load_chat_store(path: &Path) -> Result<ChatStoreFile> {
-    let text = fs::read_to_string(path)
-        .with_context(|| format!("read {}", path.display()))?;
+    let text = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
     serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))
 }
 

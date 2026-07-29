@@ -755,12 +755,12 @@ fn decode_wsp_parameters(cur: &mut Cursor<'_>, end: usize) -> HashMap<String, St
             }
         } else if let Ok(name) = decode_text_string(cur) {
             // Untyped-parameter = Token-text Untyped-value
-            if let Ok(val) = decode_wsp_text_param(cur)
-                .or_else(|_| decode_constrained_media(cur))
-                && !name.is_empty() {
-                    params.insert(name, val);
-                    continue;
-                }
+            if let Ok(val) = decode_wsp_text_param(cur).or_else(|_| decode_constrained_media(cur))
+                && !name.is_empty()
+            {
+                params.insert(name, val);
+                continue;
+            }
         }
         cur.pos = pstart + 1;
         if cur.pos <= pstart {
@@ -770,7 +770,9 @@ fn decode_wsp_parameters(cur: &mut Cursor<'_>, end: usize) -> HashMap<String, St
     params
 }
 
-fn decode_content_type_value(cur: &mut Cursor<'_>) -> Result<(String, HashMap<String, String>), ()> {
+fn decode_content_type_value(
+    cur: &mut Cursor<'_>,
+) -> Result<(String, HashMap<String, String>), ()> {
     let saved = cur.pos;
     let peek = cur.peek().ok_or(())?;
     // Content-general-form starts with Value-length (0..=30 or 31+uintvar).
@@ -829,14 +831,16 @@ fn decode_content_disposition_value(
 fn decode_application_header_value(cur: &mut Cursor<'_>) -> Result<String, ()> {
     let saved = cur.pos;
     if let Ok(s) = decode_text_string(cur)
-        && !s.is_empty() {
-            return Ok(s);
-        }
+        && !s.is_empty()
+    {
+        return Ok(s);
+    }
     cur.pos = saved;
     if let Ok(s) = decode_encoded_string_value(cur)
-        && !s.is_empty() {
-            return Ok(s);
-        }
+        && !s.is_empty()
+    {
+        return Ok(s);
+    }
     cur.pos = saved;
     if let Ok(v) = decode_short_integer(cur) {
         return Ok(format!("0x{v:02x}"));
@@ -875,9 +879,11 @@ fn decode_mms_header_field(cur: &mut Cursor<'_>, msg: &mut StructuredMms) -> Res
         // Application-header = Token-text Text-string (or other value forms).
         let name = decode_text_string(cur)?;
         if let Ok(value) = decode_application_header_value(cur)
-            && !name.is_empty() && !value.is_empty() {
-                msg.application_headers.entry(name).or_insert(value);
-            }
+            && !name.is_empty()
+            && !value.is_empty()
+        {
+            msg.application_headers.entry(name).or_insert(value);
+        }
         return Ok(false);
     }
     let field = decode_short_integer(cur)?;
@@ -888,23 +894,26 @@ fn decode_mms_header_field(cur: &mut Cursor<'_>, msg: &mut StructuredMms) -> Res
         }
         MMS_TO => {
             if let Ok(addr) = decode_encoded_string_value(cur)
-                && !addr.is_empty() {
-                    msg.to.push(addr);
-                }
+                && !addr.is_empty()
+            {
+                msg.to.push(addr);
+            }
             Ok(false)
         }
         MMS_CC => {
             if let Ok(addr) = decode_encoded_string_value(cur)
-                && !addr.is_empty() {
-                    msg.cc.push(addr);
-                }
+                && !addr.is_empty()
+            {
+                msg.cc.push(addr);
+            }
             Ok(false)
         }
         MMS_BCC => {
             if let Ok(addr) = decode_encoded_string_value(cur)
-                && !addr.is_empty() {
-                    msg.bcc.push(addr);
-                }
+                && !addr.is_empty()
+            {
+                msg.bcc.push(addr);
+            }
             Ok(false)
         }
         MMS_MESSAGE_TYPE => {
@@ -917,16 +926,15 @@ fn decode_mms_header_field(cur: &mut Cursor<'_>, msg: &mut StructuredMms) -> Res
         }
         MMS_SUBJECT => {
             if let Ok(s) = decode_encoded_string_value(cur)
-                && !s.is_empty() {
-                    msg.subject = Some(s);
-                }
+                && !s.is_empty()
+            {
+                msg.subject = Some(s);
+            }
             Ok(false)
         }
         MMS_MESSAGE_ID => {
-            msg.message_id = Some(
-                decode_text_string(cur)
-                    .or_else(|_| decode_encoded_string_value(cur))?,
-            );
+            msg.message_id =
+                Some(decode_text_string(cur).or_else(|_| decode_encoded_string_value(cur))?);
             Ok(false)
         }
         MMS_TRANSACTION_ID => {
@@ -1004,10 +1012,7 @@ fn decode_mms_header_field(cur: &mut Cursor<'_>, msg: &mut StructuredMms) -> Res
         MMS_CONTENT_TYPE => {
             let (ct, params) = decode_content_type_value(cur)?;
             msg.content_type = Some(ct);
-            if let Some(start) = params
-                .get("Start")
-                .or_else(|| params.get("Start-info"))
-            {
+            if let Some(start) = params.get("Start").or_else(|| params.get("Start-info")) {
                 msg.content_start = Some(normalize_content_id(start));
             }
             Ok(true) // Content-Type terminates the header section
@@ -1042,9 +1047,8 @@ fn decode_multipart_body(cur: &mut Cursor<'_>) -> Result<Vec<MmsPart>, ()> {
         }
         let header_bytes = cur.take(headers_len)?;
         let mut hcur = Cursor::new(header_bytes);
-        let (ctype, params) = decode_content_type_value(&mut hcur).unwrap_or_else(|_| {
-            ("application/octet-stream".into(), HashMap::new())
-        });
+        let (ctype, params) = decode_content_type_value(&mut hcur)
+            .unwrap_or_else(|_| ("application/octet-stream".into(), HashMap::new()));
         let mut content_location = params
             .get("Name")
             .cloned()
@@ -1053,9 +1057,7 @@ fn decode_multipart_body(cur: &mut Cursor<'_>) -> Result<Vec<MmsPart>, ()> {
             .get("Filename")
             .cloned()
             .or_else(|| params.get("Name").cloned());
-        let charset = params
-            .get("Charset")
-            .and_then(|s| s.parse::<u64>().ok());
+        let charset = params.get("Charset").and_then(|s| s.parse::<u64>().ok());
         let mut content_id = None;
         while hcur.remaining() > 0 {
             let before = hcur.pos;
@@ -1078,8 +1080,7 @@ fn decode_multipart_body(cur: &mut Cursor<'_>) -> Result<Vec<MmsPart>, ()> {
                     }
                 } else if field == WSP_CONTENT_DISPOSITION {
                     if let Ok((_disp, dparams)) = decode_content_disposition_value(&mut hcur) {
-                        if let Some(fnm) = dparams.get("Filename").or_else(|| dparams.get("Name"))
-                        {
+                        if let Some(fnm) = dparams.get("Filename").or_else(|| dparams.get("Name")) {
                             filename = Some(fnm.clone());
                             if content_location.is_none() {
                                 content_location = Some(fnm.clone());
@@ -1100,8 +1101,7 @@ fn decode_multipart_body(cur: &mut Cursor<'_>) -> Result<Vec<MmsPart>, ()> {
                     }
                 } else if name.eq_ignore_ascii_case("Content-Disposition") {
                     if let Ok((_disp, dparams)) = decode_content_disposition_value(&mut hcur) {
-                        if let Some(fnm) = dparams.get("Filename").or_else(|| dparams.get("Name"))
-                        {
+                        if let Some(fnm) = dparams.get("Filename").or_else(|| dparams.get("Name")) {
                             filename = Some(fnm.clone());
                             if content_location.is_none() {
                                 content_location = Some(fnm.clone());
@@ -1112,10 +1112,10 @@ fn decode_multipart_body(cur: &mut Cursor<'_>) -> Result<Vec<MmsPart>, ()> {
                 } else if name.eq_ignore_ascii_case("Content-Location")
                     && let Ok(v) = decode_encoded_string_value(&mut hcur)
                         .or_else(|_| decode_text_string(&mut hcur))
-                    {
-                        content_location = Some(v);
-                        continue;
-                    }
+                {
+                    content_location = Some(v);
+                    continue;
+                }
                 let _ = skip_unknown_mms_value(&mut hcur);
             }
             if hcur.pos == before {
@@ -1140,10 +1140,7 @@ pub(crate) fn decode_mms_at(data: &[u8], start: usize) -> Option<StructuredMms> 
     if start >= data.len() || data.len().saturating_sub(start) < 4 {
         return None;
     }
-    let mut cur = Cursor {
-        data,
-        pos: start,
-    };
+    let mut cur = Cursor { data, pos: start };
     let mut msg = StructuredMms::default();
     let mut saw_content_type = false;
     for _ in 0..64 {
@@ -1163,14 +1160,11 @@ pub(crate) fn decode_mms_at(data: &[u8], start: usize) -> Option<StructuredMms> 
     }
     if let Some(ct) = &msg.content_type
         && ct.contains("multipart")
-            && let Ok(parts) = decode_multipart_body(&mut cur) {
-                msg.parts = parts;
-            }
-    if msg.is_useful() {
-        Some(msg)
-    } else {
-        None
+        && let Ok(parts) = decode_multipart_body(&mut cur)
+    {
+        msg.parts = parts;
     }
+    if msg.is_useful() { Some(msg) } else { None }
 }
 
 /// Attempt a full decode from the start of `data`.
@@ -1187,10 +1181,7 @@ pub(crate) fn scan_multipart_bodies(data: &[u8]) -> Vec<MmsPart> {
             i += 1;
             continue;
         }
-        let mut cur = Cursor {
-            data,
-            pos: i + 1,
-        };
+        let mut cur = Cursor { data, pos: i + 1 };
         let Ok((ct, _params)) = decode_content_type_value(&mut cur) else {
             i += 1;
             continue;
@@ -1318,7 +1309,10 @@ pub(crate) fn scan_named_parts(data: &[u8]) -> Vec<NamedPart> {
             find_next_cloc_name(data, payload_start).unwrap_or(data.len())
         };
         let payload = data[payload_start..payload_end].to_vec();
-        parts.push(NamedPart { name, data: payload });
+        parts.push(NamedPart {
+            name,
+            data: payload,
+        });
         i = payload_end.max(i + 1);
     }
     parts
@@ -1386,197 +1380,220 @@ pub(crate) fn scan_mms_addresses(data: &[u8]) -> StructuredMms {
         if i + 1 >= data.len() {
             break;
         }
-        let mut cur = Cursor {
-            data,
-            pos: i + 1,
-        };
+        let mut cur = Cursor { data, pos: i + 1 };
         match field {
             MMS_FROM => {
                 if let Ok(addr) = decode_from_value(&mut cur)
-                    && !addr.is_empty() {
-                        msg.from = Some(addr);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && !addr.is_empty()
+                {
+                    msg.from = Some(addr);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_TO => {
                 if let Ok(addr) = decode_encoded_string_value(&mut cur)
-                    && !addr.is_empty() {
-                        msg.to.push(addr);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && !addr.is_empty()
+                {
+                    msg.to.push(addr);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_CC => {
                 if let Ok(addr) = decode_encoded_string_value(&mut cur)
-                    && !addr.is_empty() {
-                        msg.cc.push(addr);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && !addr.is_empty()
+                {
+                    msg.cc.push(addr);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_BCC => {
                 if let Ok(addr) = decode_encoded_string_value(&mut cur)
-                    && !addr.is_empty() {
-                        msg.bcc.push(addr);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && !addr.is_empty()
+                {
+                    msg.bcc.push(addr);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_DATE => {
                 if let Ok(d) = decode_date_value(&mut cur)
-                    && d > 0 && msg.date_unix.is_none() {
-                        msg.date_unix = Some(d);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && d > 0
+                    && msg.date_unix.is_none()
+                {
+                    msg.date_unix = Some(d);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_SUBJECT => {
                 if let Ok(s) = decode_encoded_string_value(&mut cur)
-                    && !s.is_empty() && msg.subject.is_none() {
-                        msg.subject = Some(s);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && !s.is_empty()
+                    && msg.subject.is_none()
+                {
+                    msg.subject = Some(s);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_STATUS => {
                 if let Ok(s) = decode_status_value(&mut cur)
-                    && msg.status.is_none() {
-                        msg.status = Some(s);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && msg.status.is_none()
+                {
+                    msg.status = Some(s);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_MESSAGE_ID => {
-                if let Ok(id) = decode_text_string(&mut cur)
-                    .or_else(|_| decode_encoded_string_value(&mut cur))
-                    && !id.is_empty() && msg.message_id.is_none() {
-                        msg.message_id = Some(id);
-                        i = cur.pos;
-                        continue;
-                    }
+                if let Ok(id) =
+                    decode_text_string(&mut cur).or_else(|_| decode_encoded_string_value(&mut cur))
+                    && !id.is_empty()
+                    && msg.message_id.is_none()
+                {
+                    msg.message_id = Some(id);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_TRANSACTION_ID => {
                 if let Ok(id) = decode_text_string(&mut cur)
-                    && !id.is_empty() && msg.transaction_id.is_none() {
-                        msg.transaction_id = Some(id);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && !id.is_empty()
+                    && msg.transaction_id.is_none()
+                {
+                    msg.transaction_id = Some(id);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_VERSION => {
                 if let Ok(v) = decode_mms_version(&mut cur)
-                    && msg.mms_version.is_none() {
-                        msg.mms_version = Some(v);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && msg.mms_version.is_none()
+                {
+                    msg.mms_version = Some(v);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_MESSAGE_SIZE => {
                 // Only accept a real Long-integer. GO `\x8etext.txt\0` fails
                 // (length byte > 30) so scan_named_parts keeps those payloads.
                 if let Ok(sz) = decode_long_integer(&mut cur)
-                    && msg.message_size.is_none() {
-                        msg.message_size = Some(sz);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && msg.message_size.is_none()
+                {
+                    msg.message_size = Some(sz);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_MESSAGE_CLASS => {
                 if let Ok(v) = decode_message_class_value(&mut cur)
-                    && msg.message_class.is_none() {
-                        msg.message_class = Some(v);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && msg.message_class.is_none()
+                {
+                    msg.message_class = Some(v);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_DELIVERY_TIME => {
                 if let Ok(v) = decode_expiry_or_delivery_time(&mut cur)
-                    && msg.delivery_time.is_none() {
-                        msg.delivery_time = Some(v);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && msg.delivery_time.is_none()
+                {
+                    msg.delivery_time = Some(v);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_EXPIRY => {
                 if let Ok(v) = decode_expiry_or_delivery_time(&mut cur)
-                    && msg.expiry.is_none() {
-                        msg.expiry = Some(v);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && msg.expiry.is_none()
+                {
+                    msg.expiry = Some(v);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_DELIVERY_REPORT => {
                 if let Ok(v) = decode_short_integer(&mut cur)
-                    && msg.delivery_report.is_none() {
-                        msg.delivery_report = yes_no_token(v).map(str::to_string);
-                        if msg.delivery_report.is_some() {
-                            i = cur.pos;
-                            continue;
-                        }
+                    && msg.delivery_report.is_none()
+                {
+                    msg.delivery_report = yes_no_token(v).map(str::to_string);
+                    if msg.delivery_report.is_some() {
+                        i = cur.pos;
+                        continue;
                     }
+                }
             }
             MMS_READ_REPORT => {
                 if let Ok(v) = decode_short_integer(&mut cur)
-                    && msg.read_report.is_none() {
-                        msg.read_report = yes_no_token(v).map(str::to_string);
-                        if msg.read_report.is_some() {
-                            i = cur.pos;
-                            continue;
-                        }
+                    && msg.read_report.is_none()
+                {
+                    msg.read_report = yes_no_token(v).map(str::to_string);
+                    if msg.read_report.is_some() {
+                        i = cur.pos;
+                        continue;
                     }
+                }
             }
             MMS_REPORT_ALLOWED => {
                 if let Ok(v) = decode_short_integer(&mut cur)
-                    && msg.report_allowed.is_none() {
-                        msg.report_allowed = yes_no_token(v).map(str::to_string);
-                        if msg.report_allowed.is_some() {
-                            i = cur.pos;
-                            continue;
-                        }
+                    && msg.report_allowed.is_none()
+                {
+                    msg.report_allowed = yes_no_token(v).map(str::to_string);
+                    if msg.report_allowed.is_some() {
+                        i = cur.pos;
+                        continue;
                     }
+                }
             }
             MMS_PRIORITY => {
                 if let Ok(v) = decode_short_integer(&mut cur)
-                    && msg.priority.is_none() {
-                        msg.priority = priority_token(v).map(str::to_string);
-                        if msg.priority.is_some() {
-                            i = cur.pos;
-                            continue;
-                        }
+                    && msg.priority.is_none()
+                {
+                    msg.priority = priority_token(v).map(str::to_string);
+                    if msg.priority.is_some() {
+                        i = cur.pos;
+                        continue;
                     }
+                }
             }
             MMS_RESPONSE_STATUS => {
                 if let Ok(v) = decode_response_status_value(&mut cur)
-                    && msg.response_status.is_none() {
-                        msg.response_status = Some(v);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && msg.response_status.is_none()
+                {
+                    msg.response_status = Some(v);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_RESPONSE_TEXT => {
                 if let Ok(v) = decode_encoded_string_value(&mut cur)
-                    && msg.response_text.is_none() {
-                        msg.response_text = Some(v);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && msg.response_text.is_none()
+                {
+                    msg.response_text = Some(v);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_SENDER_VISIBILITY => {
                 if let Ok(v) = decode_sender_visibility_value(&mut cur)
-                    && msg.sender_visibility.is_none() {
-                        msg.sender_visibility = Some(v);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && msg.sender_visibility.is_none()
+                {
+                    msg.sender_visibility = Some(v);
+                    i = cur.pos;
+                    continue;
+                }
             }
             MMS_MESSAGE_TYPE => {
                 if let Ok(mt) = decode_message_type_value(&mut cur)
-                    && msg.message_type.is_none() {
-                        msg.message_type = Some(mt);
-                        i = cur.pos;
-                        continue;
-                    }
+                    && msg.message_type.is_none()
+                {
+                    msg.message_type = Some(mt);
+                    i = cur.pos;
+                    continue;
+                }
             }
             _ => {}
         }
@@ -1703,10 +1720,10 @@ mod tests {
         jpeg.extend(std::iter::repeat_n(0x11, 80));
 
         let mut body = vec![
-            0x02, // nEntries
-            0x01, // headersLen
+            0x02,             // nEntries
+            0x01,             // headersLen
             text.len() as u8, // dataLen
-            0x83, // text/plain
+            0x83,             // text/plain
         ];
         body.extend_from_slice(text);
         body.push(0x01);
@@ -1780,9 +1797,7 @@ mod tests {
     #[test]
     fn scan_subject_ucs2() {
         // Subject + UCS-2 charset (MIBEnum 1000 as long-int) + "Hi" UTF-16BE
-        let bytes = [
-            0x96u8, 0x07, 0x02, 0x03, 0xe8, 0x00, 0x48, 0x00, 0x69,
-        ];
+        let bytes = [0x96u8, 0x07, 0x02, 0x03, 0xe8, 0x00, 0x48, 0x00, 0x69];
         let msg = scan_mms_addresses(&bytes);
         assert_eq!(msg.subject.as_deref(), Some("Hi"));
     }
@@ -1892,8 +1907,7 @@ mod tests {
     fn content_type_charset_and_filename_params() {
         // value-length: jpeg(1) + Charset si(1)+UTF-8(1) + Filename(1)+name(9) = 13
         let mut headers = vec![
-            0x0d,
-            0x97, // image/jpeg
+            0x0d, 0x97, // image/jpeg
             0x88, // Charset
             0xea, // UTF-8
             0x86, // Filename
@@ -1903,7 +1917,10 @@ mod tests {
         let (ct, params) = decode_content_type_value(&mut cur).expect("ct");
         assert!(ct.contains("jpeg"));
         assert_eq!(params.get("Charset").map(String::as_str), Some("106"));
-        assert_eq!(params.get("Filename").map(String::as_str), Some("photo.jpg"));
+        assert_eq!(
+            params.get("Filename").map(String::as_str),
+            Some("photo.jpg")
+        );
     }
 
     #[test]

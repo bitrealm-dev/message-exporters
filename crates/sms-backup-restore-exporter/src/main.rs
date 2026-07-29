@@ -6,12 +6,14 @@ use message_exporters_core::{
     ContactsConfig, ContactsKind, ExporterConfig, MediaConfig, ObfuscateConfig, OutputFormat,
     SmsBackupRestoreConfig, SourceConfig,
 };
-use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
+use message_media::{MaxResolution, MediaMode, compress_options_from_cli};
 use sms_backup_restore_exporter::{parse_date_range, run};
 
 #[derive(Parser, Debug)]
 #[command(name = "sms-backup-restore-exporter")]
-#[command(about = "Convert SMS Backup & Restore XML via common message to JSON/CSV/EML/MBOX/JSONL/XML")]
+#[command(
+    about = "Convert SMS Backup & Restore XML via common message to JSON/CSV/EML/MBOX/JSONL/XML"
+)]
 struct Cli {
     /// Path to sms-*.xml file, or a directory of .xml files
     #[arg(long)]
@@ -60,7 +62,11 @@ struct Cli {
     media_mode: MediaMode,
 
     /// Compress only: max long edge (720p, 1080p, 4k)
-    #[arg(long = "media-max-resolution", default_value = "1080p", value_name = "RES")]
+    #[arg(
+        long = "media-max-resolution",
+        default_value = "1080p",
+        value_name = "RES"
+    )]
     media_max_resolution: MaxResolution,
 
     /// Compress only: max frame rate
@@ -119,7 +125,9 @@ fn main() -> Result<()> {
 
     for line in &result.messages {
         // Media / obfuscate notes historically went to stderr; summary to stdout.
-        if line.starts_with("Media:") || line.starts_with("  media ") || line.starts_with("Obfuscated ")
+        if line.starts_with("Media:")
+            || line.starts_with("  media ")
+            || line.starts_with("Obfuscated ")
         {
             eprintln!("{line}");
         } else {

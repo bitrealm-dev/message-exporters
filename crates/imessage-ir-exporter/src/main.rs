@@ -11,7 +11,9 @@ use message_exporters_core::{
 
 #[derive(Parser, Debug)]
 #[command(name = "imessage-ir-exporter")]
-#[command(about = "Export Apple Messages (chat.db) via common message to JSON/CSV/EML/MBOX/JSONL/XML")]
+#[command(
+    about = "Export Apple Messages (chat.db) via common message to JSON/CSV/EML/MBOX/JSONL/XML"
+)]
 struct Cli {
     /// Path to chat.db (macOS) or iOS backup root (default: system Messages DB)
     #[arg(long)]

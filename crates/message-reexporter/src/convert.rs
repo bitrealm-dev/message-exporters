@@ -1,12 +1,12 @@
 //! Load detected IR export and write another packaging format.
 
-use crate::detect::{detect_ir_export, list_artifacts, DetectedExport};
-use anyhow::{bail, Context, Result};
+use crate::detect::{DetectedExport, detect_ir_export, list_artifacts};
+use anyhow::{Context, Result, bail};
 use message_exporters_core::{MediaConfig, ObfuscateConfig, OutputFormat};
 use message_ir::{
-    clean_previous_ir_output, read_conversation_csv, read_conversation_eml_dir,
-    read_conversation_json, read_conversation_jsonl, read_conversation_mbox, ConversationDocument,
-    ExportTransforms, FormatSink, FormatSinkResult,
+    ConversationDocument, ExportTransforms, FormatSink, FormatSinkResult, clean_previous_ir_output,
+    read_conversation_csv, read_conversation_eml_dir, read_conversation_json,
+    read_conversation_jsonl, read_conversation_mbox,
 };
 use sms_backup_restore_exporter::load_documents_from_xml;
 use std::fs;
@@ -52,8 +52,7 @@ pub fn convert_export(
     let transforms = ExportTransforms::from_configs(media, obfuscate);
     let copy_attachments = transforms.copies_attachments();
 
-    fs::create_dir_all(output_dir)
-        .with_context(|| format!("create {}", output_dir.display()))?;
+    fs::create_dir_all(output_dir).with_context(|| format!("create {}", output_dir.display()))?;
     clean_previous_ir_output(output_dir)?;
 
     if copy_attachments {
@@ -87,12 +86,8 @@ fn load_documents(
     match detected.format {
         OutputFormat::Xml => {
             let attachments_dir = output_dir.join("attachments");
-            let (docs, report) = load_documents_from_xml(
-                input_dir,
-                &[],
-                Some(&attachments_dir),
-                copy_attachments,
-            )?;
+            let (docs, report) =
+                load_documents_from_xml(input_dir, &[], Some(&attachments_dir), copy_attachments)?;
             if !report.errors.is_empty() {
                 for err in report.errors.iter().take(5) {
                     eprintln!("xml warning: {err}");

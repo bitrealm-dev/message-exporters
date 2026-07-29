@@ -28,9 +28,7 @@ pub fn parse_utc_offset(raw: &str) -> Result<FixedOffset, String> {
         Some('+') => (1i32, &rest[1..]),
         Some('-') => (-1i32, &rest[1..]),
         _ => {
-            return Err(format!(
-                "expected UTC±HH:MM (e.g. UTC-05:00), got {raw:?}"
-            ));
+            return Err(format!("expected UTC±HH:MM (e.g. UTC-05:00), got {raw:?}"));
         }
     };
     let (hours, minutes) = parse_hh_mm(body)?;

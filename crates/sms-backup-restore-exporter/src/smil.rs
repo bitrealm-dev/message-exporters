@@ -36,9 +36,8 @@ pub fn ordered_smil_refs(smil_xml: &str) -> (Vec<String>, Vec<String>) {
     if smil_xml.trim().is_empty() {
         return (Vec::new(), Vec::new());
     }
-    let text_re = TEXT_SRC_RE.get_or_init(|| {
-        Regex::new(r#"(?i)<text[^>]+src=["']([^"']+)["']"#).expect("text src")
-    });
+    let text_re = TEXT_SRC_RE
+        .get_or_init(|| Regex::new(r#"(?i)<text[^>]+src=["']([^"']+)["']"#).expect("text src"));
     let img_re = IMG_SRC_RE
         .get_or_init(|| Regex::new(r#"(?i)<img[^>]+src=["']([^"']+)["']"#).expect("img src"));
     let texts: Vec<String> = text_re
@@ -56,7 +55,9 @@ pub fn part_content_keys(part: &MmsPart) -> HashSet<String> {
     let mut keys = HashSet::new();
     for raw in [&part.name, &part.cl, &part.fn_attr] {
         let cleaned = raw.trim();
-        if cleaned.is_empty() || cleaned.eq_ignore_ascii_case("null") || cleaned.eq_ignore_ascii_case("none")
+        if cleaned.is_empty()
+            || cleaned.eq_ignore_ascii_case("null")
+            || cleaned.eq_ignore_ascii_case("none")
         {
             continue;
         }

@@ -6,7 +6,7 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 
 /// Shared cancel flag for cooperative in-process jobs.
@@ -177,9 +177,8 @@ pub fn spawn(
                             let _ = tx_out.send(ProcessEvent::Log(line));
                         }
                         Err(error) => {
-                            let _ = tx_out.send(ProcessEvent::Log(format!(
-                                "stdout read error: {error}"
-                            )));
+                            let _ = tx_out
+                                .send(ProcessEvent::Log(format!("stdout read error: {error}")));
                             break;
                         }
                     }
@@ -195,9 +194,8 @@ pub fn spawn(
                             let _ = tx_err.send(ProcessEvent::Log(line));
                         }
                         Err(error) => {
-                            let _ = tx_err.send(ProcessEvent::Log(format!(
-                                "stderr read error: {error}"
-                            )));
+                            let _ = tx_err
+                                .send(ProcessEvent::Log(format!("stderr read error: {error}")));
                             break;
                         }
                     }

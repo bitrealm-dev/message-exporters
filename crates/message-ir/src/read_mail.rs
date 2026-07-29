@@ -2,13 +2,13 @@
 
 use crate::normalize::{imessage_from_parts, source_from_parts};
 use crate::{
-    parse_android_type, ConversationDocument, ConversationMeta, ConversationStats, ExportMeta,
-    IrAttachment, IrConversationType, IrDirection, IrImessage, IrMessage, IrMessageKind,
-    IrParticipant, IrService, SCHEMA_VERSION,
+    ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, IrAttachment,
+    IrConversationType, IrDirection, IrImessage, IrMessage, IrMessageKind, IrParticipant,
+    IrService, SCHEMA_VERSION, parse_android_type,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use message_mail::{
-    mail_message_from_eml_bytes, mail_messages_from_mbox, Direction as MailDirection, MailMessage,
+    Direction as MailDirection, MailMessage, mail_message_from_eml_bytes, mail_messages_from_mbox,
 };
 use std::fs;
 use std::path::Path;
@@ -47,9 +47,7 @@ pub fn read_conversation_eml_dir(dir: &Path) -> Result<ConversationDocument> {
     });
 
     let packaging = crate::util::packaging_suffix_from_stem(
-        dir.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or_default(),
+        dir.file_name().and_then(|n| n.to_str()).unwrap_or_default(),
     );
     document_from_mail_messages(&mail_messages, packaging)
 }
@@ -139,9 +137,7 @@ fn ir_message_from_mail(msg: &MailMessage) -> IrMessage {
         MailDirection::Outgoing => IrDirection::Outgoing,
     };
     let source = source_from_parts(
-        msg.android_type
-            .as_deref()
-            .and_then(parse_android_type),
+        msg.android_type.as_deref().and_then(parse_android_type),
         msg.source_fields_json.as_deref().unwrap_or(""),
     );
     let imessage = imessage_from_parts(IrImessage {

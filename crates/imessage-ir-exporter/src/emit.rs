@@ -23,15 +23,15 @@ use imessage_database::{
             Message,
             models::{GroupAction, Service},
         },
-        table::{Table, ME, ORPHANED, YOU},
+        table::{ME, ORPHANED, Table, YOU},
     },
     util::dates::TIMESTAMP_FACTOR,
 };
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    owner_sender, parse_json_value, ConversationDocument, ConversationMeta, ExportMeta,
-    FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrImessage,
-    IrMessage, IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION,
+    ConversationDocument, ConversationMeta, ExportMeta, FormatSink, FormatSinkResult, IrAttachment,
+    IrConversationType, IrDirection, IrImessage, IrMessage, IrMessageKind, IrParticipant,
+    IrService, SCHEMA_VERSION, owner_sender, parse_json_value,
 };
 use message_mail::{Direction as MailDirection, MailAttachment, MailMessage, Participant};
 use sha2::{Digest, Sha256};
@@ -41,9 +41,9 @@ use crate::{
     body::{apply_body, referenced_attachment_indices},
     error::RuntimeError,
     fields::{
-        balloon_kind_label, balloon_summary, build_balloon_value, build_edit_records,
+        TapbackCell, balloon_kind_label, balloon_summary, build_balloon_value, build_edit_records,
         build_part_records, expressive_label, parse_thread_part, shared_location_label,
-        sticker_extras, transcription_for_attachment, TapbackCell,
+        sticker_extras, transcription_for_attachment,
     },
     options::AttachmentEmbed,
     session::MailSession,
@@ -379,7 +379,11 @@ fn imessage_bag(mail: &MailMessage) -> Option<IrImessage> {
 }
 
 /// Destination file name for a persisted attachment: `<local-date>-<digest16><ext>`.
-fn attachment_dest_name(timestamp_unix_ms: i64, bytes: &[u8], original_name: Option<&str>) -> String {
+fn attachment_dest_name(
+    timestamp_unix_ms: i64,
+    bytes: &[u8],
+    original_name: Option<&str>,
+) -> String {
     let digest_hex = hex::encode(Sha256::digest(bytes));
     let digest_prefix = &digest_hex[..16.min(digest_hex.len())];
     let secs = timestamp_unix_ms.div_euclid(1000);
@@ -576,10 +580,7 @@ fn build_parent_tapbacks_json(session: &MailSession, message: &Message) -> Optio
             let (reactor_handle, reactor_display_name) = if tapback.is_from_me() {
                 (
                     None,
-                    Some(
-                        owner_display_name(session, tapback)
-                            .unwrap_or_else(|| ME.to_string()),
-                    ),
+                    Some(owner_display_name(session, tapback).unwrap_or_else(|| ME.to_string())),
                 )
             } else if let Some(handle_id) = tapback.handle_id {
                 (
@@ -648,12 +649,7 @@ fn build_mail_message(
                     participants,
                 )
             }
-            None => (
-                String::new(),
-                "individual".to_string(),
-                None,
-                Vec::new(),
-            ),
+            None => (String::new(), "individual".to_string(), None, Vec::new()),
         };
 
     let is_from_me = message.is_from_me();
@@ -855,10 +851,7 @@ fn build_mail_message(
         build_parent_tapbacks_json(session, message)
     };
 
-    let owner_handle = message
-        .destination_caller_id
-        .clone()
-        .unwrap_or_default();
+    let owner_handle = message.destination_caller_id.clone().unwrap_or_default();
 
     Ok(MailMessage {
         chat_identifier,

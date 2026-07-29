@@ -1,20 +1,20 @@
 //! Convert iMazing Messages / WhatsApp rows → common message → packaging via FormatSink.
 
-use crate::cancel::{check_cancel, CancelFlag};
-use crate::parse::{discover_csv_files, parse_csv_file, RawRow, SourceKind};
+use crate::cancel::{CancelFlag, check_cancel};
+use crate::parse::{RawRow, SourceKind, discover_csv_files, parse_csv_file};
 use anyhow::{Context, Result};
 use chrono::{FixedOffset, Local, NaiveDateTime, TimeZone};
 use message_contacts::ContactsBook;
-use message_csv::{format_local_ts, parse_utc_offset, stable_guid, AttachmentCell, DateRange};
+use message_csv::{AttachmentCell, DateRange, format_local_ts, parse_utc_offset, stable_guid};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    clean_previous_ir_output, owner_sender, ConversationDocument, ConversationMeta,
-    ConversationStats, ExportMeta, ExportTransforms, FormatSink, FormatSinkResult, IrAttachment,
-    IrConversationType, IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, IrSource,
-    SCHEMA_VERSION,
+    ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
+    FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
+    IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION, clean_previous_ir_output,
+    owner_sender,
 };
-use serde_json::Map;
 use message_phone::{sanitize_number, to_e164};
+use serde_json::Map;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
@@ -167,21 +167,23 @@ pub fn convert_export(
             report.unresolved_group_participants += peer.unresolved_roster_labels;
 
             let convo_key = format!("{}|{}", family.key_prefix(), peer.chat_id);
-            let convo = conversations.entry(convo_key).or_insert_with(|| PendingConversation {
-                conversation_type: if peer.group {
-                    "group".into()
-                } else {
-                    "individual".into()
-                },
-                group_title: if peer.group {
-                    session.clone()
-                } else {
-                    String::new()
-                },
-                source_kind: Some(discovered.kind),
-                messages: Vec::new(),
-                seen: HashSet::new(),
-            });
+            let convo = conversations
+                .entry(convo_key)
+                .or_insert_with(|| PendingConversation {
+                    conversation_type: if peer.group {
+                        "group".into()
+                    } else {
+                        "individual".into()
+                    },
+                    group_title: if peer.group {
+                        session.clone()
+                    } else {
+                        String::new()
+                    },
+                    source_kind: Some(discovered.kind),
+                    messages: Vec::new(),
+                    seen: HashSet::new(),
+                });
 
             for row in session_rows {
                 let Some((secs, date_ms)) = parse_message_date(&row.message_date, &tz) else {
@@ -194,15 +196,18 @@ pub fn convert_export(
                 }
                 let is_notification = is_notification(&row.msg_type);
                 let is_from_me = !is_notification && is_outgoing(&row.msg_type);
-                let (sender_handle, sender_display_name) =
-                    resolve_sender(book, row, is_from_me, is_notification, &peer.chat_id, &peer.contact_name);
+                let (sender_handle, sender_display_name) = resolve_sender(
+                    book,
+                    row,
+                    is_from_me,
+                    is_notification,
+                    &peer.chat_id,
+                    &peer.contact_name,
+                );
 
                 let mut attachments = Vec::new();
                 if !row.attachment.is_empty() {
-                    let csv_parent = discovered
-                        .path
-                        .parent()
-                        .unwrap_or_else(|| Path::new("."));
+                    let csv_parent = discovered.path.parent().unwrap_or_else(|| Path::new("."));
                     attachments.push(resolve_attachment_cell(
                         &row.attachment,
                         &row.attachment_type,
@@ -445,12 +450,14 @@ fn attachment_name_matches(disk_name: &str, csv_name: &str) -> bool {
     if disk == csv {
         return true;
     }
-    disk.ends_with(&csv)
-        || disk.ends_with(&format!("_{csv}"))
-        || disk.ends_with(&format!("-{csv}"))
+    disk.ends_with(&csv) || disk.ends_with(&format!("_{csv}")) || disk.ends_with(&format!("-{csv}"))
 }
 
-fn find_attachment_on_disk(csv_name: &str, csv_parent: &Path, input_root: &Path) -> Option<PathBuf> {
+fn find_attachment_on_disk(
+    csv_name: &str,
+    csv_parent: &Path,
+    input_root: &Path,
+) -> Option<PathBuf> {
     if let Ok(entries) = fs::read_dir(csv_parent) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -583,9 +590,7 @@ fn resolve_chat_identifier(
 
     if let Some(handle) = peer_handles.first() {
         let contact_name = if let Some(digits) = sanitize_number(handle) {
-            book.lookup_name_by_phone(&digits)
-                .unwrap_or("")
-                .to_string()
+            book.lookup_name_by_phone(&digits).unwrap_or("").to_string()
         } else {
             String::new()
         };
@@ -603,10 +608,7 @@ fn resolve_chat_identifier(
     }
     if let Some(digits) = sanitize_number(session) {
         let e164 = to_e164(&digits);
-        let name = book
-            .lookup_name_by_phone(&digits)
-            .unwrap_or("")
-            .to_string();
+        let name = book.lookup_name_by_phone(&digits).unwrap_or("").to_string();
         return (e164, name, false);
     }
     if let Some(e164) = book.lookup_e164_by_name(session) {
@@ -660,10 +662,7 @@ fn resolve_sender(
     let mut display = row.sender_name.trim().to_string();
     if display.is_empty() {
         if let Some(digits) = sanitize_number(&handle) {
-            display = book
-                .lookup_name_by_phone(&digits)
-                .unwrap_or("")
-                .to_string();
+            display = book.lookup_name_by_phone(&digits).unwrap_or("").to_string();
         }
     }
     if display.is_empty() && !contact_name.is_empty() {
@@ -958,7 +957,17 @@ Bob,,McRoy,+13212462167,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let (report, _) = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), ExportTransforms::none(), OutputFormat::Csv, None).unwrap();
+        let (report, _) = convert_export(
+            dir.path(),
+            &out,
+            &book,
+            Some("UTC"),
+            &DateRange::default(),
+            ExportTransforms::none(),
+            OutputFormat::Csv,
+            None,
+        )
+        .unwrap();
         assert_eq!(report.conversations, 1);
         assert_eq!(report.unresolved_chat_phone, 0);
         assert_eq!(report.messages, 2);
@@ -988,7 +997,17 @@ Other,,Person,+15555550999,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let (report, _) = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), ExportTransforms::none(), OutputFormat::Csv, None).unwrap();
+        let (report, _) = convert_export(
+            dir.path(),
+            &out,
+            &book,
+            Some("UTC"),
+            &DateRange::default(),
+            ExportTransforms::none(),
+            OutputFormat::Csv,
+            None,
+        )
+        .unwrap();
         assert!(report.unresolved_chat_phone >= 1);
         assert_eq!(report.conversations, 1);
         assert!(out.join("Mystery_Person.csv").is_file());
@@ -1012,7 +1031,17 @@ Bob,,,+15555550100,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let (report, _) = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), ExportTransforms::none(), OutputFormat::Csv, None).unwrap();
+        let (report, _) = convert_export(
+            dir.path(),
+            &out,
+            &book,
+            Some("UTC"),
+            &DateRange::default(),
+            ExportTransforms::none(),
+            OutputFormat::Csv,
+            None,
+        )
+        .unwrap();
         assert_eq!(report.messages, 1);
         assert_eq!(report.duplicates_dropped, 1);
     }
@@ -1035,7 +1064,17 @@ Bob,,,+15555550100,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let (report, _) = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), ExportTransforms::none(), OutputFormat::Csv, None).unwrap();
+        let (report, _) = convert_export(
+            dir.path(),
+            &out,
+            &book,
+            Some("UTC"),
+            &DateRange::default(),
+            ExportTransforms::none(),
+            OutputFormat::Csv,
+            None,
+        )
+        .unwrap();
         assert_eq!(report.messages, 2);
         assert_eq!(report.duplicates_dropped, 0);
     }
@@ -1060,13 +1099,21 @@ Carol,,Silent,+15555550133,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let (report, _) = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), ExportTransforms::none(), OutputFormat::Csv, None).unwrap();
-        assert_eq!(report.conversations, 1);
-        assert_eq!(report.unresolved_group_participants, 0);
-        let body = fs::read_to_string(
-            out.join("group_+15555550111_+15555550122_+15555550133.csv"),
+        let (report, _) = convert_export(
+            dir.path(),
+            &out,
+            &book,
+            Some("UTC"),
+            &DateRange::default(),
+            ExportTransforms::none(),
+            OutputFormat::Csv,
+            None,
         )
         .unwrap();
+        assert_eq!(report.conversations, 1);
+        assert_eq!(report.unresolved_group_participants, 0);
+        let body = fs::read_to_string(out.join("group_+15555550111_+15555550122_+15555550133.csv"))
+            .unwrap();
         assert!(body.contains("+15555550133") || body.contains("15555550133"));
         assert!(body.contains("group"));
     }
@@ -1090,7 +1137,17 @@ Bob,,Example,+15555550122,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let (report, _) = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), ExportTransforms::none(), OutputFormat::Csv, None).unwrap();
+        let (report, _) = convert_export(
+            dir.path(),
+            &out,
+            &book,
+            Some("UTC"),
+            &DateRange::default(),
+            ExportTransforms::none(),
+            OutputFormat::Csv,
+            None,
+        )
+        .unwrap();
         assert_eq!(report.conversations, 1);
         assert_eq!(report.unresolved_group_participants, 1);
     }
@@ -1118,7 +1175,17 @@ Bob,,,+15555550100,\n",
         );
         let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
         let out = dir.path().join("out");
-        let (report, _) = convert_export(dir.path(), &out, &book, Some("UTC"), &DateRange::default(), ExportTransforms::none(), OutputFormat::Csv, None).unwrap();
+        let (report, _) = convert_export(
+            dir.path(),
+            &out,
+            &book,
+            Some("UTC"),
+            &DateRange::default(),
+            ExportTransforms::none(),
+            OutputFormat::Csv,
+            None,
+        )
+        .unwrap();
         assert_eq!(report.conversations, 2);
         assert_eq!(report.messages_files, 1);
         assert_eq!(report.whatsapp_files, 1);
@@ -1149,9 +1216,17 @@ Bob McRoy,2020-01-01 12:00:00,,,,,SMS,Incoming,+15555550100,Bob,Read,,,Hi,,image
         fs::write(chat.join("ABC123_image000000.jpg"), b"fake-jpeg-bytes").unwrap();
         let book = ContactsBook::empty();
         let out = dir.path().join("out");
-        let (report, _) =
-            convert_export(&chat, &out, &book, Some("UTC"), &DateRange::default(), ExportTransforms::none(), OutputFormat::Csv, None)
-                .unwrap();
+        let (report, _) = convert_export(
+            &chat,
+            &out,
+            &book,
+            Some("UTC"),
+            &DateRange::default(),
+            ExportTransforms::none(),
+            OutputFormat::Csv,
+            None,
+        )
+        .unwrap();
         assert_eq!(report.attachments_saved, 1);
         assert_eq!(report.messages, 1);
         let att_dir = out.join("attachments");

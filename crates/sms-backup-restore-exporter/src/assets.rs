@@ -134,10 +134,7 @@ pub fn extract_mms_attachments(
         // Content-addressed: short digest prefix makes collisions impossible.
         let digest_prefix = &digest_hex[..16];
         let out_name = if let Some(ref orig) = original {
-            format!(
-                "{date_prefix}_{digest_prefix}_{}",
-                safe_basename(orig)
-            )
+            format!("{date_prefix}_{digest_prefix}_{}", safe_basename(orig))
         } else {
             format!("{date_prefix}_{digest_prefix}{ext}")
         };
@@ -145,16 +142,14 @@ pub fn extract_mms_attachments(
         let blob = AttachmentBlob {
             filename: out_name.clone(),
             original_name: original,
-            mime_type: mime_for_ext(&ext)
-                .map(|s| s.to_string())
-                .or_else(|| {
-                    let c = part.ct.trim();
-                    if c.is_empty() {
-                        None
-                    } else {
-                        Some(c.to_string())
-                    }
-                }),
+            mime_type: mime_for_ext(&ext).map(|s| s.to_string()).or_else(|| {
+                let c = part.ct.trim();
+                if c.is_empty() {
+                    None
+                } else {
+                    Some(c.to_string())
+                }
+            }),
             data,
             digest_hex,
         };

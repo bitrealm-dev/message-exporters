@@ -6,12 +6,14 @@ use message_exporters_core::{
     ContactsConfig, ContactsKind, ExporterConfig, MediaConfig, ObfuscateConfig, OutputFormat,
     SmsBackupPlusConfig, SourceConfig,
 };
-use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
+use message_media::{MaxResolution, MediaMode, compress_options_from_cli};
 use sms_backup_plus_exporter::{parse_date_range, run};
 
 #[derive(Parser, Debug)]
 #[command(name = "sms-backup-plus-exporter")]
-#[command(about = "Convert SMS Backup+ EML exports via common message to JSON/CSV/EML/MBOX/JSONL/XML")]
+#[command(
+    about = "Convert SMS Backup+ EML exports via common message to JSON/CSV/EML/MBOX/JSONL/XML"
+)]
 struct Cli {
     /// Log progress to stderr (inputs, scan/write progress, dedupe summary)
     #[arg(short = 'v', long, global = true)]
@@ -88,7 +90,11 @@ enum Commands {
         media_mode: MediaMode,
 
         /// Compress only: max long edge (720p, 1080p, 4k)
-        #[arg(long = "media-max-resolution", default_value = "1080p", value_name = "RES")]
+        #[arg(
+            long = "media-max-resolution",
+            default_value = "1080p",
+            value_name = "RES"
+        )]
         media_max_resolution: MaxResolution,
 
         /// Compress only: max frame rate

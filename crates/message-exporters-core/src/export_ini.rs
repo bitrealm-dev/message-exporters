@@ -9,8 +9,8 @@ use message_media::MaxResolution;
 
 use crate::config::OutputFormat;
 use crate::exporters::{
-    contacts_kind_from_path, ApplePlatform, AttachmentMedia, Exporter, Form, WhatsappPlatform,
-    EXPORTERS,
+    ApplePlatform, AttachmentMedia, EXPORTERS, Exporter, Form, WhatsappPlatform,
+    contacts_kind_from_path,
 };
 
 const COMMON: &str = "common";
@@ -204,9 +204,8 @@ impl ExportIniState {
         let ini = build_ini(self, form);
         if let Some(parent) = self.path.parent() {
             if !parent.as_os_str().is_empty() {
-                fs::create_dir_all(parent).map_err(|e| {
-                    format!("Could not create {}: {e}", parent.display())
-                })?;
+                fs::create_dir_all(parent)
+                    .map_err(|e| format!("Could not create {}: {e}", parent.display()))?;
             }
         }
         ini.write_to_file(&self.path)
@@ -266,9 +265,7 @@ fn apply_common(ini: &Ini, form: &mut Form) {
     {
         form.attachment_media = media;
     }
-    if let Some(res) =
-        MaxResolution::parse(&get(ini, Some(COMMON), "media_max_resolution"))
-    {
+    if let Some(res) = MaxResolution::parse(&get(ini, Some(COMMON), "media_max_resolution")) {
         form.media_max_resolution = res;
     }
     let fps = get(ini, Some(COMMON), "media_max_fps");
@@ -279,8 +276,7 @@ fn apply_common(ini: &Ini, form: &mut Form) {
     if !min_size.is_empty() {
         form.media_min_size = min_size;
     }
-    form.media_skip_efficient =
-        parse_bool(&get(ini, Some(COMMON), "media_skip_efficient"), true);
+    form.media_skip_efficient = parse_bool(&get(ini, Some(COMMON), "media_skip_efficient"), true);
 }
 
 fn read_section(ini: &Ini, exporter: Exporter) -> ExporterSection {
@@ -320,16 +316,10 @@ fn build_ini(state: &ExportIniState, form: &Form) -> Ini {
             .set("contacts", form.contacts.trim())
             .set("output_format", form.output_format.as_str())
             .set("attachment_media", form.attachment_media.as_ini_str())
-            .set(
-                "media_max_resolution",
-                form.media_max_resolution.as_str(),
-            )
+            .set("media_max_resolution", form.media_max_resolution.as_str())
             .set("media_max_fps", form.media_max_fps.trim())
             .set("media_min_size", form.media_min_size.trim())
-            .set(
-                "media_skip_efficient",
-                bool_str(form.media_skip_efficient),
-            );
+            .set("media_skip_efficient", bool_str(form.media_skip_efficient));
     }
 
     for exporter in EXPORTERS {
@@ -352,10 +342,7 @@ fn build_ini(state: &ExportIniState, form: &Form) -> Ini {
                 s.set("apple_platform", section.apple_platform.as_ini_str())
                     .set("apple_contacts", section.apple_contacts.trim())
                     .set("attachment_root", section.attachment_root.trim())
-                    .set(
-                        "conversation_filter",
-                        section.conversation_filter.trim(),
-                    );
+                    .set("conversation_filter", section.conversation_filter.trim());
                 // backup_password intentionally omitted
             }
             Exporter::Whatsapp => {
@@ -423,8 +410,7 @@ mod tests {
             start_date: "2020-01-01".into(),
             end_date: "2021-01-01".into(),
             obfuscate: true,
-            obfuscate_seed: "01234567"
-                .into(),
+            obfuscate_seed: "01234567".into(),
             owner_phones: "+15555550100\n+15555550101".into(),
             contacts: "/tmp/contacts.vcf".into(),
             output_format: OutputFormat::Eml,
@@ -465,16 +451,14 @@ mod tests {
         assert_eq!(loaded_form.owner_phones, "+15555550100\n+15555550101");
         assert_eq!(loaded_form.input, "/data/plus");
         assert_eq!(loaded_form.owner_emails, "a@example.com");
-        assert_eq!(
-            loaded.section(Exporter::GoSmsPro).input,
-            "/data/go"
-        );
+        assert_eq!(loaded.section(Exporter::GoSmsPro).input, "/data/go");
 
         // Password must never appear in the file.
         let text = fs::read_to_string(file.path()).unwrap();
         assert!(!text.contains("backup_password"));
         assert!(
-            text.contains("exporter=sms-backup-plus") || text.contains("exporter = sms-backup-plus")
+            text.contains("exporter=sms-backup-plus")
+                || text.contains("exporter = sms-backup-plus")
         );
         assert!(text.contains("output_format=eml") || text.contains("output_format = eml"));
     }
@@ -536,8 +520,7 @@ apple_platform = ios
         let mut file = NamedTempFile::new().unwrap();
         write!(file, "[invalid").unwrap();
 
-        let (state, form, error) =
-            ExportIniState::load_or_default_at(file.path().to_path_buf());
+        let (state, form, error) = ExportIniState::load_or_default_at(file.path().to_path_buf());
 
         assert_eq!(state.path, file.path());
         assert_eq!(state.exporter, Exporter::default());

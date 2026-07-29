@@ -56,8 +56,7 @@ impl SbrBackupWriter {
     /// Create a new backup at `path` (typically `…/smses.xml`).
     pub fn create(path: &Path) -> Result<Self> {
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("create {}", parent.display()))?;
+            fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
         }
         let body_path = path.with_extension("xml.sbrbody");
         if body_path.exists() {
@@ -105,8 +104,8 @@ impl SbrBackupWriter {
         self.body.flush().context("flush sbr body")?;
         drop(self.body);
 
-        let body_bytes =
-            fs::read(&self.body_path).with_context(|| format!("read {}", self.body_path.display()))?;
+        let body_bytes = fs::read(&self.body_path)
+            .with_context(|| format!("read {}", self.body_path.display()))?;
 
         let mut tmp = self.path.clone();
         tmp.set_extension("xml.tmp");
@@ -114,7 +113,10 @@ impl SbrBackupWriter {
             let mut out = BufWriter::new(
                 File::create(&tmp).with_context(|| format!("create {}", tmp.display()))?,
             );
-            writeln!(out, r#"<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>"#)?;
+            writeln!(
+                out,
+                r#"<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>"#
+            )?;
             writeln!(out, r#"<smses count="{}">"#, self.count)?;
             out.write_all(&body_bytes)?;
             if !body_bytes.is_empty() && !body_bytes.ends_with(b"\n") {
@@ -271,5 +273,4 @@ mod tests {
         assert!(text.contains(r#"count="0""#));
         assert!(text.contains("</smses>"));
     }
-
 }

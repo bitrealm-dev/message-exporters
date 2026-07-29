@@ -7,7 +7,7 @@ mod convert;
 mod detect;
 pub mod run;
 
-pub use convert::{convert_export, ReexportReport};
-pub use detect::{detect_ir_export, DetectedExport};
+pub use convert::{ReexportReport, convert_export};
+pub use detect::{DetectedExport, detect_ir_export};
 pub use message_exporters_core::{ExporterConfig, OutputFormat};
-pub use run::{run, RunResult};
+pub use run::{RunResult, run};

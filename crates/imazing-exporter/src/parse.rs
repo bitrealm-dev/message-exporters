@@ -1,6 +1,6 @@
 //! Parse iMazing Messages and WhatsApp CSV exports.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};

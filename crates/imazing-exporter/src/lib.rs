@@ -9,7 +9,7 @@ mod emit;
 mod parse;
 pub mod run;
 
-pub use cancel::{is_cancelled, CancelFlag};
-pub use emit::{convert_export, ExportReport};
+pub use cancel::{CancelFlag, is_cancelled};
+pub use emit::{ExportReport, convert_export};
 pub use message_exporters_core::ExporterConfig;
-pub use run::{parse_date_range, report_summary_lines, run, RunResult};
+pub use run::{RunResult, parse_date_range, report_summary_lines, run};

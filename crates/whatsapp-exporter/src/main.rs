@@ -6,7 +6,7 @@ use message_exporters_core::{
     ExporterConfig, MediaConfig, ObfuscateConfig, OutputFormat, SourceConfig, WhatsappConfig,
     WhatsappPlatform,
 };
-use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
+use message_media::{MaxResolution, MediaMode, compress_options_from_cli};
 use whatsapp_exporter::{parse_date_range, run};
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -26,7 +26,9 @@ impl From<CliPlatform> for WhatsappPlatform {
 
 #[derive(Parser, Debug)]
 #[command(name = "whatsapp-exporter")]
-#[command(about = "Convert WhatsApp DB/backup (via wtsexporter) via common message to JSON/CSV/EML/MBOX/JSONL/XML")]
+#[command(
+    about = "Convert WhatsApp DB/backup (via wtsexporter) via common message to JSON/CSV/EML/MBOX/JSONL/XML"
+)]
 struct Cli {
     /// Directory (or msgstore.db file) used to resolve relative defaults such as
     /// `msgstore.db` / `wa.db` / `WhatsApp/`. Defaults to the process cwd.
@@ -96,7 +98,11 @@ struct Cli {
     media_mode: MediaMode,
 
     /// Compress only: max long edge (720p, 1080p, 4k)
-    #[arg(long = "media-max-resolution", default_value = "1080p", value_name = "RES")]
+    #[arg(
+        long = "media-max-resolution",
+        default_value = "1080p",
+        value_name = "RES"
+    )]
     media_max_resolution: MaxResolution,
 
     /// Compress only: max frame rate

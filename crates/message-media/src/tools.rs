@@ -1,6 +1,6 @@
 use std::process::{Command, Stdio};
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 pub fn ffmpeg_available() -> bool {
     command_ok("ffmpeg", &["-version"]) && command_ok("ffprobe", &["-version"])
@@ -75,10 +75,7 @@ pub(crate) fn probe_video(path: &std::path::Path) -> Result<Probe> {
     let codec = parts.first().copied().unwrap_or("").to_ascii_lowercase();
     let width = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
     let height = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
-    let fps = parts
-        .get(3)
-        .map(|s| parse_rate(s))
-        .unwrap_or(0.0);
+    let fps = parts.get(3).map(|s| parse_rate(s)).unwrap_or(0.0);
     let bitrate = parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(0);
     Ok(Probe {
         codec,

@@ -41,9 +41,7 @@ impl DateRange {
                     .from_local_datetime(&date.and_hms_opt(0, 0, 0).expect("midnight"))
                     .single()
                     .map(|dt| dt.timestamp())
-                    .ok_or_else(|| {
-                        format!("ambiguous or invalid midnight for {date} in {offset}")
-                    })
+                    .ok_or_else(|| format!("ambiguous or invalid midnight for {date} in {offset}"))
             },
             start,
             end,

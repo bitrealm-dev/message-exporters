@@ -14,7 +14,7 @@ mod size;
 mod tools;
 
 pub use csv_rewrite::rewrite_attachment_paths;
-pub use process::{process_attachments_dir, process_export_media, MediaReport};
+pub use process::{MediaReport, process_attachments_dir, process_export_media};
 pub use size::parse_size;
 pub use tools::{ffmpeg_available, require_ffmpeg};
 
@@ -73,9 +73,7 @@ impl FromStr for MediaMode {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::parse(s).ok_or_else(|| {
-            format!(
-                "invalid media-mode '{s}' (expected disabled, clone, convert, or compress)"
-            )
+            format!("invalid media-mode '{s}' (expected disabled, clone, convert, or compress)")
         })
     }
 }

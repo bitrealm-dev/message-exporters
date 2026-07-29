@@ -1,12 +1,12 @@
 //! Parse SMS Backup & Restore / legacy allsms XML.
 
 use crate::smil::{ordered_smil_refs, part_content_keys, smil_xml_from_parts};
-use message_phone::{sanitize_number, to_e164};
 use anyhow::{Context, Result};
 use base64::Engine;
-use quick_xml::events::Event;
+use message_phone::{sanitize_number, to_e164};
 use quick_xml::Reader;
 use quick_xml::XmlVersion;
+use quick_xml::events::Event;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -72,9 +72,7 @@ pub struct AttachmentBlob {
 #[serde(tag = "kind")]
 pub enum XmlFields {
     #[serde(rename = "sms")]
-    Sms {
-        attrs: BTreeMap<String, String>,
-    },
+    Sms { attrs: BTreeMap<String, String> },
     #[serde(rename = "mms")]
     Mms {
         attrs: BTreeMap<String, String>,
@@ -520,7 +518,10 @@ fn parse_mms(
 }
 
 /// Stream-parse one XML file into messages.
-pub fn parse_xml_file(path: &Path, owners: &HashSet<String>) -> Result<(Vec<ParsedMessage>, XmlParseStats)> {
+pub fn parse_xml_file(
+    path: &Path,
+    owners: &HashSet<String>,
+) -> Result<(Vec<ParsedMessage>, XmlParseStats)> {
     let file = std::fs::File::open(path).with_context(|| format!("open {}", path.display()))?;
     let reader = std::io::BufReader::new(file);
     parse_xml_reader(reader, owners)
@@ -605,8 +606,7 @@ pub fn parse_xml_reader<R: BufRead>(
                         addrs.push(std::mem::take(&mut current_addr));
                     }
                     "mms" => {
-                        if let Some(msg) =
-                            parse_mms(&mms_attrs, &parts, &addrs, owners, &mut stats)
+                        if let Some(msg) = parse_mms(&mms_attrs, &parts, &addrs, owners, &mut stats)
                         {
                             messages.push(msg);
                         }
@@ -755,11 +755,13 @@ mod tests {
         assert!(!msgs[0].is_from_me);
         assert_eq!(msgs[0].sender_digits.as_deref(), Some("5555550101"));
         assert_eq!(msgs[0].attachments.len(), 1);
-        assert!(msgs[0]
-            .group_title
-            .as_deref()
-            .unwrap_or("")
-            .contains("+15555550101"));
+        assert!(
+            msgs[0]
+                .group_title
+                .as_deref()
+                .unwrap_or("")
+                .contains("+15555550101")
+        );
     }
 
     #[test]

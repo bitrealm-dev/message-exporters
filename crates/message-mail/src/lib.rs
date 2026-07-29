@@ -8,12 +8,12 @@
 
 mod parse;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use chrono::{Local, TimeZone, Utc};
+use mail_builder::MessageBuilder;
 use mail_builder::headers::address::Address;
 use mail_builder::headers::date::Date;
 use mail_builder::headers::text::Text;
-use mail_builder::MessageBuilder;
 use message_csv::conversation_filename;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
@@ -236,8 +236,8 @@ pub fn clean_previous_mail_output(output_dir: &Path) -> Result<()> {
     if !output_dir.is_dir() {
         return Ok(());
     }
-    for entry in fs::read_dir(output_dir)
-        .with_context(|| format!("read {}", output_dir.display()))?
+    for entry in
+        fs::read_dir(output_dir).with_context(|| format!("read {}", output_dir.display()))?
     {
         let path = entry?.path();
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -247,22 +247,18 @@ pub fn clean_previous_mail_output(output_dir: &Path) -> Result<()> {
                 .and_then(|e| e.to_str())
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("mbox"))
         {
-            fs::remove_file(&path)
-                .with_context(|| format!("remove {}", path.display()))?;
+            fs::remove_file(&path).with_context(|| format!("remove {}", path.display()))?;
             continue;
         }
         if path.is_dir() && name != "attachments" {
-            let has_eml = fs::read_dir(&path)?
-                .filter_map(|e| e.ok())
-                .any(|e| {
-                    e.path()
-                        .extension()
-                        .and_then(|x| x.to_str())
-                        .is_some_and(|ext| ext.eq_ignore_ascii_case("eml"))
-                });
+            let has_eml = fs::read_dir(&path)?.filter_map(|e| e.ok()).any(|e| {
+                e.path()
+                    .extension()
+                    .and_then(|x| x.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("eml"))
+            });
             if has_eml {
-                fs::remove_dir_all(&path)
-                    .with_context(|| format!("remove {}", path.display()))?;
+                fs::remove_dir_all(&path).with_context(|| format!("remove {}", path.display()))?;
             }
         }
     }
@@ -294,11 +290,8 @@ struct AttachmentMetaCell<'a> {
 
 /// Conversation directory stem (CSV filename without `.csv`).
 pub fn conversation_stem(msg: &MailMessage) -> String {
-    let participant_handles: Vec<String> = msg
-        .participants
-        .iter()
-        .map(|p| p.handle.clone())
-        .collect();
+    let participant_handles: Vec<String> =
+        msg.participants.iter().map(|p| p.handle.clone()).collect();
     let csv_name = conversation_filename(
         &msg.conversation_type,
         &msg.chat_identifier,
@@ -315,11 +308,7 @@ pub fn conversation_stem(msg: &MailMessage) -> String {
 /// Write a single `.eml` into an existing conversation directory.
 ///
 /// `sequence` is 1-based (`000001_…`). Creates `conv_dir` if missing.
-pub fn write_message_file(
-    conv_dir: &Path,
-    sequence: u32,
-    msg: &MailMessage,
-) -> Result<PathBuf> {
+pub fn write_message_file(conv_dir: &Path, sequence: u32, msg: &MailMessage) -> Result<PathBuf> {
     if sequence == 0 {
         bail!("write_message_file sequence must be >= 1");
     }
@@ -437,8 +426,7 @@ fn write_mboxrd_record(writer: &mut impl Write, msg: &MailMessage) -> Result<()>
     let eml = build_eml(msg)?;
     let envelope = envelope_sender(msg);
     let asctime = mbox_asctime_utc(msg.timestamp_unix_ms.div_euclid(1000))?;
-    writeln!(writer, "From {envelope} {asctime}")
-        .context("write mbox From_ line")?;
+    writeln!(writer, "From {envelope} {asctime}").context("write mbox From_ line")?;
 
     let text = String::from_utf8_lossy(&eml);
     // Normalize to LF; strip a single trailing newline so we control the separator.
@@ -463,11 +451,7 @@ fn envelope_sender(msg: &MailMessage) -> String {
             .unwrap_or("unknown"),
         Direction::Outgoing => {
             let owner = msg.owner_handle.trim();
-            if owner.is_empty() {
-                "me"
-            } else {
-                owner
-            }
+            if owner.is_empty() { "me" } else { owner }
         }
     };
     // Envelope address must not contain spaces.
@@ -561,14 +545,13 @@ fn conversation_address(msg: &MailMessage) -> Address<'static> {
         .filter(|t| !t.is_empty())
         .unwrap_or_else(|| {
             let id = msg.chat_identifier.trim();
-            if id.is_empty() {
-                "group"
-            } else {
-                id
-            }
+            if id.is_empty() { "group" } else { id }
         });
     let local = sanitize_addr_local(msg.chat_identifier.trim()).unwrap_or_else(|| "group".into());
-    Address::new_address(Some(display.to_string()), format!("{local}@{CHAT_ADDRESS_DOMAIN}"))
+    Address::new_address(
+        Some(display.to_string()),
+        format!("{local}@{CHAT_ADDRESS_DOMAIN}"),
+    )
 }
 
 fn sanitize_addr_local(raw: &str) -> Option<String> {
@@ -585,11 +568,7 @@ fn sanitize_addr_local(raw: &str) -> Option<String> {
             out.push('_');
         }
     }
-    if out.is_empty() {
-        None
-    } else {
-        Some(out)
-    }
+    if out.is_empty() { None } else { Some(out) }
 }
 
 fn peer_display_name<'a>(msg: &'a MailMessage, peer: &str) -> Option<&'a str> {
@@ -604,11 +583,7 @@ fn peer_display_name<'a>(msg: &'a MailMessage, peer: &str) -> Option<&'a str> {
                 .as_deref()
                 .map(str::trim)
                 .filter(|n| !n.is_empty())
-                .filter(|_| {
-                    msg.sender_handle
-                        .as_deref()
-                        .is_some_and(|h| h == peer)
-                })
+                .filter(|_| msg.sender_handle.as_deref().is_some_and(|h| h == peer))
         })
 }
 
@@ -662,11 +637,7 @@ fn build_eml(msg: &MailMessage) -> Result<Vec<u8>> {
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| {
                 let id = msg.chat_identifier.trim();
-                if id.is_empty() {
-                    "unknown"
-                } else {
-                    id
-                }
+                if id.is_empty() { "unknown" } else { id }
             });
         let peer_name = peer_display_name(msg, peer);
         match msg.direction {
@@ -688,7 +659,10 @@ fn build_eml(msg: &MailMessage) -> Result<Vec<u8>> {
         .subject(subject)
         .date(Date::new(date_secs))
         .message_id(message_id)
-        .header("X-ME-Chat-Identifier", Text::new(msg.chat_identifier.clone()))
+        .header(
+            "X-ME-Chat-Identifier",
+            Text::new(msg.chat_identifier.clone()),
+        )
         .header(
             "X-ME-Conversation-Type",
             Text::new(msg.conversation_type.clone()),
@@ -755,10 +729,7 @@ fn build_eml(msg: &MailMessage) -> Result<Vec<u8>> {
             .header("X-ME-Thread-Originator-Guid", Text::new(guid.to_string()));
     }
     if let Some(part) = msg.thread_originator_part {
-        builder = builder.header(
-            "X-ME-Thread-Originator-Part",
-            Text::new(part.to_string()),
-        );
+        builder = builder.header("X-ME-Thread-Originator-Part", Text::new(part.to_string()));
     }
     if let Some(n) = msg.num_replies {
         builder = builder.header("X-ME-Num-Replies", Text::new(n.to_string()));
@@ -775,7 +746,11 @@ fn build_eml(msg: &MailMessage) -> Result<Vec<u8>> {
     if let Some(ann) = msg.announcement.as_deref().filter(|s| !s.is_empty()) {
         builder = builder.header("X-ME-Announcement", Text::new(ann.to_string()));
     }
-    if let Some(rr) = msg.read_receipt_rfc3339.as_deref().filter(|s| !s.is_empty()) {
+    if let Some(rr) = msg
+        .read_receipt_rfc3339
+        .as_deref()
+        .filter(|s| !s.is_empty())
+    {
         builder = builder.header("X-ME-Read-Receipt", Text::new(rr.to_string()));
     }
     if let Some(parts) = msg.parts_json.as_deref().filter(|s| !s.is_empty()) {
@@ -960,12 +935,14 @@ mod tests {
             .collect();
         emls.sort();
         assert_eq!(emls.len(), 1);
-        assert!(emls[0]
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .starts_with("000001_"));
+        assert!(
+            emls[0]
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("000001_")
+        );
 
         let bytes = fs::read(&emls[0]).unwrap();
         let mail = mailparse::parse_mail(&bytes).unwrap();
@@ -1039,12 +1016,7 @@ mod tests {
         let dir = write_conversation(tmp.path(), &[msg]).unwrap();
         assert_eq!(dir.file_name().unwrap(), "Family");
 
-        let eml = fs::read_dir(&dir)
-            .unwrap()
-            .next()
-            .unwrap()
-            .unwrap()
-            .path();
+        let eml = fs::read_dir(&dir).unwrap().next().unwrap().unwrap().path();
         let bytes = fs::read(&eml).unwrap();
         let mail = mailparse::parse_mail(&bytes).unwrap();
         let headers = mail.get_headers();
@@ -1114,10 +1086,7 @@ mod tests {
             "From was {from}"
         );
         let to = headers.get_first_value("To").unwrap();
-        assert!(
-            to.contains("me=icloud.com@handle.local"),
-            "To was {to}"
-        );
+        assert!(to.contains("me=icloud.com@handle.local"), "To was {to}");
         let mid = headers.get_first_value("Message-ID").unwrap();
         assert!(
             mid.contains("AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE@imessage.local"),
@@ -1146,10 +1115,12 @@ mod tests {
             headers.get_first_value("Subject").as_deref(),
             Some("Message with Sam")
         );
-        assert!(!headers
-            .get_first_value("Subject")
-            .unwrap()
-            .contains("body must not"));
+        assert!(
+            !headers
+                .get_first_value("Subject")
+                .unwrap()
+                .contains("body must not")
+        );
         assert_eq!(
             headers.get_first_value("X-ME-Sender-Handle").as_deref(),
             Some("+15555550100")
@@ -1159,7 +1130,9 @@ mod tests {
             Some("+15555550100")
         );
         assert_eq!(
-            headers.get_first_value("X-ME-Owner-Display-Name").as_deref(),
+            headers
+                .get_first_value("X-ME-Owner-Display-Name")
+                .as_deref(),
             None // unset on base_sms unless set
         );
     }
@@ -1196,7 +1169,9 @@ mod tests {
             Some("+15555550100")
         );
         assert_eq!(
-            headers.get_first_value("X-ME-Owner-Display-Name").as_deref(),
+            headers
+                .get_first_value("X-ME-Owner-Display-Name")
+                .as_deref(),
             Some("+15555550100")
         );
         assert_eq!(

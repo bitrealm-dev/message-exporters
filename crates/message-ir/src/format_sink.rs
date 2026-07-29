@@ -1,8 +1,8 @@
 //! Unified per-export writer for IR packaging formats.
 
-use crate::export_transforms::{apply_transforms, ExportTransforms};
+use crate::export_transforms::{ExportTransforms, apply_transforms};
 use crate::write_sbr::SbrBackupSession;
-use crate::{write_format, ConversationDocument};
+use crate::{ConversationDocument, write_format};
 use anyhow::Result;
 use message_exporters_core::OutputFormat;
 use message_media::MediaReport;
@@ -21,10 +21,7 @@ impl FormatSinkResult {
     /// Human-readable lines for CLI / GUI logs.
     pub fn log_lines(&self) -> Vec<String> {
         let mut lines = Vec::new();
-        if self.media.processed > 0
-            || self.media.skipped > 0
-            || !self.media.errors.is_empty()
-        {
+        if self.media.processed > 0 || self.media.skipped > 0 || !self.media.errors.is_empty() {
             lines.push(format!(
                 "Media: processed {} file(s), skipped {}",
                 self.media.processed, self.media.skipped

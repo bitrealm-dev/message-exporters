@@ -11,7 +11,7 @@ use message_ir::ExportTransforms;
 use crate::{
     emit::run_export,
     error::RuntimeError,
-    options::{validate_export_path, AttachmentEmbed, MailOptions},
+    options::{AttachmentEmbed, MailOptions, validate_export_path},
     session::MailSession,
 };
 

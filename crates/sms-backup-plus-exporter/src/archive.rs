@@ -14,7 +14,7 @@
 //! guesswork — see [`assign_archive_attachments`].
 
 use crate::assets::extract_attachments;
-use crate::flat_eml::{is_archive_eml, MailHeaders};
+use crate::flat_eml::{MailHeaders, is_archive_eml};
 use crate::types::{AttachmentBlob, ParsedMessage};
 use anyhow::{Context, Result};
 use message_phone::sanitize_number;
@@ -42,9 +42,8 @@ fn clean_archive_contact_name(raw: &str) -> String {
         name = name[5..].trim();
     }
     static YEAR_RANGE: OnceLock<Regex> = OnceLock::new();
-    let re = YEAR_RANGE.get_or_init(|| {
-        Regex::new(r"\s*\(\d{4}\s*[-–—]\s*\d{4}\)\s*$").expect("year range")
-    });
+    let re = YEAR_RANGE
+        .get_or_init(|| Regex::new(r"\s*\(\d{4}\s*[-–—]\s*\d{4}\)\s*$").expect("year range"));
     re.replace(name, "").trim().to_string()
 }
 

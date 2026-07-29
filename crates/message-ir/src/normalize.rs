@@ -62,10 +62,7 @@ pub(crate) fn imessage_from_parts(im: IrImessage) -> Option<IrImessage> {
 }
 
 /// Build [`IrSource`] from android type + fields JSON cell.
-pub(crate) fn source_from_parts(
-    android_type: Option<i32>,
-    fields_json: &str,
-) -> Option<IrSource> {
+pub(crate) fn source_from_parts(android_type: Option<i32>, fields_json: &str) -> Option<IrSource> {
     let fields = if fields_json.trim().is_empty() {
         Default::default()
     } else {

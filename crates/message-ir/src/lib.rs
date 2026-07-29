@@ -31,17 +31,15 @@ pub use read_mail::{
 };
 pub use write_sbr::SbrBackupSession;
 
-use anyhow::{bail, Context, Result};
-use message_csv::{
-    conversation_filename, format_local_ts, json_cell, AttachmentCell,
-};
+use anyhow::{Context, Result, bail};
+use message_csv::{AttachmentCell, conversation_filename, format_local_ts, json_cell};
 use message_exporters_core::OutputFormat;
 use message_mail::{
-    write_mail_package, Direction as MailDirection, MailAttachment, MailMessage, MailPackage,
-    Participant, SmsMailFields,
+    Direction as MailDirection, MailAttachment, MailMessage, MailPackage, Participant,
+    SmsMailFields, write_mail_package,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -306,11 +304,7 @@ impl IrSource {
     }
 
     pub fn into_option(self) -> Option<Self> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(self)
-        }
+        if self.is_empty() { None } else { Some(self) }
     }
 }
 
@@ -364,11 +358,7 @@ impl IrImessage {
     }
 
     pub fn into_option(self) -> Option<Self> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(self)
-        }
+        if self.is_empty() { None } else { Some(self) }
     }
 }
 
@@ -387,9 +377,7 @@ impl ConversationDocument {
             &handles,
             self.packaging_stem_suffix.as_deref(),
         );
-        csv.strip_suffix(".csv")
-            .unwrap_or(csv.as_str())
-            .to_string()
+        csv.strip_suffix(".csv").unwrap_or(csv.as_str()).to_string()
     }
 
     /// Recompute [`ConversationMeta::stats`] from `messages`.
@@ -470,15 +458,13 @@ pub fn write_format(
 
 /// Per-conversation JSON artifact (`<stem>.json`).
 pub fn write_conversation_json(output_dir: &Path, doc: &ConversationDocument) -> Result<PathBuf> {
-    fs::create_dir_all(output_dir)
-        .with_context(|| format!("create {}", output_dir.display()))?;
+    fs::create_dir_all(output_dir).with_context(|| format!("create {}", output_dir.display()))?;
     let path = output_dir.join(format!("{}.json", doc.filename_stem()));
     let mut tmp = path.clone();
     tmp.set_extension("json.tmp");
     let json = serde_json::to_vec_pretty(doc).context("serialize ConversationDocument")?;
     {
-        let mut file =
-            File::create(&tmp).with_context(|| format!("create {}", tmp.display()))?;
+        let mut file = File::create(&tmp).with_context(|| format!("create {}", tmp.display()))?;
         file.write_all(&json)
             .with_context(|| format!("write {}", tmp.display()))?;
         file.write_all(b"\n")?;
@@ -509,14 +495,12 @@ impl ConversationHeader {
 /// Per-conversation JSON Lines (`<stem>.jsonl`): header object, then one
 /// [`IrMessage`] per line.
 pub fn write_conversation_jsonl(output_dir: &Path, doc: &ConversationDocument) -> Result<PathBuf> {
-    fs::create_dir_all(output_dir)
-        .with_context(|| format!("create {}", output_dir.display()))?;
+    fs::create_dir_all(output_dir).with_context(|| format!("create {}", output_dir.display()))?;
     let path = output_dir.join(format!("{}.jsonl", doc.filename_stem()));
     let mut tmp = path.clone();
     tmp.set_extension("jsonl.tmp");
     {
-        let mut file =
-            File::create(&tmp).with_context(|| format!("create {}", tmp.display()))?;
+        let mut file = File::create(&tmp).with_context(|| format!("create {}", tmp.display()))?;
         let header = ConversationHeader::from_document(doc);
         serde_json::to_writer(&mut file, &header).context("serialize JSONL header")?;
         file.write_all(b"\n")?;
@@ -591,8 +575,7 @@ struct ParticipantCell {
 
 /// Per-conversation CSV using the unified [`CSV_HEADERS`] contract.
 pub fn write_conversation_csv(output_dir: &Path, doc: &ConversationDocument) -> Result<PathBuf> {
-    fs::create_dir_all(output_dir)
-        .with_context(|| format!("create {}", output_dir.display()))?;
+    fs::create_dir_all(output_dir).with_context(|| format!("create {}", output_dir.display()))?;
     let filename = conversation_filename(
         doc.conversation.conversation_type.as_str(),
         &doc.conversation.chat_identifier,
@@ -670,9 +653,7 @@ pub fn write_conversation_csv(output_dir: &Path, doc: &ConversationDocument) -> 
         let is_announcement = msg.message_kind == IrMessageKind::Announcement;
         let announcement = im.and_then(|i| i.announcement.as_deref()).unwrap_or("");
         let is_reply = im.map(|i| i.is_reply).unwrap_or(false);
-        let thread_originator_guid = im
-            .and_then(|i| i.in_reply_to_guid.as_deref())
-            .unwrap_or("");
+        let thread_originator_guid = im.and_then(|i| i.in_reply_to_guid.as_deref()).unwrap_or("");
         let thread_originator_part = im
             .and_then(|i| i.thread_originator_part)
             .map(|n| n.to_string())
@@ -685,7 +666,9 @@ pub fn write_conversation_csv(output_dir: &Path, doc: &ConversationDocument) -> 
         let edits_json = value_cell(im.and_then(|i| i.edits.as_ref()));
         let tapbacks_json = value_cell(im.and_then(|i| i.tapbacks.as_ref()));
         let app_json = value_cell(im.and_then(|i| i.app.as_ref()));
-        let balloon_bundle_id = im.and_then(|i| i.balloon_bundle_id.as_deref()).unwrap_or("");
+        let balloon_bundle_id = im
+            .and_then(|i| i.balloon_bundle_id.as_deref())
+            .unwrap_or("");
         let balloon_kind = im.and_then(|i| i.balloon_kind.as_deref()).unwrap_or("");
         let associated_guid = im.and_then(|i| i.associated_guid.as_deref()).unwrap_or("");
         let associated_part = im
@@ -771,11 +754,7 @@ pub fn document_to_mail_messages(
     doc: &ConversationDocument,
     output_dir: &Path,
 ) -> Result<Vec<MailMessage>> {
-    let owner = doc
-        .export
-        .owner_handle
-        .clone()
-        .unwrap_or_default();
+    let owner = doc.export.owner_handle.clone().unwrap_or_default();
     let participants: Vec<Participant> = doc
         .conversation
         .participants
@@ -970,8 +949,18 @@ mod tests {
         assert_eq!(parsed.schema_version, 3);
         assert_eq!(parsed.messages[0].text, "hello ir");
         assert!(parsed.messages[0].attachments.is_empty());
-        assert_eq!(parsed.messages[0].source.as_ref().unwrap().android_type, Some(1));
-        assert!(parsed.messages[0].source.as_ref().unwrap().fields.contains_key("address"));
+        assert_eq!(
+            parsed.messages[0].source.as_ref().unwrap().android_type,
+            Some(1)
+        );
+        assert!(
+            parsed.messages[0]
+                .source
+                .as_ref()
+                .unwrap()
+                .fields
+                .contains_key("address")
+        );
         assert_eq!(
             parsed.messages[1].sender_handle.as_deref(),
             Some("+15555550100")
@@ -1094,7 +1083,13 @@ mod tests {
         assert_eq!(reply.num_replies, Some(2));
         assert_eq!(reply.send_effect.as_deref(), Some("Sent with Balloons"));
         assert!(reply.tapbacks_json.as_deref().unwrap().contains("loved"));
-        assert!(reply.parts_json.as_deref().unwrap().contains("hello imessage"));
+        assert!(
+            reply
+                .parts_json
+                .as_deref()
+                .unwrap()
+                .contains("hello imessage")
+        );
         assert_eq!(reply.owner_display_name.as_deref(), Some("Me"));
 
         let tapback = &mail_messages[1];
@@ -1142,12 +1137,13 @@ mod tests {
         doc.packaging_stem_suffix = Some("__whatsapp".into());
         let tmp = tempfile::tempdir().unwrap();
         let path = write_format(tmp.path(), OutputFormat::Json, &doc).unwrap();
-        assert!(path
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .contains("__whatsapp"));
+        assert!(
+            path.file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .contains("__whatsapp")
+        );
         let raw = fs::read_to_string(&path).unwrap();
         assert!(!raw.contains("filename_suffix"));
         assert!(!raw.contains("__whatsapp"));

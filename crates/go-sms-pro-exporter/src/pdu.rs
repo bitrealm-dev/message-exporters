@@ -5,17 +5,17 @@
 
 use crate::emoji::decode_gosms_emojis;
 use crate::mms_enc::{
-    content_type_from_filename, decode_bytes_with_charset, decode_mms_best_effort,
-    extension_for_content_type, normalize_content_id, MmsPart, NamedPart, StructuredMms,
+    MmsPart, NamedPart, StructuredMms, content_type_from_filename, decode_bytes_with_charset,
+    decode_mms_best_effort, extension_for_content_type, normalize_content_id,
 };
 use std::collections::{BTreeMap, HashSet};
 
 use anyhow::{Context, Result};
 use message_phone::sanitize_number;
-use quick_xml::events::Event;
 use quick_xml::Reader;
-use regex::bytes::Regex as BytesRegex;
+use quick_xml::events::Event;
 use regex::Regex;
+use regex::bytes::Regex as BytesRegex;
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -119,9 +119,10 @@ fn participants_from_structured(msg: &StructuredMms) -> Vec<String> {
     let mut numbers = Vec::new();
     for addr in msg.address_strings() {
         if let Some(digits) = digits_from_mms_address(&addr)
-            && seen.insert(digits.clone()) {
-                numbers.push(digits);
-            }
+            && seen.insert(digits.clone())
+        {
+            numbers.push(digits);
+        }
     }
     numbers
 }
@@ -152,17 +153,20 @@ fn smil_src_matches_name(src: &str, name: &str) -> bool {
 
 fn part_matches_smil_src(part: &MmsPart, src: &str) -> bool {
     if let Some(cid) = &part.content_id
-        && smil_src_matches_name(src, cid) {
-            return true;
-        }
+        && smil_src_matches_name(src, cid)
+    {
+        return true;
+    }
     if let Some(loc) = &part.content_location
-        && smil_src_matches_name(src, loc) {
-            return true;
-        }
+        && smil_src_matches_name(src, loc)
+    {
+        return true;
+    }
     if let Some(name) = &part.filename
-        && smil_src_matches_name(src, name) {
-            return true;
-        }
+        && smil_src_matches_name(src, name)
+    {
+        return true;
+    }
     false
 }
 
@@ -192,9 +196,10 @@ fn body_from_named_parts(named: &[NamedPart], smil: &SmilRefs) -> Option<String>
     for src in &smil.text_srcs {
         for part in named {
             if smil_src_matches_name(src, &part.name)
-                && let Some(text) = text_from_part_data(&part.data, None) {
-                    return Some(text);
-                }
+                && let Some(text) = text_from_part_data(&part.data, None)
+            {
+                return Some(text);
+            }
         }
     }
     let mut texts = Vec::new();
@@ -206,9 +211,10 @@ fn body_from_named_parts(named: &[NamedPart], smil: &SmilRefs) -> Option<String>
             continue;
         }
         if let Some(text) = text_from_part_data(&part.data, None)
-            && seen.insert(text.clone()) {
-                texts.push(text);
-            }
+            && seen.insert(text.clone())
+        {
+            texts.push(text);
+        }
     }
     if texts.is_empty() {
         None
@@ -224,9 +230,10 @@ fn body_from_structured(msg: &StructuredMms, smil: &SmilRefs) -> Option<String> 
     for src in &smil.text_srcs {
         for part in &msg.parts {
             if part_matches_smil_src(part, src)
-                && let Some(text) = text_from_part_data(&part.data, part.charset) {
-                    return Some(text);
-                }
+                && let Some(text) = text_from_part_data(&part.data, part.charset)
+            {
+                return Some(text);
+            }
         }
     }
     if let Some(start) = &msg.content_start {
@@ -240,9 +247,10 @@ fn body_from_structured(msg: &StructuredMms, smil: &SmilRefs) -> Option<String> 
             let ct = part.content_type.to_ascii_lowercase();
             let base = ct.split(';').next().unwrap_or(&ct).trim();
             if base.starts_with("text/")
-                && let Some(text) = text_from_part_data(&part.data, part.charset) {
-                    return Some(text);
-                }
+                && let Some(text) = text_from_part_data(&part.data, part.charset)
+            {
+                return Some(text);
+            }
         }
     }
     let mut texts = Vec::new();
@@ -254,9 +262,10 @@ fn body_from_structured(msg: &StructuredMms, smil: &SmilRefs) -> Option<String> 
             continue;
         }
         if let Some(text) = text_from_part_data(&part.data, part.charset)
-            && seen.insert(text.clone()) {
-                texts.push(text);
-            }
+            && seen.insert(text.clone())
+        {
+            texts.push(text);
+        }
     }
     if texts.is_empty() {
         None
@@ -327,14 +336,8 @@ fn attachments_from_structured(msg: &StructuredMms, smil: &SmilRefs) -> Vec<Pars
             .filename
             .as_deref()
             .and_then(ext_from_filename)
-            .or_else(|| {
-                part.content_location
-                    .as_deref()
-                    .and_then(ext_from_filename)
-            })
-            .or_else(|| {
-                extension_for_content_type(&part.content_type).map(str::to_string)
-            });
+            .or_else(|| part.content_location.as_deref().and_then(ext_from_filename))
+            .or_else(|| extension_for_content_type(&part.content_type).map(str::to_string));
         let Some(ext) = ext else {
             continue;
         };
@@ -419,11 +422,12 @@ fn parse_smil_refs(data: &[u8]) -> SmilRefs {
 fn truncate_mms_binary_tail(text: &str) -> String {
     let mut text = text.to_string();
     if let Some(img_idx) = text.find("IMG_")
-        && img_idx > 0 {
-            text.truncate(img_idx);
-        }
-    let trailing = TRAILING_GARBAGE_RE
-        .get_or_init(|| Regex::new(r"^(.+!!)[^\w\s]{0,12}$").expect("trail"));
+        && img_idx > 0
+    {
+        text.truncate(img_idx);
+    }
+    let trailing =
+        TRAILING_GARBAGE_RE.get_or_init(|| Regex::new(r"^(.+!!)[^\w\s]{0,12}$").expect("trail"));
     if let Some(caps) = trailing.captures(&text) {
         text = caps[1].to_string();
     }
@@ -468,8 +472,8 @@ fn find_bytes(haystack: &[u8], needle: &[u8], start: usize) -> Option<usize> {
 
 /// Last-resort body when Content-Location / multipart text is missing.
 fn extract_wap_text_body_fallback(data: &[u8]) -> String {
-    let re =
-        TEXT_CONTENT_RE.get_or_init(|| BytesRegex::new(r"(?-u)\x8etext(?:_\d+)?\.txt\x00").expect("txt"));
+    let re = TEXT_CONTENT_RE
+        .get_or_init(|| BytesRegex::new(r"(?-u)\x8etext(?:_\d+)?\.txt\x00").expect("txt"));
     let mut texts = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for m in re.find_iter(data) {
@@ -514,10 +518,7 @@ fn detect_attachment_blobs(data: &[u8]) -> Vec<(String, usize, usize)> {
     hits.sort_by_key(|(idx, _)| *idx);
     let mut merged = Vec::new();
     for (idx, (start, ext)) in hits.iter().enumerate() {
-        let next_start = hits
-            .get(idx + 1)
-            .map(|(s, _)| *s)
-            .unwrap_or(data.len());
+        let next_start = hits.get(idx + 1).map(|(s, _)| *s).unwrap_or(data.len());
         let size = next_start - start;
         if !attachment_ok(ext, size) {
             continue;
@@ -546,10 +547,7 @@ fn roles_from_structured(
     msg: &StructuredMms,
     owners: &HashSet<String>,
 ) -> (Option<String>, bool, bool) {
-    let from_digits = msg
-        .from
-        .as_ref()
-        .and_then(|a| digits_from_mms_address(a));
+    let from_digits = msg.from.as_ref().and_then(|a| digits_from_mms_address(a));
     let my_is_from = from_digits
         .as_ref()
         .is_some_and(|d| is_owner_digit(d, owners));
@@ -626,9 +624,10 @@ fn resolve_timestamp(filename_ts: i64, structured: &StructuredMms) -> (i64, Fiel
 
 fn insert_nonempty(fields: &mut BTreeMap<String, String>, key: &str, value: &Option<String>) {
     if let Some(v) = value
-        && !v.is_empty() {
-            fields.insert(key.into(), v.clone());
-        }
+        && !v.is_empty()
+    {
+        fields.insert(key.into(), v.clone());
+    }
 }
 
 fn pdu_fields_from_structured(msg: &StructuredMms) -> BTreeMap<String, String> {
@@ -678,24 +677,25 @@ fn score_decode_quality(
     if body == FieldSource::Heuristic && attachments == FieldSource::Heuristic {
         return "heuristic";
     }
-    if content.iter().all(|s| *s == FieldSource::Heuristic) && timestamp == FieldSource::Heuristic
-    {
+    if content.iter().all(|s| *s == FieldSource::Heuristic) && timestamp == FieldSource::Heuristic {
         return "heuristic";
     }
     "mixed"
 }
 
 /// Parse one PDU file. Returns `None` for unparseable / bad filenames.
-pub fn parse_pdu_file(path: &Path, owners: &HashSet<String>, primary_digits: &str) -> Result<Option<ParsedPdu>> {
+pub fn parse_pdu_file(
+    path: &Path,
+    owners: &HashSet<String>,
+    primary_digits: &str,
+) -> Result<Option<ParsedPdu>> {
     let data = std::fs::read(path).with_context(|| format!("read {}", path.display()))?;
     if data.len() < 10 {
         return Ok(None);
     }
-    let Some(filename_ts) = timestamp_from_filename(
-        path.file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or(""),
-    ) else {
+    let Some(filename_ts) =
+        timestamp_from_filename(path.file_name().and_then(|s| s.to_str()).unwrap_or(""))
+    else {
         return Ok(None);
     };
 
@@ -959,7 +959,9 @@ mod tests {
     #[test]
     fn smil_binds_text_and_image_parts() {
         let mut data = Vec::new();
-        data.extend_from_slice(b"<smil><body><text src=\"text.txt\"/><img src=\"IMG_1.jpg\"/></body></smil>");
+        data.extend_from_slice(
+            b"<smil><body><text src=\"text.txt\"/><img src=\"IMG_1.jpg\"/></body></smil>",
+        );
         data.extend_from_slice(&[0x8e]);
         data.extend_from_slice(b"text.txt\0Hello from SMIL");
         data.extend_from_slice(&[0x8e]);
@@ -1114,10 +1116,12 @@ mod tests {
             parsed.pdu_fields.get("mms_version").map(String::as_str),
             Some("1.2")
         );
-        assert!(parsed
-            .pdu_fields
-            .get("bcc")
-            .is_some_and(|b| b.contains("15559876543")));
+        assert!(
+            parsed
+                .pdu_fields
+                .get("bcc")
+                .is_some_and(|b| b.contains("15559876543"))
+        );
     }
 
     #[test]

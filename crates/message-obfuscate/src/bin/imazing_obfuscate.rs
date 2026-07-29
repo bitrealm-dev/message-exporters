@@ -6,7 +6,9 @@ use message_obfuscate::{obfuscate_imazing, resolve_obfuscator};
 
 #[derive(Parser, Debug)]
 #[command(name = "imazing-obfuscate")]
-#[command(about = "Rewrite iMazing Messages CSV with obfuscated names, numbers, text, and attachments")]
+#[command(
+    about = "Rewrite iMazing Messages CSV with obfuscated names, numbers, text, and attachments"
+)]
 struct Cli {
     /// iMazing CSV file or directory of CSVs
     #[arg(long)]
@@ -25,6 +27,10 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     let mut anon = resolve_obfuscator(cli.obfuscate_seed.as_deref())?;
     let n = obfuscate_imazing(&cli.input, &cli.output, &mut anon)?;
-    println!("Wrote {} obfuscated CSV file(s) to {}", n, cli.output.display());
+    println!(
+        "Wrote {} obfuscated CSV file(s) to {}",
+        n,
+        cli.output.display()
+    );
     Ok(())
 }

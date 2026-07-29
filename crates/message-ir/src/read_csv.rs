@@ -2,11 +2,11 @@
 
 use crate::normalize::{imessage_from_parts, source_from_parts};
 use crate::{
-    parse_android_type, ConversationDocument, ConversationHeader, ConversationMeta,
-    ConversationStats, ExportMeta, IrAttachment, IrConversationType, IrDirection, IrImessage,
-    IrMessage, IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION, CSV_HEADERS,
+    CSV_HEADERS, ConversationDocument, ConversationHeader, ConversationMeta, ConversationStats,
+    ExportMeta, IrAttachment, IrConversationType, IrDirection, IrImessage, IrMessage,
+    IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION, parse_android_type,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use message_csv::AttachmentCell;
 use serde::Deserialize;
 use serde_json::Value;
@@ -41,7 +41,8 @@ pub fn read_conversation_csv(path: &Path) -> Result<ConversationDocument> {
 
     let mut rows = Vec::new();
     for (i, result) in rdr.records().enumerate() {
-        let record = result.with_context(|| format!("read CSV row {} in {}", i + 1, path.display()))?;
+        let record =
+            result.with_context(|| format!("read CSV row {} in {}", i + 1, path.display()))?;
         rows.push(record);
     }
     if rows.is_empty() {
@@ -122,27 +123,15 @@ fn message_from_record(headers: &[String], row: &csv::StringRecord) -> Result<Ir
     let is_deleted = parse_bool(get("is_deleted"));
     let thread_originator_part = {
         let s = get("thread_originator_part");
-        if s.is_empty() {
-            None
-        } else {
-            s.parse().ok()
-        }
+        if s.is_empty() { None } else { s.parse().ok() }
     };
     let num_replies = {
         let s = get("num_replies");
-        if s.is_empty() {
-            None
-        } else {
-            s.parse().ok()
-        }
+        if s.is_empty() { None } else { s.parse().ok() }
     };
     let associated_part = {
         let s = get("associated_part");
-        if s.is_empty() {
-            None
-        } else {
-            s.parse().ok()
-        }
+        if s.is_empty() { None } else { s.parse().ok() }
     };
     let imessage = imessage_from_parts(IrImessage {
         is_reply,

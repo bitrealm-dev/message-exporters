@@ -1,20 +1,20 @@
 //! Convert GO SMS Pro export → common message → packaging via FormatSink.
 
-use crate::pdu::{parse_pdu_file, ParsedPdu};
-use crate::cancel::{check_cancel, CancelFlag};
-use crate::xml::{parse_xml_file, SkippedBadAddrDetail, XmlMessage};
-use anyhow::{bail, Context, Result};
+use crate::cancel::{CancelFlag, check_cancel};
+use crate::pdu::{ParsedPdu, parse_pdu_file};
+use crate::xml::{SkippedBadAddrDetail, XmlMessage, parse_xml_file};
+use anyhow::{Context, Result, bail};
 use chrono::{Local, TimeZone};
 use message_contacts::ContactsBook;
-use message_csv::{format_local_ts, stable_guid, DateRange};
+use message_csv::{DateRange, format_local_ts, stable_guid};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    clean_previous_ir_output, owner_sender, parse_android_type, ConversationDocument,
-    ConversationMeta, ConversationStats, ExportMeta, ExportTransforms, FormatSink,
-    FormatSinkResult, IrAttachment, IrConversationType,
-    IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION,
+    ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
+    FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
+    IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION, clean_previous_ir_output,
+    owner_sender, parse_android_type,
 };
-use message_phone::{to_e164, OwnerPhoneSet};
+use message_phone::{OwnerPhoneSet, to_e164};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
@@ -297,9 +297,11 @@ fn add_pdu_message(
 ) {
     if is_empty_pdu(&parsed) {
         report.skipped_empty_pdu += 1;
-        report.skipped_empty_pdu_details.push(SkippedEmptyPduDetail {
-            pdu_filename: pdu_basename(&parsed),
-        });
+        report
+            .skipped_empty_pdu_details
+            .push(SkippedEmptyPduDetail {
+                pdu_filename: pdu_basename(&parsed),
+            });
         return;
     }
 
@@ -321,13 +323,15 @@ fn add_pdu_message(
             .collect();
         if others.is_empty() {
             report.skipped_no_other_party += 1;
-            report.skipped_no_other_party_details.push(SkippedNoPartyDetail {
-                pdu_filename: pdu_basename(&parsed),
-                participants: parsed.participants.join(";"),
-                is_sent: parsed.is_sent,
-                has_from: parsed.has_from,
-                has_to: parsed.has_to,
-            });
+            report
+                .skipped_no_other_party_details
+                .push(SkippedNoPartyDetail {
+                    pdu_filename: pdu_basename(&parsed),
+                    participants: parsed.participants.join(";"),
+                    is_sent: parsed.is_sent,
+                    has_from: parsed.has_from,
+                    has_to: parsed.has_to,
+                });
             return;
         }
         let other = &others[0];
@@ -437,7 +441,9 @@ fn display_names_for_handles(convo: &PendingConversation) -> HashMap<String, Str
             let name = msg.contact_name.trim();
             if !name.is_empty() {
                 for peer in &convo.participant_e164s {
-                    names.entry(peer.clone()).or_insert_with(|| name.to_string());
+                    names
+                        .entry(peer.clone())
+                        .or_insert_with(|| name.to_string());
                 }
             }
         }
@@ -493,7 +499,11 @@ fn pending_to_document(
         }
         let secs = msg.sort_key as i64;
         let (ts_local, _, _) = format_local_ts(secs).expect("timestamp validated above");
-        let digests: Vec<String> = msg.attachments.iter().map(|a| a.digest_hex.clone()).collect();
+        let digests: Vec<String> = msg
+            .attachments
+            .iter()
+            .map(|a| a.digest_hex.clone())
+            .collect();
         let guid = stable_guid(chat_id, &ts_local, msg.is_from_me, &msg.text, &digests);
         let timestamp_unix_ms = msg
             .date_ms
@@ -690,7 +700,9 @@ pub fn convert_export(
                     .collect();
                 add_xml_messages(&mut conversations, msgs);
             }
-            Err(err) => report.errors.push(format!("{}: {err:#}", xml_path.display())),
+            Err(err) => report
+                .errors
+                .push(format!("{}: {err:#}", xml_path.display())),
         }
     }
 
@@ -721,25 +733,19 @@ pub fn convert_export(
                     report.skipped_out_of_range += 1;
                     continue;
                 }
-                match save_pdu_attachments(
-                    &parsed,
-                    &attachments_dir,
-                    &mut report,
-                    copy_attachments,
-                ) {
-                    Ok(atts) => add_pdu_message(
-                        &mut conversations,
-                        parsed,
-                        atts,
-                        &owners,
-                        &mut report,
-                    ),
+                match save_pdu_attachments(&parsed, &attachments_dir, &mut report, copy_attachments)
+                {
+                    Ok(atts) => {
+                        add_pdu_message(&mut conversations, parsed, atts, &owners, &mut report)
+                    }
                     Err(err) => report
                         .errors
                         .push(format!("{}: {err:#}", pdu_path.display())),
                 }
             }
-            Err(err) => report.errors.push(format!("{}: {err:#}", pdu_path.display())),
+            Err(err) => report
+                .errors
+                .push(format!("{}: {err:#}", pdu_path.display())),
         }
     }
 
@@ -783,8 +789,8 @@ fn write_skipped_invalid_address_csv(
         remove_if_exists(&path);
         return Ok(());
     }
-    let mut wtr = csv::Writer::from_path(&path)
-        .with_context(|| format!("create {}", path.display()))?;
+    let mut wtr =
+        csv::Writer::from_path(&path).with_context(|| format!("create {}", path.display()))?;
     wtr.write_record([
         "xml_file",
         "address",
@@ -813,8 +819,8 @@ fn write_skipped_empty_pdu_csv(output_dir: &Path, details: &[SkippedEmptyPduDeta
         remove_if_exists(&path);
         return Ok(());
     }
-    let mut wtr = csv::Writer::from_path(&path)
-        .with_context(|| format!("create {}", path.display()))?;
+    let mut wtr =
+        csv::Writer::from_path(&path).with_context(|| format!("create {}", path.display()))?;
     wtr.write_record(["pdu_filename"])?;
     for d in details {
         wtr.write_record([d.pdu_filename.as_str()])?;
@@ -829,8 +835,8 @@ fn write_skipped_no_party_csv(output_dir: &Path, details: &[SkippedNoPartyDetail
         remove_if_exists(&path);
         return Ok(());
     }
-    let mut wtr = csv::Writer::from_path(&path)
-        .with_context(|| format!("create {}", path.display()))?;
+    let mut wtr =
+        csv::Writer::from_path(&path).with_context(|| format!("create {}", path.display()))?;
     wtr.write_record([
         "pdu_filename",
         "participants",

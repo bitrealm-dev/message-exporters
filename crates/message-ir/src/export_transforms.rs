@@ -5,8 +5,8 @@ use anyhow::Result;
 use message_exporters_core::{MediaConfig, ObfuscateConfig};
 use message_media::{CompressOptions, MediaMode, MediaReport};
 use message_obfuscate::{
-    classify_attachment, materialize_placeholders, placeholder_rel_path, resolve_obfuscator,
-    Obfuscator,
+    Obfuscator, classify_attachment, materialize_placeholders, placeholder_rel_path,
+    resolve_obfuscator,
 };
 use std::collections::HashMap;
 use std::fs;
@@ -155,11 +155,7 @@ fn obfuscate_attachment(att: &mut IrAttachment) {
         .and_then(|e| e.to_str())
         .unwrap_or("bin");
     att.original_name = Some(format!("attachment.{ext}"));
-    if att
-        .transcription
-        .as_deref()
-        .is_some_and(|s| !s.is_empty())
-    {
+    if att.transcription.as_deref().is_some_and(|s| !s.is_empty()) {
         att.transcription = Some("[redacted]".into());
     }
     att.digest_sha256 = None;

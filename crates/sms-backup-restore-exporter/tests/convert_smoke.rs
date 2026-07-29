@@ -253,7 +253,12 @@ fn convert_export_json_and_jsonl_use_pristine_v3() {
     let raw = fs::read_to_string(&json_path).unwrap();
     let doc: serde_json::Value = serde_json::from_str(&raw).unwrap();
     assert_eq!(doc["schema_version"], 3);
-    assert!(doc["conversation"]["stats"]["message_count"].as_u64().unwrap() >= 1);
+    assert!(
+        doc["conversation"]["stats"]["message_count"]
+            .as_u64()
+            .unwrap()
+            >= 1
+    );
     assert!(!raw.contains("filename_suffix"));
     assert!(!raw.contains("\"bytes\""));
     let msg = &doc["messages"][0];
@@ -263,8 +268,7 @@ fn convert_export_json_and_jsonl_use_pristine_v3() {
     assert!(msg["service"].as_str() == Some("sms"));
     // Outgoing rows carry owner identity.
     let has_outgoing = doc["messages"].as_array().unwrap().iter().any(|m| {
-        m["direction"] == "outgoing"
-            && m["sender_handle"].as_str() == Some("+15555550100")
+        m["direction"] == "outgoing" && m["sender_handle"].as_str() == Some("+15555550100")
     });
     assert!(has_outgoing, "expected outgoing message with owner sender");
 
@@ -293,7 +297,12 @@ fn convert_export_json_and_jsonl_use_pristine_v3() {
     let header: serde_json::Value = serde_json::from_str(lines.next().unwrap()).unwrap();
     assert_eq!(header["schema_version"], 3);
     assert!(header.get("messages").is_none());
-    assert!(header["conversation"]["stats"]["message_count"].as_u64().unwrap() >= 1);
+    assert!(
+        header["conversation"]["stats"]["message_count"]
+            .as_u64()
+            .unwrap()
+            >= 1
+    );
     let msg_line: serde_json::Value = serde_json::from_str(lines.next().unwrap()).unwrap();
     assert!(msg_line["source"]["fields"].is_object());
 }

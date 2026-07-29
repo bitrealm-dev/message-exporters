@@ -7,8 +7,7 @@ use whatsapp_exporter::convert_json;
 
 #[test]
 fn convert_fixture_json_individual_and_group() {
-    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/result.json");
+    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/result.json");
     assert!(fixture.is_file(), "missing {}", fixture.display());
 
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -96,7 +95,10 @@ fn copies_ios_style_media_true_data_paths() {
     let csv = out.path().join("+15555550999__whatsapp.csv");
     let body = fs::read_to_string(&csv).expect("csv");
     assert!(body.contains("look at this"));
-    assert!(!body.contains(rel), "media path must not become message text");
+    assert!(
+        !body.contains(rel),
+        "media path must not become message text"
+    );
     assert!(body.contains("attachments/"));
     let att_dir = out.path().join("attachments");
     let files: Vec<_> = fs::read_dir(&att_dir)

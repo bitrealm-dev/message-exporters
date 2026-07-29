@@ -103,9 +103,7 @@ fn convert_export_root_recursively_keeps_services_separate() {
         .unwrap()
         .filter_map(|e| e.ok())
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .find(|n| {
-            n.ends_with(".csv") && n.contains("15555550133") && !n.contains("whatsapp")
-        })
+        .find(|n| n.ends_with(".csv") && n.contains("15555550133") && !n.contains("whatsapp"))
         .expect("group csv with silent Carol");
     let body = fs::read_to_string(tmp.path().join(group)).unwrap();
     assert!(body.contains("group"));

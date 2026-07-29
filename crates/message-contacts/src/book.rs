@@ -2,7 +2,7 @@
 
 use crate::name::{collapse_inner_whitespace, is_blank_or_unknown_name, normalize_name_key};
 use crate::vcf::{self, strip_tags};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use message_phone::{sanitize_number, to_e164};
 use std::collections::HashMap;
 use std::fs::File;
@@ -27,7 +27,7 @@ impl ContactsBook {
 
     /// Load a contacts file using the same format rules as contacts-validate.
     pub fn load_contacts_file(path: &Path) -> Result<Self> {
-        use crate::validate::{detect_contacts_format, ContactsFormat};
+        use crate::validate::{ContactsFormat, detect_contacts_format};
         let format = detect_contacts_format(path).map_err(|e| {
             if e.details.is_empty() {
                 anyhow::anyhow!("{}", e.message)
@@ -81,9 +81,7 @@ impl ContactsBook {
     /// tokens scraped from `Notes` (including `PROP-ID: +…`).
     pub fn load_imazing_contacts_csv(path: &Path) -> Result<Self> {
         let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-        let mut rdr = csv::ReaderBuilder::new()
-            .flexible(true)
-            .from_reader(file);
+        let mut rdr = csv::ReaderBuilder::new().flexible(true).from_reader(file);
         let headers = rdr
             .headers()
             .with_context(|| format!("headers {}", path.display()))?
@@ -165,9 +163,7 @@ impl ContactsBook {
         }
         let key = normalize_name_key(&display);
         if !key.is_empty() {
-            self.by_name
-                .entry(key)
-                .or_insert_with(|| phones[0].clone());
+            self.by_name.entry(key).or_insert_with(|| phones[0].clone());
         }
         for phone in phones {
             self.by_phone
@@ -333,14 +329,8 @@ Pat,Contact,+15555550133,+15555550144\n",
             book.lookup_name_by_phone("+15555550122"),
             Some("Sam Example")
         );
-        assert_eq!(
-            book.lookup_name_by_phone("5555550133"),
-            Some("Pat Contact")
-        );
-        assert_eq!(
-            book.lookup_name_by_phone("5555550144"),
-            Some("Pat Contact")
-        );
+        assert_eq!(book.lookup_name_by_phone("5555550133"), Some("Pat Contact"));
+        assert_eq!(book.lookup_name_by_phone("5555550144"), Some("Pat Contact"));
     }
 
     #[test]
@@ -410,10 +400,7 @@ Ada,Lovelace,+15555550100\n",
             book.enrich_display_name("5555550122", "").as_deref(),
             Some("Sam Example")
         );
-        assert_eq!(
-            book.enrich_display_name("5555550122", "Already Set"),
-            None
-        );
+        assert_eq!(book.enrich_display_name("5555550122", "Already Set"), None);
     }
 
     #[test]
@@ -432,10 +419,7 @@ NoPhone,,Person,,,,\n",
             book.lookup_phone_by_name("Bob McRoy").as_deref(),
             Some("3212462167")
         );
-        assert_eq!(
-            book.lookup_name_by_phone("+13212462167"),
-            Some("Bob McRoy")
-        );
+        assert_eq!(book.lookup_name_by_phone("+13212462167"), Some("Bob McRoy"));
         assert_eq!(
             book.lookup_phone_by_name("Kyle").as_deref(),
             Some("7276875182")

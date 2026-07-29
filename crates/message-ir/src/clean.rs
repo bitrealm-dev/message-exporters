@@ -12,8 +12,8 @@ pub fn clean_previous_ir_output(output_dir: &Path) -> Result<()> {
     if !output_dir.is_dir() {
         return Ok(());
     }
-    for entry in fs::read_dir(output_dir)
-        .with_context(|| format!("read {}", output_dir.display()))?
+    for entry in
+        fs::read_dir(output_dir).with_context(|| format!("read {}", output_dir.display()))?
     {
         let path = entry?.path();
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");

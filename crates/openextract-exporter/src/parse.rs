@@ -1,6 +1,6 @@
 //! Parse OpenExtract conversation CSV (per-chat or all-conversations).
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -47,8 +47,8 @@ pub(crate) fn discover_csv_files(input: &Path) -> Result<Vec<PathBuf>> {
         bail!("input path not found: {}", input.display());
     }
     let mut files = Vec::new();
-    for entry in std::fs::read_dir(input)
-        .with_context(|| format!("read_dir {}", input.display()))?
+    for entry in
+        std::fs::read_dir(input).with_context(|| format!("read_dir {}", input.display()))?
     {
         let entry = entry?;
         let path = entry.path();
@@ -124,8 +124,12 @@ pub(crate) fn parse_csv_file(path: &Path) -> Result<Vec<RawRow>> {
         }
         let is_from_me = parse_bool(&field(&rec, is_from_me_i));
         let has_attachments = parse_bool(&field(&rec, has_att_i));
-        let conversation = conversation_i.map(|i| field(&rec, i)).filter(|s| !s.is_empty());
-        let direction = direction_i.map(|i| field(&rec, i)).filter(|s| !s.is_empty());
+        let conversation = conversation_i
+            .map(|i| field(&rec, i))
+            .filter(|s| !s.is_empty());
+        let direction = direction_i
+            .map(|i| field(&rec, i))
+            .filter(|s| !s.is_empty());
         rows.push(RawRow {
             date,
             conversation,

@@ -1,6 +1,6 @@
 //! Auto-detect IR export layout in an input directory.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use message_exporters_core::OutputFormat;
 use message_ir::CSV_HEADERS;
 use std::fs::{self, File};
@@ -29,9 +29,7 @@ pub fn detect_ir_export(input_dir: &Path) -> Result<DetectedExport> {
     let mut has_eml = false;
     let mut samples: Vec<String> = Vec::new();
 
-    for entry in fs::read_dir(input_dir)
-        .with_context(|| format!("read {}", input_dir.display()))?
-    {
+    for entry in fs::read_dir(input_dir).with_context(|| format!("read {}", input_dir.display()))? {
         let entry = entry?;
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();

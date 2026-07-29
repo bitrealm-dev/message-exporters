@@ -1,8 +1,8 @@
 //! Copy a contacts VCF/CSV and rewrite phones that [`normalize_certain`] accepts.
 
 use crate::name::collapse_inner_whitespace;
-use anyhow::{bail, Context, Result};
-use message_phone::{normalize_certain, normalize_uncertain_reason, PhoneRegion};
+use anyhow::{Context, Result, bail};
+use message_phone::{PhoneRegion, normalize_certain, normalize_uncertain_reason};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Write;
@@ -248,10 +248,7 @@ fn corrected_output_paths(input: &Path) -> (PathBuf, PathBuf) {
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("contacts");
-    let ext = input
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("csv");
+    let ext = input.extension().and_then(|e| e.to_str()).unwrap_or("csv");
     let base = update_output_stem(stem);
     (
         parent.join(format!("{base}.{ext}")),
@@ -430,10 +427,7 @@ fn emit_uncertain_sections(log_lines: &mut Vec<String>, unable: &[UnableEntry]) 
     for reason in reasons {
         log_lines.push(format!("UNCERTAIN FORMAT - {reason}"));
         for entry in &by_reason[&reason] {
-            log_lines.push(format!(
-                "  - {:?} - {:?}",
-                entry.contact, entry.phone
-            ));
+            log_lines.push(format!("  - {:?} - {:?}", entry.contact, entry.phone));
         }
     }
 }
@@ -549,9 +543,7 @@ fn rewrite_vcf(
             continue;
         }
         if upper == "END:VCARD" {
-            log_lines.push(format!(
-                "# vcard {card_index} end name={current_name:?}"
-            ));
+            log_lines.push(format!("# vcard {card_index} end name={current_name:?}"));
             out.push_str(line);
             out.push('\n');
             continue;
@@ -561,9 +553,7 @@ fn rewrite_vcf(
             if current_name.is_empty() {
                 current_name = "(unnamed)".into();
             }
-            log_lines.push(format!(
-                "# vcard {card_index} FN={current_name:?}"
-            ));
+            log_lines.push(format!("# vcard {card_index} FN={current_name:?}"));
             out.push_str(line);
             out.push('\n');
             continue;
@@ -578,9 +568,7 @@ fn rewrite_vcf(
             if current_name.is_empty() {
                 current_name = "(unnamed)".into();
             }
-            log_lines.push(format!(
-                "# vcard {card_index} N={current_name:?}"
-            ));
+            log_lines.push(format!("# vcard {card_index} N={current_name:?}"));
             out.push_str(line);
             out.push('\n');
             continue;
@@ -591,16 +579,8 @@ fn rewrite_vcf(
                 let label = contact_label(card_index, &current_name);
                 let display = contact_display_name(card_index, &current_name);
                 let new_val = rewrite_phone_token(
-                    value,
-                    &label,
-                    &display,
-                    region,
-                    rewritten,
-                    uncertain,
-                    log_lines,
-                    unable,
-                    by_e164,
-                    true,
+                    value, &label, &display, region, rewritten, uncertain, log_lines, unable,
+                    by_e164, true,
                 );
                 out.push_str(prefix);
                 out.push(':');
@@ -665,9 +645,7 @@ fn rewrite_imazing_csv(
     cards: &mut Vec<OutCard>,
 ) -> Result<()> {
     let file = File::open(input).with_context(|| format!("open {}", input.display()))?;
-    let mut rdr = csv::ReaderBuilder::new()
-        .flexible(true)
-        .from_reader(file);
+    let mut rdr = csv::ReaderBuilder::new().flexible(true).from_reader(file);
     let headers = rdr.headers()?.clone();
     let header_l: Vec<String> = headers
         .iter()
@@ -837,41 +815,52 @@ END:VCARD\n",
         let report =
             validate_contacts_file(&input, PhoneRegion::International, ValidateMode::Check)
                 .unwrap();
-        assert!(report.log_lines.iter().any(|l| l.contains("# vcard 1 begin")));
-        assert!(report
-            .log_lines
-            .iter()
-            .any(|l| l.contains("FN=\"Ada Lovelace\"")));
+        assert!(
+            report
+                .log_lines
+                .iter()
+                .any(|l| l.contains("# vcard 1 begin"))
+        );
+        assert!(
+            report
+                .log_lines
+                .iter()
+                .any(|l| l.contains("FN=\"Ada Lovelace\""))
+        );
         assert!(report.log_lines.iter().any(|l| l.contains("REWRITTEN")));
-        assert!(report
-            .log_lines
-            .iter()
-            .any(|l| l.starts_with("UNCERTAIN FORMAT - ")));
-        assert!(report
-            .log_lines
-            .iter()
-            .any(|l| l.contains("\"Ada Lovelace\" - ")));
-        assert!(report
-            .log_lines
-            .iter()
-            .any(|l| l.contains("# vcard 1 end name=\"Ada Lovelace\"")));
+        assert!(
+            report
+                .log_lines
+                .iter()
+                .any(|l| l.starts_with("UNCERTAIN FORMAT - "))
+        );
+        assert!(
+            report
+                .log_lines
+                .iter()
+                .any(|l| l.contains("\"Ada Lovelace\" - "))
+        );
+        assert!(
+            report
+                .log_lines
+                .iter()
+                .any(|l| l.contains("# vcard 1 end name=\"Ada Lovelace\""))
+        );
         assert!(report.log_lines.iter().any(|l| l == "Summary"));
-        assert!(report
-            .log_lines
-            .iter()
-            .any(|l| l == "  - Numbers formatted: 1"));
-        assert!(report
-            .log_lines
-            .iter()
-            .any(|l| l == "  - Uncertain: 1"));
-        assert!(report
-            .log_lines
-            .iter()
-            .any(|l| l == "  - Mode: check"));
-        assert!(report
-            .log_lines
-            .iter()
-            .any(|l| l == "    - File written: none"));
+        assert!(
+            report
+                .log_lines
+                .iter()
+                .any(|l| l == "  - Numbers formatted: 1")
+        );
+        assert!(report.log_lines.iter().any(|l| l == "  - Uncertain: 1"));
+        assert!(report.log_lines.iter().any(|l| l == "  - Mode: check"));
+        assert!(
+            report
+                .log_lines
+                .iter()
+                .any(|l| l == "    - File written: none")
+        );
     }
 
     #[test]
@@ -928,30 +917,38 @@ Clone,Contact,(542).341-2398\n",
             "contacts.csv",
             "First Name,Last Name,Mobile Phone\nAda,Lovelace,(542).341-2398\nShort,Number,1555-4567\n",
         );
-        let before: Vec<_> = fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().path()).collect();
-        let report =
-            validate_contacts_file(&input, PhoneRegion::Usa, ValidateMode::Check).unwrap();
+        let before: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .collect();
+        let report = validate_contacts_file(&input, PhoneRegion::Usa, ValidateMode::Check).unwrap();
         assert!(!report.wrote_files);
         assert_eq!(report.rewritten, 1);
         assert_eq!(report.uncertain, 1);
-        assert!(report
-            .log_lines
-            .iter()
-            .any(|l| l.starts_with("UNCERTAIN FORMAT - ")));
+        assert!(
+            report
+                .log_lines
+                .iter()
+                .any(|l| l.starts_with("UNCERTAIN FORMAT - "))
+        );
         assert!(report.log_lines.iter().any(|l| l == "Summary"));
-        assert!(report
-            .log_lines
-            .iter()
-            .any(|l| l == "  - Numbers formatted: 1"));
-        assert!(report
-            .log_lines
-            .iter()
-            .any(|l| l == "  - Mode: check"));
-        assert!(report
-            .log_lines
-            .iter()
-            .any(|l| l == "    - File written: none"));
-        let after: Vec<_> = fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().path()).collect();
+        assert!(
+            report
+                .log_lines
+                .iter()
+                .any(|l| l == "  - Numbers formatted: 1")
+        );
+        assert!(report.log_lines.iter().any(|l| l == "  - Mode: check"));
+        assert!(
+            report
+                .log_lines
+                .iter()
+                .any(|l| l == "    - File written: none")
+        );
+        let after: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .collect();
         assert_eq!(before.len(), after.len(), "check must not create files");
         assert!(!report.output_path.exists());
     }

@@ -19,18 +19,16 @@ use imessage_database::{
         },
     },
     util::{
-        bundle_id::parse_balloon_bundle_id,
-        dates::get_local_time,
-        platform::Platform,
+        bundle_id::parse_balloon_bundle_id, dates::get_local_time, platform::Platform,
         plist::parse_ns_keyed_archiver,
     },
 };
 use rusqlite::Connection;
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::Path;
 
-use crate::body::{resolve_run, AttachmentResolver};
+use crate::body::{AttachmentResolver, resolve_run};
 
 /// One historical edit (or unsent marker) for a body part.
 #[derive(Serialize)]
@@ -72,7 +70,10 @@ pub struct TapbackCell {
 }
 
 pub fn optional_rfc3339(
-    result: Result<chrono::DateTime<chrono::Local>, imessage_database::error::message::MessageError>,
+    result: Result<
+        chrono::DateTime<chrono::Local>,
+        imessage_database::error::message::MessageError,
+    >,
 ) -> (Option<String>, Option<String>) {
     match result {
         Ok(date) => (Some(date.to_rfc3339()), Some(date.to_utc().to_rfc3339())),
@@ -82,11 +83,7 @@ pub fn optional_rfc3339(
 
 pub fn expressive_label(expressive: Expressive<'_>) -> Option<String> {
     let label = expressive.to_string();
-    if label.is_empty() {
-        None
-    } else {
-        Some(label)
-    }
+    if label.is_empty() { None } else { Some(label) }
 }
 
 pub fn shared_location_label(kind: SharedLocation) -> &'static str {
@@ -227,10 +224,7 @@ pub fn build_part_records(message: &Message, attachments: &[Attachment]) -> Vec<
 }
 
 /// Collect transcription text from body ranges matching an attachment GUID.
-pub fn transcription_for_attachment(
-    message: &Message,
-    attachment: &Attachment,
-) -> Option<String> {
+pub fn transcription_for_attachment(message: &Message, attachment: &Attachment) -> Option<String> {
     let guid = attachment.guid.as_deref()?;
     for component in &message.components {
         let BubbleComponent::Run(ranges) = component else {
@@ -435,16 +429,18 @@ pub fn build_balloon_value(db: &Connection, message: &Message) -> Option<Value> 
 
 /// Balloon kind string for `X-ME-Balloon-Kind` (from `X-ME-App` JSON or variant).
 pub fn balloon_kind_label(app: &Value) -> Option<String> {
-    app.get("kind")
-        .and_then(|v| v.as_str())
-        .map(str::to_string)
+    app.get("kind").and_then(|v| v.as_str()).map(str::to_string)
 }
 
 /// Plain-text summary for balloon messages.
 pub fn balloon_summary(app: &Value, fallback_text: Option<&str>) -> String {
     if let Some(data) = app.get("data") {
         for key in ["title", "caption", "app_name", "url", "track_name", "name"] {
-            if let Some(s) = data.get(key).and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            if let Some(s) = data
+                .get(key)
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+            {
                 return s.to_string();
             }
         }

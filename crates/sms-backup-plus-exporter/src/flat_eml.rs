@@ -398,15 +398,9 @@ Hello\r\n",
         let mail = mailparse::parse_mail(&bytes).unwrap();
         let headers = MailHeaders::from_mail(&mail);
         let owners = HashSet::from(["5555550100".to_string()]);
-        let msg = parse_flat_eml_mail(
-            &path,
-            &mail,
-            &headers,
-            &owners,
-            &["me@example.com".into()],
-        )
-        .unwrap()
-        .unwrap();
+        let msg = parse_flat_eml_mail(&path, &mail, &headers, &owners, &["me@example.com".into()])
+            .unwrap()
+            .unwrap();
         assert_eq!(msg.chat_key, "4075551234");
         assert!(msg.is_from_me);
     }

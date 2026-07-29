@@ -1,7 +1,7 @@
 //! Full export pipeline for CLI and in-process GUI.
 
-use crate::emit::{convert_export, ExportReport};
-use anyhow::{bail, Context, Result};
+use crate::emit::{ExportReport, convert_export};
+use anyhow::{Context, Result, bail};
 use message_contacts::ContactsBook;
 use message_csv::DateRange;
 use message_exporters_core::{ExporterConfig, SourceConfig};
@@ -88,10 +88,7 @@ pub fn report_summary_lines(
         ),
     ];
     if report.notifications > 0 {
-        lines.push(format!(
-            "  notifications:       {}",
-            report.notifications
-        ));
+        lines.push(format!("  notifications:       {}", report.notifications));
     }
     if report.duplicates_dropped > 0 {
         lines.push(format!(

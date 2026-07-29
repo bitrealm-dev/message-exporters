@@ -1,18 +1,18 @@
 //! Convert wtsexporter JSON → common message → packaging via FormatSink.
 
-use crate::cancel::{check_cancel, CancelFlag};
+use crate::cancel::{CancelFlag, check_cancel};
 use crate::jid::{chat_id_from_jid, is_group_jid, jid_to_e164};
 use crate::parse::{
-    load_chat_store, media_path, message_text, timestamp_secs, ChatJson, MessageJson,
+    ChatJson, MessageJson, load_chat_store, media_path, message_text, timestamp_secs,
 };
 use anyhow::{Context, Result};
-use message_csv::{format_local_ts, json_cell, stable_guid, DateRange};
+use message_csv::{DateRange, format_local_ts, json_cell, stable_guid};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    clean_previous_ir_output, owner_sender, ConversationDocument, ConversationMeta,
-    ConversationStats, ExportMeta, ExportTransforms, FormatSink, FormatSinkResult, IrAttachment,
-    IrConversationType, IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, IrSource,
-    SCHEMA_VERSION,
+    ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
+    FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
+    IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION, clean_previous_ir_output,
+    owner_sender,
 };
 use serde_json::Map;
 use sha2::{Digest, Sha256};
@@ -385,11 +385,7 @@ fn sanitize_att_stem(chat_id: &str) -> String {
             }
         })
         .collect();
-    if s.is_empty() {
-        "chat".into()
-    } else {
-        s
-    }
+    if s.is_empty() { "chat".into() } else { s }
 }
 
 fn file_sha256(path: &Path) -> Result<String> {
@@ -479,7 +475,11 @@ fn pending_to_document(
         }
         let secs = msg.sort_key as i64;
         let (ts_local, _, _) = format_local_ts(secs).expect("timestamp validated above");
-        let digests: Vec<String> = msg.attachments.iter().map(|a| a.digest_hex.clone()).collect();
+        let digests: Vec<String> = msg
+            .attachments
+            .iter()
+            .map(|a| a.digest_hex.clone())
+            .collect();
         let guid = stable_guid(chat_id, &ts_local, msg.is_from_me, &msg.text, &digests);
         let attachments: Vec<IrAttachment> = msg
             .attachments

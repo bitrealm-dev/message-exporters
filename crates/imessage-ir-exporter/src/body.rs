@@ -66,10 +66,7 @@ pub(crate) fn resolve_run<'r>(
 /// Indices into `attachments` referenced by the message body.
 ///
 /// When `components` is empty (parse failure), falls back to every join row.
-pub fn referenced_attachment_indices(
-    message: &Message,
-    attachments: &[Attachment],
-) -> Vec<usize> {
+pub fn referenced_attachment_indices(message: &Message, attachments: &[Attachment]) -> Vec<usize> {
     if attachments.is_empty() {
         return Vec::new();
     }

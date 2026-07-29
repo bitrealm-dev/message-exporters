@@ -1,7 +1,7 @@
 //! Full export pipeline for CLI and in-process GUI.
 
-use crate::emit::{convert_export, ExportReport};
-use anyhow::{bail, Context, Result};
+use crate::emit::{ExportReport, convert_export};
+use anyhow::{Context, Result, bail};
 use message_contacts::resolve_contacts_cli;
 use message_csv::DateRange;
 use message_exporters_core::{ExporterConfig, SourceConfig};
@@ -53,10 +53,7 @@ pub fn report_summary_lines(report: &ExportReport, output: &Path) -> Vec<String>
         format!("  PDU messages:      {}", report.pdu_messages),
         format!("  PDU group MMS:     {}", report.pdu_group_messages),
         format!("  attachments:       {}", report.attachments_saved),
-        format!(
-            "  sent / received:   {} / {}",
-            report.sent, report.received
-        ),
+        format!("  sent / received:   {} / {}", report.sent, report.received),
     ];
     if report.skipped_invalid_date > 0 {
         lines.push(format!(
@@ -88,12 +85,7 @@ pub fn report_summary_lines(report: &ExportReport, output: &Path) -> Vec<String>
         for d in report.skipped_unknown_address_details.iter().take(10) {
             lines.push(format!(
                 "    invalid address: {} address={:?} contact={:?} type={} date_ms={} body={:?}",
-                d.xml_file,
-                d.address,
-                d.contact_name,
-                d.android_type,
-                d.date_ms,
-                d.body,
+                d.xml_file, d.address, d.contact_name, d.android_type, d.date_ms, d.body,
             ));
         }
         if report.skipped_unknown_address_details.len() > 10 {
@@ -122,11 +114,7 @@ pub fn report_summary_lines(report: &ExportReport, output: &Path) -> Vec<String>
         for d in report.skipped_no_other_party_details.iter().take(10) {
             lines.push(format!(
                 "    no party: {} participants=[{}] sent={} from={} to={}",
-                d.pdu_filename,
-                d.participants,
-                d.is_sent as u8,
-                d.has_from as u8,
-                d.has_to as u8,
+                d.pdu_filename, d.participants, d.is_sent as u8, d.has_from as u8, d.has_to as u8,
             ));
         }
         if report.skipped_no_other_party_details.len() > 10 {

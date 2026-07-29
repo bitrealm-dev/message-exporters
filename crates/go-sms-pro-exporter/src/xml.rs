@@ -80,10 +80,7 @@ pub fn parse_xml_str(text: &str) -> Result<(Vec<XmlMessage>, XmlParseStats)> {
     for fields in file.sms {
         stats.messages += 1;
         let addr = sanitize_number(fields.get("address").map(String::as_str).unwrap_or(""));
-        let contact = fields
-            .get("contactName")
-            .cloned()
-            .unwrap_or_default();
+        let contact = fields.get("contactName").cloned().unwrap_or_default();
         let body_raw = fields.get("body").map(String::as_str).unwrap_or("");
         let body = decode_gosms_emojis(body_raw);
         let date_ms = fields.get("date").cloned().unwrap_or_else(|| "0".into());
@@ -253,7 +250,10 @@ mod tests {
 </GoSms>"#;
         let (msgs, _) = parse_xml_str(xml).unwrap();
         assert_eq!(msgs.len(), 1);
-        assert_eq!(msgs[0].xml_fields.get("read").map(String::as_str), Some("1"));
+        assert_eq!(
+            msgs[0].xml_fields.get("read").map(String::as_str),
+            Some("1")
+        );
         assert_eq!(
             msgs[0].xml_fields.get("status").map(String::as_str),
             Some("-1")

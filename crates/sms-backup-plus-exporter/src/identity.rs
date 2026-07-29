@@ -123,10 +123,7 @@ mod tests {
         let whole = sample_msg("4075551234", 1609459200.0, false, "Hello");
         let subsec = sample_msg("4075551234", 1609459200.488, false, "Hello");
         assert_eq!(cover_identity(&whole), cover_identity(&subsec));
-        assert_eq!(
-            cover_identity(&whole),
-            "+14075551234|1609459200000|0|Hello"
-        );
+        assert_eq!(cover_identity(&whole), "+14075551234|1609459200000|0|Hello");
     }
 
     #[test]

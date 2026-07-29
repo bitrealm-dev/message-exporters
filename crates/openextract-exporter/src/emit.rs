@@ -1,20 +1,19 @@
 //! Convert OpenExtract rows → common message → packaging via FormatSink.
 
-use crate::cancel::{check_cancel, CancelFlag};
-use crate::parse::{discover_csv_files, parse_csv_file, RawRow, SourceKind};
+use crate::cancel::{CancelFlag, check_cancel};
+use crate::parse::{RawRow, SourceKind, discover_csv_files, parse_csv_file};
 use anyhow::{Context, Result};
 use chrono::DateTime;
 use message_contacts::ContactsBook;
-use message_csv::{format_local_ts, stable_guid, DateRange};
+use message_csv::{DateRange, format_local_ts, stable_guid};
 use message_exporters_core::OutputFormat;
 use message_ir::{
-    clean_previous_ir_output, owner_sender, ConversationDocument, ConversationMeta,
-    ConversationStats, ExportMeta, ExportTransforms, FormatSink, FormatSinkResult,
-    IrConversationType, IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, IrSource,
-    SCHEMA_VERSION,
+    ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
+    FormatSink, FormatSinkResult, IrConversationType, IrDirection, IrMessage, IrMessageKind,
+    IrParticipant, IrService, IrSource, SCHEMA_VERSION, clean_previous_ir_output, owner_sender,
 };
-use serde_json::{json, Map};
 use message_phone::{sanitize_number, to_e164};
+use serde_json::{Map, json};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
@@ -208,10 +207,7 @@ fn resolve_chat(book: &ContactsBook, peer: &str) -> (String, String, bool) {
     }
     if let Some(digits) = sanitize_number(peer) {
         let e164 = to_e164(&digits);
-        let name = book
-            .lookup_name_by_phone(&digits)
-            .unwrap_or("")
-            .to_string();
+        let name = book.lookup_name_by_phone(&digits).unwrap_or("").to_string();
         return (e164, name, false);
     }
     if let Some(e164) = book.lookup_e164_by_name(peer) {
@@ -280,9 +276,7 @@ fn resolve_sender(
     let display = if !contact_name.is_empty() {
         contact_name.to_string()
     } else if let Some(digits) = sanitize_number(&row.sender) {
-        book.lookup_name_by_phone(&digits)
-            .unwrap_or("")
-            .to_string()
+        book.lookup_name_by_phone(&digits).unwrap_or("").to_string()
     } else if !is_me(&row.sender) {
         row.sender.clone()
     } else {

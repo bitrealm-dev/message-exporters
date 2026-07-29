@@ -1,13 +1,11 @@
 //! Full export pipeline (wtsexporter/JSON convert) for CLI and GUI.
 
 use crate::cancel::check_cancel;
-use crate::emit::{convert_json, ExportReport};
-use crate::wtsexporter::{resolve_wtsexporter, run_wtsexporter, Platform, WtsexporterArgs};
-use anyhow::{bail, Context, Result};
+use crate::emit::{ExportReport, convert_json};
+use crate::wtsexporter::{Platform, WtsexporterArgs, resolve_wtsexporter, run_wtsexporter};
+use anyhow::{Context, Result, bail};
 use message_csv::DateRange;
-use message_exporters_core::{
-    ExporterConfig, SourceConfig, WhatsappPlatform as CorePlatform,
-};
+use message_exporters_core::{ExporterConfig, SourceConfig, WhatsappPlatform as CorePlatform};
 use message_ir::ExportTransforms;
 use std::env;
 use std::fs;
@@ -50,8 +48,8 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
         media_roots.dedup();
         (json.clone(), media_roots, None)
     } else {
-        let platform = platform
-            .ok_or_else(|| anyhow::anyhow!("platform is required unless json is set"))?;
+        let platform =
+            platform.ok_or_else(|| anyhow::anyhow!("platform is required unless json is set"))?;
         let input = match input {
             Some(path) => path,
             None => env::current_dir().context("resolve current working directory")?,
@@ -177,10 +175,7 @@ pub fn report_summary_lines(report: &ExportReport, output: &Path) -> Vec<String>
 }
 
 /// Helper used by CLI to parse date strings into [`DateRange`].
-pub fn parse_date_range(
-    start_date: Option<&str>,
-    end_date: Option<&str>,
-) -> Result<DateRange> {
+pub fn parse_date_range(start_date: Option<&str>, end_date: Option<&str>) -> Result<DateRange> {
     DateRange::parse(start_date, end_date)
         .map_err(anyhow::Error::msg)
         .context("invalid date range")

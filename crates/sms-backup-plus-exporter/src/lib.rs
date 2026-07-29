@@ -14,9 +14,9 @@ pub(crate) mod identity;
 pub mod run;
 pub(crate) mod types;
 
-pub use cancel::{is_cancelled, CancelFlag};
+pub use cancel::{CancelFlag, is_cancelled};
 pub use emit::{ExportReport, convert_export};
 pub use message_exporters_core::ExporterConfig;
 pub use run::{
-    parse_date_range, report_summary_lines, resolve_inputs, resolve_owner, run, RunResult,
+    RunResult, parse_date_range, report_summary_lines, resolve_inputs, resolve_owner, run,
 };

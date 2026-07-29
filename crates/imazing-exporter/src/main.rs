@@ -7,11 +7,13 @@ use message_exporters_core::{
     ContactsConfig, ContactsKind, ExporterConfig, ImazingConfig, MediaConfig, ObfuscateConfig,
     OutputFormat, SourceConfig,
 };
-use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
+use message_media::{MaxResolution, MediaMode, compress_options_from_cli};
 
 #[derive(Parser, Debug)]
 #[command(name = "imazing-exporter")]
-#[command(about = "Convert iMazing Messages / WhatsApp CSV exports via common message to JSON/CSV/EML/MBOX/JSONL/XML")]
+#[command(
+    about = "Convert iMazing Messages / WhatsApp CSV exports via common message to JSON/CSV/EML/MBOX/JSONL/XML"
+)]
 struct Cli {
     /// Messages/WhatsApp export directory (or a single CSV for CLI convenience)
     #[arg(long)]
@@ -55,7 +57,11 @@ struct Cli {
     media_mode: MediaMode,
 
     /// Compress only: max long edge (720p, 1080p, 4k)
-    #[arg(long = "media-max-resolution", default_value = "1080p", value_name = "RES")]
+    #[arg(
+        long = "media-max-resolution",
+        default_value = "1080p",
+        value_name = "RES"
+    )]
     media_max_resolution: MaxResolution,
 
     /// Compress only: max frame rate

@@ -13,9 +13,7 @@ use imessage_database::{
     util::dates::get_offset,
 };
 
-use crate::{
-    contacts::Name, data_source::DataSource, error::RuntimeError, options::MailOptions,
-};
+use crate::{contacts::Name, data_source::DataSource, error::RuntimeError, options::MailOptions};
 
 /// Bootstrap state for one mail export.
 pub struct MailSession {

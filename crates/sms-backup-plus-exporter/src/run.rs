@@ -1,8 +1,8 @@
 //! Full export pipeline for CLI and in-process GUI.
 
-use crate::emit::{convert_export, ExportReport};
-use anyhow::{bail, Context, Result};
-use message_contacts::{resolve_contacts_cli, NameMapping};
+use crate::emit::{ExportReport, convert_export};
+use anyhow::{Context, Result, bail};
+use message_contacts::{NameMapping, resolve_contacts_cli};
 use message_csv::DateRange;
 use message_exporters_core::{ExporterConfig, SourceConfig};
 use message_ir::ExportTransforms;
@@ -109,10 +109,8 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     };
     let mut messages = Vec::new();
 
-    let (owner_phones, owner_emails, default_inputs) = resolve_owner(
-        source.owner_phones.clone(),
-        source.owner_emails.clone(),
-    )?;
+    let (owner_phones, owner_emails, default_inputs) =
+        resolve_owner(source.owner_phones.clone(), source.owner_emails.clone())?;
     let inputs = resolve_inputs(config.inputs.clone(), default_inputs)?;
 
     let (contacts_path, vcf) = config.contacts_csv_vcf();
@@ -165,10 +163,7 @@ pub fn report_summary_lines(report: &ExportReport, output: &Path) -> Vec<String>
         format!("  messages (deduped):{}", report.messages),
         format!("  duplicates dropped:{}", report.duplicates_dropped),
         format!("  attachments:       {}", report.attachments_saved),
-        format!(
-            "  sent / received:   {} / {}",
-            report.sent, report.received
-        ),
+        format!("  sent / received:   {} / {}", report.sent, report.received),
     ];
     if report.skipped_invalid_date > 0 {
         lines.push(format!(
@@ -210,10 +205,7 @@ pub fn report_summary_lines(report: &ExportReport, output: &Path) -> Vec<String>
 }
 
 /// Helper used by CLI to parse date strings into [`DateRange`].
-pub fn parse_date_range(
-    start_date: Option<&str>,
-    end_date: Option<&str>,
-) -> Result<DateRange> {
+pub fn parse_date_range(start_date: Option<&str>, end_date: Option<&str>) -> Result<DateRange> {
     DateRange::parse(start_date, end_date)
         .map_err(anyhow::Error::msg)
         .context("invalid date range")

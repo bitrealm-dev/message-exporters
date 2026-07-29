@@ -3,10 +3,9 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 use message_exporters_core::{
-    ExporterConfig, MediaConfig, MessageReexportConfig, ObfuscateConfig, OutputFormat,
-    SourceConfig,
+    ExporterConfig, MediaConfig, MessageReexportConfig, ObfuscateConfig, OutputFormat, SourceConfig,
 };
-use message_media::{compress_options_from_cli, MaxResolution, MediaMode};
+use message_media::{MaxResolution, MediaMode, compress_options_from_cli};
 use message_reexporter::run;
 
 #[derive(Parser, Debug)]
@@ -38,7 +37,11 @@ struct Cli {
     media_mode: MediaMode,
 
     /// Compress only: max long edge (720p, 1080p, 4k)
-    #[arg(long = "media-max-resolution", default_value = "1080p", value_name = "RES")]
+    #[arg(
+        long = "media-max-resolution",
+        default_value = "1080p",
+        value_name = "RES"
+    )]
     media_max_resolution: MaxResolution,
 
     /// Compress only: max frame rate

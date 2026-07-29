@@ -173,7 +173,10 @@ pub const WHATSAPP_PLATFORMS: [WhatsappPlatform; 2] =
 /// Create `path` and parents if missing.
 pub fn ensure_output_dir(path: &Path) -> Result<(), String> {
     fs::create_dir_all(path).map_err(|error| {
-        format!("Could not create output directory {}: {error}", path.display())
+        format!(
+            "Could not create output directory {}: {error}",
+            path.display()
+        )
     })
 }
 
@@ -508,8 +511,7 @@ impl Form {
         errors: &mut Vec<String>,
     ) -> ExporterConfig {
         required_text(&self.output, "Output", errors);
-        if self.whatsapp_platform == WhatsappPlatform::Ios
-            && self.whatsapp_backup.trim().is_empty()
+        if self.whatsapp_platform == WhatsappPlatform::Ios && self.whatsapp_backup.trim().is_empty()
         {
             errors.push("Backup path is required for iOS.".into());
         }
@@ -1137,7 +1139,10 @@ mod tests {
             ..Form::default()
         };
         let err = ios_missing.to_config(Exporter::Whatsapp).unwrap_err();
-        assert!(err.iter().any(|e| e.contains("Backup path is required for iOS")));
+        assert!(
+            err.iter()
+                .any(|e| e.contains("Backup path is required for iOS"))
+        );
     }
 
     #[test]
@@ -1165,20 +1170,13 @@ mod tests {
         };
 
         let config = form
-            .to_reexport_config(
-                input.path().to_str().unwrap(),
-                "out",
-                OutputFormat::Json,
-            )
+            .to_reexport_config(input.path().to_str().unwrap(), "out", OutputFormat::Json)
             .unwrap();
 
         assert_eq!(config.inputs, vec![input.path().to_path_buf()]);
         assert!(config.obfuscate.enabled);
         assert_eq!(config.obfuscate.seed.as_deref(), Some("01234567"));
-        assert!(matches!(
-            config.source,
-            SourceConfig::MessageReexport(_)
-        ));
+        assert!(matches!(config.source, SourceConfig::MessageReexport(_)));
     }
 
     #[test]
@@ -1194,7 +1192,11 @@ mod tests {
             .unwrap_err();
 
         assert!(errors.iter().any(|error| error.contains("Input directory")));
-        assert!(errors.iter().any(|error| error.contains("Output directory")));
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("Output directory"))
+        );
         assert!(errors.iter().any(|error| error.contains("Obfuscate seed")));
     }
 }

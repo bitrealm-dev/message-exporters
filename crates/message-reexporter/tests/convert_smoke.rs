@@ -1,8 +1,9 @@
 use message_exporters_core::{MediaConfig, ObfuscateConfig, OutputFormat};
 use message_ir::{
-    clean_previous_ir_output, read_conversation_csv, read_conversation_json, ConversationDocument,
-    ConversationMeta, ConversationStats, ExportMeta, ExportTransforms, FormatSink, IrConversationType,
-    IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION,
+    ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
+    FormatSink, IrConversationType, IrDirection, IrMessage, IrMessageKind, IrParticipant,
+    IrService, SCHEMA_VERSION, clean_previous_ir_output, read_conversation_csv,
+    read_conversation_json,
 };
 use message_reexporter::{convert_export, detect_ir_export};
 use std::fs;
@@ -51,8 +52,7 @@ fn sample_doc() -> ConversationDocument {
 fn write_fixture(dir: &Path, format: OutputFormat) {
     fs::create_dir_all(dir).unwrap();
     clean_previous_ir_output(dir).unwrap();
-    let mut sink =
-        FormatSink::open(dir, format, ExportTransforms::none()).unwrap();
+    let mut sink = FormatSink::open(dir, format, ExportTransforms::none()).unwrap();
     sink.write_document(&sample_doc()).unwrap();
     sink.finish().unwrap();
 }
