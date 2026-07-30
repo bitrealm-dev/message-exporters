@@ -1,8 +1,8 @@
-import { Button, ScrollView } from "std-widgets.slint";
+import { Button } from "std-widgets.slint";
 import {
     LabeledLineEdit, LabeledPathField, LabeledTextEdit, LabeledComboBox,
     AdvancedSection, Hint, DangerHint, ActionRow, SectionHeading, SectionDivider,
-    CheckBoxRow, ScrollForm
+    CheckBoxRow, AnchoredScrollPage
 } from "../widgets.slint";
 
 export global ExportAdapter {
@@ -75,8 +75,7 @@ export global ExportAdapter {
     callback clear();
 }
 
-export component ExportPage inherits ScrollView {
-    ScrollForm {
+export component ExportPage inherits AnchoredScrollPage {
         LabeledComboBox {
             label: "Backup type";
             model: ExportAdapter.exporter-options;
@@ -316,18 +315,17 @@ export component ExportPage inherits ScrollView {
             value <=> ExportAdapter.obfuscate-seed;
         }
 
-        ActionRow {
-            Button {
-                text: "Clear";
-                enabled: ExportAdapter.enabled;
-                clicked => { ExportAdapter.clear(); }
-            }
-            Button {
-                text: "Run exporter";
-                primary: true;
-                enabled: ExportAdapter.enabled;
-                clicked => { ExportAdapter.run(); }
-            }
+    ActionRow {
+        Button {
+            text: "Clear";
+            enabled: ExportAdapter.enabled;
+            clicked => { ExportAdapter.clear(); }
+        }
+        Button {
+            text: "Run exporter";
+            primary: true;
+            enabled: ExportAdapter.enabled;
+            clicked => { ExportAdapter.run(); }
         }
     }
 }

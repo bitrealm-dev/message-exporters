@@ -1,4 +1,4 @@
-import { Button, CheckBox, ComboBox, LineEdit, TextEdit } from "std-widgets.slint";
+import { Button, CheckBox, ComboBox, LineEdit, ScrollView, TextEdit } from "std-widgets.slint";
 
 // Classic desktop dialog grid:
 //   [ right-aligned label | flexible control | trailing button ]
@@ -333,13 +333,37 @@ export component PageColumn inherits VerticalLayout {
     @children
 }
 
-// Content column inside ScrollView: height tracks preferred size so Flickable
-// does not distribute extra viewport height across form rows.
+// Content column inside ScrollView: pinned to the viewport's top-left.
+// Width follows the viewport so fields stretch; height tracks preferred size
+// so expanding the window never vertically redistributes form rows.
 export component ScrollForm inherits VerticalLayout {
     padding: FormMetrics.page-padding;
     spacing: FormMetrics.row-spacing;
     alignment: start;
     vertical-stretch: 0;
+    horizontal-stretch: 0;
+    x: 0px;
+    y: 0px;
+    width: 100%;
     height: self.preferred-height;
     @children
+}
+
+// Scrollable form page whose content stays anchored at the top-left when the
+// window grows. Extra space appears below/right; content scrolls when taller
+// than the visible area.
+export component AnchoredScrollPage inherits ScrollView {
+    vertical-stretch: 1;
+    horizontal-stretch: 1;
+    // Match the visible width so fields stay left-aligned; height follows the
+    // form so Flickable cannot center a shorter preferred-size layout.
+    viewport-width: self.visible-width;
+    viewport-height: form.preferred-height;
+
+    form := ScrollForm {
+        width: root.viewport-width;
+        x: 0px;
+        y: 0px;
+        @children
+    }
 }

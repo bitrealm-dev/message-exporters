@@ -1,7 +1,7 @@
-import { Button, ScrollView } from "std-widgets.slint";
+import { Button } from "std-widgets.slint";
 import {
     LabeledLineEdit, LabeledPathField, Hint, ActionRow, PageHeader,
-    CheckBoxRow, ScrollForm
+    CheckBoxRow, AnchoredScrollPage
 } from "../widgets.slint";
 
 export global VaultAdapter {
@@ -20,70 +20,68 @@ export global VaultAdapter {
     callback clear();
 }
 
-export component VaultPage inherits ScrollView {
-    ScrollForm {
-        PageHeader { title: "Vault"; }
-        Hint {
-            message: "Import a Message Exporters JSONL folder into Message Vault. Export with JSONL in the Export tab first. Uses your Import API token (Vault key) from Vault Settings.";
-        }
+export component VaultPage inherits AnchoredScrollPage {
+    PageHeader { title: "Vault"; }
+    Hint {
+        message: "Import a Message Exporters JSONL folder into Message Vault. Export with JSONL in the Export tab first. Uses your Import API token (Vault key) from Vault Settings.";
+    }
 
-        LabeledLineEdit {
-            label: "Vault URL";
-            required: true;
-            placeholder: "http://127.0.0.1:8080";
-            value <=> VaultAdapter.url;
-        }
-        LabeledLineEdit {
-            label: "Username";
-            required: true;
-            placeholder: "vault username";
-            value <=> VaultAdapter.username;
-        }
-        LabeledLineEdit {
-            label: "Vault key";
-            required: true;
-            placeholder: "Import API token from Vault Settings";
-            password: true;
-            value <=> VaultAdapter.key;
-        }
-        LabeledPathField {
-            label: "Input directory";
-            required: true;
-            placeholder: "JSONL export folder";
-            field-id: "vault.input";
-            value <=> VaultAdapter.input;
-            browse-requested(id) => { VaultAdapter.browse(id); }
-        }
-        if VaultAdapter.source-note != "": Hint {
-            message: VaultAdapter.source-note;
-        }
+    LabeledLineEdit {
+        label: "Vault URL";
+        required: true;
+        placeholder: "http://127.0.0.1:8080";
+        value <=> VaultAdapter.url;
+    }
+    LabeledLineEdit {
+        label: "Username";
+        required: true;
+        placeholder: "vault username";
+        value <=> VaultAdapter.username;
+    }
+    LabeledLineEdit {
+        label: "Vault key";
+        required: true;
+        placeholder: "Import API token from Vault Settings";
+        password: true;
+        value <=> VaultAdapter.key;
+    }
+    LabeledPathField {
+        label: "Input directory";
+        required: true;
+        placeholder: "JSONL export folder";
+        field-id: "vault.input";
+        value <=> VaultAdapter.input;
+        browse-requested(id) => { VaultAdapter.browse(id); }
+    }
+    if VaultAdapter.source-note != "": Hint {
+        message: VaultAdapter.source-note;
+    }
 
-        CheckBoxRow {
-            text: "Continue on error";
-            checked <=> VaultAdapter.continue-on-error;
-        }
-        CheckBoxRow {
-            text: "Force re-upload (ignore journal)";
-            checked <=> VaultAdapter.force;
-        }
+    CheckBoxRow {
+        text: "Continue on error";
+        checked <=> VaultAdapter.continue-on-error;
+    }
+    CheckBoxRow {
+        text: "Force re-upload (ignore journal)";
+        checked <=> VaultAdapter.force;
+    }
 
-        ActionRow {
-            Button {
-                text: "Clear";
-                enabled: VaultAdapter.enabled;
-                clicked => { VaultAdapter.clear(); }
-            }
-            Button {
-                text: "Authenticate";
-                enabled: VaultAdapter.enabled;
-                clicked => { VaultAdapter.authenticate(); }
-            }
-            Button {
-                text: "Import to vault";
-                primary: true;
-                enabled: VaultAdapter.enabled;
-                clicked => { VaultAdapter.import(); }
-            }
+    ActionRow {
+        Button {
+            text: "Clear";
+            enabled: VaultAdapter.enabled;
+            clicked => { VaultAdapter.clear(); }
+        }
+        Button {
+            text: "Authenticate";
+            enabled: VaultAdapter.enabled;
+            clicked => { VaultAdapter.authenticate(); }
+        }
+        Button {
+            text: "Import to vault";
+            primary: true;
+            enabled: VaultAdapter.enabled;
+            clicked => { VaultAdapter.import(); }
         }
     }
 }

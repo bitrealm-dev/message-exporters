@@ -1,8 +1,8 @@
-import { Button, ScrollView } from "std-widgets.slint";
+import { Button } from "std-widgets.slint";
 import {
     LabeledLineEdit, LabeledPathField, LabeledComboBox,
     Hint, DangerHint, ActionRow, SectionHeading, SectionDivider,
-    PageHeader, CheckBoxRow, ScrollForm
+    PageHeader, CheckBoxRow, AnchoredScrollPage
 } from "../widgets.slint";
 
 export global ConvertAdapter {
@@ -32,96 +32,94 @@ export global ConvertAdapter {
     callback clear();
 }
 
-export component ConvertPage inherits ScrollView {
-    ScrollForm {
-        PageHeader { title: "Convert"; }
-        Hint {
-            message: "Convert a prior Message Exporters output directory to another format. Input format is auto-detected (csv, eml, mbox, json, jsonl, or xml).";
-        }
+export component ConvertPage inherits AnchoredScrollPage {
+    PageHeader { title: "Convert"; }
+    Hint {
+        message: "Convert a prior Message Exporters output directory to another format. Input format is auto-detected (csv, eml, mbox, json, jsonl, or xml).";
+    }
 
-        LabeledPathField {
-            label: "Input directory";
-            required: true;
-            placeholder: "Prior export folder";
-            field-id: "convert.input";
-            value <=> ConvertAdapter.input;
-            browse-requested(id) => { ConvertAdapter.browse(id); }
-        }
-        LabeledComboBox {
-            label: "Output format";
-            model: ConvertAdapter.output-format-options;
-            current-index <=> ConvertAdapter.output-format-index;
-        }
-        LabeledPathField {
-            label: "Output directory";
-            required: true;
-            placeholder: "Path";
-            field-id: "convert.output";
-            value <=> ConvertAdapter.output;
-            browse-requested(id) => { ConvertAdapter.browse(id); }
-        }
+    LabeledPathField {
+        label: "Input directory";
+        required: true;
+        placeholder: "Prior export folder";
+        field-id: "convert.input";
+        value <=> ConvertAdapter.input;
+        browse-requested(id) => { ConvertAdapter.browse(id); }
+    }
+    LabeledComboBox {
+        label: "Output format";
+        model: ConvertAdapter.output-format-options;
+        current-index <=> ConvertAdapter.output-format-index;
+    }
+    LabeledPathField {
+        label: "Output directory";
+        required: true;
+        placeholder: "Path";
+        field-id: "convert.output";
+        value <=> ConvertAdapter.output;
+        browse-requested(id) => { ConvertAdapter.browse(id); }
+    }
 
-        LabeledComboBox {
-            label: "Attachments";
-            model: ConvertAdapter.attachment-media-options;
-            current-index <=> ConvertAdapter.attachment-media-index;
-            selected(_) => { ConvertAdapter.media-changed(); }
-        }
-        if ConvertAdapter.obfuscate: Hint {
-            message: "Obfuscate replaces all media with shared placeholders (real files are not copied or converted).";
-        }
-        if ConvertAdapter.show-ffmpeg-warning: DangerHint {
-            message: "Convert/Compress need ffmpeg and ffprobe beside the app, in MESSAGE_EXPORTERS_BIN, or on PATH.";
-        }
-        if ConvertAdapter.show-compress-options: LabeledComboBox {
-            label: "Max resolution";
-            model: ConvertAdapter.max-resolution-options;
-            current-index <=> ConvertAdapter.max-resolution-index;
-        }
-        if ConvertAdapter.show-compress-options: LabeledLineEdit {
-            label: "Max fps";
-            required: true;
-            placeholder: "e.g. 30";
-            value <=> ConvertAdapter.media-max-fps;
-        }
-        if ConvertAdapter.show-compress-options: LabeledLineEdit {
-            label: "Min size";
-            required: true;
-            placeholder: "e.g. 20M";
-            value <=> ConvertAdapter.media-min-size;
-        }
-        if ConvertAdapter.show-compress-options: CheckBoxRow {
-            text: "Skip already-efficient HEVC";
-            checked <=> ConvertAdapter.media-skip-efficient;
-        }
+    LabeledComboBox {
+        label: "Attachments";
+        model: ConvertAdapter.attachment-media-options;
+        current-index <=> ConvertAdapter.attachment-media-index;
+        selected(_) => { ConvertAdapter.media-changed(); }
+    }
+    if ConvertAdapter.obfuscate: Hint {
+        message: "Obfuscate replaces all media with shared placeholders (real files are not copied or converted).";
+    }
+    if ConvertAdapter.show-ffmpeg-warning: DangerHint {
+        message: "Convert/Compress need ffmpeg and ffprobe beside the app, in MESSAGE_EXPORTERS_BIN, or on PATH.";
+    }
+    if ConvertAdapter.show-compress-options: LabeledComboBox {
+        label: "Max resolution";
+        model: ConvertAdapter.max-resolution-options;
+        current-index <=> ConvertAdapter.max-resolution-index;
+    }
+    if ConvertAdapter.show-compress-options: LabeledLineEdit {
+        label: "Max fps";
+        required: true;
+        placeholder: "e.g. 30";
+        value <=> ConvertAdapter.media-max-fps;
+    }
+    if ConvertAdapter.show-compress-options: LabeledLineEdit {
+        label: "Min size";
+        required: true;
+        placeholder: "e.g. 20M";
+        value <=> ConvertAdapter.media-min-size;
+    }
+    if ConvertAdapter.show-compress-options: CheckBoxRow {
+        text: "Skip already-efficient HEVC";
+        checked <=> ConvertAdapter.media-skip-efficient;
+    }
 
-        SectionDivider { }
-        SectionHeading { title: "Options"; }
-        CheckBoxRow {
-            text: "Obfuscate";
-            checked <=> ConvertAdapter.obfuscate;
-        }
-        if ConvertAdapter.obfuscate: Hint {
-            message: "Names, phones, message text, and media are replaced. Attachment files become placeholders only.";
-        }
-        if ConvertAdapter.obfuscate || ConvertAdapter.obfuscate-seed != "": LabeledLineEdit {
-            label: "Seed";
-            placeholder: "8-hex seed (optional)";
-            value <=> ConvertAdapter.obfuscate-seed;
-        }
+    SectionDivider { }
+    SectionHeading { title: "Options"; }
+    CheckBoxRow {
+        text: "Obfuscate";
+        checked <=> ConvertAdapter.obfuscate;
+    }
+    if ConvertAdapter.obfuscate: Hint {
+        message: "Names, phones, message text, and media are replaced. Attachment files become placeholders only.";
+    }
+    if ConvertAdapter.obfuscate || ConvertAdapter.obfuscate-seed != "": LabeledLineEdit {
+        label: "Seed";
+        placeholder: "8-hex seed (optional)";
+        value <=> ConvertAdapter.obfuscate-seed;
+    }
 
-        ActionRow {
-            Button {
-                text: "Clear";
-                enabled: ConvertAdapter.enabled;
-                clicked => { ConvertAdapter.clear(); }
-            }
-            Button {
-                text: "Run convert";
-                primary: true;
-                enabled: ConvertAdapter.enabled;
-                clicked => { ConvertAdapter.run(); }
-            }
+    ActionRow {
+        Button {
+            text: "Clear";
+            enabled: ConvertAdapter.enabled;
+            clicked => { ConvertAdapter.clear(); }
+        }
+        Button {
+            text: "Run convert";
+            primary: true;
+            enabled: ConvertAdapter.enabled;
+            clicked => { ConvertAdapter.run(); }
         }
     }
 }
