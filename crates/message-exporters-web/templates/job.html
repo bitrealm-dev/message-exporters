@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block title %}Log — Message Exporters{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="log-header">
+    <h1>{{ label }}</h1>
+    <span id="job-status" class="badge{% if done %} badge-done{% else %} badge-running{% endif %}" data-job-id="{{ job_id }}" data-events-url="/jobs/{{ job_id }}/events">
+      {% if done %}Finished{% else %}Running…{% endif %}
+    </span>
+  </div>
+
+  <pre id="log-output" class="log-output" aria-live="polite"></pre>
+
+  <noscript>
+    <pre class="log-output">{% for line in buffered_lines %}{{ line }}
+{% endfor %}</pre>
+    <p class="hint">JavaScript is required for live updates. <a href="/jobs/{{ job_id }}">Refresh</a> to see the latest status.</p>
+  </noscript>
+
+  <form method="post" action="/jobs/{{ job_id }}/cancel" class="actions">
+    <button type="submit" class="btn btn-danger-outline"{% if done %} disabled{% endif %}>Cancel</button>
+    <a href="/export" class="btn">Back to Export</a>
+  </form>
+</section>
+{% endblock %}

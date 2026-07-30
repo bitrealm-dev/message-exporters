@@ -19,7 +19,7 @@ The importer recognizes both one-message-per-file exports and archive emails tha
 
 ## Run the import
 
-In **Message**, choose **SMS Backup+ (experimental)**. Select the EML file or directory, enter owner phone and email identities, choose optional contacts or name mapping, then select the output format and directory.
+In **Export**, choose **SMS Backup+ (experimental)**. Select the EML file or directory, enter owner phone and email identities, choose optional contacts or name mapping, then select the output format and directory.
 
 ## Known limitations
 

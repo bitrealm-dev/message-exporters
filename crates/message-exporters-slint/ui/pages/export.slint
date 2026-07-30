@@ -1,0 +1,333 @@
+import { Button, ScrollView } from "std-widgets.slint";
+import {
+    LabeledLineEdit, LabeledPathField, LabeledTextEdit, LabeledComboBox,
+    AdvancedSection, Hint, DangerHint, ActionRow, SectionHeading, SectionDivider,
+    CheckBoxRow, ScrollForm
+} from "../widgets.slint";
+
+export global ExportAdapter {
+    in-out property <string> exporter-key;
+    in-out property <int> exporter-index;
+    in property <[string]> exporter-options;
+    in property <string> exporter-command;
+    in property <string> product-link-label;
+    in property <string> product-url;
+
+    in-out property <int> output-format-index;
+    in property <[string]> output-format-options;
+
+    in-out property <string> input;
+    in-out property <string> output;
+    in-out property <string> db-path;
+    in-out property <string> contacts;
+    in-out property <string> owner-phones;
+    in-out property <string> owner-emails;
+    in-out property <string> name-mapping;
+    in-out property <int> timezone-index;
+    in property <[string]> timezone-options;
+
+    in-out property <int> attachment-media-index;
+    in property <[string]> attachment-media-options;
+    in-out property <int> max-resolution-index;
+    in property <[string]> max-resolution-options;
+    in-out property <string> media-max-fps: "30";
+    in-out property <string> media-min-size: "20M";
+    in-out property <bool> media-skip-efficient: true;
+
+    in-out property <string> start-date;
+    in-out property <string> end-date;
+    in-out property <bool> obfuscate;
+    in-out property <string> obfuscate-seed;
+    in-out property <bool> advanced;
+
+    in-out property <int> whatsapp-platform-index;
+    in property <[string]> whatsapp-platform-options;
+    in-out property <string> whatsapp-backup;
+    in-out property <string> whatsapp-wa;
+    in-out property <string> whatsapp-key;
+    in-out property <string> whatsapp-media;
+    in-out property <string> whatsapp-db;
+    in-out property <bool> whatsapp-business;
+
+    in-out property <int> apple-platform-index;
+    in property <[string]> apple-platform-options;
+    in-out property <string> backup-password;
+    in-out property <string> apple-contacts;
+    in-out property <string> attachment-root;
+    in-out property <string> conversation-filter;
+
+    in property <bool> is-whatsapp;
+    in property <bool> is-imessage;
+    in property <bool> is-imazing;
+    in property <bool> is-sms-backup-plus;
+    in property <bool> needs-owner-phones;
+    in property <bool> whatsapp-is-ios;
+    in property <bool> show-contacts;
+    in property <bool> show-ffmpeg-warning;
+    in property <bool> show-compress-options;
+    in property <string> input-label: "Input directory";
+    in property <bool> enabled: true;
+
+    callback browse(string);
+    callback exporter-changed(int);
+    callback open-product-url();
+    callback run();
+    callback clear();
+}
+
+export component ExportPage inherits ScrollView {
+    ScrollForm {
+        LabeledComboBox {
+            label: "Backup type";
+            model: ExportAdapter.exporter-options;
+            current-index <=> ExportAdapter.exporter-index;
+            selected(_) => { ExportAdapter.exporter-changed(ExportAdapter.exporter-index); }
+        }
+        LabeledLineEdit {
+            label: "Exporter";
+            value: ExportAdapter.exporter-command;
+            enabled: false;
+        }
+        LabeledComboBox {
+            label: "Output format";
+            model: ExportAdapter.output-format-options;
+            current-index <=> ExportAdapter.output-format-index;
+        }
+
+        if ExportAdapter.is-whatsapp: LabeledComboBox {
+            label: "Platform";
+            model: ExportAdapter.whatsapp-platform-options;
+            current-index <=> ExportAdapter.whatsapp-platform-index;
+            selected(_) => { ExportAdapter.exporter-changed(ExportAdapter.exporter-index); }
+        }
+
+        if !ExportAdapter.is-whatsapp && ExportAdapter.is-imessage: LabeledPathField {
+            label: "Backup path";
+            placeholder: "/path/to/backup";
+            field-id: "export.db_path";
+            value <=> ExportAdapter.db-path;
+            browse-requested(id) => { ExportAdapter.browse(id); }
+        }
+        if !ExportAdapter.is-whatsapp && !ExportAdapter.is-imessage: LabeledPathField {
+            label: ExportAdapter.input-label;
+            required: true;
+            placeholder: "Path";
+            field-id: "export.input";
+            value <=> ExportAdapter.input;
+            browse-requested(id) => { ExportAdapter.browse(id); }
+        }
+        if !ExportAdapter.is-whatsapp: LabeledPathField {
+            label: "Output directory";
+            required: true;
+            placeholder: "Path";
+            field-id: "export.output";
+            value <=> ExportAdapter.output;
+            browse-requested(id) => { ExportAdapter.browse(id); }
+        }
+
+        if ExportAdapter.is-whatsapp && ExportAdapter.whatsapp-is-ios: LabeledPathField {
+            label: "Backup path";
+            required: true;
+            placeholder: "MobileSync Backup/DEVICE_ID folder";
+            field-id: "export.whatsapp_backup";
+            value <=> ExportAdapter.whatsapp-backup;
+            browse-requested(id) => { ExportAdapter.browse(id); }
+        }
+        if ExportAdapter.is-whatsapp && ExportAdapter.whatsapp-is-ios: LabeledPathField {
+            label: "Contacts";
+            placeholder: "ContactsV2.sqlite (optional)";
+            field-id: "export.whatsapp_wa";
+            value <=> ExportAdapter.whatsapp-wa;
+            browse-requested(id) => { ExportAdapter.browse(id); }
+        }
+        if ExportAdapter.is-whatsapp && !ExportAdapter.whatsapp-is-ios: LabeledPathField {
+            label: "Backup path";
+            placeholder: "msgstore.db.crypt12 / .crypt14 / .crypt15";
+            field-id: "export.whatsapp_backup";
+            value <=> ExportAdapter.whatsapp-backup;
+            browse-requested(id) => { ExportAdapter.browse(id); }
+        }
+        if ExportAdapter.is-whatsapp && !ExportAdapter.whatsapp-is-ios: LabeledPathField {
+            label: "Contacts";
+            placeholder: "wa.db (optional)";
+            field-id: "export.whatsapp_wa";
+            value <=> ExportAdapter.whatsapp-wa;
+            browse-requested(id) => { ExportAdapter.browse(id); }
+        }
+        if ExportAdapter.is-whatsapp: LabeledPathField {
+            label: "Output directory";
+            required: true;
+            placeholder: "Path";
+            field-id: "export.output";
+            value <=> ExportAdapter.output;
+            browse-requested(id) => { ExportAdapter.browse(id); }
+        }
+
+        if ExportAdapter.show-contacts: LabeledPathField {
+            label: "Contacts file";
+            placeholder: ".csv or .vcf (optional)";
+            field-id: "export.contacts";
+            value <=> ExportAdapter.contacts;
+            browse-requested(id) => { ExportAdapter.browse(id); }
+        }
+
+        LabeledComboBox {
+            label: "Attachments";
+            model: ExportAdapter.attachment-media-options;
+            current-index <=> ExportAdapter.attachment-media-index;
+            selected(_) => { ExportAdapter.exporter-changed(ExportAdapter.exporter-index); }
+        }
+        if ExportAdapter.obfuscate: Hint {
+            message: "Obfuscate replaces all media with shared placeholders (real files are not copied or converted).";
+        }
+        if ExportAdapter.show-ffmpeg-warning: DangerHint {
+            message: "Convert/Compress need ffmpeg and ffprobe beside the app, in MESSAGE_EXPORTERS_BIN, or on PATH.";
+        }
+        if ExportAdapter.show-compress-options: LabeledComboBox {
+            label: "Max resolution";
+            model: ExportAdapter.max-resolution-options;
+            current-index <=> ExportAdapter.max-resolution-index;
+        }
+        if ExportAdapter.show-compress-options: LabeledLineEdit {
+            label: "Max fps";
+            required: true;
+            placeholder: "e.g. 30";
+            value <=> ExportAdapter.media-max-fps;
+        }
+        if ExportAdapter.show-compress-options: LabeledLineEdit {
+            label: "Min size";
+            required: true;
+            placeholder: "e.g. 20M";
+            value <=> ExportAdapter.media-min-size;
+        }
+        if ExportAdapter.show-compress-options: CheckBoxRow {
+            text: "Skip already-efficient HEVC";
+            checked <=> ExportAdapter.media-skip-efficient;
+        }
+
+        if ExportAdapter.needs-owner-phones: LabeledTextEdit {
+            label: "Your phone number(s)";
+            required: true;
+            placeholder: "+19995551234 (one per line)";
+            value <=> ExportAdapter.owner-phones;
+        }
+        if ExportAdapter.is-sms-backup-plus: LabeledTextEdit {
+            label: "Backup email(s)";
+            required: true;
+            placeholder: "you@example.com (one per line)";
+            value <=> ExportAdapter.owner-emails;
+        }
+        if ExportAdapter.is-sms-backup-plus: LabeledPathField {
+            label: "Name mapping";
+            placeholder: "Phone,Incorrect Name CSV (optional)";
+            field-id: "export.name_mapping";
+            value <=> ExportAdapter.name-mapping;
+            browse-requested(id) => { ExportAdapter.browse(id); }
+        }
+        if ExportAdapter.is-imazing: LabeledComboBox {
+            label: "Timezone";
+            model: ExportAdapter.timezone-options;
+            current-index <=> ExportAdapter.timezone-index;
+        }
+
+        if ExportAdapter.is-whatsapp && !ExportAdapter.whatsapp-is-ios: LabeledLineEdit {
+            label: "Decryption key";
+            placeholder: "Key file or crypt15 hex";
+            value <=> ExportAdapter.whatsapp-key;
+        }
+        if ExportAdapter.is-whatsapp: AdvancedSection {
+            open <=> ExportAdapter.advanced;
+            if !ExportAdapter.whatsapp-is-ios: LabeledPathField {
+                label: "Media folder";
+                placeholder: "WhatsApp media directory (optional)";
+                field-id: "export.whatsapp_media";
+                value <=> ExportAdapter.whatsapp-media;
+                browse-requested(id) => { ExportAdapter.browse(id); }
+            }
+            if !ExportAdapter.whatsapp-is-ios: LabeledPathField {
+                label: "Message database";
+                placeholder: "msgstore.db override (optional)";
+                field-id: "export.whatsapp_db";
+                value <=> ExportAdapter.whatsapp-db;
+                browse-requested(id) => { ExportAdapter.browse(id); }
+            }
+            CheckBoxRow {
+                text: "WhatsApp Business";
+                checked <=> ExportAdapter.whatsapp-business;
+            }
+        }
+
+        if ExportAdapter.is-imessage: AdvancedSection {
+            open <=> ExportAdapter.advanced;
+            LabeledComboBox {
+                label: "Platform";
+                model: ExportAdapter.apple-platform-options;
+                current-index <=> ExportAdapter.apple-platform-index;
+            }
+            LabeledLineEdit {
+                label: "Backup password";
+                placeholder: "Encrypted iOS backup password (optional)";
+                password: true;
+                value <=> ExportAdapter.backup-password;
+            }
+            LabeledPathField {
+                label: "AddressBook DB";
+                placeholder: "Path (optional)";
+                field-id: "export.apple_contacts";
+                value <=> ExportAdapter.apple-contacts;
+                browse-requested(id) => { ExportAdapter.browse(id); }
+            }
+            LabeledPathField {
+                label: "Attachment root";
+                placeholder: "Path (optional)";
+                field-id: "export.attachment_root";
+                value <=> ExportAdapter.attachment-root;
+                browse-requested(id) => { ExportAdapter.browse(id); }
+            }
+            LabeledLineEdit {
+                label: "Conversation filter";
+                placeholder: "Names, numbers, or emails (optional)";
+                value <=> ExportAdapter.conversation-filter;
+            }
+        }
+
+        SectionDivider { }
+        SectionHeading { title: "Message filtering"; }
+        LabeledLineEdit {
+            label: "Start date";
+            placeholder: "YYYY-MM-DD";
+            value <=> ExportAdapter.start-date;
+        }
+        LabeledLineEdit {
+            label: "End date";
+            placeholder: "YYYY-MM-DD";
+            value <=> ExportAdapter.end-date;
+        }
+        CheckBoxRow {
+            text: "Obfuscate";
+            checked <=> ExportAdapter.obfuscate;
+        }
+        if ExportAdapter.obfuscate: Hint {
+            message: "Names, phones, message text, and media are replaced. Attachment files become placeholders only.";
+        }
+        if ExportAdapter.obfuscate: LabeledLineEdit {
+            label: "Seed";
+            placeholder: "8-hex seed (optional)";
+            value <=> ExportAdapter.obfuscate-seed;
+        }
+
+        ActionRow {
+            Button {
+                text: "Clear";
+                enabled: ExportAdapter.enabled;
+                clicked => { ExportAdapter.clear(); }
+            }
+            Button {
+                text: "Run exporter";
+                primary: true;
+                enabled: ExportAdapter.enabled;
+                clicked => { ExportAdapter.run(); }
+            }
+        }
+    }
+}

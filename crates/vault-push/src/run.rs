@@ -276,7 +276,7 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
     let files = list_jsonl_files(&input, &[&journal_path, &report_path, &log_path])?;
     if files.is_empty() {
         bail!(
-            "no .jsonl files under {} (export with JSONL in the Message tab first)",
+            "no .jsonl files under {} (export with JSONL in the Export tab first)",
             input.display()
         );
     }

@@ -1,0 +1,72 @@
+import { Button, ListView, Spinner } from "std-widgets.slint";
+import { ActionRow, Hint, SectionHeading, FormMetrics } from "../widgets.slint";
+
+export global LogAdapter {
+    in property <[string]> lines;
+    in property <bool> running;
+    in property <string> session-log-name;
+    in property <string> status-text;
+    callback cancel();
+    callback clear-view();
+}
+
+export component LogPage inherits VerticalLayout {
+    padding: FormMetrics.page-padding;
+    spacing: FormMetrics.row-spacing;
+    alignment: stretch;
+
+    HorizontalLayout {
+        spacing: 8px;
+        padding: 0;
+        alignment: start;
+        vertical-stretch: 0;
+        SectionHeading { title: "Log"; }
+        if LogAdapter.running: Spinner { }
+        Text {
+            text: LogAdapter.session-log-name == "" ? "(no session log)" : LogAdapter.session-log-name;
+            font-size: 11px;
+            vertical-alignment: center;
+            vertical-stretch: 0;
+            horizontal-stretch: 1;
+        }
+    }
+
+    Rectangle {
+        border-width: 1px;
+        border-color: #808080;
+        background: #111827;
+        vertical-stretch: 1;
+        min-height: 160px;
+
+        ListView {
+            for line[i] in LogAdapter.lines: HorizontalLayout {
+                padding: 3px;
+                Text {
+                    text: line;
+                    color: #e5e7eb;
+                    font-family: "monospace";
+                    font-size: 11px;
+                    wrap: word-wrap;
+                    horizontal-stretch: 1;
+                }
+            }
+        }
+    }
+
+    Hint {
+        message: LogAdapter.status-text;
+    }
+
+    ActionRow {
+        Button {
+            text: "Clear view";
+            enabled: !LogAdapter.running && LogAdapter.lines.length > 0;
+            clicked => { LogAdapter.clear-view(); }
+        }
+        Button {
+            text: "Cancel";
+            enabled: LogAdapter.running;
+            clicked => { LogAdapter.cancel(); }
+        }
+    }
+}

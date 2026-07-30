@@ -1,0 +1,49 @@
+{% macro text_field(id, label, value, placeholder, required) -%}
+<div class="field">
+  <label for="{{ id }}">{{ label }}{% if required %} <span class="req">*</span>{% endif %}</label>
+  <input type="text" id="{{ id }}" name="{{ id }}" value="{{ value }}" placeholder="{{ placeholder }}" autocomplete="off"{% if required %} required{% endif %}>
+</div>
+{%- endmacro %}
+
+{% macro password_field(id, label, value, placeholder) -%}
+<div class="field">
+  <label for="{{ id }}">{{ label }}</label>
+  <input type="password" id="{{ id }}" name="{{ id }}" value="{{ value }}" placeholder="{{ placeholder }}" autocomplete="off">
+</div>
+{%- endmacro %}
+
+{% macro path_field(id, label, value, placeholder, required) -%}
+<div class="field">
+  <label for="{{ id }}">{{ label }}{% if required %} <span class="req">*</span>{% endif %}</label>
+  <div class="path-row">
+    <input type="text" id="{{ id }}" name="{{ id }}" value="{{ value }}" placeholder="{{ placeholder }}" autocomplete="off"{% if required %} required{% endif %}>
+    <button type="button" class="browse" data-browse-target="{{ id }}">Browse…</button>
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro textarea_field(id, label, value, placeholder, required) -%}
+<div class="field">
+  <label for="{{ id }}">{{ label }}{% if required %} <span class="req">*</span>{% endif %}</label>
+  <textarea id="{{ id }}" name="{{ id }}" placeholder="{{ placeholder }}" rows="3"{% if required %} required{% endif %}>{{ value }}</textarea>
+</div>
+{%- endmacro %}
+
+{% macro select_field(id, label, options) -%}
+<div class="field">
+  <label for="{{ id }}">{{ label }}</label>
+  <select id="{{ id }}" name="{{ id }}">
+    {% for opt in options %}
+    {% if opt.separator_before %}<option disabled>──────────</option>{% endif %}
+    <option value="{{ opt.value }}"{% if opt.selected %} selected{% endif %}>{{ opt.label }}</option>
+    {% endfor %}
+  </select>
+</div>
+{%- endmacro %}
+
+{% macro checkbox_field(id, label, checked) -%}
+<label class="checkbox">
+  <input type="checkbox" id="{{ id }}" name="{{ id }}"{% if checked %} checked{% endif %}>
+  <span>{{ label }}</span>
+</label>
+{%- endmacro %}

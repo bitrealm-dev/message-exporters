@@ -47,7 +47,7 @@ Do not move the desktop app away from the other files in the release folder. Eac
 - `contacts-validate` for offline contact Check / Update from a terminal
 - `imazing-obfuscate` for rewriting iMazing vendor CSV offline
 
-The Contacts, Message, Re-export, and Vault tabs in the desktop app call libraries inside the app itself. They do not need the programs under `cli/`.
+The Contacts, Export, Convert, and Vault tabs in the desktop app call libraries inside the app itself. They do not need the programs under `cli/`.
 
 The app first looks for helpers beside its own executable. It can also find them in the directory named by `MESSAGE_EXPORTERS_BIN` or on `PATH`. To point directly to the WhatsApp helper, set `WTSEXPORTER` to its full path. Programs under `cli/` also look one folder up (the ZIP root) so they find the same bundled helpers.
 

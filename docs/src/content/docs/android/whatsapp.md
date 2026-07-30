@@ -18,7 +18,7 @@ Use the files from the same backup. A key that does not match the encrypted data
 
 ## Export in the desktop app
 
-1. Open **Message** and choose **WhatsApp**.
+1. Open **Export** and choose **WhatsApp**.
 2. Choose the output format.
 3. Set **Platform** to **Android**.
 4. Fill the **Backup** and **Key** fields when using an encrypted backup.

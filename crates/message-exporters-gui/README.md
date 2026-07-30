@@ -2,7 +2,7 @@
 
 Cross-platform [egui](https://github.com/emilk/egui) / [eframe](https://github.com/emilk/egui/tree/master/crates/eframe) desktop interface for the exporters in this workspace. Convert runs via linked exporter libraries; `contacts-validate` and WhatsApp `wtsexporter` still resolve as sibling tools when needed.
 
-**End-user guides:** [docs site](https://bitrealm-dev.github.io/message-exporters/) (Install, desktop app, per-source export, Re-export).
+**End-user guides:** [docs site](https://bitrealm-dev.github.io/message-exporters/) (Install, desktop app, per-source export, Convert).
 
 ## Run in development
 
@@ -24,10 +24,10 @@ The GUI searches for helper binaries (`contacts-validate`, `wtsexporter`, `ffmpe
 
 ## Included
 
-- Top tabs: **Contacts** | **Message** | **Re-export** | **Log**
+- Top tabs: **Contacts** | **Export** | **Convert** | **Log**
 - **Contacts**: Check (dry run) / Update (write corrected files) / Cancel
-- **Message**: backup-source picker, output formats (csv / eml / mbox / json / jsonl / xml), attachments, obfuscate, dates
-- **Re-export**: convert a prior Message Exporters output folder to another format
+- **Export**: backup-source picker, output formats (csv / eml / mbox / json / jsonl / xml), attachments, obfuscate, dates
+- **Convert**: convert a prior Message Exporters output folder to another format
 - Forms for GO SMS Pro, SMS Backup & Restore, SMS Backup+, OpenExtract, iMazing, WhatsApp, and iPhone backup
 - Native file/folder dialogs
 - Shared run log with cancel

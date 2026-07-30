@@ -15,7 +15,7 @@ A contacts VCF or iMazing Contacts CSV is optional and can fill display names.
 
 ## Run the import
 
-In **Message**, choose **GO SMS Pro (experimental)**. Select the backup directory, enter the owner phone number or numbers, choose the output directory and format, then run the exporter.
+In **Export**, choose **GO SMS Pro (experimental)**. Select the backup directory, enter the owner phone number or numbers, choose the output directory and format, then run the exporter.
 
 ## Known limitations
 

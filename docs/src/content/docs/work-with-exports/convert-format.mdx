@@ -5,7 +5,7 @@ description: Change a Message Exporters output folder into another supported for
 
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-Re-export reads an archive that Message Exporters already created and writes it in another format. It does not read an arbitrary vendor export.
+**Convert** reads an archive that Message Exporters already created and writes it in another format. It does not read an arbitrary vendor export.
 
 ## Before you start
 
@@ -24,13 +24,13 @@ Create a different empty output folder. Input and output cannot be the same path
 
 <Tabs>
   <TabItem label="Desktop app">
-    1. Open **Re-export**.
+    1. Open **Convert**.
     2. Choose the existing **Input directory**.
     3. Choose the new **Output format**.
     4. Choose a different **Output directory**.
     5. Select the attachment mode. **Copy** keeps media when it is present.
     6. Optionally enable **Obfuscate**.
-    7. Select **Run re-export**, then check **Log** for the detected format and conversation count.
+    7. Select **Run convert**, then check **Log** for the detected format and conversation count.
   </TabItem>
   <TabItem label="Terminal">
     Run:
@@ -49,7 +49,7 @@ Create a different empty output folder. Input and output cannot be the same path
 The detector ignores `attachments/` and old `*.meta.json` files. It rejects mixed format classes, unsupported folder layouts, and attempts to write over the input.
 
 <Aside type="caution" title="Some conversions lose details">
-  Android XML cannot store Apple-only fields. Prefer JSON as the source and destination when preserving iMessage detail matters. Re-export can only carry media that is still present in the source folder or embedded in its files.
+  Android XML cannot store Apple-only fields. Prefer JSON as the source and destination when preserving iMessage detail matters. Convert can only carry media that is still present in the source folder or embedded in its files.
 </Aside>
 
 ## Command-line reference

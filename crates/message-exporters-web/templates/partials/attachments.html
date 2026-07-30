@@ -1,0 +1,13 @@
+{% import "macros.html" as m %}
+{% call m::select_field("attachment_media", "Attachments", attachment_media_options) %}
+{% if form.obfuscate %}
+<p class="hint">Obfuscate replaces all media with shared placeholders (real files are not copied or converted).</p>
+{% else if show_ffmpeg_warning %}
+<p class="hint hint-danger">Convert/Compress need ffmpeg and ffprobe beside the app, in MESSAGE_EXPORTERS_BIN, or on PATH.</p>
+{% endif %}
+{% if show_compress_options %}
+{% call m::select_field("media_max_resolution", "Max resolution", max_resolution_options) %}
+{% call m::text_field("media_max_fps", "Max fps", form.media_max_fps, "e.g. 30", true) %}
+{% call m::text_field("media_min_size", "Min size", form.media_min_size, "e.g. 20M", true) %}
+{% call m::checkbox_field("media_skip_efficient", "Skip already-efficient HEVC", form.media_skip_efficient) %}
+{% endif %}

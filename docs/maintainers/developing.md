@@ -36,7 +36,7 @@ Each ZIP has the desktop app and helpers at the archive root, and standalone CLI
 
 **ZIP root — desktop app + helpers**
 
-- `message-exporters-gui` (`.exe` on Windows) — runs exporters, Contacts, Re-export, and Vault as libraries
+- `message-exporters-gui` (`.exe` on Windows) — runs exporters, Contacts, Convert, and Vault as libraries
 - `wtsexporter` / `wtsexporter.exe` — KnugiHK WhatsApp-Chat-Exporter `0.13.0` (pinned + SHA-256 in `scripts/package-release.sh`)
 - `ffmpeg` / `ffprobe` — eugeneware/ffmpeg-static `b6.1.1` (binaries report FFmpeg `7.0.2-static`)
 - `LICENSE`, `THIRD_PARTY_NOTICES.md`, `THIRD_PARTY_WTSEXPORTER.LICENSE`, `THIRD_PARTY_FFMPEG.LICENSE`

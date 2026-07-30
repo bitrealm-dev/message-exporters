@@ -17,7 +17,7 @@ message-reexporter --input <DIR> --output <DIR>
 
 Auto-detects a single input format among `csv`, `eml`, `mbox`, `json`, `jsonl`, and `xml` (`smses.xml`) in `--input`, loads conversations into the common message, then writes `--format` (default `json`) via the shared packaging pipeline (media modes + obfuscate included).
 
-`--output` must differ from `--input`. The desktop GUI **Re-export** tab uses the same library path.
+`--output` must differ from `--input`. The desktop GUI **Convert** tab uses the same library path.
 
 # OPTIONS
 
@@ -71,4 +71,4 @@ The detector ignores `attachments/` and legacy `*.meta.json` files. It rejects a
 
 # SEE ALSO
 
-- [Re-export user guide](https://bitrealm-dev.github.io/message-exporters/work-with-exports/convert-format/)
+- [Convert user guide](https://bitrealm-dev.github.io/message-exporters/work-with-exports/convert-format/)

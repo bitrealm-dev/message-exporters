@@ -19,7 +19,7 @@ Choose the source guide for exact requirements: [Apple](/apple/), [Android](/and
 
 ## Run an export
 
-1. Start `message-exporters-gui` and open **Message**.
+1. Start `message-exporters-gui` and open **Export**.
 2. Choose the **Backup type**.
 3. Choose the **Output format**. JSON is the default and keeps the most information for later conversion.
 4. Fill in the source paths and identity fields shown for that backup type.
@@ -34,11 +34,11 @@ Start dates are inclusive. End dates are exclusive. Both use local calendar date
 ## What each tab does
 
 <Tabs>
-  <TabItem label="Message">
+  <TabItem label="Export">
     Export a phone backup or an export from another app. This is the tab to use for a first archive.
   </TabItem>
-  <TabItem label="Re-export">
-    Read an existing Message Exporters output folder and write it in another format. You do not need this tab when making the first export because the Message tab can write every supported output format directly.
+  <TabItem label="Convert">
+    Read an existing Message Exporters output folder and write it in another format. You do not need this tab when making the first export because the Export tab can write every supported output format directly.
   </TabItem>
   <TabItem label="Contacts">
     Check a VCF or contacts CSV without changing it, or write a cleaned sibling file. Cleaned contacts can improve phone-number and display-name matching for sources that accept a contacts file.
@@ -55,7 +55,7 @@ The output directory is the archive. Most formats write one file or folder per c
 When media copying is enabled, JSON, JSONL, and CSV use an `attachments/` folder. EML, MBOX, and Android XML embed media instead.
 
 <Aside type="caution" title="Keep input and output separate">
-  Do not choose the source folder as the output folder. Re-export also requires different input and output directories.
+  Do not choose the source folder as the output folder. Convert also requires different input and output directories.
 </Aside>
 
 While an in-process export is running, use **Cancel** when it appears. Cancellation is cooperative. The app cannot stop the external `wtsexporter` process in the middle of WhatsApp extraction.

@@ -6,8 +6,8 @@ description = "Cross-platform egui GUI for message-exporters"
 
 [dependencies]
 chrono = "0.4.44"
-eframe = "0.31"
-egui = "0.31"
+eframe = "0.35"
+egui = "0.35"
 go-sms-pro-exporter = { path = "../go-sms-pro-exporter", default-features = false }
 imazing-exporter = { path = "../imazing-exporter", default-features = false }
 imessage-ir-exporter = { path = "../imessage-ir-exporter" }

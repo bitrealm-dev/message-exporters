@@ -17,7 +17,7 @@ You can also prepare an Apple AddressBook database if you want names resolved wh
 
 ## Export in the desktop app
 
-1. Open **Message**.
+1. Open **Export**.
 2. Set **Backup type** to **iPhone backup**.
 3. Choose the output format.
 4. Set **Database / iOS backup path** to `chat.db` or the iPhone backup folder.

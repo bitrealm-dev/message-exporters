@@ -20,7 +20,7 @@ Set the timezone when the CSV's `Message Date` values should not use the compute
 
 ## Run the import
 
-In **Message**, choose **iMazing (experimental)**. Select the input, optional contacts CSV, timezone, output format, and output directory. Prefer iMazing's **All backup** export when attachment filenames matter.
+In **Export**, choose **iMazing (experimental)**. Select the input, optional contacts CSV, timezone, output format, and output directory. Prefer iMazing's **All backup** export when attachment filenames matter.
 
 ## Known limitations
 

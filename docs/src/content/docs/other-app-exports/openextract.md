@@ -16,7 +16,7 @@ A contacts VCF from the OpenExtract export is strongly recommended. You can inst
 
 ## Run the import
 
-In **Message**, choose **OpenExtract (experimental)**. Select the CSV file or directory, choose the optional contacts file, set the output format and directory, then run the exporter.
+In **Export**, choose **OpenExtract (experimental)**. Select the CSV file or directory, choose the optional contacts file, set the output format and directory, then run the exporter.
 
 ## Known limitations
 

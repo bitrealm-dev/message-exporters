@@ -13,7 +13,7 @@ WhatsApp export uses `wtsexporter` to read an iPhone backup. Message Exporters t
 
 ## Export in the desktop app
 
-1. Open **Message**.
+1. Open **Export**.
 2. Set **Backup type** to **WhatsApp**.
 3. Choose the output format.
 4. Set **Platform** to **iOS**.

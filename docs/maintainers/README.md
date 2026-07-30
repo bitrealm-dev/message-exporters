@@ -7,6 +7,8 @@ This directory contains implementation and release documentation for contributor
 - [Develop and publish releases](developing.md) — release workflow, documentation build, and local preview.
 - [Code signing (Windows / macOS)](signing.md) — certificates, GitHub secrets, and gated release workflow steps.
 - [GUI design](gui.md) — tabs, controls, validation, saved settings, and exporter integration.
+- [Web GUI design](web-gui.md) — browser-based alternative GUI (axum + askama, local-only server).
+- [Slint GUI design](slint-gui.md) — Slint desktop alternative GUI (retained-mode widgets).
 - [Exporter capability matrix](exporter-matrix.md) — supported inputs, known source limitations, and links to crate-specific technical documents.
 
 ## Architecture and output formats

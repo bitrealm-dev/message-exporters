@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+{% import "macros.html" as m %}
+{% block title %}Vault — Message Exporters{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Vault</h1>
+  <p class="hint">* Required field</p>
+  <p>Step 2: import a Message Exporters JSONL folder into Message Vault. Export with JSONL in the Export tab first. Uses your Import API token (Vault key) from Vault Settings.</p>
+
+  <form method="post" action="/vault" class="stack">
+    {% call m::text_field("url", "Vault URL", url, "http://127.0.0.1:8080", true) %}
+    {% call m::text_field("username", "Username", username, "vault username", true) %}
+    {% call m::password_field("key", "Vault key", key, "Import API token from Vault Settings") %}
+    {% call m::path_field("input", "Input directory", input, "JSONL export folder", true) %}
+
+    {% if let Some(note) = source_note %}
+    <p class="hint">{{ note }}</p>
+    {% endif %}
+
+    {% call m::checkbox_field("continue_on_error", "Continue on error", continue_on_error) %}
+    {% call m::checkbox_field("force", "Force re-upload (ignore journal)", force) %}
+
+    <div class="actions">
+      <button type="submit" formaction="/vault/authenticate" formnovalidate class="btn">Authenticate</button>
+      <button type="submit" class="btn btn-primary">Import to vault</button>
+      <button type="submit" formaction="/vault/clear" formnovalidate class="btn btn-danger-outline" title="Clear Vault fields from {{ ini_path }}">Clear</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

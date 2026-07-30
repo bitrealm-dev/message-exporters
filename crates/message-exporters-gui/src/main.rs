@@ -574,8 +574,8 @@ impl App {
         ui.horizontal(|ui| {
             ui.add_enabled_ui(self.mode_selectable(AppMode::Export), |ui| {
                 ui.selectable_value(&mut self.mode, AppMode::ValidateContacts, "Contacts");
-                ui.selectable_value(&mut self.mode, AppMode::Export, "Message");
-                ui.selectable_value(&mut self.mode, AppMode::Reexport, "Re-export");
+                ui.selectable_value(&mut self.mode, AppMode::Export, "Export");
+                ui.selectable_value(&mut self.mode, AppMode::Reexport, "Convert");
                 ui.selectable_value(&mut self.mode, AppMode::Vault, "Vault");
             });
             ui.selectable_value(&mut self.mode, AppMode::Log, "Log");
@@ -761,7 +761,7 @@ impl App {
         egui::Frame::NONE
             .inner_margin(egui::Margin::same(18))
             .show(ui, |ui| {
-                ui.heading("Re-export");
+                ui.heading("Convert");
                 required_field_note(ui);
                 ui.add_space(6.0);
                 ui.label(
@@ -798,12 +798,12 @@ impl App {
                 self.ui_obfuscation_options(ui);
                 ui.add_space(10.0);
                 form_action_row(ui, |ui| {
-                    let run = form_action_button(ui, "Run re-export", true);
+                    let run = form_action_button(ui, "Run convert", true);
                     if run.clicked() {
                         self.start_reexport();
                     }
                     let clear = form_action_button(ui, "Clear", true).on_hover_text(format!(
-                        "Clear re-export paths and format from {}",
+                        "Clear convert paths and format from {}",
                         self.export_ini.path.display()
                     ));
                     if clear.clicked() {
@@ -834,7 +834,7 @@ impl App {
                 ui.add_space(6.0);
                 ui.label(
                     "Step 2: import a Message Exporters JSONL folder into Message Vault. \
-                     Export with JSONL in the Message tab first. Uses your Import API token \
+                     Export with JSONL in the Export tab first. Uses your Import API token \
                      (Vault key) from Vault Settings.",
                 );
                 ui.add_space(16.0);
@@ -1400,24 +1400,24 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.poll_events(ctx);
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.poll_events(ui.ctx());
         self.sync_log_text();
 
-        egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
+        egui::Panel::top("tabs").show(ui, |ui| {
             ui.add_space(4.0);
             self.ui_tabs(ui);
             ui.add_space(2.0);
         });
 
-        egui::TopBottomPanel::bottom("status")
-            .exact_height(28.0)
+        egui::Panel::bottom("status")
+            .exact_size(28.0)
             .show_separator_line(true)
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 self.ui_status_bar(ui);
             });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             let mode = self.mode;
             match mode {
                 AppMode::Log => {
@@ -1442,7 +1442,7 @@ impl eframe::App for App {
         });
     }
 
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+    fn on_exit(&mut self) {
         self.persist_export_ini();
     }
 }

@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% import "macros.html" as m %}
+{% block title %}Convert — Message Exporters{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Convert</h1>
+  <p class="hint">* Required field</p>
+  <p>Convert a prior Message Exporters output directory to another format. Input format is auto-detected (csv, eml, mbox, json, jsonl, or xml).</p>
+
+  <form method="post" action="/reexport" class="stack">
+    {% call m::path_field("input", "Input directory", input, "Prior export folder", true) %}
+    {% call m::select_field("output_format", "Output format", output_format_options) %}
+    {% call m::path_field("output", "Output directory", output, "Path", true) %}
+
+    {% include "partials/attachments.html" %}
+
+    <hr>
+    <h2>Options</h2>
+    {% include "partials/obfuscate.html" %}
+
+    <div class="actions">
+      <button type="submit" class="btn btn-primary">Run convert</button>
+      <button type="submit" formaction="/reexport/clear" formnovalidate class="btn btn-danger-outline" title="Clear convert paths and format from {{ ini_path }}">Clear</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

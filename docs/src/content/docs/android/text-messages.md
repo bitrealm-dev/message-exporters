@@ -17,7 +17,7 @@ Owner phone numbers are required. They identify the owner in MMS groups and help
 
 ## Export in the desktop app
 
-1. Open **Message**.
+1. Open **Export**.
 2. Set **Backup type** to **SMS Backup & Restore**.
 3. Choose the output format.
 4. Set **Input** to one XML file or a directory of XML files.

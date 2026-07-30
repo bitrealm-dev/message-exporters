@@ -2,8 +2,14 @@
 
 Living design notes for the cross-platform desktop GUI that drives the existing exporter binaries.
 
-**Framework:** [egui](https://github.com/emilk/egui) / [eframe](https://github.com/emilk/egui/tree/master/crates/eframe) 0.31, implemented in
+**Framework:** [egui](https://github.com/emilk/egui) / [eframe](https://github.com/emilk/egui/tree/master/crates/eframe) 0.35, implemented in
 [`crates/message-exporters-gui`](../../crates/message-exporters-gui).
+
+There are two additive alternatives that share the same `export.ini` and exporter
+libraries: the browser-based [`message-exporters-web`](web-gui.md) (good on high-DPI
+Windows where egui can look blurry) and the Slint desktop
+[`message-exporters-slint`](slint-gui.md) (retained-mode widgets, no C++/Qt SDK).
+Pick whichever renders better on your machine.
 
 ## Goals
 
@@ -16,16 +22,16 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 ## Current implementation
 
 - Pure Rust egui/eframe desktop app for Linux, macOS, and Windows.
-- Top tab panel: **Contacts** (default) | **Message** | **Re-export** | **Vault** | **Log**.
+- Top tab panel: **Contacts** (default) | **Export** | **Convert** | **Vault** | **Log**.
 - Typed UI `Form` plus shared `ExporterConfig` / `SourceConfig` in `message-exporters-core` (`Form::to_config`).
 - Native file/folder dialogs through `rfd`.
-- Contacts, Message convert, Re-export, and Vault are linked libraries (no sibling exporter CLIs required). WhatsApp’s `wtsexporter` and media tools `ffmpeg` / `ffprobe` still resolve beside the GUI, via `MESSAGE_EXPORTERS_BIN`, or on `PATH`.
+- Contacts, Export, Convert, and Vault are linked libraries (no sibling exporter CLIs required). WhatsApp’s `wtsexporter` and media tools `ffmpeg` / `ffprobe` still resolve beside the GUI, via `MESSAGE_EXPORTERS_BIN`, or on `PATH`.
 - Live tagged log and cooperative cancellation (mpsc poll in `update`).
 - Exporter-specific validation before launch (`Form::to_config`), then in-process `run(&ExporterConfig)`.
 - Mid-run library progress/warnings stream via `ExporterConfig.log` (`LogSink` → `ProcessEvent::Log`); end-of-run summaries still come from `RunResult.messages`.
 - Backup-source titles link to the upstream product site.
-- **Global options** (Obfuscate + Start/End date) on the Message tab per-source form.
-- **Re-export** tab converts a prior output folder via `message_ir::reexport` (INI section `[message-reexport]`).
+- **Global options** (Obfuscate + Start/End date) on the Export tab per-source form.
+- **Convert** tab converts a prior output folder via `message_ir::reexport` (INI section `[message-reexport]`).
 - **Vault** tab pushes a JSONL export folder via `vault_push` (INI section `[vault]`; vault key is persisted in plain text).
 
 Export options persist in `export.ini` (load on start; save on Run / exit). Prefer an existing file in the working directory, else beside the GUI binary; otherwise create `./export.ini` on first save. Template: [`export.example.ini`](../../crates/message-exporters-gui/export.example.ini). Backup passwords are never written.
@@ -44,10 +50,10 @@ cargo run -p message-exporters-gui
 
 ## Layout
 
-1. Top tabs — **Contacts** | **Message** | **Re-export** | **Vault** | **Log**
+1. Top tabs — **Contacts** | **Export** | **Convert** | **Vault** | **Log**
 2. **Contacts:** contacts file, USA numbers checkbox, Check / Update / Cancel
-3. **Message:** backup source picker + global options + per-source form
-4. **Re-export:** convert a prior Message Exporters output (`message-reexport`) — input dir, output dir, output format, attachments, obfuscate. Input format is auto-detected.
+3. **Export:** backup source picker + global options + per-source form
+4. **Convert:** convert a prior Message Exporters output (`message-reexport`) — input dir, output dir, output format, attachments, obfuscate. Input format is auto-detected.
 5. **Vault:** import a JSONL export folder into Message Vault — URL, username, vault key, input dir, continue-on-error / force.
 6. Shared run log (Log tab / full-window log view)
 
@@ -59,9 +65,9 @@ Runs [`message_contacts::validate_contacts_file`](../../crates/message-contacts)
 - **Update**: write `<stem>-update.<ext>` (or `<stem>-update-N` when re-updating) (+ `.log`; CSV also `.vcf`). Only unambiguous phones are rewritten; uncertain values stay as-is.
 - **Cancel**: cooperative cancel for the in-process job.
 
-### Re-export — `message-reexporter`
+### Convert — `message-reexporter`
 
-Top tab (not a Message backup type). Converts a prior Message Exporters output folder to another packaging format (via the common message).
+Top tab (not an Export backup type). Converts a prior Message Exporters output folder to another packaging format (via the common message).
 
 | Control | Type | Required | CLI |
 |---------|------|:--------:|-----|
@@ -75,14 +81,14 @@ Persists under `[message-reexport]` in `export.ini`. Mixed or unrecognized input
 
 ### Vault — `vault-push`
 
-Top tab (not a Message backup type). Two-step workflow after Message export: push message-ir v3 JSONL + `attachments/` to a running Message Vault.
+Top tab (not an Export backup type). Two-step workflow after Export: push message-ir v3 JSONL + `attachments/` to a running Message Vault.
 
 | Control | Type | Required | Notes |
 |---------|------|:--------:|-------|
 | Vault URL | text | yes | e.g. `http://127.0.0.1:8080` |
 | Username | text | yes | Vault account username |
 | Vault key | text | yes | Import API token from Vault Settings; saved to `export.ini` as `key` (plain text) |
-| Input directory | folder | yes | JSONL export folder (prefills from last Message output when empty) |
+| Input directory | folder | yes | JSONL export folder (prefills from last Export output when empty) |
 | Continue on error | checkbox | no | Default on |
 | Force re-upload | checkbox | no | Ignore `.vault-import-state.jsonl` |
 
@@ -281,11 +287,11 @@ Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox
 ## Form flow
 
 ```text
-Tabs: Contacts | Message | Re-export | Log
+Tabs: Contacts | Export | Convert | Log
   Contacts → contacts file, USA checkbox → Check / Update / Cancel → log
-  Message → pick backup source → Obfuscate/dates → per-source form
+  Export → pick backup source → Obfuscate/dates → per-source form
          → Form::to_config → ExporterConfig → library run / Cancel → log
-  Re-export → input dir → output format → output dir → media/obfuscate
+  Convert → input dir → output format → output dir → media/obfuscate
            → message_ir::reexport::run → log
 ```
 
