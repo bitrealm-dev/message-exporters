@@ -22,8 +22,10 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     let input = config.require_input().map_err(anyhow::Error::msg)?;
     let mut messages = Vec::new();
     let (contacts_path, vcf) = config.contacts_csv_vcf();
-    let (book, book_path) = resolve_contacts_cli(contacts_path, vcf)?;
-    let transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
+    let log_fn = |line: &str| config.emit_log(line);
+    let (book, book_path) = resolve_contacts_cli(contacts_path, vcf, Some(&log_fn))?;
+    let mut transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
+    transforms.log = config.log.clone();
     let (report, sink) = convert_export(
         input,
         &config.output,

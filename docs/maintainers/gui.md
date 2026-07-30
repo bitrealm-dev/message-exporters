@@ -22,6 +22,7 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 - Export converters are linked libraries (no sibling exporter binaries required for convert). `contacts-validate`, WhatsApp’s `wtsexporter`, and media tools `ffmpeg` / `ffprobe` still resolve beside the GUI, via `MESSAGE_EXPORTERS_BIN`, or on `PATH`.
 - Live tagged log and cooperative cancellation (mpsc poll in `update`).
 - Exporter-specific validation before launch (`Form::to_config`), then in-process `run(&ExporterConfig)`.
+- Mid-run library progress/warnings stream via `ExporterConfig.log` (`LogSink` → `ProcessEvent::Log`); end-of-run summaries still come from `RunResult.messages`.
 - Backup-source titles link to the upstream product site.
 - **Global options** (Obfuscate + Start/End date) on the Message tab per-source form.
 - **Re-export** tab converts a prior output folder via `message_ir::reexport` (INI section `[message-reexport]`).
@@ -297,6 +298,8 @@ End-user walkthrough: [First export with the app](../src/content/docs/get-starte
 | Plus `owner.toml` | Resolved via `CARGO_MANIFEST_DIR`, not user cwd | GUI collects phone/email/input explicitly |
 | iMazing attachments | Filename-only; no media copy | Document in UI; optional future media join |
 | Encrypted backup password | Still held in memory on `AppleConfig` during run | Prefer env/stdin if CLI grows support; warn in UI |
+| ffmpeg / ffprobe stderr | Media tools discard detailed stderr; failures become short media-report lines | Optional capture into `LogSink` |
+| WhatsApp `wtsexporter` | Nested CLI is buffered until extract exits (then appended to `messages`) | Stream subprocess lines like Contacts validate |
 
 ## Next steps
 

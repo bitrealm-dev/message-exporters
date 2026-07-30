@@ -504,6 +504,14 @@ fn key_from_seed_bytes(bytes: &[u8]) -> [u8; 32] {
 
 /// Parse `--obfuscate-seed` hex or generate a random seed; print seed to stderr when generated.
 pub fn resolve_obfuscator(seed_hex: Option<&str>) -> Result<Obfuscator> {
+    resolve_obfuscator_with_log(seed_hex, None)
+}
+
+/// Like [`resolve_obfuscator`], but emit the generated-seed notice via `log` when set.
+pub fn resolve_obfuscator_with_log(
+    seed_hex: Option<&str>,
+    log: Option<&dyn Fn(&str)>,
+) -> Result<Obfuscator> {
     let key = match seed_hex {
         Some(s) => {
             let s = s.trim();
@@ -520,10 +528,14 @@ pub fn resolve_obfuscator(seed_hex: Option<&str>) -> Result<Obfuscator> {
             let mut seed = [0u8; OBFUSCATE_SEED_BYTES];
             rand::rng().fill_bytes(&mut seed);
             let hex_key = hex::encode(seed);
-            let _ = writeln!(
-                std::io::stderr(),
-                "obfuscate-seed: {hex_key}  (save to reproduce; not written to output)"
-            );
+            let msg =
+                format!("obfuscate-seed: {hex_key}  (save to reproduce; not written to output)");
+            match log {
+                Some(emit) => emit(&msg),
+                None => {
+                    let _ = writeln!(std::io::stderr(), "{msg}");
+                }
+            }
             key_from_seed_bytes(&seed)
         }
     };

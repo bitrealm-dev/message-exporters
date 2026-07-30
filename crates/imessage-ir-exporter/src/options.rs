@@ -6,7 +6,7 @@ use imessage_database::{
     tables::table::DEFAULT_PATH_IOS,
     util::{platform::Platform, query_context::QueryContext},
 };
-use message_exporters_core::OutputFormat;
+use message_exporters_core::{LogSink, OutputFormat, emit_log};
 use message_ir::ExportTransforms;
 
 use crate::error::RuntimeError;
@@ -38,6 +38,8 @@ pub struct MailOptions {
     pub transforms: ExportTransforms,
     /// CSV, EML, MBOX, JSON, or JSONL.
     pub output_format: OutputFormat,
+    /// Mid-run progress / warnings (GUI sink or stderr).
+    pub log: Option<LogSink>,
 }
 
 impl MailOptions {
@@ -47,6 +49,10 @@ impl MailOptions {
             Platform::iOS => self.db_path.join(DEFAULT_PATH_IOS),
             Platform::macOS => self.db_path.clone(),
         }
+    }
+
+    pub fn emit_log(&self, line: impl AsRef<str>) {
+        emit_log(self.log.as_ref(), line);
     }
 }
 

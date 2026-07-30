@@ -67,11 +67,11 @@ struct PendingConversation {
 /// Stream chat.db into per-conversation CSV, EML, MBOX, JSON, or JSONL.
 pub(crate) fn run_export(session: &MailSession) -> Result<FormatSinkResult, RuntimeError> {
     let format = session.options.output_format;
-    eprintln!(
+    session.options.emit_log(format!(
         "Exporting to {} as {}...",
         session.options.export_path.display(),
         format.as_str()
-    );
+    ));
 
     let attachments_dir = session.options.export_path.join("attachments");
     if matches!(
@@ -118,24 +118,30 @@ pub(crate) fn run_export(session: &MailSession) -> Result<FormatSinkResult, Runt
             Ok(()) => {}
             Err(why) => {
                 failures += 1;
-                eprintln!(
+                session.options.emit_log(format!(
                     "Skipping message (rowid={}, guid={}): {}",
                     msg.rowid, msg.guid, why
-                );
+                ));
             }
         }
         current_message += 1;
         if current_message.is_multiple_of(500) {
-            eprintln!("  …{current_message}/{total_messages}");
+            session
+                .options
+                .emit_log(format!("  …{current_message}/{total_messages}"));
         }
     }
 
     if failures > 0 {
-        eprintln!("{failures} messages skipped due to formatting errors.");
+        session
+            .options
+            .emit_log(format!("{failures} messages skipped due to formatting errors."));
     }
 
     let total_conversations = conversations.len() as u64;
-    eprintln!("Writing {total_conversations} conversation file(s)...");
+    session
+        .options
+        .emit_log(format!("Writing {total_conversations} conversation file(s)..."));
     let mut sink = FormatSink::open(
         &session.options.export_path,
         format,
@@ -193,7 +199,9 @@ pub(crate) fn run_export(session: &MailSession) -> Result<FormatSinkResult, Runt
             ))
         })?;
         if written.is_multiple_of(50) || written == total_conversations {
-            eprintln!("  wrote {written}/{total_conversations} conversations");
+            session.options.emit_log(format!(
+                "  wrote {written}/{total_conversations} conversations"
+            ));
         }
     }
     let sink_result = sink

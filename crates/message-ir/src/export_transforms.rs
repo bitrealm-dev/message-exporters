@@ -3,11 +3,11 @@
 use crate::util::read_attachment_file;
 use crate::{ConversationDocument, IrAttachment, IrDirection, IrParticipant};
 use anyhow::Result;
-use message_exporters_core::{MediaConfig, ObfuscateConfig};
+use message_exporters_core::{LogSink, MediaConfig, ObfuscateConfig, emit_log};
 use message_media::{CompressOptions, MediaMode, MediaReport};
 use message_obfuscate::{
     Obfuscator, classify_attachment, materialize_placeholders, placeholder_rel_path,
-    resolve_obfuscator,
+    resolve_obfuscator_with_log,
 };
 use std::collections::HashMap;
 use std::path::Path;
@@ -19,6 +19,8 @@ pub struct ExportTransforms {
     pub compress: CompressOptions,
     pub obfuscate: bool,
     pub obfuscate_seed: Option<String>,
+    /// Mid-run notes (e.g. generated obfuscate seed). `None` → stderr.
+    pub log: Option<LogSink>,
 }
 
 impl Default for ExportTransforms {
@@ -28,6 +30,7 @@ impl Default for ExportTransforms {
             compress: CompressOptions::default(),
             obfuscate: false,
             obfuscate_seed: None,
+            log: None,
         }
     }
 }
@@ -39,6 +42,7 @@ impl ExportTransforms {
             compress: media.compress.clone(),
             obfuscate: obfuscate.enabled || obfuscate.seed.is_some(),
             obfuscate_seed: obfuscate.seed.clone(),
+            log: None,
         }
     }
 
@@ -208,7 +212,11 @@ pub(crate) fn apply_transforms(
     let mut obfuscated_docs = 0usize;
     if transforms.obfuscate {
         materialize_placeholders(output_dir)?;
-        let mut anon = resolve_obfuscator(transforms.obfuscate_seed.as_deref())?;
+        let log_fn = |line: &str| emit_log(transforms.log.as_ref(), line);
+        let mut anon = resolve_obfuscator_with_log(
+            transforms.obfuscate_seed.as_deref(),
+            Some(&log_fn),
+        )?;
         for doc in docs.iter_mut() {
             obfuscate_document(doc, &mut anon);
             obfuscated_docs += 1;

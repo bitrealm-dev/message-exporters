@@ -17,6 +17,6 @@ pub use exporters::{
     ensure_output_dir,
 };
 pub use process::{
-    CancelFlag, ProcessControl, ProcessEvent, check_cancel, is_cancelled, resolve_binary, spawn,
-    spawn_job,
+    CancelFlag, LogSink, ProcessControl, ProcessEvent, check_cancel, emit_log, is_cancelled,
+    resolve_binary, spawn, spawn_job,
 };

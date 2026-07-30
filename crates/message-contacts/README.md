@@ -14,7 +14,7 @@ Name resolution belongs in **message-exporters** (backup → common message → 
 ```rust
 use message_contacts::resolve_contacts_cli;
 
-let (book, path) = resolve_contacts_cli(contacts_opt, vcf_opt)?;
+let (book, path) = resolve_contacts_cli(contacts_opt, vcf_opt, None)?;
 // At most one of --contacts or --vcf. Neither → empty book + stderr warning.
 ```
 

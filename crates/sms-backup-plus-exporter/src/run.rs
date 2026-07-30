@@ -113,19 +113,22 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     let inputs = resolve_inputs(config.inputs.clone(), default_inputs)?;
 
     let (contacts_path, vcf) = config.contacts_csv_vcf();
-    let (contacts_book, contacts_resolved) = resolve_contacts_cli(contacts_path, vcf)?;
+    let log_fn = |line: &str| config.emit_log(line);
+    let (contacts_book, contacts_resolved) =
+        resolve_contacts_cli(contacts_path, vcf, Some(&log_fn))?;
     let name_mapping_path =
         resolve_optional_config(source.name_mapping.clone(), "name-mapping.csv");
     let (name_mapping, _) = NameMapping::load_optional(name_mapping_path.as_deref())?;
 
     if source.verbose {
         match contacts_resolved.as_ref() {
-            Some(path) => eprintln!("contacts: {}", path.display()),
-            None => eprintln!("contacts: (none)"),
+            Some(path) => config.emit_log(format!("contacts: {}", path.display())),
+            None => config.emit_log("contacts: (none)"),
         }
     }
 
-    let transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
+    let mut transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
+    transforms.log = config.log.clone();
     let (report, sink) = convert_export(
         &inputs,
         &config.output,
@@ -138,6 +141,7 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
         transforms,
         config.output_format,
         config.cancel.as_ref(),
+        config.log.as_ref(),
     )?;
     if !sink.media.errors.is_empty() && sink.media.processed == 0 && config.media.mode.needs_tools()
     {

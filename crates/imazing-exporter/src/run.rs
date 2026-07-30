@@ -41,7 +41,8 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
         }
     };
 
-    let transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
+    let mut transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
+    transforms.log = config.log.clone();
     let (report, sink) = convert_export(
         input,
         &config.output,

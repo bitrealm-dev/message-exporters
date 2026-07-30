@@ -442,6 +442,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
+            log: None,
             output_format,
             source: SourceConfig::MessageReexport(MessageReexportConfig {}),
         };
@@ -487,6 +488,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
+            log: None,
             output_format: self.output_format,
             source: SourceConfig::Apple(AppleConfig {
                 platform,
@@ -528,6 +530,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
+            log: None,
             output_format: self.output_format,
             source: SourceConfig::Whatsapp(WhatsappConfig {
                 platform: Some(self.whatsapp_platform),
@@ -571,6 +574,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
+            log: None,
             output_format: self.output_format,
             source: SourceConfig::Imazing(ImazingConfig { timezone }),
         }
@@ -598,6 +602,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
+            log: None,
             output_format: self.output_format,
             source: SourceConfig::OpenExtract(OpenExtractConfig {}),
         }
@@ -617,6 +622,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
+            log: None,
             output_format: self.output_format,
             source: SourceConfig::GoSmsPro(GoSmsProConfig { owner_phones }),
         }
@@ -636,6 +642,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
+            log: None,
             output_format: self.output_format,
             source: SourceConfig::SmsBackupRestore(SmsBackupRestoreConfig { owner_phones }),
         }
@@ -662,6 +669,7 @@ impl Form {
             obfuscate,
             media,
             cancel: None,
+            log: None,
             output_format: self.output_format,
             source: SourceConfig::SmsBackupPlus(SmsBackupPlusConfig {
                 owner_phones,

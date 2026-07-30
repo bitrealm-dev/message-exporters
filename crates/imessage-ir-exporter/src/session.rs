@@ -33,25 +33,25 @@ impl MailSession {
     pub fn new(options: MailOptions) -> Result<Self, RuntimeError> {
         let data_source = DataSource::from(&options)?;
 
-        eprintln!("Building cache...");
-        eprintln!("  [1/4] Caching chats...");
+        options.emit_log("Building cache...");
+        options.emit_log("  [1/4] Caching chats...");
         let chatrooms = Chat::cache(data_source.db())?;
 
-        eprintln!("  [2/4] Caching chatrooms...");
+        options.emit_log("  [2/4] Caching chatrooms...");
         let chatroom_participants = ChatToHandle::cache(data_source.db())?;
         let chat_handle_lookup = ChatToHandle::get_chat_lookup_map(data_source.db())?;
         let real_chatrooms = ChatToHandle::dedupe(&chatroom_participants, &chat_handle_lookup)?;
 
-        eprintln!("  [3/4] Caching participants...");
+        options.emit_log("  [3/4] Caching participants...");
         let participants = Handle::cache(data_source.db())?;
         let real_participants = Handle::dedupe(&participants);
         let participants_map = data_source
             .contacts_index
             .build_participants_map(&participants, &real_participants);
 
-        eprintln!("  [4/4] Caching tapbacks...");
+        options.emit_log("  [4/4] Caching tapbacks...");
         let tapbacks = Message::cache(data_source.db())?;
-        eprintln!("Cache built!");
+        options.emit_log("Cache built!");
 
         Ok(Self {
             chatrooms,
@@ -72,7 +72,8 @@ impl MailSession {
                 if let Some(chatroom) = self.chatrooms.get(&chat_id) {
                     self.real_chatrooms.get(&chat_id).map(|id| (chatroom, id))
                 } else {
-                    eprintln!("Chat ID {chat_id} does not exist in chat table!");
+                    self.options
+                        .emit_log(format!("Chat ID {chat_id} does not exist in chat table!"));
                     None
                 }
             }
@@ -151,7 +152,7 @@ impl MailSession {
                 .iter()
                 .map(|handle_id| self.real_participants.get(handle_id))
                 .collect();
-            eprintln!(
+            self.options.emit_log(format!(
                 "Selected {} handle{} from {} chat{} from filter `{}`",
                 unique_handle_ids.len(),
                 plural(unique_handle_ids.len()),
@@ -161,7 +162,7 @@ impl MailSession {
                     .conversation_filter
                     .as_deref()
                     .unwrap_or_default()
-            );
+            ));
         }
     }
 }

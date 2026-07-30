@@ -8,7 +8,7 @@ use crate::types::{AttachmentBlob, ParsedMessage};
 use anyhow::{Result, bail};
 use message_contacts::{ContactsBook, NameMapping};
 use message_csv::{DateRange, format_local_ts, stable_guid};
-use message_exporters_core::{CancelFlag, OutputFormat};
+use message_exporters_core::{CancelFlag, LogSink, OutputFormat, emit_log};
 use message_ir::{
     ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
     FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
@@ -603,19 +603,25 @@ fn parse_one_eml(
 
 const EML_PROGRESS_EVERY: u64 = 5000;
 
-fn vlog(verbose: bool, msg: impl AsRef<str>) {
+fn vlog(verbose: bool, log: Option<&LogSink>, msg: impl AsRef<str>) {
     if verbose {
-        eprintln!("{}", msg.as_ref());
+        emit_log(log, msg);
     }
 }
 
-fn report_progress(verbose: bool, label: &str, processed: u64, total: u64) {
+fn report_progress(
+    verbose: bool,
+    log: Option<&LogSink>,
+    label: &str,
+    processed: u64,
+    total: u64,
+) {
     if !verbose || total == 0 {
         return;
     }
     let every = EML_PROGRESS_EVERY;
     if processed == total || (every > 0 && processed.is_multiple_of(every)) {
-        eprintln!("{label}: {processed} / {total}");
+        emit_log(log, format!("{label}: {processed} / {total}"));
     }
 }
 
@@ -637,6 +643,7 @@ pub(crate) fn convert_export<P: AsRef<Path>>(
     transforms: ExportTransforms,
     output_format: OutputFormat,
     cancel: Option<&CancelFlag>,
+    log: Option<&LogSink>,
 ) -> Result<(ExportReport, FormatSinkResult)> {
     let owners = OwnerPhoneSet::new(owner_phones)?;
     let owner_handle = to_e164(&owners.primary_digits);
@@ -650,14 +657,20 @@ pub(crate) fn convert_export<P: AsRef<Path>>(
 
     vlog(
         verbose,
+        log,
         format!("owner phones: {}", owners.all_digits.len()),
     );
-    vlog(verbose, format!("owner emails: {}", owner_emails_lc.len()));
     vlog(
         verbose,
+        log,
+        format!("owner emails: {}", owner_emails_lc.len()),
+    );
+    vlog(
+        verbose,
+        log,
         format!("contacts entries (by phone): {}", contacts.len()),
     );
-    vlog(verbose, format!("output: {}", output_dir.display()));
+    vlog(verbose, log, format!("output: {}", output_dir.display()));
 
     fs::create_dir_all(output_dir)?;
     clean_previous_ir_output(output_dir)?;
@@ -678,6 +691,7 @@ pub(crate) fn convert_export<P: AsRef<Path>>(
     let total = eml_paths.len() as u64;
     vlog(
         verbose,
+        log,
         format!("scanning {total} .eml files (parallel parse)"),
     );
     // Pre-size for typical 1:1 chat counts; grows as needed.
@@ -703,7 +717,7 @@ pub(crate) fn convert_export<P: AsRef<Path>>(
 
     for (idx, outcome) in outcomes.into_iter().enumerate() {
         check_cancel(cancel)?;
-        report_progress(verbose, "scanned", (idx + 1) as u64, total);
+        report_progress(verbose, log, "scanned", (idx + 1) as u64, total);
         match outcome {
             ParsedEmlKind::Archive {
                 msgs,
@@ -768,6 +782,7 @@ pub(crate) fn convert_export<P: AsRef<Path>>(
 
     vlog(
         verbose,
+        log,
         format!(
             "parsed: flat_eml={} archive_eml={} messages={} unknown_chat={} skipped_not_sms_backup_plus={} skipped_parse_error={} skipped_bad_date={}",
             report.flat_eml,
@@ -783,6 +798,7 @@ pub(crate) fn convert_export<P: AsRef<Path>>(
     let convo_total = conversations.len() as u64;
     vlog(
         verbose,
+        log,
         format!(
             "writing {convo_total} conversation files (duplicates dropped so far: {})",
             report.duplicates_dropped
@@ -794,19 +810,20 @@ pub(crate) fn convert_export<P: AsRef<Path>>(
         check_cancel(cancel)?;
         if !prepare_conversation(&mut convo, &mut report) {
             written += 1;
-            report_progress(verbose, "wrote", written, convo_total);
+            report_progress(verbose, log, "wrote", written, convo_total);
             continue;
         }
         let doc = pending_to_document(&chat_id, &convo, &owner_handle, &mut report)?;
         sink.write_document(&doc)?;
         report.conversations += 1;
         written += 1;
-        report_progress(verbose, "wrote", written, convo_total);
+        report_progress(verbose, log, "wrote", written, convo_total);
     }
     let sink_result = sink.finish()?;
 
     vlog(
         verbose,
+        log,
         format!(
             "done: conversations={} messages={} duplicates_dropped={} attachments={}",
             report.conversations,
@@ -816,12 +833,15 @@ pub(crate) fn convert_export<P: AsRef<Path>>(
         ),
     );
     if verbose && !report.errors.is_empty() {
-        eprintln!("errors: {}", report.errors.len());
+        emit_log(log, format!("errors: {}", report.errors.len()));
         for err in report.errors.iter().take(20) {
-            eprintln!("  {err}");
+            emit_log(log, format!("  {err}"));
         }
         if report.errors.len() > 20 {
-            eprintln!("  … and {} more", report.errors.len() - 20);
+            emit_log(
+                log,
+                format!("  … and {} more", report.errors.len() - 20),
+            );
         }
     }
 

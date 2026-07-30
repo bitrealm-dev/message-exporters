@@ -202,10 +202,12 @@ impl ContactsBook {
 /// `--contacts` accepts the same files as contacts-validate (VCF or iMazing
 /// Contacts CSV). `--vcf` is a VCF-only alias.
 ///
-/// When neither is passed, returns an empty book and prints a stderr warning.
+/// When neither is passed, returns an empty book and emits a warning via `log`
+/// (or stderr when `log` is `None`).
 pub fn resolve_contacts_cli(
     contacts: Option<PathBuf>,
     vcf: Option<PathBuf>,
+    log: Option<&dyn Fn(&str)>,
 ) -> Result<(ContactsBook, Option<PathBuf>)> {
     match (contacts, vcf) {
         (Some(path), None) => {
@@ -220,10 +222,12 @@ pub fn resolve_contacts_cli(
             bail!("pass only one of --contacts PATH or --vcf PATH")
         }
         (None, None) => {
-            eprintln!(
-                "warning: no contacts file provided (--contacts or --vcf); \
-                 phone numbers will not be resolved to names"
-            );
+            let msg = "warning: no contacts file provided (--contacts or --vcf); \
+                 phone numbers will not be resolved to names";
+            match log {
+                Some(emit) => emit(msg),
+                None => eprintln!("{msg}"),
+            }
             Ok((ContactsBook::empty(), None))
         }
     }
@@ -343,7 +347,7 @@ TEL;TYPE=CELL:+1-555-555-0100\nEND:VCARD\n",
 
     #[test]
     fn resolve_cli_allows_none_and_rejects_both() {
-        let (book, path) = resolve_contacts_cli(None, None).unwrap();
+        let (book, path) = resolve_contacts_cli(None, None, None).unwrap();
         assert!(book.is_empty());
         assert!(path.is_none());
         let dir = tempfile::tempdir().unwrap();
@@ -357,8 +361,8 @@ TEL;TYPE=CELL:+1-555-555-0100\nEND:VCARD\n",
             "c.vcf",
             "BEGIN:VCARD\nN:B;A;;;\nTEL:+15555550100\nEND:VCARD\n",
         );
-        assert!(resolve_contacts_cli(Some(csv.clone()), Some(vcf)).is_err());
-        let (book, path) = resolve_contacts_cli(Some(csv), None).unwrap();
+        assert!(resolve_contacts_cli(Some(csv.clone()), Some(vcf), None).is_err());
+        let (book, path) = resolve_contacts_cli(Some(csv), None, None).unwrap();
         assert!(!book.is_empty());
         assert!(path.is_some());
     }
@@ -372,7 +376,7 @@ TEL;TYPE=CELL:+1-555-555-0100\nEND:VCARD\n",
             "First Name,Last Name,Mobile Phone\n\
 Ada,Lovelace,+15555550100\n",
         );
-        let (book, path) = resolve_contacts_cli(Some(csv), None).unwrap();
+        let (book, path) = resolve_contacts_cli(Some(csv), None, None).unwrap();
         assert!(path.is_some());
         assert_eq!(
             book.lookup_name_by_phone("+15555550100"),

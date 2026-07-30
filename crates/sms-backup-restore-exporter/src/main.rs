@@ -117,6 +117,7 @@ fn main() -> Result<()> {
             compress,
         },
         cancel: None,
+        log: None,
         output_format,
         source: SourceConfig::SmsBackupRestore(SmsBackupRestoreConfig {
             owner_phones: cli.owner_phones,

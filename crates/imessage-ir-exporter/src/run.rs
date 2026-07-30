@@ -106,10 +106,10 @@ fn options_from_export_config(config: &ExporterConfig) -> Result<MailOptions, Ru
             )));
         }
         if platform == Platform::iOS {
-            eprintln!(
+            config.emit_log(format!(
                 "Option attachment-root is enabled, but the platform is {}, so the root will have no effect!",
                 Platform::iOS
-            );
+            ));
         }
     }
 
@@ -121,10 +121,10 @@ fn options_from_export_config(config: &ExporterConfig) -> Result<MailOptions, Ru
             )));
         }
         if platform == Platform::iOS {
-            eprintln!(
+            config.emit_log(format!(
                 "Option contacts path is enabled, but the platform is {}, so the path will have no effect!",
                 Platform::iOS
-            );
+            ));
         }
     }
 
@@ -152,7 +152,12 @@ fn options_from_export_config(config: &ExporterConfig) -> Result<MailOptions, Ru
         cleartext_password: source.backup_password.clone(),
         contacts_path: source.apple_contacts.clone(),
         attachment_embed,
-        transforms: ExportTransforms::from_configs(&config.media, &config.obfuscate),
+        transforms: {
+            let mut transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
+            transforms.log = config.log.clone();
+            transforms
+        },
         output_format: config.output_format,
+        log: config.log.clone(),
     })
 }

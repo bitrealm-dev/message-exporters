@@ -88,6 +88,7 @@ fn main() -> Result<()> {
         obfuscate: ObfuscateConfig::default(),
         media: MediaConfig::default(),
         cancel: None,
+        log: None,
         output_format,
         source: SourceConfig::Apple(AppleConfig {
             platform,

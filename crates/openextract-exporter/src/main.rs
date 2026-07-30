@@ -81,6 +81,7 @@ fn main() -> Result<()> {
             compress: Default::default(),
         },
         cancel: None,
+        log: None,
         output_format,
         source: SourceConfig::OpenExtract(OpenExtractConfig {}),
     })?;

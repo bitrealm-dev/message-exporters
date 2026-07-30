@@ -70,7 +70,8 @@ fn convert_export(input_dir: &Path, config: &ExporterConfig) -> Result<ReexportR
     }
 
     let detected = detect_ir_export(input_dir)?;
-    let transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
+    let mut transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
+    transforms.log = config.log.clone();
     let copy_attachments = transforms.copies_attachments();
 
     fs::create_dir_all(&config.output)
@@ -119,7 +120,7 @@ fn load_documents(
             },
         )?;
         for error in report.errors.iter().take(5) {
-            eprintln!("xml warning: {error}");
+            config.emit_log(format!("xml warning: {error}"));
         }
         return Ok(documents);
     }
@@ -435,6 +436,7 @@ mod tests {
             obfuscate: ObfuscateConfig::default(),
             media: MediaConfig::default(),
             cancel: None,
+            log: None,
             output_format,
             source: SourceConfig::MessageReexport(MessageReexportConfig {}),
         }

@@ -35,6 +35,7 @@ fn convert_smoke_writes_csv_not_json() {
         ExportTransforms::none(),
         OutputFormat::Csv,
         None,
+        None,
     )
     .unwrap();
 
@@ -114,6 +115,7 @@ fn end_dedupe_collapses_duplicate_flats() {
         ExportTransforms::none(),
         OutputFormat::Csv,
         None,
+        None,
     )
     .unwrap();
 
@@ -182,6 +184,7 @@ Will do\r\n"
         false,
         ExportTransforms::none(),
         OutputFormat::Csv,
+        None,
         None,
     )
     .unwrap();

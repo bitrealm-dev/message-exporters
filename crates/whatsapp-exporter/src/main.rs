@@ -142,6 +142,7 @@ fn main() -> Result<()> {
             compress,
         },
         cancel: None,
+        log: None,
         output_format,
         source: SourceConfig::Whatsapp(WhatsappConfig {
             platform: cli.platform.map(Into::into),

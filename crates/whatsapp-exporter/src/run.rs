@@ -112,7 +112,8 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     }
 
     check_cancel(config.cancel.as_ref())?;
-    let transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
+    let mut transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
+    transforms.log = config.log.clone();
     let (report, sink) = convert_json(
         &json_path,
         &config.output,

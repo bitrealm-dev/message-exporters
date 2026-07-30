@@ -166,6 +166,7 @@ fn main() -> Result<()> {
                     compress,
                 },
                 cancel: None,
+                log: None,
                 output_format,
                 source: SourceConfig::SmsBackupPlus(SmsBackupPlusConfig {
                     owner_phones,

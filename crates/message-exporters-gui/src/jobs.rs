@@ -5,7 +5,9 @@ use std::sync::mpsc;
 use go_sms_pro_exporter::run as run_go_sms_pro;
 use imazing_exporter::run as run_imazing;
 use imessage_ir_exporter::run as run_imessage;
-use message_exporters_core::{CancelFlag, Exporter, ExporterConfig, ProcessEvent};
+use message_exporters_core::{
+    CancelFlag, Exporter, ExporterConfig, LogSink, ProcessEvent,
+};
 use openextract_exporter::run as run_openextract;
 use sms_backup_plus_exporter::run as run_sms_plus;
 use sms_backup_restore_exporter::run as run_sms_restore;
@@ -14,42 +16,45 @@ use whatsapp_exporter::run as run_whatsapp;
 pub(crate) type LibraryJob =
     Box<dyn FnOnce(CancelFlag, mpsc::Sender<ProcessEvent>) -> Result<(), String> + Send>;
 
+/// Install cancel + live log sink, then run an exporter library entrypoint.
+fn prepare_config(mut config: ExporterConfig, cancel: CancelFlag, tx: &mpsc::Sender<ProcessEvent>) -> ExporterConfig {
+    config.cancel = Some(cancel);
+    let tx = tx.clone();
+    config.log = Some(LogSink::new(move |line| {
+        let _ = tx.send(ProcessEvent::Log(line.to_string()));
+    }));
+    config
+}
+
 /// Build an in-process export job from a validated [`ExporterConfig`].
 pub(crate) fn library_job_for_exporter(exporter: Exporter, config: ExporterConfig) -> LibraryJob {
     match exporter {
         Exporter::GoSmsPro => Box::new(move |cancel, tx| {
-            let mut config = config;
-            config.cancel = Some(cancel);
+            let config = prepare_config(config, cancel, &tx);
             run_and_log(run_go_sms_pro(&config), tx)
         }),
         Exporter::SmsBackupRestore => Box::new(move |cancel, tx| {
-            let mut config = config;
-            config.cancel = Some(cancel);
+            let config = prepare_config(config, cancel, &tx);
             run_and_log(run_sms_restore(&config), tx)
         }),
         Exporter::SmsBackupPlus => Box::new(move |cancel, tx| {
-            let mut config = config;
-            config.cancel = Some(cancel);
+            let config = prepare_config(config, cancel, &tx);
             run_and_log(run_sms_plus(&config), tx)
         }),
         Exporter::OpenExtract => Box::new(move |cancel, tx| {
-            let mut config = config;
-            config.cancel = Some(cancel);
+            let config = prepare_config(config, cancel, &tx);
             run_and_log(run_openextract(&config), tx)
         }),
         Exporter::Imazing => Box::new(move |cancel, tx| {
-            let mut config = config;
-            config.cancel = Some(cancel);
+            let config = prepare_config(config, cancel, &tx);
             run_and_log(run_imazing(&config), tx)
         }),
         Exporter::Whatsapp => Box::new(move |cancel, tx| {
-            let mut config = config;
-            config.cancel = Some(cancel);
+            let config = prepare_config(config, cancel, &tx);
             run_and_log(run_whatsapp(&config), tx)
         }),
         Exporter::Imessage => Box::new(move |cancel, tx| {
-            let mut config = config;
-            config.cancel = Some(cancel);
+            let config = prepare_config(config, cancel, &tx);
             run_and_log(run_imessage(&config), tx)
         }),
     }
@@ -71,6 +76,15 @@ where
         }
         Err(error) => Err(format!("{error:#}")),
     }
+}
+
+/// Attach cancel + live log sink for re-export (and similar) jobs.
+pub(crate) fn prepare_library_config(
+    config: ExporterConfig,
+    cancel: CancelFlag,
+    tx: &mpsc::Sender<ProcessEvent>,
+) -> ExporterConfig {
+    prepare_config(config, cancel, tx)
 }
 
 pub(crate) trait HasMessages {

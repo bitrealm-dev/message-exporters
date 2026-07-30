@@ -10,7 +10,7 @@ use message_csv::DateRange;
 use message_media::{CompressOptions, MediaMode};
 
 use crate::exporters::{ApplePlatform, ContactsKind, Exporter, WhatsappPlatform};
-use crate::process::CancelFlag;
+use crate::process::{CancelFlag, LogSink, emit_log};
 
 /// Output packaging projected from the common message.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -102,12 +102,19 @@ pub struct ExporterConfig {
     /// Attachment handling for FormatSink (none / copy / convert / compress).
     pub media: MediaConfig,
     pub cancel: Option<CancelFlag>,
+    /// Mid-run progress / warnings. `None` → stderr (CLI); GUI sets a sink.
+    pub log: Option<LogSink>,
     /// Packaging format (`csv` / `eml` / `mbox` / `json` / `jsonl` / `xml`).
     pub output_format: OutputFormat,
     pub source: SourceConfig,
 }
 
 impl ExporterConfig {
+    /// Emit a progress / warning line (sink when set, else stderr).
+    pub fn emit_log(&self, line: impl AsRef<str>) {
+        emit_log(self.log.as_ref(), line);
+    }
+
     /// First input path, if any.
     pub fn primary_input(&self) -> Option<&Path> {
         self.inputs.first().map(PathBuf::as_path)

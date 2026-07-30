@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use chrono::Local;
 use eframe::egui;
-use jobs::{LibraryJob, library_job_for_exporter, run_and_log};
+use jobs::{LibraryJob, library_job_for_exporter, prepare_library_config, run_and_log};
 use message_exporters_core::{
     APPLE_PLATFORMS, ATTACHMENT_MEDIA, AttachmentMedia, EXPORTERS, ExportIniState, Exporter,
     ExporterConfig, Form, MAX_RESOLUTIONS, OUTPUT_FORMATS_MAIL, ProcessControl, ProcessEvent,
@@ -350,8 +350,7 @@ impl App {
 
         let label = "message-reexporter (library)".to_string();
         let job: LibraryJob = Box::new(move |cancel, tx| {
-            let mut config = config;
-            config.cancel = Some(cancel);
+            let config = prepare_library_config(config, cancel, &tx);
             run_and_log(run_reexport(&config), tx)
         });
         self.start_library_job(label, job);

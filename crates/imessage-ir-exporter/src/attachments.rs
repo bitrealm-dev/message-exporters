@@ -32,10 +32,10 @@ pub fn load_attachment_bytes(
         let temp = decrypt_file(backup, &source)?;
         let bytes = fs::read(&temp).unwrap_or_default();
         if let Err(why) = fs::remove_file(&temp) {
-            eprintln!(
+            session.options.emit_log(format!(
                 "Unable to remove encrypted temp file {}: {why}",
                 temp.display()
-            );
+            ));
         }
         return Ok(bytes);
     }
