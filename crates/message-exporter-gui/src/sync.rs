@@ -1,7 +1,7 @@
 //! Push `AppState` into Slint adapters and pull adapter values back into `Form`
 //! / `ExportIniState` before validation and save.
 
-use message_exporters_core::{
+use message_exporter_core::{
     AttachmentMedia, Exporter, OutputFormat, WhatsappPlatform, contacts_kind_from_path,
 };
 use media::ffmpeg_available;

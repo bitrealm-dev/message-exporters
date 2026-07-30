@@ -1,7 +1,7 @@
 use crate::emit::convert_export;
 use contacts::ContactsBook;
 use csv::DateRange;
-use message_exporters_core::OutputFormat;
+use message_exporter_core::OutputFormat;
 use ir::ExportTransforms;
 use std::fs::{self, File};
 use std::io::{Read, Write};

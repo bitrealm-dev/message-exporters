@@ -1,9 +1,9 @@
-# Message Exporters Slint GUI
+# Message Exporter GUI
 
 Living design notes for the cross-platform desktop GUI.
 
 **Framework:** [Slint](https://slint.dev) 1.17, implemented in
-[`crates/message-exporters-slint`](../../crates/message-exporters-slint).
+[`crates/message-exporter-gui`](../../crates/message-exporter-gui).
 
 ## Goals
 
@@ -31,7 +31,7 @@ Compiled with Slint's `native` style in `build.rs`:
 
 This crate stays pure Rust (no Qt SDK dependency). On Linux without Qt, Fluent is
 the intentional fallback. Override at compile time with `SLINT_STYLE`
-(for example `SLINT_STYLE=fluent cargo build -p message-exporters-slint`).
+(for example `SLINT_STYLE=fluent cargo build -p message-exporter-gui`).
 
 Layout density lives in `ui/widgets.slint` (`FormMetrics`, horizontal `FormRow`
 fields, tight row gaps). Ordinary fields do not stretch; only the Log tab's viewer
@@ -59,7 +59,7 @@ grows when the window is resized vertically.
 - `src/session_log.rs` — timestamped temp-file session log.
 - `src/wsl.rs` — Windows interop when the Linux GUI runs under WSL (browser / help).
 
-Jobs run via `message_exporters_core::spawn_job` on a `std::thread` with a
+Jobs run via `message_exporter_core::spawn_job` on a `std::thread` with a
 `CancelFlag` + `mpsc::Sender<ProcessEvent>`. A bridge thread drains the receiver
 and marshals each line onto the Slint UI thread (`upgrade_in_event_loop`),
 appending to the Log tab's `VecModel` and the session log file.
@@ -73,7 +73,7 @@ exporter CLIs required). WhatsApp’s `wtsexporter` and media tools `ffmpeg` /
 Reads/writes `export.ini` via `ExportIniState::load_or_default()` / `save()`.
 Prefer an existing file in the working directory, else beside the GUI binary;
 otherwise create `./export.ini` on first save. Template:
-[`export.example.ini`](../../crates/message-exporters-slint/export.example.ini).
+[`export.example.ini`](../../crates/message-exporter-gui/export.example.ini).
 Backup passwords are never written. The vault key is persisted in plain text under
 `[vault]`.
 
@@ -91,8 +91,8 @@ paid commercial license is required for this desktop app.
 
 ```bash
 cargo build --workspace
-# optional: cp crates/message-exporters-slint/export.example.ini export.ini
-cargo run -p message-exporters-slint
+# optional: cp crates/message-exporter-gui/export.example.ini export.ini
+cargo run -p message-exporter-gui
 ```
 
 ## Layout

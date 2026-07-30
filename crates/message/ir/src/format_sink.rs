@@ -4,7 +4,7 @@ use crate::export_transforms::{ExportTransforms, apply_transforms};
 use crate::write_sbr::SbrBackupSession;
 use crate::{ConversationDocument, write_format};
 use anyhow::Result;
-use message_exporters_core::OutputFormat;
+use message_exporter_core::OutputFormat;
 use media::MediaReport;
 use std::fs;
 use std::path::{Path, PathBuf};

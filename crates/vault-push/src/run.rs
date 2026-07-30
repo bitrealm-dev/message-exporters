@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
-use message_exporters_core::{CancelFlag, check_cancel};
+use message_exporter_core::{CancelFlag, check_cancel};
 use ir::{ConversationHeader, read_conversation_jsonl};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

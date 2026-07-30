@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
-use message_exporters_core::{
+use message_exporter_core::{
     ExporterConfig, MediaConfig, MessageReexportConfig, ObfuscateConfig, OutputFormat, SourceConfig,
 };
 use ir::reexport::run;

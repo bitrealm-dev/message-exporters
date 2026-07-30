@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 use chrono::{Local, TimeZone};
 use contacts::ContactsBook;
 use csv::{DateRange, format_local_ts, stable_guid};
-use message_exporters_core::{CancelFlag, OutputFormat};
+use message_exporter_core::{CancelFlag, OutputFormat};
 use ir::{
     ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
     FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
@@ -25,7 +25,7 @@ const EXPORT_TOOL: &str = "GO SMS Pro";
 const EXPORT_TOOL_VERSION: &str = "";
 
 fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
-    message_exporters_core::check_cancel(cancel).map_err(anyhow::Error::msg)
+    message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)
 }
 
 #[derive(Debug, Default)]

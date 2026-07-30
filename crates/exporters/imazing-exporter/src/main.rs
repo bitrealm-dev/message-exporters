@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 use imazing_exporter::{parse_date_range, run};
-use message_exporters_core::{
+use message_exporter_core::{
     ContactsConfig, ExporterConfig, ImazingConfig, MediaConfig, ObfuscateConfig, OutputFormat,
     SourceConfig, contacts_kind_from_path,
 };

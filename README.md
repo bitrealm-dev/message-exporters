@@ -22,13 +22,13 @@ Source Markdown lives in [`docs/src/content/docs/`](docs/src/content/docs/) and 
 
 ## Quick start
 
-**Desktop app / binaries:** Download the platform ZIP from the latest [Release](https://github.com/bitrealm-dev/message-exporters/releases). Extract it and keep every file in the same folder. Run `message-exporters-slint`.
+**Desktop app / binaries:** Download the platform ZIP from the latest [Release](https://github.com/bitrealm-dev/message-exporters/releases). Extract it and keep every file in the same folder. Run `message-exporter`.
 
 **From source:**
 
 ```bash
 cargo build --workspace --release
-cargo run --release -p message-exporters-slint
+cargo run --release -p message-exporter-gui
 ```
 
 ### WSL2 development
@@ -84,7 +84,7 @@ app automatically opens Windows-native file dialogs and the Windows browser
 when it detects WSL. Build it in release mode for realistic export performance:
 
 ```bash
-cargo run --release -p message-exporters-slint
+cargo run --release -p message-exporter-gui
 ```
 
 More Linux package details and optional helpers such as `ffmpeg` are documented

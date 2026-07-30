@@ -6,7 +6,7 @@ use crate::{
     read_conversation_json, read_conversation_jsonl, read_conversation_mbox, read_sbr_documents,
 };
 use anyhow::{Context, Result, bail};
-use message_exporters_core::{ExporterConfig, OutputFormat};
+use message_exporter_core::{ExporterConfig, OutputFormat};
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
@@ -376,7 +376,7 @@ mod tests {
         IrMessage, IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION, read_conversation_csv,
         read_conversation_json,
     };
-    use message_exporters_core::{
+    use message_exporter_core::{
         MediaConfig, MessageReexportConfig, ObfuscateConfig, SourceConfig,
     };
 

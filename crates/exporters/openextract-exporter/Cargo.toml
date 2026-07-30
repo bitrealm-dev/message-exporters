@@ -22,7 +22,7 @@ csv_io = { package = "csv", version = "1.4.0" }
 obfuscate = { path = "../../message/obfuscate" }
 contacts = { path = "../../message/contacts" }
 csv = { path = "../../message/csv" }
-message-exporters-core = { path = "../../message-exporters-core" }
+message-exporter-core = { path = "../../message-exporter-core" }
 ir = { path = "../../message/ir" }
 media = { path = "../../message/media" }
 phone = { path = "../../message/phone" }

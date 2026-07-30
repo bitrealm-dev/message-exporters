@@ -1178,7 +1178,7 @@ mod tests {
     #[test]
     fn ensure_output_dir_creates_missing_path() {
         let out = std::env::temp_dir().join(format!(
-            "message-exporters-core-test-{}-{}",
+            "message-exporter-core-test-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

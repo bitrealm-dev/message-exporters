@@ -1,4 +1,4 @@
-# Message Exporters Slint GUI
+# Message Exporter GUI
 
 Desktop GUI built with [Slint](https://slint.dev). Same exporter libraries and
 `export.ini` as the rest of the workspace.
@@ -9,17 +9,17 @@ Desktop GUI built with [Slint](https://slint.dev). Same exporter libraries and
 
 ```bash
 cargo build --workspace
-cargo run -p message-exporters-slint
+cargo run -p message-exporter-gui
 ```
 
 For release:
 
 ```bash
 cargo build --workspace --release
-./target/release/message-exporters-slint
+./target/release/message-exporter
 ```
 
-On Windows the final command is `target\release\message-exporters-slint.exe`.
+On Windows the final command is `target\release\message-exporter.exe`.
 
 The app searches for helper binaries (`wtsexporter`, `ffmpeg`, `ffprobe`) beside
 its own executable, then in `MESSAGE_EXPORTERS_BIN`, then on `PATH`.
@@ -42,7 +42,7 @@ from the Experimental group. Override the style at compile time with
 `SLINT_STYLE` if needed:
 
 ```bash
-SLINT_STYLE=fluent cargo run -p message-exporters-slint
+SLINT_STYLE=fluent cargo run -p message-exporter-gui
 ```
 
 ## Included
@@ -58,4 +58,4 @@ SLINT_STYLE=fluent cargo run -p message-exporters-slint
 - Help button linking to the published user documentation
 - About dialog with Slint attribution (`AboutSlint`) for the Royalty-free license
 
-Architecture notes: [`../../docs/maintainers/slint-gui.md`](../../docs/maintainers/slint-gui.md).
+Architecture notes: [`../../docs/maintainers/gui.md`](../../docs/maintainers/gui.md).

@@ -2395,7 +2395,7 @@ dependencies = [
  "hex",
  "ir",
  "media",
- "message-exporters-core",
+ "message-exporter-core",
  "obfuscate",
  "phone",
  "quick-xml 0.41.0",
@@ -3270,7 +3270,7 @@ dependencies = [
  "hex",
  "ir",
  "media",
- "message-exporters-core",
+ "message-exporter-core",
  "obfuscate",
  "phone",
  "serde_json",
@@ -3308,7 +3308,7 @@ dependencies = [
  "imessage-database",
  "ir",
  "mail",
- "message-exporters-core",
+ "message-exporter-core",
  "rpassword",
  "rusqlite",
  "serde",
@@ -3409,7 +3409,7 @@ dependencies = [
  "csv 1.4.0",
  "mail",
  "media",
- "message-exporters-core",
+ "message-exporter-core",
  "obfuscate",
  "phone",
  "sbr",
@@ -3939,7 +3939,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "message-exporters-core"
+name = "message-exporter-core"
 version = "0.1.0"
 dependencies = [
  "csv 0.1.0",
@@ -3949,7 +3949,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "message-exporters-slint"
+name = "message-exporter-gui"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -3959,7 +3959,7 @@ dependencies = [
  "imessage-ir-exporter",
  "ir",
  "media",
- "message-exporters-core",
+ "message-exporter-core",
  "open",
  "openextract-exporter",
  "phone",
@@ -4634,7 +4634,7 @@ dependencies = [
  "csv 1.4.0",
  "ir",
  "media",
- "message-exporters-core",
+ "message-exporter-core",
  "obfuscate",
  "phone",
  "serde_json",
@@ -6257,7 +6257,7 @@ dependencies = [
  "ir",
  "mailparse",
  "media",
- "message-exporters-core",
+ "message-exporter-core",
  "obfuscate",
  "phone",
  "rayon",
@@ -6279,7 +6279,7 @@ dependencies = [
  "csv 0.1.0",
  "ir",
  "media",
- "message-exporters-core",
+ "message-exporter-core",
  "serde_json",
  "tempfile",
 ]
@@ -7175,7 +7175,7 @@ dependencies = [
  "hex",
  "httpmock",
  "ir",
- "message-exporters-core",
+ "message-exporter-core",
  "reqwest",
  "serde",
  "serde_json",
@@ -7503,7 +7503,7 @@ dependencies = [
  "hex",
  "ir",
  "media",
- "message-exporters-core",
+ "message-exporter-core",
  "obfuscate",
  "phone",
  "serde",

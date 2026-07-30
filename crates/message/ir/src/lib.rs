@@ -36,7 +36,7 @@ use write_sbr::SbrBackupSession;
 
 use anyhow::{Context, Result, bail};
 use csv::{AttachmentCell, conversation_filename, format_local_ts, json_cell};
-use message_exporters_core::OutputFormat;
+use message_exporter_core::OutputFormat;
 use mail::{
     Direction as MailDirection, MailAttachment, MailMessage, MailPackage, Participant,
     SmsMailFields, write_mail_package,

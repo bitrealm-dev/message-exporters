@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::sync::mpsc;
 
 use jobs::library_job_for_exporter;
-use message_exporters_core::{
+use message_exporter_core::{
     ATTACHMENT_MEDIA, EXPORTERS, OUTPUT_FORMATS_MAIL, ExportIniState, Exporter, Form,
     ProcessControl, ProcessEvent, ensure_output_dir, spawn_job,
 };
@@ -328,7 +328,7 @@ use std::sync::{Arc, Mutex, mpsc};
 use chrono::{Datelike, Local, NaiveDate};
 use jobs::{LibraryJob, library_job_for_exporter, prepare_library_config, run_and_log};
 use contacts::{ValidateMode, probe_contacts_input, validate_contacts_file};
-use message_exporters_core::{ProcessEvent, VaultSection, spawn_job};
+use message_exporter_core::{ProcessEvent, VaultSection, spawn_job};
 use ir::reexport::run as run_reexport;
 use phone::PhoneRegion;
 use slint::ComponentHandle;

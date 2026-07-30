@@ -22,7 +22,7 @@ crabapple = { version = "=0.4.7" }
 hex = "0.4.3"
 imessage-database = "4.2.0"
 csv = { path = "../../message/csv" }
-message-exporters-core = { path = "../../message-exporters-core" }
+message-exporter-core = { path = "../../message-exporter-core" }
 ir = { path = "../../message/ir" }
 mail = { path = "../../message/mail" }
 rpassword = "=7.5.3"

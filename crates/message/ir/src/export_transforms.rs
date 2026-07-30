@@ -3,7 +3,7 @@
 use crate::util::read_attachment_file;
 use crate::{ConversationDocument, IrAttachment, IrDirection, IrParticipant};
 use anyhow::Result;
-use message_exporters_core::{LogSink, MediaConfig, ObfuscateConfig, emit_log};
+use message_exporter_core::{LogSink, MediaConfig, ObfuscateConfig, emit_log};
 use media::{CompressOptions, MediaMode, MediaReport};
 use obfuscate::{
     Obfuscator, classify_attachment, materialize_placeholders, placeholder_rel_path,

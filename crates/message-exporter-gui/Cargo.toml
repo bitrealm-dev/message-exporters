@@ -1,9 +1,14 @@
 [package]
-name = "message-exporters-slint"
+name = "message-exporter-gui"
 version = "0.1.0"
 edition = "2024"
 description = "Slint desktop GUI for message-exporters"
 build = "build.rs"
+
+
+[[bin]]
+name = "message-exporter"
+path = "src/main.rs"
 
 [dependencies]
 chrono = "0.4.44"
@@ -19,7 +24,7 @@ sms-backup-plus-exporter = { path = "../exporters/sms-backup-plus-exporter", def
 sms-backup-restore-exporter = { path = "../exporters/sms-backup-restore-exporter", default-features = false }
 whatsapp-exporter = { path = "../exporters/whatsapp-exporter", default-features = false }
 contacts = { path = "../message/contacts" }
-message-exporters-core = { path = "../message-exporters-core" }
+message-exporter-core = { path = "../message-exporter-core" }
 ir = { path = "../message/ir", default-features = false }
 media = { path = "../message/media" }
 phone = { path = "../message/phone" }

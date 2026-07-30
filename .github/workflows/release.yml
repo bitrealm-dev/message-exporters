@@ -107,7 +107,7 @@ jobs:
 
           # Sign project binaries that ship in the ZIP (GUI + cli/).
           for bin in \
-            message-exporters-slint \
+            message-exporter \
             go-sms-pro-exporter \
             sms-backup-restore-exporter \
             sms-backup-plus-exporter \
@@ -157,7 +157,7 @@ jobs:
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
           for bin in \
-            message-exporters-slint \
+            message-exporter \
             go-sms-pro-exporter \
             sms-backup-restore-exporter \
             sms-backup-plus-exporter \
@@ -180,8 +180,8 @@ jobs:
 
           # Notarize the GUI (standalone Mach-O; stapling is not available without a
           # .app / .pkg / .dmg — Gatekeeper still checks online on first launch).
-          NOTARY_ZIP="$RUNNER_TEMP/message-exporters-slint-notarize.zip"
-          ditto -c -k --keepParent target/release/message-exporters-slint "$NOTARY_ZIP"
+          NOTARY_ZIP="$RUNNER_TEMP/message-exporter-notarize.zip"
+          ditto -c -k --keepParent target/release/message-exporter "$NOTARY_ZIP"
           xcrun notarytool submit "$NOTARY_ZIP" \
             --apple-id "$NOTARY_APPLE_ID" \
             --team-id "$NOTARY_TEAM_ID" \
@@ -231,9 +231,9 @@ jobs:
 
           Download the ZIP for your platform, extract the whole archive into one folder, and keep every file together. Start the desktop app:
 
-          - Linux: \`message-exporters-slint\`
-          - Windows: \`message-exporters-slint.exe\`
-          - macOS Apple Silicon: \`message-exporters-slint\`
+          - Linux: \`message-exporter\`
+          - Windows: \`message-exporter.exe\`
+          - macOS Apple Silicon: \`message-exporter\`
 
           ### Archives
 
@@ -243,7 +243,7 @@ jobs:
 
           ### Layout
 
-          - **ZIP root:** \`message-exporters-slint\`, WhatsApp \`wtsexporter\` 0.13.0, bundled \`ffmpeg\` / \`ffprobe\` (eugeneware/ffmpeg-static \`b6.1.1\`), and license notices. The GUI runs exporters as libraries; keep the helpers beside it.
+          - **ZIP root:** \`message-exporter\`, WhatsApp \`wtsexporter\` 0.13.0, bundled \`ffmpeg\` / \`ffprobe\` (eugeneware/ffmpeg-static \`b6.1.1\`), and license notices. The GUI runs exporters as libraries; keep the helpers beside it.
           - **\`cli/\`:** standalone exporter CLIs, \`message-reexporter\`, and \`vault-push\`.
 
           ### Notes

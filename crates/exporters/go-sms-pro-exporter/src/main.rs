@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 use go_sms_pro_exporter::{parse_date_range, run};
-use message_exporters_core::{
+use message_exporter_core::{
     ContactsConfig, ContactsKind, ExporterConfig, GoSmsProConfig, MediaConfig, ObfuscateConfig,
     OutputFormat, SourceConfig,
 };

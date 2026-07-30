@@ -8,7 +8,7 @@ use crate::types::{AttachmentBlob, ParsedMessage};
 use anyhow::{Result, bail};
 use contacts::{ContactsBook, NameMapping};
 use csv::{DateRange, format_local_ts, stable_guid};
-use message_exporters_core::{CancelFlag, LogSink, OutputFormat, emit_log};
+use message_exporter_core::{CancelFlag, LogSink, OutputFormat, emit_log};
 use ir::{
     ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
     FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
@@ -26,7 +26,7 @@ const EXPORT_TOOL: &str = "SMS Backup+";
 const EXPORT_TOOL_VERSION: &str = "1.5.11";
 
 fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
-    message_exporters_core::check_cancel(cancel).map_err(anyhow::Error::msg)
+    message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)
 }
 
 #[derive(Debug, Default)]

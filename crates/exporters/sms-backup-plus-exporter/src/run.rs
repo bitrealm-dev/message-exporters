@@ -4,7 +4,7 @@ use crate::emit::{ExportReport, convert_export};
 use anyhow::{Context, Result, bail};
 use contacts::{NameMapping, resolve_contacts_cli};
 use csv::DateRange;
-use message_exporters_core::{ExporterConfig, SourceConfig};
+use message_exporter_core::{ExporterConfig, SourceConfig};
 use ir::ExportTransforms;
 use serde::Deserialize;
 use std::fs;

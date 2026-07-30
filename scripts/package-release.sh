@@ -2,7 +2,7 @@
 # Stage a self-contained platform ZIP for a message-exporters release.
 #
 # Layout:
-#   ZIP root  — message-exporters-slint + wtsexporter + ffmpeg/ffprobe + notices
+#   ZIP root  — message-exporter + wtsexporter + ffmpeg/ffprobe + notices
 #   cli/      — exporter CLIs, message-reexporter, vault-push
 #
 # Usage:
@@ -30,7 +30,7 @@ rm -rf "$STAGE"
 mkdir -p "$STAGE" dist
 
 # --- desktop app at ZIP root (uses exporter crates as libraries) ---
-GUI_BIN="message-exporters-slint${EXT}"
+GUI_BIN="message-exporter${EXT}"
 src="${RELEASE_DIR}/${GUI_BIN}"
 if [[ ! -f "$src" ]]; then
   echo "missing release binary: $src" >&2

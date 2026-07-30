@@ -4,7 +4,7 @@ use crate::emit::{ExportReport, convert_json};
 use crate::wtsexporter::{Platform, WtsexporterArgs, resolve_wtsexporter, run_wtsexporter};
 use anyhow::{Context, Result, bail};
 use csv::DateRange;
-use message_exporters_core::{
+use message_exporter_core::{
     CancelFlag, ExporterConfig, SourceConfig, WhatsappPlatform as CorePlatform,
 };
 use ir::ExportTransforms;
@@ -186,5 +186,5 @@ pub fn parse_date_range(start_date: Option<&str>, end_date: Option<&str>) -> Res
 }
 
 fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
-    message_exporters_core::check_cancel(cancel).map_err(anyhow::Error::msg)
+    message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)
 }

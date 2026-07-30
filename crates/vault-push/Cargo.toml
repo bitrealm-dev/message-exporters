@@ -19,7 +19,7 @@ anyhow = "1.0.103"
 clap = { version = "4.6.1", features = ["derive", "env"], optional = true }
 hex = "0.4.3"
 csv = { path = "../message/csv" }
-message-exporters-core = { path = "../message-exporters-core" }
+message-exporter-core = { path = "../message-exporter-core" }
 ir = { path = "../message/ir", default-features = false }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = { version = "1.0.228", features = ["derive"] }

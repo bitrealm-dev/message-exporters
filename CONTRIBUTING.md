@@ -38,7 +38,7 @@ sudo dnf install \
   libxkbcommon-devel libxcb-devel
 ```
 
-`libxkbcommon-x11-0` provides `libxkbcommon-x11.so` — required to **run** `message-exporters-slint` even when the build succeeded.
+`libxkbcommon-x11-0` provides `libxkbcommon-x11.so` — required to **run** `message-exporter` even when the build succeeded.
 
 ## Clone and build
 
@@ -66,22 +66,22 @@ cargo build --release -p vault-push --features cli
 ## Run the app
 
 ```bash
-cargo run -p message-exporters-slint
+cargo run -p message-exporter-gui
 ```
 
 Use a release build when testing real exports. Debug builds compile faster, but parsing,
 attachment hashing, and JSON serialization can be substantially slower:
 
 ```bash
-cargo run --release -p message-exporters-slint
+cargo run --release -p message-exporter-gui
 ```
 
-Settings persist in `export.ini` (working directory or next to the binary). Template: [`crates/message-exporters-slint/export.example.ini`](crates/message-exporters-slint/export.example.ini). Backup passwords are never written.
+Settings persist in `export.ini` (working directory or next to the binary). Template: [`crates/message-exporter-gui/export.example.ini`](crates/message-exporter-gui/export.example.ini). Backup passwords are never written.
 
 Compile-time Slint style override (optional):
 
 ```bash
-SLINT_STYLE=fluent cargo build -p message-exporters-slint
+SLINT_STYLE=fluent cargo build -p message-exporter-gui
 ```
 
 ## Helper binaries and environment variables
@@ -110,13 +110,13 @@ Local options:
 ```powershell
 # Windows PowerShell
 $env:MESSAGE_EXPORTERS_BIN = "$PWD\target\release"
-cargo run --release -p message-exporters-slint
+cargo run --release -p message-exporter-gui
 ```
 
 ```bash
 # Linux / macOS
 export MESSAGE_EXPORTERS_BIN="$PWD/target/release"
-cargo run --release -p message-exporters-slint
+cargo run --release -p message-exporter-gui
 ```
 
 ## Test
@@ -158,9 +158,9 @@ Do not edit generated files under `docs/src/content/docs/reference/cli/` by hand
 
 ## Workspace map
 
-- **Libraries:** under `crates/message/` — `ir`, `contacts`, `media`, `mail`, `sbr`, `phone`, `csv`, `obfuscate`; plus `message-exporters-core`
+- **Libraries:** under `crates/message/` — `ir`, `contacts`, `media`, `mail`, `sbr`, `phone`, `csv`, `obfuscate`; plus `message-exporter-core`
 - **Exporter crates:** under `crates/exporters/` — `imessage-ir-exporter`, `whatsapp-exporter`, `sms-backup-restore-exporter`, and experimental converters (GO SMS Pro, iMazing, OpenExtract, SMS Backup+)
-- **GUI:** `message-exporters-slint`
+- **GUI:** `message-exporter-gui`
 - **Utilities:** `vault-push`, `message-reexporter` (package `ir`, `--features cli`)
 
 Most crates are MIT. `imessage-ir-exporter` is **GPL-3.0-or-later** (via `imessage-database` / `crabapple`). The GUI binary therefore includes GPL-licensed code.

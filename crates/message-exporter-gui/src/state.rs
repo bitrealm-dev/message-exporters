@@ -3,7 +3,7 @@
 
 use std::sync::mpsc::Receiver;
 
-use message_exporters_core::{ExportIniState, Exporter, Form, ProcessControl, ProcessEvent};
+use message_exporter_core::{ExportIniState, Exporter, Form, ProcessControl, ProcessEvent};
 
 use crate::session_log::SessionLog;
 
@@ -106,5 +106,5 @@ impl AppState {
 }
 
 pub fn ensure_output_dir_checked(output: &std::path::Path) -> Result<(), String> {
-    message_exporters_core::ensure_output_dir(output)
+    message_exporter_core::ensure_output_dir(output)
 }

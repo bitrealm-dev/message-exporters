@@ -12,7 +12,7 @@ use crabapple::{
     error::BackupError,
 };
 use imessage_database::{tables::table::DEFAULT_PATH_IOS, util::platform::Platform};
-use message_exporters_core::{LogSink, emit_log};
+use message_exporter_core::{LogSink, emit_log};
 
 use crate::{contacts, error::RuntimeError, options::MailOptions};
 
