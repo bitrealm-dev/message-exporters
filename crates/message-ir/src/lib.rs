@@ -44,7 +44,7 @@ use message_mail::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::fs::{self, File};
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 pub const SCHEMA_VERSION: u32 = 3;
@@ -445,9 +445,8 @@ pub fn parse_json_value(s: &str) -> Value {
 fn write_format(
     output_dir: &Path,
     format: OutputFormat,
-    doc: &ConversationDocument,
+    mut doc: ConversationDocument,
 ) -> Result<PathBuf> {
-    let mut doc = doc.clone();
     doc.finalize_stats();
     match format {
         OutputFormat::Csv => write_conversation_csv(output_dir, &doc),
@@ -503,7 +502,8 @@ fn write_conversation_jsonl(output_dir: &Path, doc: &ConversationDocument) -> Re
     let mut tmp = path.clone();
     tmp.set_extension("jsonl.tmp");
     {
-        let mut file = File::create(&tmp).with_context(|| format!("create {}", tmp.display()))?;
+        let file = File::create(&tmp).with_context(|| format!("create {}", tmp.display()))?;
+        let mut file = BufWriter::new(file);
         let header = ConversationHeader::from_document(doc);
         serde_json::to_writer(&mut file, &header).context("serialize JSONL header")?;
         file.write_all(b"\n")?;
@@ -511,6 +511,8 @@ fn write_conversation_jsonl(output_dir: &Path, doc: &ConversationDocument) -> Re
             serde_json::to_writer(&mut file, msg).context("serialize JSONL message")?;
             file.write_all(b"\n")?;
         }
+        file.flush()
+            .with_context(|| format!("flush {}", tmp.display()))?;
     }
     fs::rename(&tmp, &path)
         .with_context(|| format!("rename {} → {}", tmp.display(), path.display()))?;
@@ -934,7 +936,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let doc = sample_doc();
 
-        let json_path = write_format(tmp.path(), OutputFormat::Json, &doc).unwrap();
+        let json_path = write_format(tmp.path(), OutputFormat::Json, doc.clone()).unwrap();
         assert!(json_path.ends_with("+15555550101.json"));
         let raw = fs::read_to_string(&json_path).unwrap();
         let parsed: ConversationDocument = serde_json::from_str(&raw).unwrap();
@@ -964,7 +966,7 @@ mod tests {
         assert!(raw.contains("\"group_title\": null") || raw.contains("\"group_title\":null"));
         assert!(raw.contains("\"imessage\": null") || raw.contains("\"imessage\":null"));
 
-        let jsonl_path = write_format(tmp.path(), OutputFormat::Jsonl, &doc).unwrap();
+        let jsonl_path = write_format(tmp.path(), OutputFormat::Jsonl, doc.clone()).unwrap();
         assert!(jsonl_path.ends_with("+15555550101.jsonl"));
         let jsonl = fs::read_to_string(&jsonl_path).unwrap();
         let mut lines = jsonl.lines();
@@ -977,7 +979,7 @@ mod tests {
         assert!(msg_line["source"]["fields"].is_object());
         assert_eq!(msg_line["source"]["android_type"], 1);
 
-        let csv_path = write_format(tmp.path(), OutputFormat::Csv, &doc).unwrap();
+        let csv_path = write_format(tmp.path(), OutputFormat::Csv, doc.clone()).unwrap();
         let csv = fs::read_to_string(&csv_path).unwrap();
         assert!(csv.contains("hello ir"));
         assert!(csv.contains("sms-backup-restore"));
@@ -986,7 +988,7 @@ mod tests {
         assert!(csv.contains("+15555550100")); // outgoing sender filled
 
         let _ = clean_previous_mail_output(tmp.path());
-        let eml_dir = write_format(tmp.path(), OutputFormat::Eml, &doc).unwrap();
+        let eml_dir = write_format(tmp.path(), OutputFormat::Eml, doc.clone()).unwrap();
         assert!(eml_dir.is_dir());
     }
 
@@ -1098,7 +1100,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let doc = sample_imessage_doc();
 
-        let csv_path = write_format(tmp.path(), OutputFormat::Csv, &doc).unwrap();
+        let csv_path = write_format(tmp.path(), OutputFormat::Csv, doc.clone()).unwrap();
         let csv = fs::read_to_string(&csv_path).unwrap();
         let header_line = csv.lines().next().unwrap();
         assert_eq!(header_line, CSV_HEADERS.join(","));
@@ -1116,7 +1118,7 @@ mod tests {
         assert!(csv.contains("+15555550100")); // outgoing sender / owner
 
         let sbr_doc = sample_doc();
-        let sbr_csv_path = write_format(tmp.path(), OutputFormat::Csv, &sbr_doc).unwrap();
+        let sbr_csv_path = write_format(tmp.path(), OutputFormat::Csv, sbr_doc).unwrap();
         let sbr_csv = fs::read_to_string(&sbr_csv_path).unwrap();
         assert_eq!(sbr_csv.lines().next().unwrap(), CSV_HEADERS.join(","));
         assert!(sbr_csv.contains("xml_fields_json") == false);
@@ -1128,7 +1130,7 @@ mod tests {
         let mut doc = sample_doc();
         doc.packaging_stem_suffix = Some("__whatsapp".into());
         let tmp = tempfile::tempdir().unwrap();
-        let path = write_format(tmp.path(), OutputFormat::Json, &doc).unwrap();
+        let path = write_format(tmp.path(), OutputFormat::Json, doc).unwrap();
         assert!(
             path.file_name()
                 .unwrap()
@@ -1249,12 +1251,12 @@ mod tests {
     fn roundtrip_json_and_jsonl() {
         for doc in [sample_doc(), sample_imessage_doc()] {
             let tmp = tempfile::tempdir().unwrap();
-            let json_path = write_format(tmp.path(), OutputFormat::Json, &doc).unwrap();
+            let json_path = write_format(tmp.path(), OutputFormat::Json, doc.clone()).unwrap();
             let back_json = read_conversation_json(&json_path).unwrap();
             assert_docs_equal_after_normalize(doc.clone(), back_json);
 
             let _ = clean_previous_ir_output(tmp.path());
-            let jsonl_path = write_format(tmp.path(), OutputFormat::Jsonl, &doc).unwrap();
+            let jsonl_path = write_format(tmp.path(), OutputFormat::Jsonl, doc.clone()).unwrap();
             let back_jsonl = read_conversation_jsonl(&jsonl_path).unwrap();
             assert_docs_equal_after_normalize(doc, back_jsonl);
         }
@@ -1265,7 +1267,7 @@ mod tests {
         for doc in [sample_doc(), sample_imessage_doc()] {
             let tmp = tempfile::tempdir().unwrap();
             let _ = clean_previous_mail_output(tmp.path());
-            let eml_dir = write_format(tmp.path(), OutputFormat::Eml, &doc).unwrap();
+            let eml_dir = write_format(tmp.path(), OutputFormat::Eml, doc.clone()).unwrap();
             let back_eml = read_conversation_eml_dir(&eml_dir).unwrap();
             // Outgoing EML must carry sender + owner identity headers.
             let outgoing_eml = fs::read_dir(&eml_dir)
@@ -1285,7 +1287,7 @@ mod tests {
             assert_docs_equal_after_normalize(doc.clone(), back_eml);
 
             let _ = clean_previous_mail_output(tmp.path());
-            let mbox_path = write_format(tmp.path(), OutputFormat::Mbox, &doc).unwrap();
+            let mbox_path = write_format(tmp.path(), OutputFormat::Mbox, doc.clone()).unwrap();
             let back_mbox = read_conversation_mbox(&mbox_path).unwrap();
             assert_docs_equal_after_normalize(doc, back_mbox);
         }
@@ -1309,7 +1311,7 @@ mod tests {
         assert!(!text.contains("Sent with Balloons"));
         assert!(!text.contains("tapback_kind"));
         // write_format(Xml) is intentionally unsupported for multi-chat.
-        assert!(write_format(tmp.path(), OutputFormat::Xml, &sample_doc()).is_err());
+        assert!(write_format(tmp.path(), OutputFormat::Xml, sample_doc()).is_err());
     }
 
     #[test]

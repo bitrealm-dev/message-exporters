@@ -310,9 +310,9 @@ fn main() -> Result<(), slint::PlatformError> {
     Ok(())
 }
 */
-//! Slint desktop GUI for message-exporters.
+//! Vertical-form Slint desktop GUI for message-exporters.
 //!
-//! Additive alternative to `message-exporters-gui` and `message-exporters-web`.
+//! Additive layout experiment cloned from `message-exporters-slint`.
 //! Same in-process exporter libraries, same `export.ini`.
 
 mod browse;
@@ -321,12 +321,10 @@ mod options;
 mod session_log;
 mod state;
 mod sync;
-mod wsl;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 
-use chrono::{Datelike, Local, NaiveDate};
 use jobs::{LibraryJob, library_job_for_exporter, prepare_library_config, run_and_log};
 use message_contacts::{ValidateMode, probe_contacts_input, validate_contacts_file};
 use message_exporters_core::{ProcessEvent, VaultSection, spawn_job};
@@ -345,7 +343,6 @@ const TAB_LOG: i32 = 4;
 
 fn main() -> Result<(), slint::PlatformError> {
     let ui = AppWindow::new()?;
-    ui.set_app_title(format!("Message Exporters {}", env!("CARGO_PKG_VERSION")).into());
     let state = Arc::new(Mutex::new(AppState::load()));
 
     sync::push_static_option_models(&ui);
@@ -356,7 +353,6 @@ fn main() -> Result<(), slint::PlatformError> {
     sync::clear_log_lines(&ui);
 
     wire_about(&ui);
-    wire_help(&ui, Arc::clone(&state));
     wire_contacts(&ui, Arc::clone(&state));
     wire_export(&ui, Arc::clone(&state));
     wire_convert(&ui, Arc::clone(&state));
@@ -374,21 +370,6 @@ fn wire_about(ui: &AppWindow) {
     ui.on_about_toggled(move || {
         if let Some(ui) = ui_weak.upgrade() {
             ui.set_about_open(!ui.get_about_open());
-        }
-    });
-}
-
-fn wire_help(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
-    const DOCS_URL: &str = "https://bitrealm-dev.github.io/message-exporters/";
-
-    let ui_weak = ui.as_weak();
-    ui.on_help_requested(move || {
-        if let Err(error) = wsl::open_url(DOCS_URL)
-            && let Some(ui) = ui_weak.upgrade()
-        {
-            let mut st = state.lock().expect("state lock");
-            st.set_errors(vec![format!("Could not open help: {error}")]);
-            sync::push_chrome(&ui, &st);
         }
     });
 }
@@ -417,16 +398,6 @@ fn wire_contacts(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
 
 fn wire_export(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
     let ui_weak = ui.as_weak();
-
-    ui.global::<ExportAdapter>().on_date_for_text(|value| {
-        let date = NaiveDate::parse_from_str(value.trim(), "%Y-%m-%d")
-            .unwrap_or_else(|_| Local::now().date_naive());
-        Date {
-            year: date.year(),
-            month: i32::try_from(date.month()).expect("month fits in i32"),
-            day: i32::try_from(date.day()).expect("day fits in i32"),
-        }
-    });
 
     ui.global::<ExportAdapter>().on_browse({
         let ui_weak = ui_weak.clone();

@@ -87,15 +87,16 @@ fn convert_export(input_dir: &Path, config: &ExporterConfig) -> Result<ReexportR
         bail!("no conversations loaded from {}", input_dir.display());
     }
 
+    let conversations = documents.len();
     let mut sink = FormatSink::open(&config.output, config.output_format, transforms)?;
-    for document in &documents {
+    for document in documents {
         sink.write_document(document)?;
     }
     let sink = sink.finish()?;
 
     Ok(ReexportReport {
         detected_format: detected.format.as_str().to_string(),
-        conversations: documents.len(),
+        conversations,
         sink,
     })
 }
@@ -423,7 +424,7 @@ mod tests {
         fs::create_dir_all(dir).unwrap();
         clean_previous_ir_output(dir).unwrap();
         let mut sink = FormatSink::open(dir, format, ExportTransforms::none()).unwrap();
-        sink.write_document(&sample_doc()).unwrap();
+        sink.write_document(sample_doc()).unwrap();
         sink.finish().unwrap();
     }
 
@@ -545,7 +546,7 @@ mod tests {
         write_fixture(source.path(), OutputFormat::Json);
         let mut sink =
             FormatSink::open(source.path(), OutputFormat::Csv, ExportTransforms::none()).unwrap();
-        sink.write_document(&sample_doc()).unwrap();
+        sink.write_document(sample_doc()).unwrap();
         sink.finish().unwrap();
         let error = detect_ir_export(source.path()).unwrap_err().to_string();
         assert!(error.contains("mixed"), "{error}");

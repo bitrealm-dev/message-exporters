@@ -1,7 +1,9 @@
 //! Native file/folder pickers via `rfd`, run off the Slint UI thread so the
 //! event loop is never blocked (Wayland compositors treat a blocked UI as hung).
 
-use std::path::PathBuf;
+use std::io;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use slint::{ComponentHandle, SharedString, Weak};
 
@@ -36,14 +38,7 @@ pub fn browse_kind_for_field(field_id: &str) -> BrowseKind {
 /// Spawn a background dialog, then apply the picked path on the UI thread.
 pub fn pick_path(ui_weak: Weak<AppWindow>, field_id: String, kind: BrowseKind) {
     std::thread::spawn(move || {
-        let dialog = rfd::FileDialog::new().set_title("Choose path");
-        let picked: Option<PathBuf> = match kind {
-            BrowseKind::File => dialog.pick_file(),
-            BrowseKind::Folder => dialog.pick_folder(),
-            BrowseKind::FileOrFolder => dialog
-                .pick_folder()
-                .or_else(|| rfd::FileDialog::new().set_title("Choose file").pick_file()),
-        };
+        let picked = pick_path_blocking(kind);
         let Some(path) = picked else {
             return;
         };
@@ -53,6 +48,112 @@ pub fn pick_path(ui_weak: Weak<AppWindow>, field_id: String, kind: BrowseKind) {
         });
     });
 }
+
+fn pick_path_blocking(kind: BrowseKind) -> Option<PathBuf> {
+    if crate::wsl::is_wsl() {
+        match pick_with_windows_dialog(kind) {
+            Ok(picked) => return picked,
+            Err(error) => eprintln!("Windows file picker failed; using Linux picker: {error}"),
+        }
+    }
+
+    let dialog = rfd::FileDialog::new().set_title("Choose path");
+    match kind {
+        BrowseKind::File => dialog.pick_file(),
+        BrowseKind::Folder => dialog.pick_folder(),
+        BrowseKind::FileOrFolder => dialog
+            .pick_folder()
+            .or_else(|| rfd::FileDialog::new().set_title("Choose file").pick_file()),
+    }
+}
+
+fn pick_with_windows_dialog(kind: BrowseKind) -> io::Result<Option<PathBuf>> {
+    let script = match kind {
+        BrowseKind::File => WINDOWS_FILE_PICKER,
+        BrowseKind::Folder => WINDOWS_FOLDER_PICKER,
+        BrowseKind::FileOrFolder => WINDOWS_FILE_OR_FOLDER_PICKER,
+    };
+    let output = Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-STA", "-Command", script])
+        .output()?;
+    if !output.status.success() {
+        return Err(io::Error::other(format!(
+            "PowerShell exited with {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+
+    let selected = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if selected.is_empty() {
+        return Ok(None);
+    }
+    windows_to_wsl_path(Path::new(&selected)).map(Some)
+}
+
+fn windows_to_wsl_path(path: &Path) -> io::Result<PathBuf> {
+    let output = Command::new("wslpath").arg("-u").arg(path).output()?;
+    if !output.status.success() {
+        return Err(io::Error::other(format!(
+            "wslpath exited with {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    let converted = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if converted.is_empty() {
+        Err(io::Error::other("wslpath returned an empty path"))
+    } else {
+        Ok(PathBuf::from(converted))
+    }
+}
+
+const WINDOWS_FILE_PICKER: &str = concat!(
+    r#"
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+Add-Type -AssemblyName System.Windows.Forms
+$dialog = New-Object System.Windows.Forms.OpenFileDialog
+$dialog.Title = 'Choose file'
+$dialog.CheckFileExists = $true
+if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+    [Console]::Write($dialog.FileName)
+}
+"#
+);
+
+const WINDOWS_FOLDER_PICKER: &str = concat!(
+    r#"
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+Add-Type -AssemblyName System.Windows.Forms
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$dialog.Description = 'Choose folder'
+$dialog.ShowNewFolderButton = $true
+if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+    [Console]::Write($dialog.SelectedPath)
+}
+"#
+);
+
+const WINDOWS_FILE_OR_FOLDER_PICKER: &str = concat!(
+    r#"
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+Add-Type -AssemblyName System.Windows.Forms
+$sentinel = '__MESSAGE_EXPORTERS_SELECT_THIS_FOLDER__'
+$dialog = New-Object System.Windows.Forms.OpenFileDialog
+$dialog.Title = 'Choose file or open a folder and select Choose'
+$dialog.CheckFileExists = $false
+$dialog.CheckPathExists = $true
+$dialog.ValidateNames = $false
+$dialog.FileName = $sentinel
+if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+    $selected = $dialog.FileName
+    if ([System.IO.Path]::GetFileName($selected) -eq $sentinel) {
+        $selected = [System.IO.Path]::GetDirectoryName($selected)
+    }
+    [Console]::Write($selected)
+}
+"#
+);
 
 fn apply_path(ui: &AppWindow, field_id: &str, path: SharedString) {
     match field_id {

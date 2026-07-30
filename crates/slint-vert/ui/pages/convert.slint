@@ -2,7 +2,7 @@ import { Button } from "std-widgets.slint";
 import {
     LabeledLineEdit, LabeledPathField, LabeledComboBox,
     Hint, DangerHint, ActionRow, SectionHeading, SectionDivider,
-    PageSummary, CheckBoxRow, AnchoredScrollPage
+    PageHeader, CheckBoxRow, AnchoredScrollPage
 } from "../widgets.slint";
 
 export global ConvertAdapter {
@@ -33,8 +33,9 @@ export global ConvertAdapter {
 }
 
 export component ConvertPage inherits AnchoredScrollPage {
-    PageSummary {
-        message: "Convert an existing Message Exporter archive to another format. The input format is automatically detected.";
+    PageHeader { title: "Format"; }
+    Hint {
+        message: "Format a prior Message Exporters output directory as another file type. The input format is auto-detected (csv, eml, mbox, json, jsonl, or xml).";
     }
 
     LabeledPathField {

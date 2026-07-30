@@ -814,7 +814,7 @@ pub(crate) fn convert_export<P: AsRef<Path>>(
             continue;
         }
         let doc = pending_to_document(&chat_id, &convo, &owner_handle, &mut report)?;
-        sink.write_document(&doc)?;
+        sink.write_document(doc)?;
         report.conversations += 1;
         written += 1;
         report_progress(verbose, log, "wrote", written, convo_total);

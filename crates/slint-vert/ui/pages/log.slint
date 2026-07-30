@@ -1,7 +1,5 @@
 import { Button, ListView, Spinner } from "std-widgets.slint";
-import {
-    ActionRow, Hint, PageSummary, FormMetrics
-} from "../widgets.slint";
+import { ActionRow, Hint, SectionHeading, FormMetrics } from "../widgets.slint";
 
 export global LogAdapter {
     in property <[string]> lines;
@@ -17,15 +15,12 @@ export component LogPage inherits VerticalLayout {
     spacing: FormMetrics.row-spacing;
     alignment: stretch;
 
-    PageSummary {
-        message: "Review progress and errors from the current or most recent operation.";
-    }
-
     HorizontalLayout {
         spacing: 8px;
         padding: 0;
         alignment: start;
         vertical-stretch: 0;
+        SectionHeading { title: "Log"; }
         if LogAdapter.running: Spinner { }
         Text {
             text: LogAdapter.session-log-name == "" ? "(no session log)" : LogAdapter.session-log-name;

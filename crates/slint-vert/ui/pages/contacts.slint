@@ -1,6 +1,6 @@
 import { Button } from "std-widgets.slint";
 import {
-    LabeledPathField, LabeledComboBox, ActionRow, PageSummary, PageColumn
+    LabeledPathField, LabeledComboBox, Hint, ActionRow, PageHeader, PageColumn
 } from "../widgets.slint";
 
 export global ContactsAdapter {
@@ -15,9 +15,7 @@ export global ContactsAdapter {
 }
 
 export component ContactsPage inherits PageColumn {
-    PageSummary {
-        message: "Analyze the phone number format of a contacts file or write a corrected copy with normalized phone numbers.";
-    }
+    PageHeader { title: "Validate contacts"; }
 
     LabeledPathField {
         label: "Contacts file";
@@ -34,12 +32,16 @@ export component ContactsPage inherits PageColumn {
         current-index <=> ContactsAdapter.region-index;
     }
 
+    Hint {
+        message: "Check analyzes the file without writing. Update writes a corrected copy beside the original.";
+    }
+
     // Pin dialog actions to the bottom-right of the tab.
     Rectangle { vertical-stretch: 1; }
 
     ActionRow {
         Button {
-            text: "Analyze";
+            text: "Check";
             enabled: ContactsAdapter.enabled;
             clicked => { ContactsAdapter.check(); }
         }

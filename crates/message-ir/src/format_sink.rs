@@ -83,8 +83,8 @@ impl FormatSink {
         &self.transforms
     }
 
-    pub fn write_document(&mut self, doc: &ConversationDocument) -> Result<()> {
-        self.docs.push(doc.clone());
+    pub fn write_document(&mut self, doc: ConversationDocument) -> Result<()> {
+        self.docs.push(doc);
         Ok(())
     }
 
@@ -114,7 +114,7 @@ impl FormatSink {
             }
             result.xml_path = Some(session.finish()?);
         } else {
-            for doc in &self.docs {
+            for doc in self.docs {
                 write_format(&self.output_dir, self.format, doc)?;
             }
         }
@@ -190,7 +190,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut sink =
             FormatSink::open(tmp.path(), OutputFormat::Csv, ExportTransforms::none()).unwrap();
-        sink.write_document(&tiny_doc("hello")).unwrap();
+        sink.write_document(tiny_doc("hello")).unwrap();
         sink.finish().unwrap();
         assert!(tmp.path().join("+15555550101.csv").is_file());
     }
@@ -200,11 +200,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut sink =
             FormatSink::open(tmp.path(), OutputFormat::Xml, ExportTransforms::none()).unwrap();
-        sink.write_document(&tiny_doc("one")).unwrap();
+        sink.write_document(tiny_doc("one")).unwrap();
         let mut doc2 = tiny_doc("two");
         doc2.messages[0].guid = "guid-2".into();
         doc2.messages[0].timestamp_unix_ms = 1_400_773_262_000;
-        sink.write_document(&doc2).unwrap();
+        sink.write_document(doc2).unwrap();
         let result = sink.finish().unwrap();
         let path = result.xml_path.expect("smses.xml");
         let text = fs::read_to_string(path).unwrap();
@@ -238,7 +238,7 @@ mod tests {
             ..ExportTransforms::none()
         };
         let mut sink = FormatSink::open(tmp.path(), OutputFormat::Eml, transforms).unwrap();
-        sink.write_document(&doc).unwrap();
+        sink.write_document(doc).unwrap();
         sink.finish().unwrap();
 
         assert!(!tmp.path().join("attachments").exists());
@@ -263,7 +263,7 @@ mod tests {
 
         let mut sink =
             FormatSink::open(tmp.path(), OutputFormat::Csv, ExportTransforms::none()).unwrap();
-        sink.write_document(&tiny_doc("hello")).unwrap();
+        sink.write_document(tiny_doc("hello")).unwrap();
         sink.finish().unwrap();
         assert!(tmp.path().join("attachments/photo.jpg").is_file());
     }
@@ -277,7 +277,7 @@ mod tests {
             ..ExportTransforms::none()
         };
         let mut sink = FormatSink::open(tmp.path(), OutputFormat::Csv, transforms).unwrap();
-        sink.write_document(&tiny_doc("secret")).unwrap();
+        sink.write_document(tiny_doc("secret")).unwrap();
         let result = sink.finish().unwrap();
         assert_eq!(result.obfuscated_docs, 1);
         let mut found = false;

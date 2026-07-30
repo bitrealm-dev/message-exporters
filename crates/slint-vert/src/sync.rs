@@ -16,7 +16,6 @@ use crate::{AppWindow, ContactsAdapter, ConvertAdapter, ExportAdapter, LogAdapte
 pub fn push_static_option_models(ui: &AppWindow) {
     let export = ui.global::<ExportAdapter>();
     export.set_exporter_options(options::exporter_options());
-    export.set_exporter_separator_before_index(options::exporter_separator_before_index());
     export.set_attachment_media_options(options::attachment_media_options());
     export.set_max_resolution_options(options::max_resolution_options());
     export.set_apple_platform_options(options::apple_platform_options());

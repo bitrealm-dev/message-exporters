@@ -51,6 +51,15 @@ use crate::{
 
 const EXPORT_SOURCE: &str = "imessage";
 const EXPORT_TOOL: &str = "imessage-ir-exporter";
+const DEFAULT_MESSAGE_PROGRESS_EVERY: u64 = 500;
+const JSONL_MESSAGE_PROGRESS_EVERY: u64 = 1_000;
+
+const fn message_progress_every(format: OutputFormat) -> u64 {
+    match format {
+        OutputFormat::Jsonl => JSONL_MESSAGE_PROGRESS_EVERY,
+        _ => DEFAULT_MESSAGE_PROGRESS_EVERY,
+    }
+}
 
 /// Messages accumulated for one Apple `chat_identifier` before projection.
 struct PendingConversation {
@@ -125,7 +134,7 @@ pub(crate) fn run_export(session: &MailSession) -> Result<FormatSinkResult, Runt
             }
         }
         current_message += 1;
-        if current_message.is_multiple_of(500) {
+        if current_message.is_multiple_of(message_progress_every(format)) {
             session
                 .options
                 .emit_log(format!("  …{current_message}/{total_messages}"));
@@ -191,11 +200,12 @@ pub(crate) fn run_export(session: &MailSession) -> Result<FormatSinkResult, Runt
             messages,
             packaging_stem_suffix: None,
         };
-        sink.write_document(&doc).map_err(|e| {
+        let document_id = doc.conversation.chat_identifier.clone();
+        sink.write_document(doc).map_err(|e| {
             RuntimeError::InvalidOptions(format!(
                 "write {} for {}: {e:#}",
                 format.as_str(),
-                doc.conversation.chat_identifier
+                document_id
             ))
         })?;
         if written.is_multiple_of(50) || written == total_conversations {
@@ -330,6 +340,23 @@ fn mail_message_to_ir(
         imessage: imessage_bag(mail),
         source: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn jsonl_progress_is_less_frequent_than_other_formats() {
+        assert_eq!(
+            message_progress_every(OutputFormat::Jsonl),
+            JSONL_MESSAGE_PROGRESS_EVERY
+        );
+        assert_eq!(
+            message_progress_every(OutputFormat::Json),
+            DEFAULT_MESSAGE_PROGRESS_EVERY
+        );
+    }
 }
 
 /// Build typed [`IrImessage`] from `MailMessage` extension fields.

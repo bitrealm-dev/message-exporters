@@ -64,7 +64,7 @@ pub(crate) fn convert_export(
 
     let mut sink = FormatSink::open(output_dir, output_format, transforms)?;
     for document in documents {
-        sink.write_document(&document)?;
+        sink.write_document(document)?;
     }
     Ok((report, sink.finish()?))
 }

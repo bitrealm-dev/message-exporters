@@ -1,0 +1,316 @@
+import { Button, CheckBox, ComboBox, LineEdit, ScrollView, TextEdit } from "std-widgets.slint";
+
+// Vertical workflow form:
+//   label
+//   [ flexible control | optional trailing button ]
+// IMPORTANT: use Layout primitives with padding: 0 — HorizontalBox/VerticalBox
+// inject StyleMetrics.layout-padding (8px Fluent) and inflate every row.
+export global FormMetrics {
+    out property <length> button-width: 36px;
+    out property <length> field-spacing: 4px;
+    out property <length> page-padding: 12px;
+    out property <length> row-spacing: 10px;
+    out property <length> section-spacing: 10px;
+    out property <length> row-height: 32px;
+    out property <length> label-height: 20px;
+}
+
+// Full-width label above its editor.
+export component FieldLabel inherits HorizontalLayout {
+    in property <string> label;
+    in property <bool> required: false;
+    height: FormMetrics.label-height;
+    spacing: 2px;
+    padding: 0;
+    alignment: start;
+    vertical-stretch: 0;
+    horizontal-stretch: 1;
+
+    Text {
+        text: root.label;
+        font-size: 12px;
+        vertical-alignment: center;
+        horizontal-alignment: left;
+        overflow: elide;
+        horizontal-stretch: 0;
+        vertical-stretch: 0;
+    }
+    if root.required: Text {
+        text: "*";
+        font-size: 12px;
+        color: #c0392b;
+        vertical-alignment: center;
+        vertical-stretch: 0;
+        horizontal-stretch: 0;
+    }
+}
+
+// A field block: label above a full-width editor row.
+export component FormRow inherits VerticalLayout {
+    in property <string> label;
+    in property <bool> required: false;
+    // Retained for page/component compatibility; vertical rows need no gutter.
+    in property <bool> has-trailing: false;
+    spacing: FormMetrics.field-spacing;
+    padding: 0;
+    alignment: start;
+    vertical-stretch: 0;
+    height: self.preferred-height;
+
+    FieldLabel {
+        label: root.label;
+        required: root.required;
+    }
+
+    HorizontalLayout {
+        spacing: FormMetrics.field-spacing;
+        padding: 0;
+        alignment: stretch;
+        horizontal-stretch: 1;
+        vertical-stretch: 0;
+        @children
+    }
+}
+
+export component LabeledLineEdit inherits FormRow {
+    in property <string> placeholder: "";
+    in-out property <string> value;
+    in property <bool> password: false;
+    in property <bool> enabled: true;
+    has-trailing: false;
+
+    if !root.password: LineEdit {
+        text <=> root.value;
+        placeholder-text: root.placeholder;
+        enabled: root.enabled;
+        horizontal-stretch: 1;
+        vertical-stretch: 0;
+        height: FormMetrics.row-height;
+    }
+    if root.password: LineEdit {
+        text <=> root.value;
+        placeholder-text: root.placeholder;
+        enabled: root.enabled;
+        input-type: InputType.password;
+        horizontal-stretch: 1;
+        vertical-stretch: 0;
+        height: FormMetrics.row-height;
+    }
+}
+
+export component LabeledTextEdit inherits FormRow {
+    in property <string> placeholder: "";
+    in-out property <string> value;
+    has-trailing: false;
+
+    TextEdit {
+        text <=> root.value;
+        horizontal-stretch: 1;
+        vertical-stretch: 0;
+        preferred-height: 56px;
+        min-height: 56px;
+    }
+}
+
+export component LabeledPathField inherits FormRow {
+    in property <string> placeholder: "";
+    in property <string> field-id;
+    in-out property <string> value;
+    callback browse-requested(string);
+    has-trailing: true;
+
+    LineEdit {
+        text <=> root.value;
+        placeholder-text: root.placeholder;
+        horizontal-stretch: 1;
+        vertical-stretch: 0;
+        height: FormMetrics.row-height;
+    }
+    Button {
+        text: "…";
+        width: FormMetrics.button-width;
+        height: FormMetrics.row-height;
+        vertical-stretch: 0;
+        horizontal-stretch: 0;
+        clicked => { root.browse-requested(root.field-id); }
+    }
+}
+
+export component LabeledComboBox inherits FormRow {
+    in property <[string]> model;
+    in-out property <int> current-index;
+    callback selected(string);
+    has-trailing: false;
+
+    ComboBox {
+        model: root.model;
+        current-index <=> root.current-index;
+        selected(value) => { root.selected(value); }
+        horizontal-stretch: 1;
+        vertical-stretch: 0;
+        height: FormMetrics.row-height;
+    }
+}
+
+export component CheckBoxRow inherits HorizontalLayout {
+    in property <string> text;
+    in-out property <bool> checked;
+    padding: 0;
+    vertical-stretch: 0;
+    height: FormMetrics.row-height;
+
+    CheckBox {
+        text: root.text;
+        checked <=> root.checked;
+        horizontal-stretch: 1;
+        vertical-stretch: 0;
+        height: FormMetrics.row-height;
+    }
+}
+
+export component AdvancedSection inherits VerticalLayout {
+    in-out property <bool> open: false;
+    spacing: FormMetrics.row-spacing;
+    padding: 0;
+    vertical-stretch: 0;
+
+    Button {
+        text: root.open ? "⌄  Advanced options" : "›  Advanced options";
+        vertical-stretch: 0;
+        horizontal-stretch: 1;
+        height: FormMetrics.row-height;
+        clicked => { root.open = !root.open; }
+    }
+
+    // @children cannot live inside `if`; clip/height toggles visibility instead.
+    Rectangle {
+        visible: root.open;
+        height: root.open ? self.preferred-height : 0px;
+        clip: true;
+        vertical-stretch: 0;
+        VerticalLayout {
+            spacing: FormMetrics.row-spacing;
+            padding: 0;
+            vertical-stretch: 0;
+            @children
+        }
+    }
+}
+
+export component Hint inherits Text {
+    in property <string> message;
+    text: root.message;
+    font-size: 11px;
+    wrap: word-wrap;
+    color: #555555;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+}
+
+export component DangerHint inherits Text {
+    in property <string> message;
+    text: root.message;
+    font-size: 11px;
+    color: #c0392b;
+    wrap: word-wrap;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+}
+
+export component SectionHeading inherits Text {
+    in property <string> title;
+    text: root.title;
+    font-size: 13px;
+    font-weight: 700;
+    vertical-alignment: center;
+    vertical-stretch: 0;
+    height: 28px;
+}
+
+export component SectionDivider inherits Rectangle {
+    height: 1px;
+    background: #c0c0c0;
+    vertical-stretch: 0;
+}
+
+export component PageHeader inherits HorizontalLayout {
+    in property <string> title;
+    in property <bool> show-required: true;
+    spacing: 8px;
+    padding: 0;
+    alignment: start;
+    vertical-stretch: 0;
+    height: 28px;
+
+    Text {
+        text: root.title;
+        font-size: 13px;
+        font-weight: 700;
+        vertical-alignment: center;
+        vertical-stretch: 0;
+    }
+    if root.show-required: Text {
+        text: "* Required field";
+        font-size: 11px;
+        color: #555555;
+        vertical-alignment: center;
+        vertical-stretch: 0;
+    }
+}
+
+export component ActionRow inherits HorizontalLayout {
+    spacing: 8px;
+    padding-top: FormMetrics.section-spacing;
+    padding-bottom: 0;
+    padding-left: 0;
+    padding-right: 0;
+    alignment: end;
+    vertical-stretch: 0;
+    @children
+}
+
+// Fill-tab page shell: page margin only, children pack to top.
+export component PageColumn inherits VerticalLayout {
+    padding: FormMetrics.page-padding;
+    spacing: FormMetrics.row-spacing;
+    alignment: start;
+    vertical-stretch: 1;
+    width: 100%;
+    height: 100%;
+    @children
+}
+
+// Content column inside ScrollView: pinned to the viewport's top-left.
+// Width follows the viewport so fields stretch; height tracks preferred size
+// so expanding the window never vertically redistributes form rows.
+export component ScrollForm inherits VerticalLayout {
+    padding: FormMetrics.page-padding;
+    spacing: FormMetrics.row-spacing;
+    alignment: start;
+    vertical-stretch: 0;
+    horizontal-stretch: 0;
+    x: 0px;
+    y: 0px;
+    width: 100%;
+    height: self.preferred-height;
+    @children
+}
+
+// Scrollable form page whose content stays anchored at the top-left when the
+// window grows. Extra space appears below/right; content scrolls when taller
+// than the visible area.
+export component AnchoredScrollPage inherits ScrollView {
+    vertical-stretch: 1;
+    horizontal-stretch: 1;
+    // Match the visible width so fields stay left-aligned; height follows the
+    // form so Flickable cannot center a shorter preferred-size layout.
+    viewport-width: self.visible-width;
+    viewport-height: form.preferred-height;
+
+    form := ScrollForm {
+        width: root.viewport-width;
+        x: 0px;
+        y: 0px;
+        @children
+    }
+}

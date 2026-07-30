@@ -70,11 +70,13 @@ cargo build --release -p vault-push --features cli
 | egui desktop GUI | `cargo run -p message-exporters-gui` | Default desktop app |
 | Web GUI | `cargo run -p message-exporters-web` | Browser UI on `127.0.0.1` — useful when egui looks blurry on high-DPI Windows |
 | Slint desktop GUI | `cargo run -p message-exporters-slint` | Retained-mode widgets; same features and `export.ini` |
+| Vertical Slint experiment | `cargo run -p slint-vert` | Workspace-only variant with labels above fields and top-to-bottom tab workflows |
 
-Add `--release` after `run` for a faster binary (slower compile):
+Use a release build when testing real exports. Debug builds compile faster, but parsing,
+attachment hashing, and JSON serialization can be substantially slower:
 
 ```bash
-cargo run --release -p message-exporters-gui
+cargo run --release -p message-exporters-slint
 ```
 
 Settings persist in `export.ini` (working directory or next to the binary). Template: [`crates/message-exporters-gui/export.example.ini`](crates/message-exporters-gui/export.example.ini). Backup passwords are never written.
@@ -162,7 +164,7 @@ Do not edit generated files under `docs/src/content/docs/reference/cli/` by hand
 
 - **Libraries:** `message-ir`, `message-exporters-core`, `message-contacts`, `message-media`, `message-mail`, `message-sbr`, …
 - **Exporter crates:** `imessage-ir-exporter`, `whatsapp-exporter`, `sms-backup-restore-exporter`, and experimental converters (GO SMS Pro, iMazing, OpenExtract, SMS Backup+)
-- **GUIs:** `message-exporters-gui`, `message-exporters-web`, `message-exporters-slint`
+- **GUIs:** `message-exporters-gui`, `message-exporters-web`, `message-exporters-slint`, `slint-vert` (experimental)
 - **Utilities:** `vault-push`, `message-reexporter` (package `message-ir`, `--features cli`)
 
 Most crates are MIT. `imessage-ir-exporter` is **GPL-3.0-or-later** (via `imessage-database` / `crabapple`). The combined GUI binaries therefore include GPL-licensed code.

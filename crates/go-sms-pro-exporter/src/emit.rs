@@ -762,7 +762,7 @@ pub(crate) fn convert_export(
             continue;
         }
         let doc = pending_to_document(&chat_id, &convo, &owner_handle, &mut report)?;
-        sink.write_document(&doc)?;
+        sink.write_document(doc)?;
         report.conversations += 1;
     }
 

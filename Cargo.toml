@@ -20,5 +20,6 @@ members = [
     "crates/message-exporters-gui",
     "crates/message-exporters-web",
     "crates/message-exporters-slint",
+    "crates/slint-vert",
     "crates/vault-push",
 ]

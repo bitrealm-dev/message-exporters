@@ -44,6 +44,65 @@ Or try the Slint desktop GUI (retained-mode widgets; same features and `export.i
 cargo run --release -p message-exporters-slint
 ```
 
+### WSL2 development
+
+Use WSL2 with WSLg enabled and keep the repository in the Linux filesystem
+(`~/repo/...`), not under `/mnt/c`. From Windows PowerShell, update WSL before
+setting up the Linux environment:
+
+```powershell
+wsl --update
+wsl --shutdown
+```
+
+Inside Ubuntu, install the compiler and GUI libraries:
+
+```bash
+sudo apt update
+sudo apt install \
+  build-essential pkg-config curl git libfontconfig1-dev \
+  libxkbcommon-x11-0 libxkbcommon0 \
+  libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+  libxkbcommon-dev libxkbcommon-x11-dev
+```
+
+Install Rust inside WSL rather than using a Windows Rust installation:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
+
+Install [nvm](https://github.com/nvm-sh/nvm) and Node.js 24 inside WSL. This
+prevents WSL from invoking Windows `npm.cmd`, which fails when the current
+directory is a `\\wsl.localhost\...` path:
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.6/install.sh | bash
+source ~/.bashrc
+nvm install 24
+nvm alias default 24
+```
+
+Confirm that Linux owns the active tools:
+
+```bash
+command -v cargo node npm
+node --version
+npm --version
+```
+
+The paths should be under `/home/...`, not `/mnt/c/...` or `C:\...`. The Slint
+app automatically opens Windows-native file dialogs and the Windows browser
+when it detects WSL. Build it in release mode for realistic export performance:
+
+```bash
+cargo run --release -p message-exporters-slint
+```
+
+More Linux package details and optional helpers such as `ffmpeg` are documented
+in [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Supported exporters
 
 | Backup | Converter |

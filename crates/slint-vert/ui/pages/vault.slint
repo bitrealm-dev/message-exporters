@@ -1,6 +1,6 @@
 import { Button } from "std-widgets.slint";
 import {
-    LabeledLineEdit, LabeledPathField, Hint, ActionRow, PageSummary,
+    LabeledLineEdit, LabeledPathField, Hint, ActionRow, PageHeader,
     CheckBoxRow, AnchoredScrollPage
 } from "../widgets.slint";
 
@@ -21,8 +21,9 @@ export global VaultAdapter {
 }
 
 export component VaultPage inherits AnchoredScrollPage {
-    PageSummary {
-        message: "Import a JSONL archive into Message Vault using an Import API token.";
+    PageHeader { title: "Vault"; }
+    Hint {
+        message: "Import a Message Exporters JSONL folder into Message Vault. Use Extract Messages first, then enter your Import API token (Vault key) from Vault Settings.";
     }
 
     LabeledLineEdit {

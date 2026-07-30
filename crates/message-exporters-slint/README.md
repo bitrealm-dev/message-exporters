@@ -39,7 +39,9 @@ controls, ~4px row gaps, content packed at the top). Form rows use bare
 `HorizontalLayout`/`VerticalLayout` — not `HorizontalBox`/`VerticalBox`, which
 inject Fluent's 8px `layout-padding` per side and inflate every row. Ordinary
 fields do not stretch when you grow the window vertically; only the Log viewer
-does. Override the style at compile time with `SLINT_STYLE` if needed:
+does. Dropdown menus use compact rows; Backup type separates supported sources
+from the Experimental group. Override the style at compile time with
+`SLINT_STYLE` if needed:
 
 ```bash
 SLINT_STYLE=fluent cargo run -p message-exporters-slint
@@ -55,6 +57,7 @@ SLINT_STYLE=fluent cargo run -p message-exporters-slint
 - Forms for GO SMS Pro, SMS Backup & Restore, SMS Backup+, OpenExtract, iMazing, WhatsApp, and iPhone backup
 - Native file/folder dialogs via `rfd`
 - Live run log with cooperative cancel
+- Help button linking to the published user documentation
 - About dialog with Slint attribution (`AboutSlint`) for the Royalty-free license
 
 Architecture notes: [`../../docs/maintainers/slint-gui.md`](../../docs/maintainers/slint-gui.md).

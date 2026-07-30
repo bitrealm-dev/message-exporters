@@ -7,15 +7,6 @@ use message_exporters_core::{
 use message_media::MaxResolution;
 use slint::{ModelRc, SharedString, VecModel};
 
-const OUTPUT_FORMATS_ALPHABETICAL: [OutputFormat; OUTPUT_FORMATS_MAIL.len()] = [
-    OutputFormat::Csv,
-    OutputFormat::Eml,
-    OutputFormat::Json,
-    OutputFormat::Jsonl,
-    OutputFormat::Mbox,
-    OutputFormat::Xml,
-];
-
 pub const UTC_OFFSETS: &[&str] = &[
     "UTC-12:00",
     "UTC-11:00",
@@ -66,19 +57,8 @@ pub fn exporter_options() -> ModelRc<SharedString> {
     model_from_labels(EXPORTERS.iter().map(|e| e.dropdown_label()))
 }
 
-pub fn exporter_separator_before_index() -> i32 {
-    EXPORTERS
-        .iter()
-        .position(|exporter| !exporter.is_supported())
-        .map_or(-1, |index| index as i32)
-}
-
 pub fn output_format_options() -> ModelRc<SharedString> {
-    model_from_labels(
-        OUTPUT_FORMATS_ALPHABETICAL
-            .iter()
-            .map(|f| f.as_str().to_string()),
-    )
+    model_from_labels(OUTPUT_FORMATS_MAIL.iter().map(|f| f.as_str().to_string()))
 }
 
 pub fn attachment_media_options() -> ModelRc<SharedString> {
@@ -124,14 +104,14 @@ pub fn exporter_at(index: i32) -> Exporter {
 }
 
 pub fn output_format_index(format: OutputFormat) -> i32 {
-    OUTPUT_FORMATS_ALPHABETICAL
+    OUTPUT_FORMATS_MAIL
         .iter()
         .position(|&f| f == format)
         .unwrap_or(0) as i32
 }
 
 pub fn output_format_at(index: i32) -> OutputFormat {
-    OUTPUT_FORMATS_ALPHABETICAL
+    OUTPUT_FORMATS_MAIL
         .get(index as usize)
         .copied()
         .unwrap_or_default()
@@ -211,15 +191,5 @@ pub fn timezone_at(index: i32) -> String {
             .copied()
             .unwrap_or("")
             .to_string()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::exporter_separator_before_index;
-
-    #[test]
-    fn experimental_exporters_start_after_supported_exporters() {
-        assert_eq!(exporter_separator_before_index(), 3);
     }
 }

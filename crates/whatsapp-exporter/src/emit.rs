@@ -128,7 +128,7 @@ pub(crate) fn convert_json(
             continue;
         }
         let doc = pending_to_document(&chat_id, &convo, &mut report)?;
-        sink.write_document(&doc)?;
+        sink.write_document(doc)?;
         report.conversations += 1;
     }
     let sink_result = sink.finish()?;

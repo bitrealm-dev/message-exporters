@@ -6857,6 +6857,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "slint-vert"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "go-sms-pro-exporter",
+ "imazing-exporter",
+ "imessage-ir-exporter",
+ "message-contacts",
+ "message-exporters-core",
+ "message-ir",
+ "message-media",
+ "message-phone",
+ "open",
+ "openextract-exporter",
+ "rfd",
+ "slint",
+ "slint-build",
+ "sms-backup-plus-exporter",
+ "sms-backup-restore-exporter",
+ "vault-push",
+ "whatsapp-exporter",
+]
+
+[[package]]
 name = "slotmap"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

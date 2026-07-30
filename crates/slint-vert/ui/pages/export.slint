@@ -1,15 +1,14 @@
-import { Button, Date } from "std-widgets.slint";
+import { Button } from "std-widgets.slint";
 import {
-    LabeledDateEdit, LabeledLineEdit, LabeledPathField, LabeledTextEdit, LabeledComboBox,
+    LabeledLineEdit, LabeledPathField, LabeledTextEdit, LabeledComboBox,
     AdvancedSection, Hint, DangerHint, ActionRow, SectionHeading, SectionDivider,
-    PageSummary, CheckBoxRow, AnchoredScrollPage
+    PageHeader, CheckBoxRow, AnchoredScrollPage
 } from "../widgets.slint";
 
 export global ExportAdapter {
     in-out property <string> exporter-key;
     in-out property <int> exporter-index;
     in property <[string]> exporter-options;
-    in property <int> exporter-separator-before-index: -1;
     in property <string> product-link-label;
     in property <string> product-url;
 
@@ -68,21 +67,20 @@ export global ExportAdapter {
     callback browse(string);
     callback exporter-changed(int);
     callback open-product-url();
-    callback date-for-text(string) -> Date;
     callback run();
     callback clear();
 }
 
 export component ExportPage inherits AnchoredScrollPage {
-        PageSummary {
-            message: "Choose a backup to extract its messages to a JSONL archive.";
+        PageHeader { title: "Extract Messages"; }
+        Hint {
+            message: "Choose a backup, then extract its messages to a JSONL archive.";
         }
 
         LabeledComboBox {
             label: "Backup type";
             model: ExportAdapter.exporter-options;
             current-index <=> ExportAdapter.exporter-index;
-            separator-before-index: ExportAdapter.exporter-separator-before-index;
             selected(_) => { ExportAdapter.exporter-changed(ExportAdapter.exporter-index); }
         }
 
@@ -95,7 +93,7 @@ export component ExportPage inherits AnchoredScrollPage {
 
         if !ExportAdapter.is-whatsapp && ExportAdapter.is-imessage: LabeledPathField {
             label: "Backup path";
-            placeholder: "Path";
+            placeholder: "/path/to/backup";
             field-id: "export.db_path";
             value <=> ExportAdapter.db-path;
             browse-requested(id) => { ExportAdapter.browse(id); }
@@ -120,7 +118,7 @@ export component ExportPage inherits AnchoredScrollPage {
         if ExportAdapter.is-whatsapp && ExportAdapter.whatsapp-is-ios: LabeledPathField {
             label: "Backup path";
             required: true;
-            placeholder: "Path";
+            placeholder: "MobileSync Backup/DEVICE_ID folder";
             field-id: "export.whatsapp_backup";
             value <=> ExportAdapter.whatsapp-backup;
             browse-requested(id) => { ExportAdapter.browse(id); }
@@ -134,7 +132,7 @@ export component ExportPage inherits AnchoredScrollPage {
         }
         if ExportAdapter.is-whatsapp && !ExportAdapter.whatsapp-is-ios: LabeledPathField {
             label: "Backup path";
-            placeholder: "Path";
+            placeholder: "msgstore.db.crypt12 / .crypt14 / .crypt15";
             field-id: "export.whatsapp_backup";
             value <=> ExportAdapter.whatsapp-backup;
             browse-requested(id) => { ExportAdapter.browse(id); }
@@ -288,15 +286,15 @@ export component ExportPage inherits AnchoredScrollPage {
         Hint {
             message: "Leave both dates blank to include all messages.";
         }
-        LabeledDateEdit {
+        LabeledLineEdit {
             label: "Start date";
+            placeholder: "YYYY-MM-DD (optional)";
             value <=> ExportAdapter.start-date;
-            date-for-text(value) => { return ExportAdapter.date-for-text(value); }
         }
-        LabeledDateEdit {
+        LabeledLineEdit {
             label: "End date (exclusive)";
+            placeholder: "YYYY-MM-DD (optional)";
             value <=> ExportAdapter.end-date;
-            date-for-text(value) => { return ExportAdapter.date-for-text(value); }
         }
         CheckBoxRow {
             text: "Obfuscate";

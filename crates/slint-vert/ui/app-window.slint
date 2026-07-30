@@ -14,15 +14,11 @@ export { VaultAdapter } from "pages/vault.slint";
 export { LogAdapter } from "pages/log.slint";
 
 export component AppWindow inherits Window {
-    // Official Slint small mark (blue S); CC-BY-ND-4.0 from slint-ui/slint logo/.
-    icon: @image-url("assets/slint-logo-small-light.png");
-    // OS title bar text; version is filled in from Rust (CARGO_PKG_VERSION).
-    in-out property <string> app-title: "Message Exporters";
-    title: root.app-title;
-    preferred-width: 780px;
-    preferred-height: 580px;
-    min-width: 640px;
-    min-height: 480px;
+    title: "Message Exporters — Vertical";
+    preferred-width: 640px;
+    preferred-height: 720px;
+    min-width: 480px;
+    min-height: 520px;
     default-font-size: 12px;
 
     in-out property <int> tab-index: 0;
@@ -31,7 +27,6 @@ export component AppWindow inherits Window {
     in property <bool> about-open: false;
     in property <bool> tabs-enabled: true;
     callback close-requested();
-    callback help-requested();
     callback about-toggled();
 
     // Use Layout (not Box): Box widgets inject StyleMetrics.layout-padding.
@@ -44,25 +39,12 @@ export component AppWindow inherits Window {
             spacing: 8px;
             alignment: stretch;
             vertical-stretch: 0;
-            Image {
-                source: @image-url("assets/slint-logo-small-light.png");
-                width: 20px;
-                height: 20px;
-                vertical-alignment: center;
-                horizontal-stretch: 0;
-            }
             Text {
-                text: root.app-title;
+                text: "Message Exporters — Vertical";
                 font-size: 13px;
                 font-weight: 700;
                 vertical-alignment: center;
-                horizontal-alignment: left;
                 horizontal-stretch: 1;
-            }
-            Button {
-                text: "Help";
-                horizontal-stretch: 0;
-                clicked => { root.help-requested(); }
             }
             Button {
                 text: "About";
@@ -92,13 +74,13 @@ export component AppWindow inherits Window {
             alignment: start;
             vertical-stretch: 1;
             Text {
-                text: root.app-title + " — Slint desktop GUI";
+                text: "Message Exporters — Vertical Slint GUI";
                 font-size: 13px;
                 font-weight: 700;
                 vertical-stretch: 0;
             }
             Text {
-                text: "An additive alternative to the egui and web GUIs. Same exporters, same export.ini.";
+                text: "A vertical-form layout experiment. Same exporters, same export.ini.";
                 wrap: word-wrap;
                 font-size: 12px;
                 vertical-stretch: 0;
@@ -151,7 +133,7 @@ export component AppWindow inherits Window {
                     horizontal-stretch: 1;
                 }
                 Text {
-                    text: "Slint desktop GUI";
+                    text: "Vertical Slint GUI";
                     font-size: 11px;
                     vertical-alignment: center;
                     horizontal-stretch: 0;
