@@ -12,12 +12,14 @@ use std::time::Duration;
 use chrono::Local;
 use eframe::egui;
 use jobs::{LibraryJob, library_job_for_exporter, prepare_library_config, run_and_log};
+use message_contacts::{ValidateMode, validate_contacts_file};
 use message_exporters_core::{
     APPLE_PLATFORMS, ATTACHMENT_MEDIA, AttachmentMedia, EXPORTERS, ExportIniState, Exporter,
     ExporterConfig, Form, MAX_RESOLUTIONS, OUTPUT_FORMATS_MAIL, ProcessControl, ProcessEvent,
     VaultSection, WHATSAPP_PLATFORMS, WhatsappPlatform, contacts_kind_from_path, ensure_output_dir,
-    resolve_binary, spawn, spawn_job,
+    spawn_job,
 };
+use message_phone::PhoneRegion;
 use message_ir::reexport::run as run_reexport;
 use vault_push::{
     ProgressEvent as VaultProgressEvent, VaultPushConfig, authenticate as vault_authenticate,
@@ -519,39 +521,39 @@ impl App {
             self.errors = vec!["Choose a contacts CSV or VCF file.".into()];
             return;
         }
-        if let Err(error) = message_contacts::probe_contacts_input(std::path::Path::new(input)) {
+        let input = PathBuf::from(input);
+        if let Err(error) = message_contacts::probe_contacts_input(&input) {
             self.errors = vec![error.message];
             return;
         }
 
-        let program = match resolve_binary("contacts-validate") {
-            Ok(program) => program,
-            Err(error) => {
-                self.errors = vec![error];
-                return;
-            }
-        };
         let region = if self.validate_usa {
-            "usa"
+            PhoneRegion::Usa
         } else {
-            "international"
+            PhoneRegion::International
         };
-        let mut args = vec![
-            "--input".into(),
-            input.into(),
-            "--region".into(),
-            region.into(),
-        ];
-        if check_only {
-            args.push("--check".into());
-        }
-        self.errors.clear();
-        self.running = true;
-        self.begin_session_log();
-        self.mode = AppMode::Log;
-        let (tx, rx) = mpsc::channel();
-        self.rx = Some(rx);
-        spawn(program, args, self.control.clone(), tx);
+        let mode = if check_only {
+            ValidateMode::Check
+        } else {
+            ValidateMode::Update
+        };
+        let label = if check_only {
+            "contacts-validate --check (library)".to_string()
+        } else {
+            "contacts-validate (library)".to_string()
+        };
+        let job: LibraryJob = Box::new(move |_cancel, tx| {
+            match validate_contacts_file(&input, region, mode) {
+                Ok(report) => {
+                    for line in report.log_lines {
+                        let _ = tx.send(ProcessEvent::Log(line));
+                    }
+                    Ok(())
+                }
+                Err(error) => Err(format!("{error:#}")),
+            }
+        });
+        self.start_library_job(label, job);
     }
 
     fn cancel(&mut self) {
@@ -1097,7 +1099,12 @@ impl App {
                 &ATTACHMENT_MEDIA,
                 PATH_W,
             );
-            if self.form.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available() {
+            if self.form.obfuscate {
+                ui.label(
+                    "Obfuscate replaces all media with shared placeholders (real files are not copied or converted).",
+                );
+            } else if self.form.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available()
+            {
                 ui.colored_label(
                     egui::Color32::from_rgb(180, 50, 50),
                     "Convert/Compress need ffmpeg and ffprobe beside the app, in MESSAGE_EXPORTERS_BIN, or on PATH.",
@@ -1138,6 +1145,11 @@ impl App {
             form_label(ui, "Obfuscate");
             ui.checkbox(&mut self.form.obfuscate, "");
         });
+        if self.form.obfuscate {
+            ui.label(
+                "Names, phones, message text, and media are replaced. Attachment files become placeholders only.",
+            );
+        }
         if self.form.obfuscate || !self.form.obfuscate_seed.is_empty() {
             labeled_text(
                 ui,

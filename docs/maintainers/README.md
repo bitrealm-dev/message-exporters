@@ -5,6 +5,7 @@ This directory contains implementation and release documentation for contributor
 ## Start here
 
 - [Develop and publish releases](developing.md) — release workflow, documentation build, and local preview.
+- [Code signing (Windows / macOS)](signing.md) — certificates, GitHub secrets, and gated release workflow steps.
 - [GUI design](gui.md) — tabs, controls, validation, saved settings, and exporter integration.
 - [Exporter capability matrix](exporter-matrix.md) — supported inputs, known source limitations, and links to crate-specific technical documents.
 

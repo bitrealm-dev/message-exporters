@@ -66,7 +66,10 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
             .tempdir_in(&config.output)
             .context("create temp dir for wtsexporter")?;
         let json_out = work.path().join("result.json");
-        let move_media = config.media.mode.copies_attachments() && source.media.is_some();
+        // Obfuscate replaces media with placeholders — do not extract real files.
+        let move_media = ExportTransforms::from_configs(&config.media, &config.obfuscate)
+            .copies_attachments()
+            && source.media.is_some();
 
         // Cooperative only: we check cancel before and after the external process.
         // Killing wtsexporter mid-run is not implemented.
@@ -114,6 +117,7 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     check_cancel(config.cancel.as_ref())?;
     let mut transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
     transforms.log = config.log.clone();
+    let needs_media_tools = transforms.needs_media_tools();
     let (report, sink) = convert_json(
         &json_path,
         &config.output,
@@ -126,8 +130,7 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     // Drop tempdir after convert (media files already copied).
     drop(_work_keep_alive);
 
-    if !sink.media.errors.is_empty() && sink.media.processed == 0 && config.media.mode.needs_tools()
-    {
+    if !sink.media.errors.is_empty() && sink.media.processed == 0 && needs_media_tools {
         bail!("media processing failed for all candidate files");
     }
     messages.extend(sink.log_lines());

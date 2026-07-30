@@ -39,7 +39,8 @@ pub(crate) struct WtsexporterArgs {
     pub move_media: bool,
 }
 
-/// Resolve `wtsexporter`: `WTSEXPORTER` → sibling of this exe → `MESSAGE_EXPORTERS_BIN` → `PATH`.
+/// Resolve `wtsexporter`: `WTSEXPORTER` → sibling of this exe → parent of exe dir →
+/// `MESSAGE_EXPORTERS_BIN` → `PATH`.
 pub(crate) fn resolve_wtsexporter() -> Result<PathBuf> {
     if let Some(explicit) = env::var_os("WTSEXPORTER") {
         let path = PathBuf::from(explicit);
@@ -67,6 +68,14 @@ pub(crate) fn resolve_wtsexporter() -> Result<PathBuf> {
         tried.push(sibling.clone());
         if sibling.is_file() {
             return Ok(sibling);
+        }
+        // Release ZIPs put helpers beside the GUI and CLIs under cli/; look one level up.
+        if let Some(parent) = dir.parent() {
+            let up = parent.join(executable);
+            tried.push(up.clone());
+            if up.is_file() {
+                return Ok(up);
+            }
         }
     }
 

@@ -19,7 +19,7 @@ Living design notes for the cross-platform desktop GUI that drives the existing 
 - Top tab panel: **Contacts** (default) | **Message** | **Re-export** | **Vault** | **Log**.
 - Typed UI `Form` plus shared `ExporterConfig` / `SourceConfig` in `message-exporters-core` (`Form::to_config`).
 - Native file/folder dialogs through `rfd`.
-- Export converters are linked libraries (no sibling exporter binaries required for convert). `contacts-validate`, WhatsApp’s `wtsexporter`, and media tools `ffmpeg` / `ffprobe` still resolve beside the GUI, via `MESSAGE_EXPORTERS_BIN`, or on `PATH`.
+- Contacts, Message convert, Re-export, and Vault are linked libraries (no sibling exporter CLIs required). WhatsApp’s `wtsexporter` and media tools `ffmpeg` / `ffprobe` still resolve beside the GUI, via `MESSAGE_EXPORTERS_BIN`, or on `PATH`.
 - Live tagged log and cooperative cancellation (mpsc poll in `update`).
 - Exporter-specific validation before launch (`Form::to_config`), then in-process `run(&ExporterConfig)`.
 - Mid-run library progress/warnings stream via `ExporterConfig.log` (`LogSink` → `ProcessEvent::Log`); end-of-run summaries still come from `RunResult.messages`.
@@ -53,11 +53,11 @@ cargo run -p message-exporters-gui
 
 ### Contacts
 
-Spawns [`contacts-validate`](../../crates/message-contacts) (same discovery rules as exporters).
+Runs [`message_contacts::validate_contacts_file`](../../crates/message-contacts) in-process (same library the `contacts-validate` CLI uses).
 
-- **Check** (`--check`): dry run — no files written; the run log shows the same UNCERTAIN / DUPLICATE / summary content as a validate log.
+- **Check**: dry run — no files written; the run log shows the same UNCERTAIN / DUPLICATE / summary content as a validate log.
 - **Update**: write `<stem>-update.<ext>` (or `<stem>-update-N` when re-updating) (+ `.log`; CSV also `.vcf`). Only unambiguous phones are rewritten; uncertain values stay as-is.
-- **Cancel**: stop the running job.
+- **Cancel**: cooperative cancel for the in-process job.
 
 ### Re-export — `message-reexporter`
 

@@ -32,13 +32,16 @@ Exactly **three** ZIP assets (no loose individual executables):
 | `message-exporters-<version>-x86_64-pc-windows-msvc.zip` | `windows-latest` |
 | `message-exporters-<version>-aarch64-apple-darwin.zip` | `macos-latest` (Apple Silicon) |
 
-Each ZIP is a flat folder (executables at the archive root) containing:
+Each ZIP has the desktop app and helpers at the archive root, and standalone CLIs under `cli/`:
 
-**Desktop app**
+**ZIP root — desktop app + helpers**
 
-- `message-exporters-gui` (`.exe` on Windows)
+- `message-exporters-gui` (`.exe` on Windows) — runs exporters, Contacts, Re-export, and Vault as libraries
+- `wtsexporter` / `wtsexporter.exe` — KnugiHK WhatsApp-Chat-Exporter `0.13.0` (pinned + SHA-256 in `scripts/package-release.sh`)
+- `ffmpeg` / `ffprobe` — eugeneware/ffmpeg-static `b6.1.1` (binaries report FFmpeg `7.0.2-static`)
+- `LICENSE`, `THIRD_PARTY_NOTICES.md`, `THIRD_PARTY_WTSEXPORTER.LICENSE`, `THIRD_PARTY_FFMPEG.LICENSE`
 
-**Exporter / utility CLIs**
+**`cli/` — exporter / utility CLIs**
 
 - `go-sms-pro-exporter`
 - `sms-backup-restore-exporter`
@@ -52,19 +55,11 @@ Each ZIP is a flat folder (executables at the archive root) containing:
 - `contacts-validate`
 - `imazing-obfuscate`
 
-**Bundled third-party helpers** (pinned + SHA-256 checked in `scripts/package-release.sh`)
+The GUI only needs the third-party helpers beside it (`wtsexporter` for WhatsApp extract, `ffmpeg` / `ffprobe` for media convert/compress). CLIs under `cli/` look for those helpers beside themselves, then one directory up (the ZIP root). Keep the extracted archive together.
 
-- `wtsexporter` / `wtsexporter.exe` — KnugiHK WhatsApp-Chat-Exporter `0.13.0`
-- `ffmpeg` / `ffprobe` — eugeneware/ffmpeg-static `b6.1.1` (binaries report FFmpeg `7.0.2-static`)
+### Code signing
 
-**Notices**
-
-- `LICENSE`
-- `THIRD_PARTY_NOTICES.md`
-- `THIRD_PARTY_WTSEXPORTER.LICENSE`
-- `THIRD_PARTY_FFMPEG.LICENSE`
-
-The GUI links exporter crates as libraries for convert, but still needs sibling helpers for Contacts validation, WhatsApp extract, and media convert/compress. Keep every file from the ZIP together.
+Windows Authenticode and macOS codesign / notarization steps are already in the Release workflow but stay skipped until certificate secrets are set. See [Code signing for Windows and macOS releases](signing.md).
 
 ### Local packaging smoke test
 

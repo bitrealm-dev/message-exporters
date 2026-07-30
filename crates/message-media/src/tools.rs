@@ -31,7 +31,8 @@ fn command_ok(bin: &Path, args: &[&str]) -> bool {
         .unwrap_or(false)
 }
 
-/// Resolve `ffmpeg` / `ffprobe`: sibling of current exe, then `MESSAGE_EXPORTERS_BIN`, then PATH.
+/// Resolve `ffmpeg` / `ffprobe`: sibling of current exe, then parent of exe dir,
+/// then `MESSAGE_EXPORTERS_BIN`, then PATH.
 fn resolve_tool(name: &str) -> Option<PathBuf> {
     static FFMPEG: OnceLock<Option<PathBuf>> = OnceLock::new();
     static FFPROBE: OnceLock<Option<PathBuf>> = OnceLock::new();
@@ -52,6 +53,13 @@ fn find_tool(name: &str) -> Option<PathBuf> {
         let sibling = dir.join(&executable);
         if sibling.is_file() && command_ok(&sibling, &["-version"]) {
             return Some(sibling);
+        }
+        // Release ZIPs put helpers beside the GUI and CLIs under cli/; look one level up.
+        if let Some(parent) = dir.parent() {
+            let up = parent.join(&executable);
+            if up.is_file() && command_ok(&up, &["-version"]) {
+                return Some(up);
+            }
         }
     }
 

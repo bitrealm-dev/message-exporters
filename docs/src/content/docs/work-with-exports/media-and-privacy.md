@@ -29,6 +29,8 @@ JSON, JSONL, and CSV keep copied media in `attachments/`. EML, MBOX, and Android
 
 Enable **Obfuscate** to replace display names, phone numbers, message text, and media with stable substitutes. This is intended for copies shared in demonstrations or support reports.
 
+When **Obfuscate** is on, the export does not copy or convert real attachment files. Attachment modes such as **Copy** or **Convert** are ignored for staging: the output uses three shared placeholders (`placeholder.jpg`, `placeholder.mp4`, `placeholder.bin`) chosen from each attachment’s type. That avoids copying media only to delete it afterward.
+
 You can enter a seed of exactly eight hexadecimal characters to make the same input produce repeatable substitutions. Leaving it blank creates a seed for the run.
 
 Obfuscation applies to every output format. It changes the output copy, not the source backup.

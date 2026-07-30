@@ -2954,6 +2954,7 @@ dependencies = [
  "message-exporters-core",
  "message-ir",
  "message-media",
+ "message-phone",
  "open",
  "openextract-exporter",
  "rfd",

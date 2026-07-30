@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Stage a self-contained platform ZIP for a message-exporters release.
 #
+# Layout:
+#   ZIP root  — message-exporters-gui + wtsexporter + ffmpeg/ffprobe + notices
+#   cli/      — exporter CLIs, message-reexporter, vault-push, contacts-validate,
+#               imazing-obfuscate
+#
 # Usage:
 #   scripts/package-release.sh <version> <artifact_suffix> [ext]
 #
@@ -25,9 +30,20 @@ RELEASE_DIR="${CARGO_TARGET_DIR:-target}/release"
 rm -rf "$STAGE"
 mkdir -p "$STAGE" dist
 
-# --- project binaries (friendly names, ZIP root) ---
+# --- desktop app at ZIP root (uses exporter crates as libraries) ---
+GUI_BIN="message-exporters-gui${EXT}"
+src="${RELEASE_DIR}/${GUI_BIN}"
+if [[ ! -f "$src" ]]; then
+  echo "missing release binary: $src" >&2
+  exit 1
+fi
+cp "$src" "${STAGE}/${GUI_BIN}"
+chmod +x "${STAGE}/${GUI_BIN}" || true
+
+# --- CLI exporters / utilities under cli/ ---
+CLI_DIR="${STAGE}/cli"
+mkdir -p "$CLI_DIR"
 for bin in \
-  message-exporters-gui \
   go-sms-pro-exporter \
   sms-backup-restore-exporter \
   sms-backup-plus-exporter \
@@ -45,8 +61,8 @@ do
     echo "missing release binary: $src" >&2
     exit 1
   fi
-  cp "$src" "${STAGE}/${bin}${EXT}"
-  chmod +x "${STAGE}/${bin}${EXT}" || true
+  cp "$src" "${CLI_DIR}/${bin}${EXT}"
+  chmod +x "${CLI_DIR}/${bin}${EXT}" || true
 done
 
 # --- third-party helpers (pinned + checksummed) ---

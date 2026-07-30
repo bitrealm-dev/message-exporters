@@ -1,5 +1,5 @@
-//! Spawn exporter / contacts-validate CLIs and stream output via mpsc.
-//! Also runs in-process jobs (e.g. GO SMS Pro library) on a background thread.
+//! Resolve sibling helper binaries, spawn optional CLI subprocesses, and run
+//! in-process jobs on a background thread with mpsc log streaming.
 
 use std::ffi::OsString;
 use std::fmt;
@@ -125,6 +125,14 @@ pub fn resolve_binary(name: &str) -> Result<PathBuf, String> {
         tried.push(sibling.clone());
         if sibling.is_file() {
             return Ok(sibling);
+        }
+        // Release ZIPs put helpers beside the GUI and CLIs under cli/; look one level up.
+        if let Some(parent) = dir.parent() {
+            let up = parent.join(&executable);
+            tried.push(up.clone());
+            if up.is_file() {
+                return Ok(up);
+            }
         }
     }
 

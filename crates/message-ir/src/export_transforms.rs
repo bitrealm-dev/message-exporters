@@ -51,11 +51,13 @@ impl ExportTransforms {
     }
 
     pub fn needs_media_tools(&self) -> bool {
-        self.media.needs_tools()
+        // Obfuscate replaces all media with placeholders — no ffmpeg work.
+        !self.obfuscate && self.media.needs_tools()
     }
 
     pub fn copies_attachments(&self) -> bool {
-        self.media.copies_attachments()
+        // Obfuscate discards real bytes; skip staging them in the first place.
+        !self.obfuscate && self.media.copies_attachments()
     }
 }
 
@@ -197,12 +199,18 @@ pub(crate) fn apply_transforms(
     transforms: &ExportTransforms,
     load_bytes: bool,
 ) -> Result<TransformOutcome> {
-    for doc in docs.iter_mut() {
-        clear_attachments_when_disabled(doc, transforms.media);
+    // Keep MIME/path for placeholder classification when obfuscating.
+    if !transforms.obfuscate {
+        for doc in docs.iter_mut() {
+            clear_attachments_when_disabled(doc, transforms.media);
+        }
     }
 
-    let (media, remap) =
-        message_media::process_attachments_dir(output_dir, transforms.media, &transforms.compress)?;
+    let (media, remap) = if transforms.obfuscate {
+        (MediaReport::default(), HashMap::new())
+    } else {
+        message_media::process_attachments_dir(output_dir, transforms.media, &transforms.compress)?
+    };
     if !remap.is_empty() {
         for doc in docs.iter_mut() {
             apply_media_remap(doc, &remap);
@@ -233,4 +241,127 @@ pub(crate) fn apply_transforms(
         media,
         obfuscated_docs,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        ConversationMeta, ConversationStats, ExportMeta, IrConversationType, IrMessage,
+        IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION,
+    };
+    use message_media::MediaMode;
+    use std::fs;
+
+    fn doc_with_image_attachment() -> ConversationDocument {
+        ConversationDocument {
+            schema_version: SCHEMA_VERSION,
+            export: ExportMeta {
+                source: "test".into(),
+                tool: "test".into(),
+                tool_version: "0".into(),
+                owner_handle: None,
+                owner_display_name: None,
+            },
+            conversation: ConversationMeta {
+                chat_identifier: "+15555550101".into(),
+                conversation_type: IrConversationType::Individual,
+                group_title: None,
+                participants: vec![IrParticipant {
+                    handle: "+15555550101".into(),
+                    display_name: Some("Sam".into()),
+                }],
+                stats: ConversationStats::default(),
+            },
+            messages: vec![IrMessage {
+                guid: "guid-1".into(),
+                timestamp_unix_ms: 1_400_773_261_000,
+                direction: IrDirection::Incoming,
+                service: IrService::Sms,
+                message_kind: IrMessageKind::Sms,
+                sender_handle: Some("+15555550101".into()),
+                sender_display_name: Some("Sam".into()),
+                subject: None,
+                text: "hi".into(),
+                attachments: vec![IrAttachment {
+                    path: Some("photo.jpg".into()),
+                    original_name: Some("photo.jpg".into()),
+                    mime_type: Some("image/jpeg".into()),
+                    digest_sha256: None,
+                    is_sticker: false,
+                    transcription: None,
+                    sticker_effect: None,
+                    bytes: None,
+                }],
+                imessage: None,
+                source: None,
+            }],
+            packaging_stem_suffix: None,
+        }
+    }
+
+    #[test]
+    fn obfuscate_disables_copy_and_media_tools() {
+        let t = ExportTransforms {
+            media: MediaMode::Convert,
+            obfuscate: true,
+            ..ExportTransforms::none()
+        };
+        assert!(!t.copies_attachments());
+        assert!(!t.needs_media_tools());
+
+        let t = ExportTransforms {
+            media: MediaMode::Clone,
+            obfuscate: false,
+            ..ExportTransforms::none()
+        };
+        assert!(t.copies_attachments());
+        assert!(!t.needs_media_tools());
+    }
+
+    #[test]
+    fn obfuscate_skips_staged_media_and_writes_placeholders() {
+        let tmp = tempfile::tempdir().unwrap();
+        let att = tmp.path().join("attachments");
+        fs::create_dir_all(&att).unwrap();
+        // Pretend an exporter staged a real file (should be removed).
+        fs::write(att.join("real-photo.jpg"), b"REAL_JPEG_BYTES_SHOULD_GO").unwrap();
+
+        let mut docs = vec![doc_with_image_attachment()];
+        let transforms = ExportTransforms {
+            media: MediaMode::Convert,
+            obfuscate: true,
+            obfuscate_seed: Some("01234567".into()),
+            ..ExportTransforms::none()
+        };
+        let outcome = apply_transforms(&mut docs, tmp.path(), &transforms, false).unwrap();
+        assert_eq!(outcome.obfuscated_docs, 1);
+        assert_eq!(outcome.media.processed, 0);
+
+        assert!(!att.join("real-photo.jpg").exists());
+        assert!(att.join("placeholder.jpg").is_file());
+        assert!(att.join("placeholder.mp4").is_file());
+        assert!(att.join("placeholder.bin").is_file());
+        assert_eq!(
+            docs[0].messages[0].attachments[0].path.as_deref(),
+            Some("attachments/placeholder.jpg")
+        );
+    }
+
+    #[test]
+    fn obfuscate_keeps_mime_when_media_disabled() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut docs = vec![doc_with_image_attachment()];
+        let transforms = ExportTransforms {
+            media: MediaMode::Disabled,
+            obfuscate: true,
+            obfuscate_seed: Some("01234567".into()),
+            ..ExportTransforms::none()
+        };
+        apply_transforms(&mut docs, tmp.path(), &transforms, false).unwrap();
+        assert_eq!(
+            docs[0].messages[0].attachments[0].path.as_deref(),
+            Some("attachments/placeholder.jpg")
+        );
+    }
 }

@@ -460,7 +460,11 @@ impl Form {
         errors: &mut Vec<String>,
     ) -> ExporterConfig {
         required_text(&self.output, "Output directory", errors);
-        if self.attachment_media.needs_ffmpeg() && !message_media::ffmpeg_available() {
+        let obfuscate_active = self.obfuscate || !self.obfuscate_seed.trim().is_empty();
+        if !obfuscate_active
+            && self.attachment_media.needs_ffmpeg()
+            && !message_media::ffmpeg_available()
+        {
             errors.push(
                 "Convert/Compress require ffmpeg and ffprobe beside the program, in MESSAGE_EXPORTERS_BIN, or on PATH.".into(),
             );
@@ -746,7 +750,9 @@ impl Form {
 
     fn validate_media(&self, errors: &mut Vec<String>) -> MediaConfig {
         let mode = self.attachment_media.media_mode();
-        if mode.needs_tools() && !message_media::ffmpeg_available() {
+        let obfuscate_active = self.obfuscate || !self.obfuscate_seed.trim().is_empty();
+        // Obfuscate skips copy/convert, so ffmpeg is not required.
+        if !obfuscate_active && mode.needs_tools() && !message_media::ffmpeg_available() {
             errors.push(
                 "Convert/Compress require ffmpeg and ffprobe beside the program, in MESSAGE_EXPORTERS_BIN, or on PATH.".into(),
             );
