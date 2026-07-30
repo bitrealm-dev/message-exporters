@@ -58,11 +58,15 @@ Already exported? The GUI **Convert** tab ([`message-reexport`](crates/message-i
 
 Import into Message Vault with the GUI **Vault** tab or the [`vault-push`](crates/vault-push/docs/MANPAGE.md) CLI (JSONL export folder + Import API token).
 
+## Contributing
+
+Setup, build, run, test, and contribution rules: [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Releases
 
 Prebuilt Linux, Windows, and macOS Apple Silicon ZIPs (GUI + CLIs + helpers): [Releases](https://github.com/bitrealm-dev/message-exporters/releases).
 
-Maintainer documentation: [`docs/maintainers/`](docs/maintainers/README.md). Release steps: [Development and releases](docs/maintainers/developing.md).
+Maintainer documentation (architecture, GUI design, signing): [`docs/maintainers/`](docs/maintainers/README.md). Release steps: [Development and releases](docs/maintainers/developing.md).
 
 ## License
 

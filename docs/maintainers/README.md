@@ -4,6 +4,7 @@ This directory contains implementation and release documentation for contributor
 
 ## Start here
 
+- [Setup, build, and contributing](../../CONTRIBUTING.md) — prerequisites, workspace build, helpers, tests, and PR rules.
 - [Develop and publish releases](developing.md) — release workflow, documentation build, and local preview.
 - [Code signing (Windows / macOS)](signing.md) — certificates, GitHub secrets, and gated release workflow steps.
 - [GUI design](gui.md) — tabs, controls, validation, saved settings, and exporter integration.
