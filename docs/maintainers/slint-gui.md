@@ -1,23 +1,23 @@
 # Message Exporters Slint GUI
 
-Living design notes for the Slint-based desktop alternative to the native
-[egui GUI](gui.md) and the [web GUI](web-gui.md).
+Living design notes for the cross-platform desktop GUI.
 
 **Framework:** [Slint](https://slint.dev) 1.17, implemented in
 [`crates/message-exporters-slint`](../../crates/message-exporters-slint).
 
 ## Goals
 
-- Same underlying functionality as `message-exporters-gui`, presented as
-  Extract Messages, Format, Vault, Contacts, and Log,
-  reusing `message-exporters-core` (`Form`, `ExporterConfig`, `ExportIniState`,
-  `ProcessControl` / `ProcessEvent`) and the exporter library crates.
-- Keep extraction as a predictable first step: Extract Messages always writes
-  JSONL, while Format handles conversion to CSV, EML, MBOX, JSON, JSONL, or XML.
-- Dense desktop form layout (fixed label column, compact spacing, no vertical
-  stretch on ordinary fields) using Slint's platform `native` widget style.
-- Leave `message-exporters-gui` and `message-exporters-web` untouched — this is
-  an additive alternative.
+- One app for Linux, macOS, and Windows with retained-mode widgets.
+- Drive exporters via their Rust libraries in-process (`ExporterConfig` + `run`);
+  each crate also ships a thin standalone CLI with the same pipeline.
+- Present tabs as **Extract Messages** | **Format** | **Vault** | **Contacts** | **Log**.
+- Keep extraction predictable: Extract Messages always writes JSONL; Format
+  converts a prior output folder to CSV, EML, MBOX, JSON, JSONL, or XML.
+- Show only the controls that apply to the selected backup source; validate before run.
+- Stream library log lines in the UI; support cancel (cooperative flags; WhatsApp’s
+  external `wtsexporter` step is not killable mid-run).
+- Dense desktop form layout (fixed label column, compact spacing) using Slint's
+  platform `native` widget style.
 
 ## Widget style
 
@@ -34,10 +34,8 @@ the intentional fallback. Override at compile time with `SLINT_STYLE`
 (for example `SLINT_STYLE=fluent cargo build -p message-exporters-slint`).
 
 Layout density lives in `ui/widgets.slint` (`FormMetrics`, horizontal `FormRow`
-fields, ~1px row gaps). Ordinary fields do not stretch; only the Log tab's viewer
-grows when the window is resized vertically. Fluent widgets still use ~32px
-control chrome on Linux without Qt — density comes from packing rows tightly at
-the top, not from shrinking the Fluent controls themselves.
+fields, tight row gaps). Ordinary fields do not stretch; only the Log tab's viewer
+grows when the window is resized vertically.
 
 ## Architecture
 
@@ -52,25 +50,36 @@ the top, not from shrinking the Fluent controls themselves.
   event loop; persists `export.ini` on exit.
 - `src/state.rs` — `AppState` holding `ExportIniState` + `Form` + job control
   (behind `Arc<Mutex<_>>` so the log bridge thread can wake the UI).
-- `src/jobs.rs` — duplicated in-process `LibraryJob` dispatch (same pattern as
-  the egui and web GUIs so those crates stay untouched).
+- `src/jobs.rs` — in-process `LibraryJob` dispatch for exporters, contacts,
+  re-export, and vault.
 - `src/sync.rs` — push `AppState` into Slint adapters / pull adapter values back
   into `Form` before validate/save.
 - `src/browse.rs` — `rfd` file/folder dialogs on a background thread, results
-  applied via `Weak::upgrade_in_event_loop`.
-- `src/session_log.rs` — timestamped temp-file session log (same naming as egui).
+  applied via `Weak::upgrade_in_event_loop` (WSL opens Windows-native dialogs).
+- `src/session_log.rs` — timestamped temp-file session log.
+- `src/wsl.rs` — Windows interop when the Linux GUI runs under WSL (browser / help).
 
-Jobs still run via `message_exporters_core::spawn_job` on a `std::thread` with a
+Jobs run via `message_exporters_core::spawn_job` on a `std::thread` with a
 `CancelFlag` + `mpsc::Sender<ProcessEvent>`. A bridge thread drains the receiver
 and marshals each line onto the Slint UI thread (`upgrade_in_event_loop`),
 appending to the Log tab's `VecModel` and the session log file.
 
+Contacts, Extract Messages, Format, and Vault are linked libraries (no sibling
+exporter CLIs required). WhatsApp’s `wtsexporter` and media tools `ffmpeg` /
+`ffprobe` still resolve beside the GUI, via `MESSAGE_EXPORTERS_BIN`, or on `PATH`.
+
 ## Persistence
 
-Reads/writes the same `export.ini` as the other GUIs via
-`ExportIniState::load_or_default()` / `save()`. Saved after exporter switch /
-Run / Clear, and again when the window exits. Running Extract Messages sets the
-shared output format to JSONL; the Format tab keeps its own re-export format.
+Reads/writes `export.ini` via `ExportIniState::load_or_default()` / `save()`.
+Prefer an existing file in the working directory, else beside the GUI binary;
+otherwise create `./export.ini` on first save. Template:
+[`export.example.ini`](../../crates/message-exporters-slint/export.example.ini).
+Backup passwords are never written. The vault key is persisted in plain text under
+`[vault]`.
+
+Saved after exporter switch / Run / Clear, and again when the window exits.
+Running Extract Messages sets the shared output format to JSONL; the Format tab
+keeps its own re-export format under `[message-reexport]`.
 
 ## Licensing
 
@@ -82,11 +91,323 @@ paid commercial license is required for this desktop app.
 
 ```bash
 cargo build --workspace
+# optional: cp crates/message-exporters-slint/export.example.ini export.ini
 cargo run -p message-exporters-slint
 ```
 
+## Layout
+
+1. Top tabs — **Extract Messages** | **Format** | **Vault** | **Contacts** | **Log**
+2. **Extract Messages:** backup source picker + global options + per-source form
+3. **Format:** convert a prior Message Exporters output (`message-reexport`) —
+   input dir, output dir, output format, attachments, obfuscate. Input format is
+   auto-detected.
+4. **Vault:** import a JSONL export folder into Message Vault — URL, username,
+   vault key, input dir, continue-on-error / force.
+5. **Contacts:** contacts file, USA numbers checkbox, Check / Update / Cancel
+6. Shared run log (Log tab)
+
+### Contacts
+
+Runs [`message_contacts::validate_contacts_file`](../../crates/message-contacts)
+in-process (same library the `contacts-validate` CLI uses).
+
+- **Check**: dry run — no files written; the run log shows the same UNCERTAIN /
+  DUPLICATE / summary content as a validate log.
+- **Update**: write `<stem>-update.<ext>` (or `<stem>-update-N` when re-updating)
+  (+ `.log`; CSV also `.vcf`). Only unambiguous phones are rewritten; uncertain
+  values stay as-is.
+- **Cancel**: cooperative cancel for the in-process job.
+
+### Format — `message-reexporter`
+
+Top tab (not an Extract Messages backup type). Converts a prior Message Exporters
+output folder to another packaging format (via the common message).
+
+| Control | Type | Required | CLI |
+|---------|------|:--------:|-----|
+| Input directory | folder | yes | `--input` (auto-detect csv/eml/mbox/json/jsonl/xml) |
+| Output format | enum | no | `--format` |
+| Output directory | folder | yes | `--output` |
+| Attachments | enum | no | `--media-mode` |
+| Obfuscate / seed | checkbox + text | no | `--obfuscate` / `--obfuscate-seed` |
+
+Persists under `[message-reexport]` in `export.ini`. Mixed or unrecognized input
+dirs fail with a clear error. See
+[`crates/message-ir/docs/MESSAGE_REEXPORTER.md`](../../crates/message-ir/docs/MESSAGE_REEXPORTER.md).
+
+### Vault — `vault-push`
+
+Top tab. Two-step workflow after Extract Messages: push message-ir v3 JSONL +
+`attachments/` to a running Message Vault.
+
+| Control | Type | Required | Notes |
+|---------|------|:--------:|-------|
+| Vault URL | text | yes | e.g. `http://127.0.0.1:8080` |
+| Username | text | yes | Vault account username |
+| Vault key | text | yes | Import API token from Vault Settings; saved to `export.ini` as `key` (plain text) |
+| Input directory | folder | yes | JSONL export folder (prefills from last Extract Messages output when empty) |
+| Continue on error | checkbox | no | Default on |
+| Force re-upload | checkbox | no | Ignore `.vault-import-state.jsonl` |
+
+Persists under `[vault]` in `export.ini`. See
+[`crates/vault-push/docs/MANPAGE.md`](../../crates/vault-push/docs/MANPAGE.md).
+
+## Shared / global controls
+
+| Control | Widget | CLI mapping | Notes |
+|---------|--------|-------------|-------|
+| Backup source | labeled selector | which binary | Supported first (iPhone backup, SMS Backup & Restore, WhatsApp), then experimental alphabetically with `(experimental)` suffix |
+| Obfuscate | checkbox (global) | `--obfuscate` | When enabled, show seed field |
+| Seed | text (exactly 8 hex) | `--obfuscate-seed` | Optional; blank = generate at run time |
+| Start date | text (global) | `--start-date` | Optional `YYYY-MM-DD`, inclusive |
+| End date | text (global) | `--end-date` | Optional `YYYY-MM-DD`, exclusive |
+| Product title | hyperlink | — | Opens the upstream product/tool site |
+| Input | path picker (file and/or folder) | `--input` / `-p` / etc. | Single path only |
+| Output | folder picker | `--output` / `-o` | Required; choose explicitly (not derived from input) |
+| Contacts | path picker | `--contacts` / `--vcf` / `-n` | Format depends on exporter; optional with warning |
+| Run / Cancel | actions | in-process library `run` | Stream logs; cooperative cancel |
+
+## Show / hide by backup source
+
+| Section | GO SMS Pro | Backup & Restore | SMS Backup+ | OpenExtract | iMazing | WhatsApp | iPhone backup |
+|---------|:----------:|:----------------:|:-----------:|:-----------:|:-------:|:--------:|:-------------:|
+| Global anon + dates | yes | yes | yes | yes | yes | yes | yes |
+| Input / Output | yes | yes | yes | yes | yes | output only | yes |
+| DB path / Platform | — | — | — | — | — | platform (+ advanced) | primary |
+| Your phone number(s) | required | required | required\* | — | — | — | — |
+| Your email address(es) | — | — | required\* | — | — | — | — |
+| Contacts VCF / iMazing CSV | yes | yes | yes | yes | — | — (Contacts field) | — |
+| Contacts iMazing CSV | — | — | — | — | yes | — | — |
+| Contacts Apple AddressBook | — | — | — | — | — | — | advanced |
+| Timezone | — | — | — | — | yes | — | — |
+| Name mapping | — | — | advanced | — | — | — | — |
+| Verbose logging | — | — | always on | — | — | — | — |
+| Attachments (copy/convert/compress/do not copy) | yes | yes | yes | yes†† | yes | yes | yes |
+| Compress options (resolution/fps/…) | when Compress | when Compress | when Compress | — | when Compress | when Compress | when Compress |
+| Advanced (attachment root, …) | — | — | name mapping | — | — | Android key / backup / wa / media / db / business | yes |
+
+Convert/Compress need `ffmpeg`/`ffprobe` on PATH. **Do not copy** skips writing
+attachment files (`--media-mode disabled` / iPhone `--copy-method disabled`).
+
+\* Required unless filled from Plus `config/owner.toml` (source-relative today);
+GUI collects fields explicitly.
+
+†† OpenExtract has no media in its source CSVs yet, so attachment modes are a
+no-op for files; the control is still shown.
+
+Extract Messages always packages as **JSONL**. Schema v3 applies to every
+exporter. See [What’s inside an export](../src/content/docs/understand-output/export-structure.md)
+and the [message-ir architecture](architecture/message-ir.md). Attachment modes
+and obfuscate apply to every output format via `FormatSink` (including Format-tab
+re-exports).
+
+## Per-exporter options
+
+### GO SMS Pro — `go-sms-pro-exporter`
+
+Product: [GO SMS Pro](https://play.google.com/store/apps/details?id=com.jb.gosms)
+
+In-process via `go_sms_pro_exporter::run`. Cancel is cooperative (between XML/PDU files).
+
+| Control | Type | Required | Library / CLI equivalent |
+|---------|------|:--------:|-----|
+| Input | folder (backup root with XML + PDU) | yes | `--input` |
+| Output | folder | yes | `--output` |
+| Your phone numbers | multi-value text | yes | `--owner-phone` (repeat) |
+| Contacts CSV | file | no† | `--contacts` |
+| Contacts VCF | file | no† | `--vcf` |
+| Attachments | enum | no | `--media-mode` (`clone` / `convert` / `compress` / `disabled`); all formats via FormatSink |
+| Max resolution / fps / min size / skip efficient | when Compress | no | `--media-max-resolution`, `--media-max-fps`, `--media-min-size`, `--media-skip-efficient` |
+
+† At most one of `--contacts` / `--vcf`. Global Obfuscate and Start/End date apply
+for every format via FormatSink. Convert → `.jpg`/`.mp4`/`.mp3`; Compress
+re-encodes (needs ffmpeg).
+
+### SMS Backup & Restore — `sms-backup-restore-exporter`
+
+Product: [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/)
+
+| Control | Type | Required | CLI |
+|---------|------|:--------:|-----|
+| Input | XML file or folder of XML | yes | `--input` |
+| Output | folder | yes | `--output` |
+| Your phone numbers | multi-value text | yes | `--owner-phone` |
+| Contacts CSV / VCF | file | no† | `--contacts` / `--vcf` |
+| Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro); all formats |
+
+Encrypted ZIP backups must be unlocked/extracted before selecting input. The
+exporter builds the [shared conversation structure](../src/content/docs/understand-output/export-structure.md),
+then writes JSONL (or the Format-tab target). Media modes and obfuscate apply
+through FormatSink for every format.
+
+### SMS Backup+ — `sms-backup-plus-exporter convert`
+
+Product: [SMS Backup+](https://github.com/jberkel/sms-backup-plus)
+
+GUI always runs the `convert` subcommand and always passes `--verbose`.
+
+| Control | Type | Required | CLI |
+|---------|------|:--------:|-----|
+| Input | one EML file or folder | yes | `--input` |
+| Output | folder | yes | `--output` |
+| Your phone numbers | multi-value text | yes\* | `--owner-phone` |
+| Your email addresses | multi-value text | yes\* | `--owner-email` |
+| Contacts CSV / VCF | file | no† | `--contacts` / `--vcf` |
+| Name mapping CSV | file | no | `--name-mapping` (`Phone,Incorrect Name`) |
+| Verbose | — | always | `--verbose` |
+| Attachments | enum | no | `--media-mode` (+ compress flags; same as GO SMS Pro); all formats |
+
+\* Or from crate-relative `config/owner.toml` — GUI does not rely on that; collect
+explicitly. Media modes and obfuscate apply through FormatSink for every format.
+
+### OpenExtract — `openextract-exporter`
+
+Product: [OpenExtract](https://www.openextract.app/)
+
+| Control | Type | Required | CLI |
+|---------|------|:--------:|-----|
+| Input | CSV file or folder | yes | `--input` |
+| Output | folder | yes | `--output` |
+| Contacts VCF / iMazing CSV | file | no† | `--vcf` / `--contacts` |
+
+Media modes and obfuscate apply through FormatSink for every format. Mail is
+text-only (no media in source).
+
+### iMazing — `imazing-exporter`
+
+Product: [iMazing](https://imazing.com/)
+
+| Control | Type | Required | CLI |
+|---------|------|:--------:|-----|
+| Input | Messages/WhatsApp CSV, chat folder, `Messages/`, `WhatsApp/`, or device export root | yes | `--input` |
+| Output | folder | yes | `--output` |
+| Contacts | iMazing Contacts CSV only | no | `--contacts` |
+| Timezone | IANA text | no | `--timezone` (default: host local) |
+
+Media modes and obfuscate apply through FormatSink for every format. WhatsApp
+chats use the `__whatsapp` stem suffix. See
+[`crates/imazing-exporter/docs/DESIGN.md`](../../crates/imazing-exporter/docs/DESIGN.md).
+
+### WhatsApp — `whatsapp-exporter`
+
+Product: [WhatsApp Chat Exporter](https://github.com/KnugiHK/WhatsApp-Chat-Exporter)
+(`wtsexporter`)
+
+Requires `wtsexporter` beside the GUI, on `PATH`, in `MESSAGE_EXPORTERS_BIN`, or
+via `WTSEXPORTER` (pip install or release-bundled binary).
+
+No Input directory and no Contacts file row in the GUI. `wtsexporter` runs in a
+temporary directory under the Output folder (so extract junk is not written into
+the GUI launch directory).
+
+**iOS field order:** Backup type → Platform → Backup path → Contacts → Output →
+Attachments → Advanced (WhatsApp Business).
+
+**Android field order:** Backup type → Platform → Backup path → Contacts → Output →
+Attachments → Decryption key → Advanced (media folder, Message Database, WhatsApp
+Business).
+
+| Control | Type | Required | CLI |
+|---------|------|:--------:|-----|
+| Platform | Android / iOS | yes | `--platform` |
+| Backup path | folder (iOS) or crypt file (Android) | iOS yes / Android no | `--backup` |
+| Contacts | file (hint: Optional wa.db / Optional ContactsV2.sqlite) | no | `--wa` |
+| Decryption key | text (Android only; not saved) | no | `--key` |
+| Output | folder | yes | `--output` |
+| Attachments | enum | no | `--media-mode`; all formats |
+| Media folder | folder (advanced, Android only) | no | `--media` |
+| Message Database | file (advanced, Android only; hint: Optional msgstore.db override) | no | `--db` |
+| WhatsApp Business | checkbox (advanced) | no | `--business` |
+
+Media modes and obfuscate apply through FormatSink for every format. Output stems
+use the `__whatsapp` suffix. Optional CLI `--input` (defaults to cwd for resolving
+`msgstore.db` / media folders) is not sent by the GUI; extraction always uses a
+temp dir under Output.
+
+### iPhone backup — `imessage-ir-exporter`
+
+Form link label: **imessage-ir-exporter** →
+[imessage-ir-exporter](https://github.com/bitrealm-dev/message-exporters/tree/main/crates/imessage-ir-exporter).
+Dropdown stays **iPhone backup**.
+
+GUI defaults: JSONL for Extract Messages, `--copy-method clone` (or `disabled`),
+always `--use-caller-id`. Honors dates, conversation filter, contacts, attachment
+embed, and caller-id on From. Convert/Compress/obfuscate apply through FormatSink
+for every format (same as other exporters).
+
+| Control | Type | Required | CLI |
+|---------|------|:--------:|-----|
+| Database / iOS backup path | file/folder | no | `--input` |
+| Backup password | password | no | `--backup-password` |
+| Platform | macOS / iOS / auto | no | `--platform` |
+| Output / export path | folder | yes | `--output` |
+| Attachments | enum | no | `--copy-method` / media mode via FormatSink |
+| Max resolution / fps / min size / skip efficient | when Compress | no | compress options on FormatSink |
+| Attachment root | folder | no | `--attachment-root` (advanced) |
+| Conversation filter | text | no | `--conversation` (advanced) |
+| Contacts (AddressBook DB) | file | no | `--contacts` (advanced) |
+
+Media modes and obfuscate apply through FormatSink for every format. Caller ID is
+always on.
+
+Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox.
+
+## Validation rules
+
+1. **Contacts mutual exclusion:** for Android/OpenExtract, allow at most one of
+   `--contacts` vs `--vcf`.
+2. **Contacts format:** label and file filters must match the exporter (VCF /
+   iMazing Contacts CSV vs Apple AddressBook).
+3. **Phone numbers:** required for GO SMS Pro and SMS Backup & Restore before Run;
+   Plus also requires email address(es).
+4. **Path existence:** input must exist; output folder may be created on run.
+5. **Obfuscate seed:** if provided, must be exactly 8 hex characters; empty means
+   generate.
+6. **Timezone (iMazing):** if set, must be a valid IANA name (or defer to converter
+   error).
+7. **iPhone backup:** output directory is required; always passes `--use-caller-id`;
+   obfuscate / convert / compress apply via FormatSink for every format.
+8. **SMS Backup+:** exactly one input path; `SourceConfig::SmsBackupPlus` sets
+   `verbose` / `include_summary`.
+9. **Date range:** optional start/end `YYYY-MM-DD`; end is exclusive; blank means
+   unbounded (`DateRange` on `ExporterConfig`).
+10. **Media convert/compress:** require `ffmpeg` and `ffprobe` on PATH; Compress
+    options validated (fps number, min size like `20M`).
+11. **Warn (non-blocking):** missing contacts → same warning language as CLIs
+    (“phones will not be resolved to names”).
+
+## Form flow
+
+```text
+Tabs: Extract Messages | Format | Vault | Contacts | Log
+  Extract Messages → pick backup source → Obfuscate/dates → per-source form
+         → Form::to_config → ExporterConfig (JSONL) → library run / Cancel → log
+  Format → input dir → output format → output dir → media/obfuscate
+           → message_ir::reexport::run → log
+  Vault → URL / user / key / input → vault_push → log
+  Contacts → contacts file, USA checkbox → Check / Update / Cancel → log
+```
+
+End-user walkthrough: [First export with the app](../src/content/docs/get-started/first-export.mdx).
+
 ## Known gaps
 
-Same as the [egui GUI's known gaps](gui.md#known-gaps) (inherited from shared
-exporter libraries). Interactive GUI smoke tests still need a display; CI verifies
-compile/link only (same constraint as `message-exporters-gui`).
+| Gap | Detail | Suggested fix |
+|-----|--------|---------------|
+| Plus `owner.toml` | Resolved via `CARGO_MANIFEST_DIR`, not user cwd | GUI collects phone/email/input explicitly |
+| iMazing attachments | Filename-only; no media copy | Document in UI; optional future media join |
+| Encrypted backup password | Still held in memory on `AppleConfig` during run | Prefer env/stdin if CLI grows support; warn in UI |
+| ffmpeg / ffprobe stderr | Media tools discard detailed stderr; failures become short media-report lines | Optional capture into `LogSink` |
+| WhatsApp `wtsexporter` | Nested CLI is buffered until extract exits (then appended to `messages`) | Stream subprocess lines like Contacts validate |
+
+Interactive GUI smoke tests still need a display; CI verifies compile/link only.
+
+## Non-goals
+
+- Packaging / installers.
+
+## Next steps
+
+- Add application icons and native installers/packages.
+- Add platform CI builds and GUI smoke tests.

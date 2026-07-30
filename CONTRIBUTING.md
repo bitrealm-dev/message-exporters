@@ -18,7 +18,7 @@ Optional for full WhatsApp / media features while developing: Python (`pip`) for
 
 ### Linux packages
 
-The desktop GUIs need a C toolchain, **fontconfig** (egui build), and X11 keyboard libs (Slint / winit at **runtime**). On Debian/Ubuntu:
+The Slint desktop GUI needs a C toolchain, **fontconfig**, and X11 keyboard libs (Slint / winit at **runtime**). On Debian/Ubuntu:
 
 ```bash
 sudo apt update
@@ -63,14 +63,11 @@ cargo build --release -p message-ir --bin message-reexporter --features cli
 cargo build --release -p vault-push --features cli
 ```
 
-## Run the apps
+## Run the app
 
-| App | Command | When to use it |
-|-----|---------|----------------|
-| egui desktop GUI | `cargo run -p message-exporters-gui` | Default desktop app |
-| Web GUI | `cargo run -p message-exporters-web` | Browser UI on `127.0.0.1` — useful when egui looks blurry on high-DPI Windows |
-| Slint desktop GUI | `cargo run -p message-exporters-slint` | Retained-mode widgets; same features and `export.ini` |
-| Vertical Slint experiment | `cargo run -p slint-vert` | Workspace-only variant with labels above fields and top-to-bottom tab workflows |
+```bash
+cargo run -p message-exporters-slint
+```
 
 Use a release build when testing real exports. Debug builds compile faster, but parsing,
 attachment hashing, and JSON serialization can be substantially slower:
@@ -79,7 +76,7 @@ attachment hashing, and JSON serialization can be substantially slower:
 cargo run --release -p message-exporters-slint
 ```
 
-Settings persist in `export.ini` (working directory or next to the binary). Template: [`crates/message-exporters-gui/export.example.ini`](crates/message-exporters-gui/export.example.ini). Backup passwords are never written.
+Settings persist in `export.ini` (working directory or next to the binary). Template: [`crates/message-exporters-slint/export.example.ini`](crates/message-exporters-slint/export.example.ini). Backup passwords are never written.
 
 Compile-time Slint style override (optional):
 
@@ -114,13 +111,13 @@ Local options:
 ```powershell
 # Windows PowerShell
 $env:MESSAGE_EXPORTERS_BIN = "$PWD\target\release"
-cargo run --release -p message-exporters-gui
+cargo run --release -p message-exporters-slint
 ```
 
 ```bash
 # Linux / macOS
 export MESSAGE_EXPORTERS_BIN="$PWD/target/release"
-cargo run --release -p message-exporters-gui
+cargo run --release -p message-exporters-slint
 ```
 
 ## Test
@@ -164,10 +161,10 @@ Do not edit generated files under `docs/src/content/docs/reference/cli/` by hand
 
 - **Libraries:** `message-ir`, `message-exporters-core`, `message-contacts`, `message-media`, `message-mail`, `message-sbr`, …
 - **Exporter crates:** `imessage-ir-exporter`, `whatsapp-exporter`, `sms-backup-restore-exporter`, and experimental converters (GO SMS Pro, iMazing, OpenExtract, SMS Backup+)
-- **GUIs:** `message-exporters-gui`, `message-exporters-web`, `message-exporters-slint`, `slint-vert` (experimental)
+- **GUI:** `message-exporters-slint`
 - **Utilities:** `vault-push`, `message-reexporter` (package `message-ir`, `--features cli`)
 
-Most crates are MIT. `imessage-ir-exporter` is **GPL-3.0-or-later** (via `imessage-database` / `crabapple`). The combined GUI binaries therefore include GPL-licensed code.
+Most crates are MIT. `imessage-ir-exporter` is **GPL-3.0-or-later** (via `imessage-database` / `crabapple`). The GUI binary therefore includes GPL-licensed code.
 
 ## Contribution rules
 
@@ -187,8 +184,7 @@ Most crates are MIT. `imessage-ir-exporter` is **GPL-3.0-or-later** (via `imessa
 | `Library libxkbcommon-x11.so could not be loaded` | Install `libxkbcommon-x11-0` (Debian/Ubuntu) or `libxkbcommon-x11` (Fedora), then re-run |
 | “Could not find wtsexporter / ffmpeg / ffprobe” | Install the helper, put it on `PATH`, or set `MESSAGE_EXPORTERS_BIN` / `WTSEXPORTER` |
 | Windows linker / `link.exe` errors | Install MSVC Build Tools with the C++ desktop workload |
-| Other GUI link / load errors on Linux | Install the packages under [Linux packages](#linux-packages), or use `message-exporters-web` |
-| egui looks blurry | Run `message-exporters-web` instead |
+| Other GUI link / load errors on Linux | Install the packages under [Linux packages](#linux-packages) |
 
 ## Further reading
 

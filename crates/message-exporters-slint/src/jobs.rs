@@ -105,10 +105,6 @@ impl_has_messages!(
 );
 */
 //! In-process exporter job adapters for the Slint GUI.
-//!
-//! This mirrors `message-exporters-gui/src/jobs.rs` exactly. It is duplicated
-//! (rather than shared via `message-exporters-core`) so the existing GUI crates
-//! are not touched by this port.
 
 use std::sync::mpsc;
 

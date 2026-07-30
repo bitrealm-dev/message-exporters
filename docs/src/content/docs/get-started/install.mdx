@@ -15,18 +15,18 @@ Open the [latest GitHub release](https://github.com/bitrealm-dev/message-exporte
   <TabItem label="Linux">
     1. Download `message-exporters-*-x86_64-unknown-linux-gnu.zip`.
     2. Extract it to a folder you plan to keep.
-    3. Run `message-exporters-gui` from that folder.
+    3. Run `message-exporters-slint` from that folder.
   </TabItem>
   <TabItem label="Windows">
     1. Download `message-exporters-*-x86_64-pc-windows-msvc.zip`.
     2. Extract the archive instead of running the app from inside it.
-    3. Open the extracted folder and start `message-exporters-gui.exe`.
+    3. Open the extracted folder and start `message-exporters-slint.exe`.
     4. If SmartScreen blocks the unsigned app, choose the option to allow it once, then start it again.
   </TabItem>
   <TabItem label="macOS">
     1. On an Apple Silicon Mac, download `message-exporters-*-aarch64-apple-darwin.zip`.
     2. Extract it to a folder you plan to keep.
-    3. Start `message-exporters-gui` from that folder.
+    3. Start `message-exporters-slint` from that folder.
     4. If Gatekeeper blocks the unsigned app, allow it once in the macOS security prompt, then start it again.
   </TabItem>
 </Tabs>
@@ -38,7 +38,7 @@ Do not move the desktop app away from the other files in the release folder. Eac
 **Beside the desktop app (ZIP root)**
 
 - `wtsexporter` for WhatsApp extraction
-- `ffmpeg` and `ffprobe` for **Convert** and **Convert & compress**
+- `ffmpeg` and `ffprobe` for **Convert** and **Convert & compress** attachment modes
 
 **In the `cli/` folder** (optional — for terminal use)
 
@@ -47,7 +47,7 @@ Do not move the desktop app away from the other files in the release folder. Eac
 - `contacts-validate` for offline contact Check / Update from a terminal
 - `imazing-obfuscate` for rewriting iMazing vendor CSV offline
 
-The Contacts, Export, Convert, and Vault tabs in the desktop app call libraries inside the app itself. They do not need the programs under `cli/`.
+The Extract Messages, Format, Contacts, and Vault tabs in the desktop app call libraries inside the app itself. They do not need the programs under `cli/`.
 
 The app first looks for helpers beside its own executable. It can also find them in the directory named by `MESSAGE_EXPORTERS_BIN` or on `PATH`. To point directly to the WhatsApp helper, set `WTSEXPORTER` to its full path. Programs under `cli/` also look one folder up (the ZIP root) so they find the same bundled helpers.
 

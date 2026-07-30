@@ -2,7 +2,7 @@
 name = "message-exporters-slint"
 version = "0.1.0"
 edition = "2024"
-description = "Slint desktop GUI for message-exporters (additive alternative to message-exporters-gui)"
+description = "Slint desktop GUI for message-exporters"
 build = "build.rs"
 
 [dependencies]

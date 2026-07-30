@@ -58,7 +58,7 @@ base64 -i DeveloperID.p12 | tr -d '\n' > macos-cert.b64   # macOS
 
 1. **Build** release binaries as today.
 2. **Windows** (`windows-latest` only, when `WINDOWS_CERTIFICATE_BASE64` is non-empty): decode the `.pfx`, locate `signtool.exe`, sign each project `.exe` under `target/release/` with SHA-256 and an RFC 3161 timestamp, then package.
-3. **macOS** (`macos-latest` only, when `MACOS_CERTIFICATE_BASE64` is non-empty): import the `.p12` into a temporary keychain, `codesign --options runtime --timestamp` each project binary, submit a zip of `message-exporters-gui` to `notarytool --wait`, tear down the keychain, then package.
+3. **macOS** (`macos-latest` only, when `MACOS_CERTIFICATE_BASE64` is non-empty): import the `.p12` into a temporary keychain, `codesign --options runtime --timestamp` each project binary, submit a zip of `message-exporters-slint` to `notarytool --wait`, tear down the keychain, then package.
 4. **Package** still runs `scripts/package-release.sh` (GUI + helpers at ZIP root; CLIs under `cli/`). Third-party helpers (`wtsexporter`, `ffmpeg`, `ffprobe`) are not re-signed by these steps.
 
 No further workflow edits are required to enable signing — only the secrets.
@@ -68,4 +68,4 @@ No further workflow edits are required to enable signing — only the secrets.
 After configuring secrets, cut a pre-release version (for example `0.0.0-sign-test`), download the Windows/macOS ZIPs, and verify:
 
 - Windows: right-click an `.exe` → Properties → Digital Signatures.
-- macOS: `codesign -dv --verbose=4 ./message-exporters-gui` and `spctl -a -vv ./message-exporters-gui` (online Gatekeeper check).
+- macOS: `codesign -dv --verbose=4 ./message-exporters-slint` and `spctl -a -vv ./message-exporters-slint` (online Gatekeeper check).

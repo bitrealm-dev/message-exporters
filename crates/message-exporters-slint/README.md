@@ -1,9 +1,7 @@
 # Message Exporters Slint GUI
 
-Desktop GUI built with [Slint](https://slint.dev) — an additive alternative to
-[`message-exporters-gui`](../message-exporters-gui) (egui) and
-[`message-exporters-web`](../message-exporters-web) (local browser UI). Same
-exporter libraries, same `export.ini`; only the presentation layer differs.
+Desktop GUI built with [Slint](https://slint.dev). Same exporter libraries and
+`export.ini` as the rest of the workspace.
 
 **End-user guides:** [docs site](https://bitrealm-dev.github.io/message-exporters/).
 
@@ -35,7 +33,7 @@ Built with Slint's **`native`** widget style (set in `build.rs`):
 - **Linux** — Qt if Qt 5.15+ is installed; otherwise Fluent (pure-Rust fallback; no Qt SDK required)
 
 Forms use a classic dialog grid (right-aligned label column, full-width
-controls, ~4px row gaps, content packed at the top). Form rows use bare
+controls, tight row gaps, content packed at the top). Form rows use bare
 `HorizontalLayout`/`VerticalLayout` — not `HorizontalBox`/`VerticalBox`, which
 inject Fluent's 8px `layout-padding` per side and inflate every row. Ordinary
 fields do not stretch when you grow the window vertically; only the Log viewer

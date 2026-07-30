@@ -1,5 +1,4 @@
-//! Timestamped session log file under the system temp directory
-//! (mirrors `message-exporters-gui`).
+//! Timestamped session log file under the system temp directory.
 
 use std::fs::OpenOptions;
 use std::io::Write;

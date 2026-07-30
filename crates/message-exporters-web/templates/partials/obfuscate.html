@@ -1,6 +1,0 @@
-{% import "macros.html" as m %}
-{% call m::checkbox_field("obfuscate", "Obfuscate", form.obfuscate) %}
-{% if form.obfuscate %}
-<p class="hint">Names, phones, message text, and media are replaced. Attachment files become placeholders only.</p>
-{% endif %}
-{% call m::text_field("obfuscate_seed", "Seed (optional)", form.obfuscate_seed, "8-hex seed", false) %}

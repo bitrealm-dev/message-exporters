@@ -1,7 +1,7 @@
 # Third-party notices
 
 This release archive bundles third-party binaries beside Message Exporters.
-Keep these files next to `message-exporters-gui` so helper discovery works.
+Keep these files next to `message-exporters-slint` so helper discovery works.
 
 ## wtsexporter
 

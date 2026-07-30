@@ -22,25 +22,12 @@ Source Markdown lives in [`docs/src/content/docs/`](docs/src/content/docs/) and 
 
 ## Quick start
 
-**Desktop app / binaries:** Download the platform ZIP from the latest [Release](https://github.com/bitrealm-dev/message-exporters/releases). Extract it and keep every file in the same folder. Run `message-exporters-gui`.
+**Desktop app / binaries:** Download the platform ZIP from the latest [Release](https://github.com/bitrealm-dev/message-exporters/releases). Extract it and keep every file in the same folder. Run `message-exporters-slint`.
 
 **From source:**
 
 ```bash
 cargo build --workspace --release
-cargo run --release -p message-exporters-gui
-```
-
-Rendering looks blurry on your display (common on some high-DPI Windows setups)? Run the
-browser-based alternative instead — same features, opens in your default browser:
-
-```bash
-cargo run --release -p message-exporters-web
-```
-
-Or try the Slint desktop GUI (retained-mode widgets; same features and `export.ini`):
-
-```bash
 cargo run --release -p message-exporters-slint
 ```
 
@@ -113,7 +100,7 @@ in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Experimental converters also ship in the GUI and release zip: GO SMS Pro, iMazing CSV, OpenExtract, and SMS Backup+. Use those when they are the only backup on hand. Details: the [docs site](https://bitrealm-dev.github.io/message-exporters/) and [exporter capability matrix](docs/maintainers/exporter-matrix.md).
 
-Already exported? The GUI **Convert** tab ([`message-reexport`](crates/message-ir/docs/REEXPORT.md)) converts a prior output folder to another format (CSV ↔ EML ↔ MBOX ↔ JSON ↔ JSONL ↔ XML).
+Already exported? The GUI **Format** tab ([`message-reexport`](crates/message-ir/docs/REEXPORT.md)) converts a prior output folder to another format (CSV ↔ EML ↔ MBOX ↔ JSON ↔ JSONL ↔ XML).
 
 Import into Message Vault with the GUI **Vault** tab or the [`vault-push`](crates/vault-push/docs/MANPAGE.md) CLI (JSONL export folder + Import API token).
 

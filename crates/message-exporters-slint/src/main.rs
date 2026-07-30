@@ -312,8 +312,7 @@ fn main() -> Result<(), slint::PlatformError> {
 */
 //! Slint desktop GUI for message-exporters.
 //!
-//! Additive alternative to `message-exporters-gui` and `message-exporters-web`.
-//! Same in-process exporter libraries, same `export.ini`.
+//! In-process exporter libraries and `export.ini` persistence.
 
 mod browse;
 mod jobs;
