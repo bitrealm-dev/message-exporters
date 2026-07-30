@@ -9,12 +9,8 @@ export global ExportAdapter {
     in-out property <string> exporter-key;
     in-out property <int> exporter-index;
     in property <[string]> exporter-options;
-    in property <string> exporter-command;
     in property <string> product-link-label;
     in property <string> product-url;
-
-    in-out property <int> output-format-index;
-    in property <[string]> output-format-options;
 
     in-out property <string> input;
     in-out property <string> output;
@@ -81,16 +77,6 @@ export component ExportPage inherits AnchoredScrollPage {
             model: ExportAdapter.exporter-options;
             current-index <=> ExportAdapter.exporter-index;
             selected(_) => { ExportAdapter.exporter-changed(ExportAdapter.exporter-index); }
-        }
-        LabeledLineEdit {
-            label: "Exporter";
-            value: ExportAdapter.exporter-command;
-            enabled: false;
-        }
-        LabeledComboBox {
-            label: "Output format";
-            model: ExportAdapter.output-format-options;
-            current-index <=> ExportAdapter.output-format-index;
         }
 
         if ExportAdapter.is-whatsapp: LabeledComboBox {
@@ -180,7 +166,7 @@ export component ExportPage inherits AnchoredScrollPage {
             message: "Obfuscate replaces all media with shared placeholders (real files are not copied or converted).";
         }
         if ExportAdapter.show-ffmpeg-warning: DangerHint {
-            message: "Convert/Compress need ffmpeg and ffprobe beside the app, in MESSAGE_EXPORTERS_BIN, or on PATH.";
+            message: "The Convert and Compress & Convert attachment modes need ffmpeg and ffprobe beside the app, in MESSAGE_EXPORTERS_BIN, or on PATH.";
         }
         if ExportAdapter.show-compress-options: LabeledComboBox {
             label: "Max resolution";
@@ -291,15 +277,18 @@ export component ExportPage inherits AnchoredScrollPage {
         }
 
         SectionDivider { }
-        SectionHeading { title: "Message filtering"; }
+        SectionHeading { title: "Message filtering (optional)"; }
+        Hint {
+            message: "Leave both dates blank to include all messages.";
+        }
         LabeledLineEdit {
             label: "Start date";
-            placeholder: "YYYY-MM-DD";
+            placeholder: "YYYY-MM-DD (optional)";
             value <=> ExportAdapter.start-date;
         }
         LabeledLineEdit {
-            label: "End date";
-            placeholder: "YYYY-MM-DD";
+            label: "End date (exclusive)";
+            placeholder: "YYYY-MM-DD (optional)";
             value <=> ExportAdapter.end-date;
         }
         CheckBoxRow {
@@ -322,7 +311,7 @@ export component ExportPage inherits AnchoredScrollPage {
             clicked => { ExportAdapter.clear(); }
         }
         Button {
-            text: "Run exporter";
+            text: "Extract messages";
             primary: true;
             enabled: ExportAdapter.enabled;
             clicked => { ExportAdapter.run(); }

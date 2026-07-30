@@ -33,9 +33,9 @@ export global ConvertAdapter {
 }
 
 export component ConvertPage inherits AnchoredScrollPage {
-    PageHeader { title: "Convert"; }
+    PageHeader { title: "Format"; }
     Hint {
-        message: "Convert a prior Message Exporters output directory to another format. Input format is auto-detected (csv, eml, mbox, json, jsonl, or xml).";
+        message: "Format a prior Message Exporters output directory as another file type. The input format is auto-detected (csv, eml, mbox, json, jsonl, or xml).";
     }
 
     LabeledPathField {
@@ -70,7 +70,7 @@ export component ConvertPage inherits AnchoredScrollPage {
         message: "Obfuscate replaces all media with shared placeholders (real files are not copied or converted).";
     }
     if ConvertAdapter.show-ffmpeg-warning: DangerHint {
-        message: "Convert/Compress need ffmpeg and ffprobe beside the app, in MESSAGE_EXPORTERS_BIN, or on PATH.";
+        message: "The Convert and Compress & Convert attachment modes need ffmpeg and ffprobe beside the app, in MESSAGE_EXPORTERS_BIN, or on PATH.";
     }
     if ConvertAdapter.show-compress-options: LabeledComboBox {
         label: "Max resolution";
@@ -116,7 +116,7 @@ export component ConvertPage inherits AnchoredScrollPage {
             clicked => { ConvertAdapter.clear(); }
         }
         Button {
-            text: "Run convert";
+            text: "Format messages";
             primary: true;
             enabled: ConvertAdapter.enabled;
             clicked => { ConvertAdapter.run(); }

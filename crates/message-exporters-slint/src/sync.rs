@@ -2,7 +2,7 @@
 //! / `ExportIniState` before validation and save.
 
 use message_exporters_core::{
-    AttachmentMedia, Exporter, WhatsappPlatform, contacts_kind_from_path,
+    AttachmentMedia, Exporter, OutputFormat, WhatsappPlatform, contacts_kind_from_path,
 };
 use message_media::ffmpeg_available;
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
@@ -16,7 +16,6 @@ use crate::{AppWindow, ContactsAdapter, ConvertAdapter, ExportAdapter, LogAdapte
 pub fn push_static_option_models(ui: &AppWindow) {
     let export = ui.global::<ExportAdapter>();
     export.set_exporter_options(options::exporter_options());
-    export.set_output_format_options(options::output_format_options());
     export.set_attachment_media_options(options::attachment_media_options());
     export.set_max_resolution_options(options::max_resolution_options());
     export.set_apple_platform_options(options::apple_platform_options());
@@ -75,11 +74,9 @@ pub fn push_export(ui: &AppWindow, state: &AppState) {
 
     export.set_exporter_key(SharedString::from(exporter.ini_key()));
     export.set_exporter_index(options::exporter_index(exporter));
-    export.set_exporter_command(SharedString::from(exporter.binary()));
     export.set_product_link_label(SharedString::from(exporter.link_label()));
     export.set_product_url(SharedString::from(exporter.product_url()));
 
-    export.set_output_format_index(options::output_format_index(form.output_format));
     export.set_input(SharedString::from(form.input.as_str()));
     export.set_output(SharedString::from(form.output.as_str()));
     export.set_db_path(SharedString::from(form.db_path.as_str()));
@@ -152,7 +149,7 @@ pub fn pull_export(ui: &AppWindow, state: &mut AppState) {
     let form = &mut state.form;
     state.exporter = options::exporter_at(export.get_exporter_index());
 
-    form.output_format = options::output_format_at(export.get_output_format_index());
+    form.output_format = OutputFormat::Jsonl;
     form.input = export.get_input().to_string();
     form.output = export.get_output().to_string();
     form.db_path = export.get_db_path().to_string();

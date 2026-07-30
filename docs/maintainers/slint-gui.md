@@ -8,9 +8,12 @@ Living design notes for the Slint-based desktop alternative to the native
 
 ## Goals
 
-- Same functionality as `message-exporters-gui` (Contacts, Export, Convert, Vault, Log),
+- Same underlying functionality as `message-exporters-gui`, presented as
+  Extract Messages, Format, Vault, Contacts, and Log,
   reusing `message-exporters-core` (`Form`, `ExporterConfig`, `ExportIniState`,
   `ProcessControl` / `ProcessEvent`) and the exporter library crates.
+- Keep extraction as a predictable first step: Extract Messages always writes
+  JSONL, while Format handles conversion to CSV, EML, MBOX, JSON, JSONL, or XML.
 - Dense desktop form layout (fixed label column, compact spacing, no vertical
   stretch on ordinary fields) using Slint's platform `native` widget style.
 - Leave `message-exporters-gui` and `message-exporters-web` untouched — this is
@@ -66,7 +69,8 @@ appending to the Log tab's `VecModel` and the session log file.
 
 Reads/writes the same `export.ini` as the other GUIs via
 `ExportIniState::load_or_default()` / `save()`. Saved after exporter switch /
-Run / Clear, and again when the window exits.
+Run / Clear, and again when the window exits. Running Extract Messages sets the
+shared output format to JSONL; the Format tab keeps its own re-export format.
 
 ## Licensing
 

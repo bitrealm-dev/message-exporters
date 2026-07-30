@@ -62,7 +62,11 @@ pub fn output_format_options() -> ModelRc<SharedString> {
 }
 
 pub fn attachment_media_options() -> ModelRc<SharedString> {
-    model_from_labels(ATTACHMENT_MEDIA.iter().map(|m| m.as_ini_str().to_string()))
+    model_from_labels(
+        ["Copy", "Convert", "Compress & Convert", "Skip"]
+            .into_iter()
+            .map(str::to_string),
+    )
 }
 
 pub fn max_resolution_options() -> ModelRc<SharedString> {

@@ -47,11 +47,11 @@ SLINT_STYLE=fluent cargo run -p message-exporters-slint
 
 ## Included
 
-- Top tabs: **Contacts** | **Export** | **Convert** | **Vault** | **Log**
-- **Contacts**: Check (dry run) / Update (write corrected files)
-- **Export**: backup-source picker, output formats, attachments, obfuscate, dates
-- **Convert**: convert a prior Message Exporters output folder to another format
+- Top tabs: **Extract Messages** | **Format** | **Vault** | **Contacts** | **Log**
+- **Extract Messages**: choose a backup source and extract a JSONL archive; attachments, obfuscation, and optional date filters are available
+- **Format**: convert a prior Message Exporters output folder to another format
 - **Vault**: push a JSONL export folder into Message Vault
+- **Contacts**: Check (dry run) / Update (write corrected files)
 - Forms for GO SMS Pro, SMS Backup & Restore, SMS Backup+, OpenExtract, iMazing, WhatsApp, and iPhone backup
 - Native file/folder dialogs via `rfd`
 - Live run log with cooperative cancel
