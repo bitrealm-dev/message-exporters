@@ -11,7 +11,7 @@ End-user guides (install, first export, formats) live on the [docs site](https:/
 | **Rust** | Stable toolchain via [rustup](https://rustup.rs/). This workspace uses Rust edition **2024**, which needs **Rust 1.85+**. CI builds with the latest stable. |
 | **Windows** | [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the “Desktop development with C++” workload (MSVC). |
 | **macOS** | Xcode Command Line Tools (`xcode-select --install`). |
-| **Linux** | C toolchain plus GUI system libs (see [Linux packages](#linux-packages) below). Slint can use Qt 5.15+ for a native look; without Qt it falls back to Fluent. |
+| **Linux** | C toolchain plus GUI system libs (see [Linux packages](#linux-packages) below). |
 | **Node.js 24** | Only if you edit the Astro Starlight docs under `docs/`. |
 
 Optional for full WhatsApp / media features while developing: Python (`pip`) for `wtsexporter`, and `ffmpeg` / `ffprobe` on `PATH` (or see [Helper binaries](#helper-binaries-and-environment-variables)).
