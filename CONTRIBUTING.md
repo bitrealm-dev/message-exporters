@@ -59,7 +59,7 @@ cargo build --workspace --release
 Binaries that are only needed when packaging a release ZIP (not for day-to-day GUI work):
 
 ```bash
-cargo build --release -p message-ir --bin message-reexporter --features cli
+cargo build --release -p ir --bin message-reexporter --features cli
 cargo build --release -p vault-push --features cli
 ```
 
@@ -92,7 +92,6 @@ Most export work runs in-process as Rust libraries. A few features still shell o
 |--------|----------|
 | `wtsexporter` | WhatsApp extract step |
 | `ffmpeg` / `ffprobe` | Media convert / compress |
-| `contacts-validate` | Contacts CLI (also available as a library from the GUIs) |
 
 Lookup order: beside the current executable → one directory up (release ZIP layout) → directory in `MESSAGE_EXPORTERS_BIN` → `PATH`. WhatsApp also accepts an explicit `WTSEXPORTER` path.
 
@@ -159,10 +158,10 @@ Do not edit generated files under `docs/src/content/docs/reference/cli/` by hand
 
 ## Workspace map
 
-- **Libraries:** `message-ir`, `message-exporters-core`, `message-contacts`, `message-media`, `message-mail`, `message-sbr`, …
-- **Exporter crates:** `imessage-ir-exporter`, `whatsapp-exporter`, `sms-backup-restore-exporter`, and experimental converters (GO SMS Pro, iMazing, OpenExtract, SMS Backup+)
+- **Libraries:** under `crates/message/` — `ir`, `contacts`, `media`, `mail`, `sbr`, `phone`, `csv`, `obfuscate`; plus `message-exporters-core`
+- **Exporter crates:** under `crates/exporters/` — `imessage-ir-exporter`, `whatsapp-exporter`, `sms-backup-restore-exporter`, and experimental converters (GO SMS Pro, iMazing, OpenExtract, SMS Backup+)
 - **GUI:** `message-exporters-slint`
-- **Utilities:** `vault-push`, `message-reexporter` (package `message-ir`, `--features cli`)
+- **Utilities:** `vault-push`, `message-reexporter` (package `ir`, `--features cli`)
 
 Most crates are MIT. `imessage-ir-exporter` is **GPL-3.0-or-later** (via `imessage-database` / `crabapple`). The GUI binary therefore includes GPL-licensed code.
 

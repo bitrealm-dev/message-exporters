@@ -18,28 +18,28 @@ const pages = [
     title: 'iPhone backup (imessage-ir-exporter)',
     description:
       'Command-line options for exporting Apple Messages from an iPhone backup or chat database.',
-    source: 'crates/imessage-ir-exporter/docs/MANPAGE.md',
+    source: 'crates/exporters/imessage-ir-exporter/docs/MANPAGE.md',
   },
   {
     slug: 'sms-backup-restore-exporter',
     title: 'SMS Backup & Restore',
     description:
       'Command-line options for converting an SMS Backup & Restore XML file.',
-    source: 'crates/sms-backup-restore-exporter/docs/MANPAGE.md',
+    source: 'crates/exporters/sms-backup-restore-exporter/docs/MANPAGE.md',
   },
   {
     slug: 'whatsapp-exporter',
     title: 'WhatsApp',
     description:
       'Command-line options for extracting and converting Apple or Android WhatsApp backups.',
-    source: 'crates/whatsapp-exporter/docs/MANPAGE.md',
+    source: 'crates/exporters/whatsapp-exporter/docs/MANPAGE.md',
   },
   {
     slug: 'message-reexporter',
     title: 'Convert an existing export',
     description:
       'Command-line options for converting a Message Exporters output directory to another format.',
-    source: 'crates/message-ir/docs/MESSAGE_REEXPORTER.md',
+    source: 'crates/message/ir/docs/MESSAGE_REEXPORTER.md',
   },
   {
     slug: 'vault-push',
@@ -53,28 +53,28 @@ const pages = [
     title: 'GO SMS Pro',
     description:
       'Command-line options for rescuing messages from a GO SMS Pro XML export.',
-    source: 'crates/go-sms-pro-exporter/docs/MANPAGE.md',
+    source: 'crates/exporters/go-sms-pro-exporter/docs/MANPAGE.md',
   },
   {
     slug: 'imazing-exporter',
     title: 'iMazing',
     description:
       'Command-line options for rescuing messages from an iMazing CSV export.',
-    source: 'crates/imazing-exporter/docs/MANPAGE.md',
+    source: 'crates/exporters/imazing-exporter/docs/MANPAGE.md',
   },
   {
     slug: 'openextract-exporter',
     title: 'OpenExtract',
     description:
       'Command-line options for rescuing messages from an OpenExtract export.',
-    source: 'crates/openextract-exporter/docs/MANPAGE.md',
+    source: 'crates/exporters/openextract-exporter/docs/MANPAGE.md',
   },
   {
     slug: 'sms-backup-plus-exporter',
     title: 'SMS Backup+',
     description:
       'Command-line options for rescuing messages from an SMS Backup+ mail archive.',
-    source: 'crates/sms-backup-plus-exporter/docs/MANPAGE.md',
+    source: 'crates/exporters/sms-backup-plus-exporter/docs/MANPAGE.md',
   },
 ];
 

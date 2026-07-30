@@ -10,7 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
 use message_exporters_core::{CancelFlag, check_cancel};
-use message_ir::{ConversationHeader, read_conversation_jsonl};
+use ir::{ConversationHeader, read_conversation_jsonl};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 

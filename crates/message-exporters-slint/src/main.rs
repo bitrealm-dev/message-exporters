@@ -327,10 +327,10 @@ use std::sync::{Arc, Mutex, mpsc};
 
 use chrono::{Datelike, Local, NaiveDate};
 use jobs::{LibraryJob, library_job_for_exporter, prepare_library_config, run_and_log};
-use message_contacts::{ValidateMode, probe_contacts_input, validate_contacts_file};
+use contacts::{ValidateMode, probe_contacts_input, validate_contacts_file};
 use message_exporters_core::{ProcessEvent, VaultSection, spawn_job};
-use message_ir::reexport::run as run_reexport;
-use message_phone::PhoneRegion;
+use ir::reexport::run as run_reexport;
+use phone::PhoneRegion;
 use slint::ComponentHandle;
 use state::{AppState, ensure_output_dir_checked};
 use vault_push::{

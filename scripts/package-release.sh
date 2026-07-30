@@ -3,8 +3,7 @@
 #
 # Layout:
 #   ZIP root  — message-exporters-slint + wtsexporter + ffmpeg/ffprobe + notices
-#   cli/      — exporter CLIs, message-reexporter, vault-push, contacts-validate,
-#               imazing-obfuscate
+#   cli/      — exporter CLIs, message-reexporter, vault-push
 #
 # Usage:
 #   scripts/package-release.sh <version> <artifact_suffix> [ext]
@@ -52,9 +51,7 @@ for bin in \
   imessage-ir-exporter \
   whatsapp-exporter \
   message-reexporter \
-  vault-push \
-  contacts-validate \
-  imazing-obfuscate
+  vault-push
 do
   src="${RELEASE_DIR}/${bin}${EXT}"
   if [[ ! -f "$src" ]]; then

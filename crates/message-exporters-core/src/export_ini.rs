@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use ini::Ini;
-use message_media::MaxResolution;
+use media::MaxResolution;
 
 use crate::config::OutputFormat;
 use crate::exporters::{

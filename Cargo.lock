@@ -1237,6 +1237,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "contacts"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "csv 1.4.0",
+ "phone",
+ "tempfile",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1447,6 +1458,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce6e4c961d6cd6c9a86db418387425e8bdeaf05b3c8bc1411e6dca4c252f1453"
 dependencies = [
  "hybrid-array",
+]
+
+[[package]]
+name = "csv"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
 ]
 
 [[package]]
@@ -2367,15 +2389,15 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
- "csv",
+ "contacts",
+ "csv 0.1.0",
+ "csv 1.4.0",
  "hex",
- "message-contacts",
- "message-csv",
+ "ir",
+ "media",
  "message-exporters-core",
- "message-ir",
- "message-media",
- "message-obfuscate",
- "message-phone",
+ "obfuscate",
+ "phone",
  "quick-xml 0.41.0",
  "regex",
  "serde",
@@ -3242,15 +3264,15 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
- "csv",
+ "contacts",
+ "csv 0.1.0",
+ "csv 1.4.0",
  "hex",
- "message-contacts",
- "message-csv",
+ "ir",
+ "media",
  "message-exporters-core",
- "message-ir",
- "message-media",
- "message-obfuscate",
- "message-phone",
+ "obfuscate",
+ "phone",
  "serde_json",
  "sha2 0.11.0",
  "tempfile",
@@ -3281,12 +3303,12 @@ dependencies = [
  "chrono",
  "clap",
  "crabapple",
+ "csv 0.1.0",
  "hex",
  "imessage-database",
- "message-csv",
+ "ir",
+ "mail",
  "message-exporters-core",
- "message-ir",
- "message-mail",
  "rpassword",
  "rusqlite",
  "serde",
@@ -3376,6 +3398,25 @@ name = "ipnet"
 version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d98f6fed1fde3f8c21bc40a1abb88dd75e67924f9cffc3ef95607bad8017f8e2"
+
+[[package]]
+name = "ir"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "csv 0.1.0",
+ "csv 1.4.0",
+ "mail",
+ "media",
+ "message-exporters-core",
+ "obfuscate",
+ "phone",
+ "sbr",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "is-docker"
@@ -3820,6 +3861,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mail"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "csv 0.1.0",
+ "mail-builder",
+ "mailparse",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "mail-builder"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3850,6 +3905,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "media"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "csv 1.4.0",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3874,33 +3939,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "message-contacts"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "csv",
- "message-phone",
- "tempfile",
-]
-
-[[package]]
-name = "message-csv"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "hex",
- "serde",
- "serde_json",
- "sha2 0.11.0",
-]
-
-[[package]]
 name = "message-exporters-core"
 version = "0.1.0"
 dependencies = [
- "message-csv",
- "message-media",
+ "csv 0.1.0",
+ "media",
  "rust-ini",
  "tempfile",
 ]
@@ -3910,16 +3953,16 @@ name = "message-exporters-slint"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "contacts",
  "go-sms-pro-exporter",
  "imazing-exporter",
  "imessage-ir-exporter",
- "message-contacts",
+ "ir",
+ "media",
  "message-exporters-core",
- "message-ir",
- "message-media",
- "message-phone",
  "open",
  "openextract-exporter",
+ "phone",
  "rfd",
  "slint",
  "slint-build",
@@ -3927,88 +3970,6 @@ dependencies = [
  "sms-backup-restore-exporter",
  "vault-push",
  "whatsapp-exporter",
-]
-
-[[package]]
-name = "message-ir"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "csv",
- "message-csv",
- "message-exporters-core",
- "message-mail",
- "message-media",
- "message-obfuscate",
- "message-phone",
- "message-sbr",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "message-mail"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "mail-builder",
- "mailparse",
- "message-csv",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "message-media"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "csv",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "message-obfuscate"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "csv",
- "hex",
- "hmac 0.12.1",
- "rand 0.9.5",
- "regex",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
-]
-
-[[package]]
-name = "message-phone"
-version = "0.1.0"
-dependencies = [
- "anyhow",
-]
-
-[[package]]
-name = "message-sbr"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "hex",
- "html-escape",
- "message-phone",
- "quick-xml 0.41.0",
- "regex",
- "serde",
- "sha2 0.11.0",
- "tempfile",
 ]
 
 [[package]]
@@ -4242,6 +4203,22 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "obfuscate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "csv 1.4.0",
+ "hex",
+ "hmac 0.12.1",
+ "rand 0.9.5",
+ "regex",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
 ]
 
 [[package]]
@@ -4652,14 +4629,14 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
- "csv",
- "message-contacts",
- "message-csv",
+ "contacts",
+ "csv 0.1.0",
+ "csv 1.4.0",
+ "ir",
+ "media",
  "message-exporters-core",
- "message-ir",
- "message-media",
- "message-obfuscate",
- "message-phone",
+ "obfuscate",
+ "phone",
  "serde_json",
  "tempfile",
 ]
@@ -4859,6 +4836,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57fef6bc5981e38c2ce2d63bfa546861309f875b8a75f092d1d54ae2d64f266"
 dependencies = [
  "siphasher",
+]
+
+[[package]]
+name = "phone"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
 ]
 
 [[package]]
@@ -5818,6 +5802,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sbr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "hex",
+ "html-escape",
+ "phone",
+ "quick-xml 0.41.0",
+ "regex",
+ "serde",
+ "sha2 0.11.0",
+ "tempfile",
+]
+
+[[package]]
 name = "scoped-tls"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6250,16 +6250,16 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
- "csv",
+ "contacts",
+ "csv 0.1.0",
+ "csv 1.4.0",
  "hex",
+ "ir",
  "mailparse",
- "message-contacts",
- "message-csv",
+ "media",
  "message-exporters-core",
- "message-ir",
- "message-media",
- "message-obfuscate",
- "message-phone",
+ "obfuscate",
+ "phone",
  "rayon",
  "regex",
  "serde",
@@ -6275,11 +6275,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "message-contacts",
- "message-csv",
+ "contacts",
+ "csv 0.1.0",
+ "ir",
+ "media",
  "message-exporters-core",
- "message-ir",
- "message-media",
  "serde_json",
  "tempfile",
 ]
@@ -7171,11 +7171,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "csv 0.1.0",
  "hex",
  "httpmock",
- "message-csv",
+ "ir",
  "message-exporters-core",
- "message-ir",
  "reqwest",
  "serde",
  "serde_json",
@@ -7499,13 +7499,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "csv 0.1.0",
  "hex",
- "message-csv",
+ "ir",
+ "media",
  "message-exporters-core",
- "message-ir",
- "message-media",
- "message-obfuscate",
- "message-phone",
+ "obfuscate",
+ "phone",
  "serde",
  "serde_json",
  "sha2 0.11.0",

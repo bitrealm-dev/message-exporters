@@ -2,8 +2,8 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use message_csv::DateRange;
-use message_media::{MaxResolution, MediaMode};
+use csv::DateRange;
+use media::{MaxResolution, MediaMode};
 
 use crate::config::{
     AppleConfig, ContactsConfig, ExporterConfig, GoSmsProConfig, ImazingConfig, MediaConfig,
@@ -92,7 +92,7 @@ impl Exporter {
             Self::OpenExtract => "https://www.openextract.app/",
             Self::Imazing => "https://imazing.com/",
             Self::Imessage => {
-                "https://github.com/bitrealm-dev/message-exporters/tree/main/crates/imessage-ir-exporter"
+                "https://github.com/bitrealm-dev/message-exporters/tree/main/crates/exporters/imessage-ir-exporter"
             }
             Self::Whatsapp => "https://github.com/KnugiHK/WhatsApp-Chat-Exporter",
         }
@@ -463,7 +463,7 @@ impl Form {
         let obfuscate_active = self.obfuscate || !self.obfuscate_seed.trim().is_empty();
         if !obfuscate_active
             && self.attachment_media.needs_ffmpeg()
-            && !message_media::ffmpeg_available()
+            && !media::ffmpeg_available()
         {
             errors.push(
                 "Convert/Compress require ffmpeg and ffprobe beside the program, in MESSAGE_EXPORTERS_BIN, or on PATH.".into(),
@@ -752,7 +752,7 @@ impl Form {
         let mode = self.attachment_media.media_mode();
         let obfuscate_active = self.obfuscate || !self.obfuscate_seed.trim().is_empty();
         // Obfuscate skips copy/convert, so ffmpeg is not required.
-        if !obfuscate_active && mode.needs_tools() && !message_media::ffmpeg_available() {
+        if !obfuscate_active && mode.needs_tools() && !media::ffmpeg_available() {
             errors.push(
                 "Convert/Compress require ffmpeg and ffprobe beside the program, in MESSAGE_EXPORTERS_BIN, or on PATH.".into(),
             );
@@ -775,17 +775,17 @@ impl Form {
                 Ok(options) => options,
                 Err(error) => {
                     errors.push(error);
-                    message_media::CompressOptions::default()
+                    media::CompressOptions::default()
                 }
             }
         } else {
-            message_media::CompressOptions::default()
+            media::CompressOptions::default()
         };
         MediaConfig { mode, compress }
     }
 
     /// Compress options for GUI iMessage post-process (after exporter exits).
-    pub fn compress_options(&self) -> Result<message_media::CompressOptions, String> {
+    pub fn compress_options(&self) -> Result<media::CompressOptions, String> {
         let fps = self.media_max_fps.trim();
         if fps.is_empty() {
             return Err("Max fps is required for Compress.".into());
@@ -797,7 +797,7 @@ impl Form {
         if min_size.is_empty() {
             return Err("Min size is required for Compress.".into());
         }
-        message_media::compress_options_from_cli(
+        media::compress_options_from_cli(
             self.media_max_resolution,
             fps,
             min_size,

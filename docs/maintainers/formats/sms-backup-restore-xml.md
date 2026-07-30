@@ -14,7 +14,7 @@ Root structure:
 </smses>
 ```
 
-This is the same family of files that [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/) reads. The importer’s source-format reference is [`INPUT_FORMAT.md`](../../../crates/sms-backup-restore-exporter/docs/INPUT_FORMAT.md).
+This is the same family of files that [SMS Backup & Restore](https://www.synctech.com.au/sms-backup-restore/) reads. The importer’s source-format reference is [`INPUT_FORMAT.md`](../../../crates/exporters/sms-backup-restore-exporter/docs/INPUT_FORMAT.md).
 
 **Motivation:** Android compatibility. Full-device Android backup/restore without third-party tooling requires root and often an unlocked bootloader; the SMS Backup & Restore app restores `smses.xml` without either, so this format is the practical path for putting messages back onto an Android phone.
 
@@ -22,9 +22,9 @@ This is the same family of files that [SMS Backup & Restore](https://www.synctec
 
 | Piece | Crate / API |
 |-------|-------------|
-| XML codec (streaming read/write, SMIL, MMS media) | [`message-sbr`](../../../crates/message-sbr/) |
-| SBR → common message | [`message_ir::read_sbr_documents`](../../../crates/message-ir/src/read_sbr.rs) |
-| Common message → SBR + export sink | [`message_ir::FormatSink`](../../../crates/message-ir/) (XML uses `SbrBackupSession` internally) |
+| XML codec (streaming read/write, SMIL, MMS media) | [`message-sbr`](../../../crates/message/sbr/) |
+| SBR → common message | [`ir::read_sbr_documents`](../../../crates/message/ir/src/read_sbr.rs) |
+| Common message → SBR + export sink | [`ir::FormatSink`](../../../crates/message/ir/) (XML uses `SbrBackupSession` internally) |
 | CLI / GUI | `--format xml` / `OutputFormat::Xml` |
 
 Exporters use `FormatSink::open` → `write_document` per conversation → `finish`. Do **not** call `write_format(..., Xml, …)` (returns an error — a single shared file cannot be safely rewritten per chat).
@@ -40,4 +40,4 @@ Exporters use `FormatSink::open` → `write_document` per conversation → `fini
 
 - [Message-ir architecture](../architecture/message-ir.md) — shared model and projectors
 - [What’s inside an export](../../src/content/docs/understand-output/export-structure.md) — end-user workflow
-- [SMS Backup & Restore import mapping](../../../crates/sms-backup-restore-exporter/docs/IMPORT_MAPPING.md) — XML source → shared model
+- [SMS Backup & Restore import mapping](../../../crates/exporters/sms-backup-restore-exporter/docs/IMPORT_MAPPING.md) — XML source → shared model

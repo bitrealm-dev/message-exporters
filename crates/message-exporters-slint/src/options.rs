@@ -4,7 +4,7 @@ use message_exporters_core::{
     APPLE_PLATFORMS, ATTACHMENT_MEDIA, ApplePlatform, AttachmentMedia, EXPORTERS, Exporter,
     MAX_RESOLUTIONS, OUTPUT_FORMATS_MAIL, OutputFormat, WHATSAPP_PLATFORMS, WhatsappPlatform,
 };
-use message_media::MaxResolution;
+use media::MaxResolution;
 use slint::{ModelRc, SharedString, VecModel};
 
 const OUTPUT_FORMATS_ALPHABETICAL: [OutputFormat; OUTPUT_FORMATS_MAIL.len()] = [

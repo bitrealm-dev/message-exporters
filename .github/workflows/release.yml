@@ -76,7 +76,7 @@ jobs:
       - name: Build release binaries
         run: |
           cargo build --workspace --release
-          cargo build --release -p message-ir --bin message-reexporter --features cli
+          cargo build --release -p ir --bin message-reexporter --features cli
           cargo build --release -p vault-push --features cli
 
       - name: Sign Windows binaries
@@ -116,9 +116,7 @@ jobs:
             imessage-ir-exporter \
             whatsapp-exporter \
             message-reexporter \
-            vault-push \
-            contacts-validate \
-            imazing-obfuscate
+            vault-push
           do
             path="target/release/${bin}.exe"
             if [[ ! -f "$path" ]]; then
@@ -168,9 +166,7 @@ jobs:
             imessage-ir-exporter \
             whatsapp-exporter \
             message-reexporter \
-            vault-push \
-            contacts-validate \
-            imazing-obfuscate
+            vault-push
           do
             path="target/release/${bin}"
             if [[ ! -f "$path" ]]; then
@@ -248,7 +244,7 @@ jobs:
           ### Layout
 
           - **ZIP root:** \`message-exporters-slint\`, WhatsApp \`wtsexporter\` 0.13.0, bundled \`ffmpeg\` / \`ffprobe\` (eugeneware/ffmpeg-static \`b6.1.1\`), and license notices. The GUI runs exporters as libraries; keep the helpers beside it.
-          - **\`cli/\`:** standalone exporter CLIs, \`message-reexporter\`, \`vault-push\`, \`contacts-validate\`, and \`imazing-obfuscate\`.
+          - **\`cli/\`:** standalone exporter CLIs, \`message-reexporter\`, and \`vault-push\`.
 
           ### Notes
 

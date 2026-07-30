@@ -1,8 +1,8 @@
 //! Project message-ir v3 records into vault NDJSON v1 wire lines.
 
 use anyhow::{Context, Result, bail};
-use message_csv::format_local_ts;
-use message_ir::{
+use csv::format_local_ts;
+use ir::{
     ConversationDocument, ConversationHeader, IrAttachment, IrDirection, IrImessage, IrMessage,
     IrService, SCHEMA_VERSION,
 };
@@ -191,7 +191,7 @@ pub fn message_line(msg: &IrMessage, digests: &[(usize, String)]) -> Result<(Vec
         send_effect: im.and_then(|i| i.send_effect.clone()),
         shared_location: im.and_then(|i| i.shared_location.clone()),
         is_announcement: im.map(|i| i.announcement.is_some()).unwrap_or(false)
-            || matches!(msg.message_kind, message_ir::IrMessageKind::Announcement),
+            || matches!(msg.message_kind, ir::IrMessageKind::Announcement),
         announcement: im.and_then(|i| i.announcement.clone()),
         attachments,
         tapbacks: value_array(im.and_then(|i| i.tapbacks.as_ref())),
@@ -298,7 +298,7 @@ pub fn document_conversation_line(doc: &ConversationDocument) -> Result<Vec<u8>>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use message_ir::{
+    use ir::{
         ConversationMeta, ConversationStats, ExportMeta, IrConversationType, IrMessageKind,
         IrParticipant,
     };

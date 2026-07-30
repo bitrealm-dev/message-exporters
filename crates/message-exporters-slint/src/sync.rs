@@ -4,7 +4,7 @@
 use message_exporters_core::{
     AttachmentMedia, Exporter, OutputFormat, WhatsappPlatform, contacts_kind_from_path,
 };
-use message_media::ffmpeg_available;
+use media::ffmpeg_available;
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use std::rc::Rc;
 use vault_push::detect_source as vault_detect_source;

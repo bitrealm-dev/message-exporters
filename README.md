@@ -94,13 +94,13 @@ in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 | Backup | Converter |
 |--------|-----------|
-| Apple Messages (`chat.db`) | [`imessage-ir-exporter`](crates/imessage-ir-exporter) |
-| SMS Backup & Restore (SyncTech XML) | [`sms-backup-restore-exporter`](crates/sms-backup-restore-exporter) |
-| WhatsApp (native DB / crypt) | [`whatsapp-exporter`](crates/whatsapp-exporter) |
+| Apple Messages (`chat.db`) | [`imessage-ir-exporter`](crates/exporters/imessage-ir-exporter) |
+| SMS Backup & Restore (SyncTech XML) | [`sms-backup-restore-exporter`](crates/exporters/sms-backup-restore-exporter) |
+| WhatsApp (native DB / crypt) | [`whatsapp-exporter`](crates/exporters/whatsapp-exporter) |
 
 Experimental converters also ship in the GUI and release zip: GO SMS Pro, iMazing CSV, OpenExtract, and SMS Backup+. Use those when they are the only backup on hand. Details: the [docs site](https://bitrealm-dev.github.io/message-exporters/) and [exporter capability matrix](docs/maintainers/exporter-matrix.md).
 
-Already exported? The GUI **Format** tab ([`message-reexport`](crates/message-ir/docs/REEXPORT.md)) converts a prior output folder to another format (CSV ↔ EML ↔ MBOX ↔ JSON ↔ JSONL ↔ XML).
+Already exported? The GUI **Format** tab ([`message-reexport`](crates/message/ir/docs/REEXPORT.md)) converts a prior output folder to another format (CSV ↔ EML ↔ MBOX ↔ JSON ↔ JSONL ↔ XML).
 
 Import into Message Vault with the GUI **Vault** tab or the [`vault-push`](crates/vault-push/docs/MANPAGE.md) CLI (JSONL export folder + Import API token).
 

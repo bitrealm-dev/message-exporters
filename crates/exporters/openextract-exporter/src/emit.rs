@@ -1,0 +1,534 @@
+//! Convert OpenExtract rows → common message → packaging via FormatSink.
+
+use crate::parse::{RawRow, SourceKind, discover_csv_files, parse_csv_file};
+use anyhow::{Context, Result};
+use chrono::DateTime;
+use contacts::ContactsBook;
+use csv::{DateRange, format_local_ts, stable_guid};
+use message_exporters_core::{CancelFlag, OutputFormat};
+use ir::{
+    ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
+    FormatSink, FormatSinkResult, IrConversationType, IrDirection, IrMessage, IrMessageKind,
+    IrParticipant, IrService, IrSource, SCHEMA_VERSION, clean_previous_ir_output, owner_sender,
+};
+use phone::{sanitize_number, to_e164};
+use serde_json::{Map, json};
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
+
+const EXPORT_SOURCE: &str = "openextract";
+const EXPORT_TOOL: &str = "OpenExtract";
+const EXPORT_TOOL_VERSION: &str = "0.5.1";
+
+fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
+    message_exporters_core::check_cancel(cancel).map_err(anyhow::Error::msg)
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct ExportReport {
+    pub conversations: u64,
+    pub messages: u64,
+    pub sent: u64,
+    pub received: u64,
+    pub skipped_invalid_date: u64,
+    pub skipped_out_of_range: u64,
+    /// Rows/chats where peer was a name with no VCF phone (name-only chat id).
+    pub unresolved_chat_phone: u64,
+    pub errors: Vec<String>,
+}
+
+#[derive(Debug)]
+struct PendingMessage {
+    sort_key: f64,
+    is_from_me: bool,
+    sender_handle: String,
+    sender_display_name: String,
+    text: String,
+    contact_name: String,
+    date_ms: String,
+    has_attachments: bool,
+    source_kind: SourceKind,
+}
+
+#[derive(Debug, Default)]
+struct PendingConversation {
+    messages: Vec<PendingMessage>,
+}
+
+/// Convert OpenExtract CSV(s) under `input` using `book` (from VCF/contacts).
+///
+/// When `cancel` is set, cooperative cancellation is checked between CSV files
+/// and before writing. Cancelled runs return an error with message `cancelled`.
+pub(crate) fn convert_export(
+    input: &Path,
+    output: &Path,
+    book: &ContactsBook,
+    date_range: &DateRange,
+    transforms: ExportTransforms,
+    output_format: OutputFormat,
+    cancel: Option<&CancelFlag>,
+) -> Result<(ExportReport, FormatSinkResult)> {
+    fs::create_dir_all(output).with_context(|| format!("create {}", output.display()))?;
+    clean_previous_ir_output(output)?;
+    let mut sink = FormatSink::open(output, output_format, transforms)?;
+
+    let files = discover_csv_files(input)?;
+    let mut report = ExportReport::default();
+    let mut conversations: BTreeMap<String, PendingConversation> = BTreeMap::new();
+
+    // For per-chat files, infer peer once from all rows in that file.
+    for path in &files {
+        check_cancel(cancel)?;
+        let rows = match parse_csv_file(path) {
+            Ok(r) => r,
+            Err(e) => {
+                report.errors.push(format!("{}: {e:#}", path.display()));
+                continue;
+            }
+        };
+        if rows.is_empty() {
+            continue;
+        }
+
+        let per_chat_peer = if rows[0].source_kind == SourceKind::PerChat {
+            Some(infer_peer_label(&rows))
+        } else {
+            None
+        };
+
+        for row in rows {
+            let peer_label = row
+                .conversation
+                .as_deref()
+                .filter(|s| !s.is_empty() && !is_me(s))
+                .map(|s| s.to_string())
+                .or_else(|| {
+                    if !row.is_from_me && !is_me(&row.sender) {
+                        Some(row.sender.clone())
+                    } else {
+                        per_chat_peer.clone()
+                    }
+                })
+                .unwrap_or_else(|| "unknown".to_string());
+
+            let (chat_id, contact_name, unresolved) = resolve_chat(book, &peer_label);
+            if unresolved {
+                report.unresolved_chat_phone += 1;
+            }
+
+            let Some((secs, date_ms)) = parse_timestamp(&row.date) else {
+                report.skipped_invalid_date += 1;
+                continue;
+            };
+            if !date_range.contains_secs(secs) {
+                report.skipped_out_of_range += 1;
+                continue;
+            }
+
+            let is_from_me = resolve_is_from_me(&row);
+            let (sender_handle, sender_display_name) =
+                resolve_sender(book, &row, is_from_me, &chat_id, &contact_name);
+
+            let convo = conversations.entry(chat_id).or_default();
+            convo.messages.push(PendingMessage {
+                sort_key: secs as f64,
+                is_from_me,
+                sender_handle,
+                sender_display_name,
+                text: row.text,
+                contact_name,
+                date_ms,
+                has_attachments: row.has_attachments,
+                source_kind: row.source_kind,
+            });
+        }
+    }
+
+    check_cancel(cancel)?;
+
+    for (chat_id, mut convo) in conversations {
+        if !prepare_conversation(&mut convo, &mut report) {
+            continue;
+        }
+        let doc = pending_to_document(&chat_id, &convo, &mut report)?;
+        sink.write_document(doc)?;
+        report.conversations += 1;
+    }
+    let sink_result = sink.finish()?;
+
+    Ok((report, sink_result))
+}
+
+fn prepare_conversation(convo: &mut PendingConversation, report: &mut ExportReport) -> bool {
+    if convo.messages.is_empty() {
+        return false;
+    }
+    convo.messages.sort_by(|a, b| {
+        a.sort_key
+            .partial_cmp(&b.sort_key)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    convo.messages.retain(|m| {
+        if format_local_ts(m.sort_key as i64).is_some() {
+            true
+        } else {
+            report.skipped_invalid_date += 1;
+            false
+        }
+    });
+    !convo.messages.is_empty()
+}
+
+fn is_me(s: &str) -> bool {
+    s.trim().eq_ignore_ascii_case("me")
+}
+
+fn infer_peer_label(rows: &[RawRow]) -> String {
+    let mut phone_peer = None;
+    let mut name_peer = None;
+    for row in rows {
+        if row.is_from_me || is_me(&row.sender) {
+            continue;
+        }
+        if sanitize_number(&row.sender).is_some() {
+            phone_peer.get_or_insert_with(|| row.sender.clone());
+        } else if name_peer.is_none() {
+            name_peer = Some(row.sender.clone());
+        }
+    }
+    phone_peer
+        .or(name_peer)
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+/// Returns `(chat_identifier, contact_name, unresolved_phone)`.
+fn resolve_chat(book: &ContactsBook, peer: &str) -> (String, String, bool) {
+    let peer = peer.trim();
+    if peer.is_empty() || peer.eq_ignore_ascii_case("unknown") {
+        return ("unknown".to_string(), String::new(), true);
+    }
+    if let Some(digits) = sanitize_number(peer) {
+        let e164 = to_e164(&digits);
+        let name = book.lookup_name_by_phone(&digits).unwrap_or("").to_string();
+        return (e164, name, false);
+    }
+    if let Some(e164) = book.lookup_e164_by_name(peer) {
+        return (e164, peer.to_string(), false);
+    }
+    // Name-only chat id — not fatal; vault may struggle later.
+    (name_stem(peer), peer.to_string(), true)
+}
+
+fn name_stem(value: &str) -> String {
+    let raw: String = value
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '+' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if raw.is_empty() || raw.chars().all(|c| c == '_') {
+        "unknown".to_string()
+    } else {
+        raw
+    }
+}
+
+fn resolve_is_from_me(row: &RawRow) -> bool {
+    if let Some(dir) = row.direction.as_deref() {
+        let d = dir.trim().to_ascii_lowercase();
+        if d == "sent" || d == "outgoing" {
+            return true;
+        }
+        if d == "received" || d == "incoming" {
+            return false;
+        }
+    }
+    row.is_from_me
+}
+
+fn resolve_sender(
+    book: &ContactsBook,
+    row: &RawRow,
+    is_from_me: bool,
+    chat_id: &str,
+    contact_name: &str,
+) -> (String, String) {
+    if is_from_me {
+        return (String::new(), String::new());
+    }
+    // Prefer phone on chat_id when it looks like E.164.
+    let handle = if chat_id.starts_with('+') || sanitize_number(chat_id).is_some() {
+        if chat_id.starts_with('+') {
+            chat_id.to_string()
+        } else {
+            sanitize_number(chat_id)
+                .map(|d| to_e164(&d))
+                .unwrap_or_default()
+        }
+    } else if let Some(digits) = sanitize_number(&row.sender) {
+        to_e164(&digits)
+    } else {
+        String::new()
+    };
+
+    let display = if !contact_name.is_empty() {
+        contact_name.to_string()
+    } else if let Some(digits) = sanitize_number(&row.sender) {
+        book.lookup_name_by_phone(&digits).unwrap_or("").to_string()
+    } else if !is_me(&row.sender) {
+        row.sender.clone()
+    } else {
+        String::new()
+    };
+
+    (handle, display)
+}
+
+fn parse_timestamp(raw: &str) -> Option<(i64, String)> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    // RFC3339 / ISO-8601 with offset (OpenExtract style).
+    if let Ok(dt) = DateTime::parse_from_rfc3339(raw) {
+        let secs = dt.timestamp();
+        return Some((secs, (secs * 1000).to_string()));
+    }
+    // Fallback without fractional seconds.
+    if let Ok(dt) = DateTime::parse_from_str(raw, "%Y-%m-%dT%H:%M:%S%z") {
+        let secs = dt.timestamp();
+        return Some((secs, (secs * 1000).to_string()));
+    }
+    None
+}
+
+fn pending_to_document(
+    chat_id: &str,
+    convo: &PendingConversation,
+    report: &mut ExportReport,
+) -> Result<ConversationDocument> {
+    let contact_name = convo
+        .messages
+        .iter()
+        .map(|m| m.contact_name.trim())
+        .find(|n| !n.is_empty())
+        .map(str::to_string);
+    let participants = if chat_id.is_empty() || chat_id.eq_ignore_ascii_case("unknown") {
+        Vec::new()
+    } else {
+        vec![IrParticipant {
+            handle: chat_id.to_string(),
+            display_name: contact_name,
+        }]
+    };
+
+    let export = ExportMeta {
+        source: EXPORT_SOURCE.into(),
+        tool: EXPORT_TOOL.into(),
+        tool_version: EXPORT_TOOL_VERSION.into(),
+        owner_handle: None,
+        owner_display_name: None,
+    };
+    let (owner_handle, owner_display) = owner_sender(&export);
+
+    let mut messages = Vec::with_capacity(convo.messages.len());
+    for msg in &convo.messages {
+        if msg.is_from_me {
+            report.sent += 1;
+        } else {
+            report.received += 1;
+        }
+        report.messages += 1;
+        let secs = msg.sort_key as i64;
+        let (ts_local, _, _) = format_local_ts(secs).expect("timestamp validated above");
+        let guid = stable_guid(chat_id, &ts_local, msg.is_from_me, &msg.text, &[]);
+        let timestamp_unix_ms = msg
+            .date_ms
+            .parse::<i64>()
+            .unwrap_or_else(|_| secs.saturating_mul(1000));
+
+        let mut fields = Map::new();
+        fields.insert("source_kind".into(), json!(msg.source_kind.as_str()));
+        fields.insert("has_attachments".into(), json!(msg.has_attachments));
+        let source = IrSource {
+            android_type: None,
+            fields,
+        }
+        .into_option();
+
+        let (sender_handle, sender_display_name) = if msg.is_from_me {
+            (owner_handle.clone(), owner_display.clone())
+        } else {
+            (
+                if msg.sender_handle.is_empty() {
+                    None
+                } else {
+                    Some(msg.sender_handle.clone())
+                },
+                if msg.sender_display_name.is_empty() {
+                    None
+                } else {
+                    Some(msg.sender_display_name.clone())
+                },
+            )
+        };
+
+        messages.push(IrMessage {
+            guid,
+            timestamp_unix_ms,
+            direction: if msg.is_from_me {
+                IrDirection::Outgoing
+            } else {
+                IrDirection::Incoming
+            },
+            service: IrService::Sms,
+            message_kind: IrMessageKind::Sms,
+            sender_handle,
+            sender_display_name,
+            subject: None,
+            text: msg.text.clone(),
+            attachments: Vec::new(),
+            imessage: None,
+            source,
+        });
+    }
+
+    Ok(ConversationDocument {
+        schema_version: SCHEMA_VERSION,
+        export,
+        conversation: ConversationMeta {
+            chat_identifier: chat_id.to_string(),
+            conversation_type: IrConversationType::Individual,
+            group_title: None,
+            participants,
+            stats: ConversationStats::default(),
+        },
+        messages,
+        packaging_stem_suffix: None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use contacts::ContactsBook;
+    use std::fs::File;
+    use std::io::Write;
+    use std::path::PathBuf;
+
+    fn write(dir: &tempfile::TempDir, name: &str, body: &str) -> PathBuf {
+        let path = dir.path().join(name);
+        let mut f = File::create(&path).unwrap();
+        write!(f, "{body}").unwrap();
+        path
+    }
+
+    #[test]
+    fn phone_peer_gets_vcf_name() {
+        let dir = tempfile::tempdir().unwrap();
+        write(
+            &dir,
+            "conversation_1.csv",
+            "Date,Sender,Text,Is From Me,Has Attachments\n\
+2020-01-01T12:00:00+00:00,+15555550122,Hello,False,False\n\
+2020-01-01T12:01:00+00:00,me,Hi,True,False\n",
+        );
+        let vcf = write(
+            &dir,
+            "contacts.vcf",
+            "BEGIN:VCARD\nVERSION:3.0\nN:Example;Sam;;;\nFN:Sam Example\n\
+TEL;TYPE=CELL:+1-555-555-0122\nEND:VCARD\n",
+        );
+        let book = ContactsBook::load_vcf(&vcf).unwrap();
+        let out = dir.path().join("out");
+        let (report, _) = convert_export(
+            dir.path(),
+            &out,
+            &book,
+            &DateRange::default(),
+            ExportTransforms::none(),
+            OutputFormat::Csv,
+            None,
+        )
+        .unwrap();
+        assert_eq!(report.conversations, 1);
+        assert_eq!(report.unresolved_chat_phone, 0);
+        let csv_path = out.join("+15555550122.csv");
+        let body = fs::read_to_string(&csv_path).unwrap();
+        assert!(body.contains("Sam Example"));
+        assert!(body.contains("openextract"));
+    }
+
+    #[test]
+    fn name_without_phone_still_writes() {
+        let dir = tempfile::tempdir().unwrap();
+        write(
+            &dir,
+            "conversation_2.csv",
+            "Date,Sender,Text,Is From Me,Has Attachments\n\
+2020-01-01T12:00:00+00:00,Cathy Arp,Hi,False,False\n\
+2020-01-01T12:01:00+00:00,me,Hello,True,False\n",
+        );
+        let vcf = write(
+            &dir,
+            "contacts.vcf",
+            "BEGIN:VCARD\nVERSION:3.0\nN:Other;Person;;;\nFN:Other Person\n\
+TEL:+15555550999\nEND:VCARD\n",
+        );
+        let book = ContactsBook::load_vcf(&vcf).unwrap();
+        let out = dir.path().join("out");
+        let (report, _) = convert_export(
+            dir.path(),
+            &out,
+            &book,
+            &DateRange::default(),
+            ExportTransforms::none(),
+            OutputFormat::Csv,
+            None,
+        )
+        .unwrap();
+        assert!(report.unresolved_chat_phone >= 1);
+        assert_eq!(report.conversations, 1);
+        let csv_path = out.join("Cathy_Arp.csv");
+        assert!(csv_path.is_file(), "missing {}", csv_path.display());
+    }
+
+    #[test]
+    fn date_range_skips_messages_outside_window() {
+        let dir = tempfile::tempdir().unwrap();
+        write(
+            &dir,
+            "conversation_1.csv",
+            "Date,Sender,Text,Is From Me,Has Attachments\n\
+2019-12-31T23:00:00+00:00,+15555550122,Old,False,False\n\
+2020-01-01T12:00:00+00:00,+15555550122,Keep,False,False\n\
+2020-01-02T00:00:00+00:00,+15555550122,New,False,False\n",
+        );
+        let book = ContactsBook::empty();
+        let out = dir.path().join("out");
+        let range =
+            DateRange::parse_optional_tz(Some("2020-01-01"), Some("2020-01-02"), Some("UTC"))
+                .unwrap();
+        let (report, _) = convert_export(
+            dir.path(),
+            &out,
+            &book,
+            &range,
+            ExportTransforms::none(),
+            OutputFormat::Csv,
+            None,
+        )
+        .unwrap();
+        assert_eq!(report.skipped_out_of_range, 2);
+        assert_eq!(report.messages, 1);
+        let body = fs::read_to_string(out.join("+15555550122.csv")).unwrap();
+        assert!(body.contains("Keep"));
+        assert!(!body.contains("Old"));
+        assert!(!body.contains("New"));
+    }
+}

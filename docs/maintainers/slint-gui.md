@@ -109,8 +109,8 @@ cargo run -p message-exporters-slint
 
 ### Contacts
 
-Runs [`message_contacts::validate_contacts_file`](../../crates/message-contacts)
-in-process (same library the `contacts-validate` CLI uses).
+Runs [`contacts::validate_contacts_file`](../../crates/message/contacts)
+in-process via the `message-contacts` library.
 
 - **Check**: dry run — no files written; the run log shows the same UNCERTAIN /
   DUPLICATE / summary content as a validate log.
@@ -134,7 +134,7 @@ output folder to another packaging format (via the common message).
 
 Persists under `[message-reexport]` in `export.ini`. Mixed or unrecognized input
 dirs fail with a clear error. See
-[`crates/message-ir/docs/MESSAGE_REEXPORTER.md`](../../crates/message-ir/docs/MESSAGE_REEXPORTER.md).
+[`crates/message/ir/docs/MESSAGE_REEXPORTER.md`](../../crates/message/ir/docs/MESSAGE_REEXPORTER.md).
 
 ### Vault — `vault-push`
 
@@ -287,7 +287,7 @@ Product: [iMazing](https://imazing.com/)
 
 Media modes and obfuscate apply through FormatSink for every format. WhatsApp
 chats use the `__whatsapp` stem suffix. See
-[`crates/imazing-exporter/docs/DESIGN.md`](../../crates/imazing-exporter/docs/DESIGN.md).
+[`crates/exporters/imazing-exporter/docs/DESIGN.md`](../../crates/exporters/imazing-exporter/docs/DESIGN.md).
 
 ### WhatsApp — `whatsapp-exporter`
 
@@ -328,7 +328,7 @@ temp dir under Output.
 ### iPhone backup — `imessage-ir-exporter`
 
 Form link label: **imessage-ir-exporter** →
-[imessage-ir-exporter](https://github.com/bitrealm-dev/message-exporters/tree/main/crates/imessage-ir-exporter).
+[imessage-ir-exporter](https://github.com/bitrealm-dev/message-exporters/tree/main/crates/exporters/imessage-ir-exporter).
 Dropdown stays **iPhone backup**.
 
 GUI defaults: JSONL for Extract Messages, `--copy-method clone` (or `disabled`),
@@ -384,7 +384,7 @@ Tabs: Extract Messages | Format | Vault | Contacts | Log
   Extract Messages → pick backup source → Obfuscate/dates → per-source form
          → Form::to_config → ExporterConfig (JSONL) → library run / Cancel → log
   Format → input dir → output format → output dir → media/obfuscate
-           → message_ir::reexport::run → log
+           → ir::reexport::run → log
   Vault → URL / user / key / input → vault_push → log
   Contacts → contacts file, USA checkbox → Check / Update / Cancel → log
 ```

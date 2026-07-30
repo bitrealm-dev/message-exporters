@@ -3,11 +3,9 @@ title: Check and clean contacts
 description: Validate a contacts file or write a cleaned copy before exporting messages.
 ---
 
-The Contacts tab checks phone numbers in a VCF or contacts CSV. Updating writes a new file; it does not overwrite the original.
+The Contacts tab checks phone numbers in a VCF or contacts CSV. Updating writes a new file; it does not overwrite the original. Contacts Check/Update runs inside the app as a library — no separate helper binary is required.
 
 ## Prepare the file
-
-Keep `contacts-validate` beside the desktop app, in `MESSAGE_EXPORTERS_BIN`, or on `PATH`.
 
 The input can be:
 

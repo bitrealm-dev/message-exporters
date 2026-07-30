@@ -52,12 +52,10 @@ Each ZIP has the desktop app and helpers at the archive root, and standalone CLI
 - `imazing-exporter`
 - `imessage-ir-exporter`
 - `whatsapp-exporter`
-- `message-reexporter` (package `message-ir`, `--features cli`)
+- `message-reexporter` (package `ir`, `--features cli`)
 - `vault-push`
-- `contacts-validate`
-- `imazing-obfuscate`
 
-The GUI only needs the third-party helpers beside it (`wtsexporter` for WhatsApp extract, `ffmpeg` / `ffprobe` for media convert/compress). CLIs under `cli/` look for those helpers beside themselves, then one directory up (the ZIP root). Keep the extracted archive together.
+Contacts Check/Update and message obfuscation run as libraries inside the desktop app (not shipped as `cli/` binaries). The GUI only needs the third-party helpers beside it (`wtsexporter` for WhatsApp extract, `ffmpeg` / `ffprobe` for media convert/compress). CLIs under `cli/` look for those helpers beside themselves, then one directory up (the ZIP root). Keep the extracted archive together.
 
 ### Code signing
 
@@ -67,7 +65,7 @@ Windows Authenticode and macOS codesign / notarization steps are already in the 
 
 ```bash
 cargo build --workspace --release
-cargo build --release -p message-ir --bin message-reexporter --features cli
+cargo build --release -p ir --bin message-reexporter --features cli
 cargo build --release -p vault-push --features cli
 scripts/package-release.sh 0.0.0-dev x86_64-unknown-linux-gnu
 unzip -l dist/message-exporters-0.0.0-dev-x86_64-unknown-linux-gnu.zip
