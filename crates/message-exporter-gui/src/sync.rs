@@ -42,6 +42,7 @@ pub fn push_all(ui: &AppWindow, state: &mut AppState) {
 
 pub fn push_chrome(ui: &AppWindow, state: &AppState) {
     ui.set_error_text(SharedString::from(state.error_text()));
+    ui.set_error_source_tab(state.error_source_tab.unwrap_or(-1));
     ui.set_status_text(SharedString::from(state.status_text()));
     ui.set_tabs_enabled(!state.running);
     let export = ui.global::<ExportAdapter>();

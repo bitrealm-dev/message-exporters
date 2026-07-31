@@ -77,7 +77,7 @@ pub fn output_format_options() -> ModelRc<SharedString> {
     model_from_labels(
         OUTPUT_FORMATS_ALPHABETICAL
             .iter()
-            .map(|f| f.as_str().to_string()),
+            .map(|f| format!(".{}", f.as_str())),
     )
 }
 

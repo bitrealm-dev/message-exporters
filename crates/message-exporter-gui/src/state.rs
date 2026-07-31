@@ -19,6 +19,8 @@ pub struct AppState {
     pub rx: Option<Receiver<ProcessEvent>>,
     pub session_log: Option<SessionLog>,
     pub errors: Vec<String>,
+    /// Tab index that produced `errors` (banner also shows on Log).
+    pub error_source_tab: Option<i32>,
     pub vault_source_note: String,
 }
 
@@ -26,6 +28,7 @@ impl AppState {
     pub fn load() -> Self {
         let (export_ini, form, load_error) = ExportIniState::load_or_default();
         let exporter = export_ini.exporter;
+        let error_source_tab = load_error.as_ref().map(|_| 0);
         Self {
             export_ini,
             form,
@@ -38,6 +41,7 @@ impl AppState {
             rx: None,
             session_log: None,
             errors: load_error.into_iter().collect(),
+            error_source_tab,
             vault_source_note: String::new(),
         }
     }
@@ -54,12 +58,14 @@ impl AppState {
         let _ = self.save_export_ini();
     }
 
-    pub fn set_errors(&mut self, errors: Vec<String>) {
+    pub fn set_errors(&mut self, errors: Vec<String>, source_tab: i32) {
         self.errors = errors;
+        self.error_source_tab = Some(source_tab);
     }
 
     pub fn clear_errors(&mut self) {
         self.errors.clear();
+        self.error_source_tab = None;
     }
 
     pub fn error_text(&self) -> String {

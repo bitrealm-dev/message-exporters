@@ -355,6 +355,7 @@ fn main() -> Result<(), slint::PlatformError> {
     sync::clear_log_lines(&ui);
 
     wire_about(&ui);
+    wire_error_dismiss(&ui, Arc::clone(&state));
     wire_help(&ui, Arc::clone(&state));
     wire_contacts(&ui, Arc::clone(&state));
     wire_export(&ui, Arc::clone(&state));
@@ -377,6 +378,18 @@ fn wire_about(ui: &AppWindow) {
     });
 }
 
+fn wire_error_dismiss(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
+    let ui_weak = ui.as_weak();
+    ui.on_error_dismissed(move || {
+        let Some(ui) = ui_weak.upgrade() else {
+            return;
+        };
+        let mut st = state.lock().expect("state lock");
+        st.clear_errors();
+        sync::push_chrome(&ui, &st);
+    });
+}
+
 fn wire_help(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
     const DOCS_URL: &str = "https://bitrealm-dev.github.io/message-exporters/";
 
@@ -386,8 +399,7 @@ fn wire_help(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
             && let Some(ui) = ui_weak.upgrade()
         {
             let mut st = state.lock().expect("state lock");
-            st.set_errors(vec![format!("Could not open help: {error}")]);
-            sync::push_chrome(&ui, &st);
+            report_errors(&ui, &mut st, vec![format!("Could not open help: {error}")]);
         }
     });
 }
@@ -449,8 +461,7 @@ fn wire_export(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
                 && let Some(ui) = ui_weak.upgrade()
             {
                 let mut st = state.lock().expect("state lock");
-                st.set_errors(vec![format!("Could not open link: {error}")]);
-                sync::push_chrome(&ui, &st);
+                report_errors(&ui, &mut st, vec![format!("Could not open link: {error}")]);
             }
         }
     });
@@ -616,9 +627,8 @@ fn wire_log(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
                     sync::append_log_line(&ui, "Cancellation requested…");
                 }
                 Err(error) => {
-                    st.set_errors(vec![error.clone()]);
                     sync::append_log_line(&ui, &format!("Could not request cancellation: {error}"));
-                    sync::push_chrome(&ui, &st);
+                    report_errors(&ui, &mut st, vec![error]);
                 }
             }
         }
@@ -633,7 +643,8 @@ fn wire_log(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
     });
 }
 
-fn show_errors(ui: &AppWindow, state: &AppState) {
+fn report_errors(ui: &AppWindow, state: &mut AppState, errors: Vec<String>) {
+    state.set_errors(errors, ui.get_tab_index());
     sync::push_chrome(ui, state);
 }
 
@@ -647,6 +658,7 @@ fn start_library_job(
     let Some(ui) = ui_weak.upgrade() else {
         return;
     };
+    let source_tab = ui.get_tab_index();
     let (tx, rx) = mpsc::channel::<ProcessEvent>();
     {
         let mut st = state.lock().expect("state lock");
@@ -686,7 +698,7 @@ fn start_library_job(
                     let mut st = state_clone.lock().expect("state lock");
                     st.running = false;
                     if is_error {
-                        st.set_errors(vec![line.clone()]);
+                        st.set_errors(vec![line.clone()], source_tab);
                     }
                     sync::push_chrome(&ui, &st);
                 } else {
@@ -716,14 +728,16 @@ fn start_validate(
         sync::pull_contacts(&ui, &mut st);
         let input = st.validate_input.trim();
         if input.is_empty() {
-            st.set_errors(vec!["Choose a contacts CSV or VCF file.".into()]);
-            show_errors(&ui, &st);
+            report_errors(
+                &ui,
+                &mut st,
+                vec!["Choose a contacts CSV or VCF file.".into()],
+            );
             return;
         }
         let path = PathBuf::from(input);
         if let Err(error) = probe_contacts_input(&path) {
-            st.set_errors(vec![error.message]);
-            show_errors(&ui, &st);
+            report_errors(&ui, &mut st, vec![error.message]);
             return;
         }
         let region = if st.validate_usa {
@@ -770,22 +784,19 @@ fn start_export(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<AppState>>) 
         sync::pull_export(&ui, &mut st);
         st.export_ini.exporter = st.exporter;
         if let Err(error) = st.save_export_ini() {
-            st.set_errors(vec![error]);
-            show_errors(&ui, &st);
+            report_errors(&ui, &mut st, vec![error]);
             return;
         }
         let result = st.form.to_config(st.exporter);
         let config = match result {
             Ok(config) => config,
             Err(errors) => {
-                st.set_errors(errors);
-                show_errors(&ui, &st);
+                report_errors(&ui, &mut st, errors);
                 return;
             }
         };
         if let Err(error) = ensure_output_dir_checked(&config.output) {
-            st.set_errors(vec![error]);
-            show_errors(&ui, &st);
+            report_errors(&ui, &mut st, vec![error]);
             return;
         }
         let label = format!("{} (library)", st.exporter.binary());
@@ -808,8 +819,7 @@ fn start_reexport(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<AppState>>
         }
         sync::pull_convert(&ui, &mut st);
         if let Err(error) = st.save_export_ini() {
-            st.set_errors(vec![error]);
-            show_errors(&ui, &st);
+            report_errors(&ui, &mut st, vec![error]);
             return;
         }
         let result = st.form.to_reexport_config(
@@ -820,14 +830,12 @@ fn start_reexport(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<AppState>>
         let config = match result {
             Ok(config) => config,
             Err(errors) => {
-                st.set_errors(errors);
-                show_errors(&ui, &st);
+                report_errors(&ui, &mut st, errors);
                 return;
             }
         };
         if let Err(error) = ensure_output_dir_checked(&config.output) {
-            st.set_errors(vec![error]);
-            show_errors(&ui, &st);
+            report_errors(&ui, &mut st, vec![error]);
             return;
         }
         let label = "message-reexporter (library)".to_string();
@@ -866,13 +874,11 @@ fn start_vault_auth(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<AppState
             errors.push("Vault key is required.".into());
         }
         if !errors.is_empty() {
-            st.set_errors(errors);
-            show_errors(&ui, &st);
+            report_errors(&ui, &mut st, errors);
             return;
         }
         if let Err(error) = st.save_export_ini() {
-            st.set_errors(vec![error]);
-            show_errors(&ui, &st);
+            report_errors(&ui, &mut st, vec![error]);
             return;
         }
         let label = "vault-push auth".to_string();
@@ -928,13 +934,11 @@ fn start_vault_import(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<AppSta
             errors.push("Input directory is required.".into());
         }
         if !errors.is_empty() {
-            st.set_errors(errors);
-            show_errors(&ui, &st);
+            report_errors(&ui, &mut st, errors);
             return;
         }
         if let Err(error) = st.save_export_ini() {
-            st.set_errors(vec![error]);
-            show_errors(&ui, &st);
+            report_errors(&ui, &mut st, vec![error]);
             return;
         }
         let continue_on_error = st.export_ini.vault.continue_on_error;
