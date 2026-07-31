@@ -238,29 +238,36 @@ jobs:
             exit 1
           fi
           gh release create "$TAG" "${assets[@]}" \
-            --title "message-exporters ${VERSION}" \
-            --notes "Release ${VERSION} of Message Exporters.
+            --title "Message Exporters ${VERSION}" \
+            --notes "## Highlights
 
-          Download the archive for your platform, extract the whole archive into one folder, and keep every file together. Start the desktop app:
+          - Slint desktop app is the primary product (Extract, Format, Contacts, Vault in-process)
+          - Tab naming: Extract + Format; dismissable tab-scoped errors
+          - Faster Vault push (batching, HEAD before PUT, overlap)
+          - Obfuscate skips media convert/compress
+          - New archive layout: GUI at root, \`lib/\`, \`cli/\`, \`licenses/\`
+          - Linux ships \`.tgz\`; Windows and macOS ship \`.zip\`
 
-          - Linux: \`message-exporter\`
-          - Windows: \`message-exporter.exe\`
-          - macOS Apple Silicon: \`message-exporter\`
+          ## Upgrade notes
 
-          ### Archives
+          - Extract the whole archive and keep folders together (\`lib/\` and \`cli/\` must stay next to the app)
+          - Scripts that expected \`ffmpeg\` / \`wtsexporter\` at the ZIP root need updating
+
+          ## Archives
 
           - \`message-exporters-${VERSION}-x86_64-unknown-linux-gnu.tgz\`
           - \`message-exporters-${VERSION}-x86_64-pc-windows-msvc.zip\`
           - \`message-exporters-${VERSION}-aarch64-apple-darwin.zip\`
 
-          ### Layout
+          ## Layout
 
-          - **Root:** \`message-exporter\` (GUI; exporters run as libraries).
-          - **\`lib/\`:** bundled \`ffmpeg\` / \`ffprobe\` (eugeneware/ffmpeg-static \`b6.1.1\`).
-          - **\`cli/\`:** standalone exporter CLIs, WhatsApp \`wtsexporter\` 0.13.0, \`message-reexporter\`, and \`vault-push\`.
-          - **\`licenses/\`:** project and third-party license notices.
+          - **Root:** \`message-exporter\` (GUI; exporters run as libraries)
+          - **\`lib/\`:** bundled \`ffmpeg\` / \`ffprobe\` (eugeneware/ffmpeg-static \`b6.1.1\`)
+          - **\`cli/\`:** standalone exporter CLIs, WhatsApp \`wtsexporter\` 0.13.0, \`message-reexporter\`, and \`vault-push\`
+          - **\`licenses/\`:** project and third-party license notices
 
-          ### Notes
+          ## Notes
 
+          - Start the desktop app from the archive root: Linux/macOS \`message-exporter\`, Windows \`message-exporter.exe\`
           - Builds are unsigned until code-signing secrets are configured (see \`docs/maintainers/signing.md\`). Windows SmartScreen and macOS Gatekeeper may warn on first launch; allow the app once if you trust the download.
           - See \`licenses/THIRD_PARTY_NOTICES.md\` in each archive for bundled helper provenance and licenses."

@@ -23,7 +23,7 @@ The release version is **`crates/message-exporter-gui/Cargo.toml` → `version`*
 3. Click **Run workflow**.
 4. Choose the branch to build from (usually `main`).
 5. Wait for all three OS jobs (Linux, Windows, macOS) to finish and for the release job to create the GitHub Release.
-6. Confirm the release at [Releases](https://github.com/bitrealm-dev/message-exporters/releases). The tag will be `v` plus the Cargo.toml version (`0.4.0` → `v0.4.0`).
+6. Confirm the release at [Releases](https://github.com/bitrealm-dev/message-exporters/releases). The tag will be `v` plus the Cargo.toml version (`0.4.0` → `v0.4.0`). The workflow fills release notes (Highlights, Upgrade notes, Archives, Layout) from [`.github/workflows/release.yml`](../../.github/workflows/release.yml); edit that `--notes` block when the next cut needs different copy.
 
 You need write access to the repository (to run workflows that create releases and tags).
 
