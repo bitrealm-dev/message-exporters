@@ -2,6 +2,10 @@
 //!
 //! In-process exporter libraries and `export.ini` persistence.
 
+// Release builds use the Windows GUI subsystem so launching message-exporter.exe
+// does not open a console window. Debug builds keep a console for logging/panics.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod browse;
 mod jobs;
 mod options;

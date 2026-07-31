@@ -251,17 +251,13 @@ jobs:
             --title "Message Exporters ${VERSION}" \
             --notes "## Highlights
 
-          - Slint desktop app is the primary product (Extract, Format, Contacts, Vault in-process)
-          - Tab naming: Extract + Format; dismissable tab-scoped errors
-          - Faster Vault push (batching, HEAD before PUT, overlap)
-          - Obfuscate skips media convert/compress
-          - New archive layout: GUI at root, \`lib/\`, \`cli/\`, \`licenses/\`
-          - Linux ships \`.tgz\`; Windows and macOS ship \`.zip\`
+          - Windows: \`message-exporter.exe\` no longer opens a console window on launch
+          - Same 0.4.x archive layout: GUI at root, \`lib/\`, \`cli/\`, \`licenses/\`
 
           ## Upgrade notes
 
+          - Drop-in for 0.4.0 users: same folder layout; replace the previous extract
           - Extract the whole archive and keep folders together (\`lib/\` and \`cli/\` must stay next to the app)
-          - Scripts that expected \`ffmpeg\` / \`wtsexporter\` at the ZIP root need updating
 
           ## Archives
 
