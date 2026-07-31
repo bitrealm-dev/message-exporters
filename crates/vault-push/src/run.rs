@@ -6,6 +6,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread::JoinHandle;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
@@ -37,6 +38,9 @@ pub struct VaultPushConfig {
     pub force: bool,
     /// Import message text only; do not upload or reference attachments.
     pub skip_attachments: bool,
+    /// When true, re-hash attachment files and compare to export `digest_sha256`.
+    /// Default false: trust export digests (server still verifies on store).
+    pub verify_digests: bool,
     pub max_retries: u32,
     pub batch_size: usize,
     /// Maximum simultaneous attachment uploads. Message import requests remain serialized.
@@ -194,6 +198,14 @@ fn list_jsonl_files(dir: &Path, exclude: &[&Path]) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
+fn normalize_digest_sha256(digest: &str) -> Result<String> {
+    let s = digest.trim().to_ascii_lowercase();
+    if s.len() != 64 || !s.chars().all(|c| c.is_ascii_hexdigit()) {
+        bail!("invalid sha256 digest (expected 64 hex digits)");
+    }
+    Ok(s)
+}
+
 fn hash_file(path: &Path) -> Result<String> {
     let mut file = File::open(path).with_context(|| format!("open {}", path.display()))?;
     let mut hasher = Sha256::new();
@@ -341,6 +353,7 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
     let mut trackers: Vec<Option<FileTracker>> =
         std::iter::repeat_with(|| None).take(total).collect();
     let mut pending: Option<ImportBatch> = None;
+    let mut inflight: Option<InFlightImport> = None;
 
     for (idx, path) in files.iter().enumerate() {
         check_cancel(cfg.cancel.as_ref()).map_err(|_| anyhow::anyhow!("cancelled"))?;
@@ -399,13 +412,14 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
         let prepared = match prepared {
             Ok(prepared) => prepared,
             Err(e) => {
-                if !cfg.continue_on_error && pending.is_some() {
-                    let request_ok = flush_import_batch(FlushImportBatch {
+                if !cfg.continue_on_error && (pending.is_some() || inflight.is_some()) {
+                    let request_ok = flush_import_pipeline(FlushImportPipeline {
                         cfg,
                         http: &http,
                         url: &url,
                         username: &username,
                         pending: &mut pending,
+                        inflight: &mut inflight,
                         first_import: &mut first_import,
                         trackers: &mut trackers,
                         journal: &mut journal,
@@ -414,6 +428,7 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
                         progress: &mut progress,
                         results: &mut results,
                         total,
+                        wait: true,
                     })?;
                     if !request_ok {
                         aborted = true;
@@ -446,12 +461,13 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
             .as_ref()
             .is_some_and(|batch| batch.source != prepared.source)
         {
-            let request_ok = flush_import_batch(FlushImportBatch {
+            let request_ok = flush_import_pipeline(FlushImportPipeline {
                 cfg,
                 http: &http,
                 url: &url,
                 username: &username,
                 pending: &mut pending,
+                inflight: &mut inflight,
                 first_import: &mut first_import,
                 trackers: &mut trackers,
                 journal: &mut journal,
@@ -460,6 +476,7 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
                 progress: &mut progress,
                 results: &mut results,
                 total,
+                wait: !cfg.continue_on_error,
             })?;
             if !request_ok && !cfg.continue_on_error {
                 aborted = true;
@@ -490,12 +507,13 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
                 should_flush_before_chunk(batch, &chunk, batch_size, MAX_IMPORT_BODY_BYTES)
             });
             if must_flush {
-                let request_ok = flush_import_batch(FlushImportBatch {
+                let request_ok = flush_import_pipeline(FlushImportPipeline {
                     cfg,
                     http: &http,
                     url: &url,
                     username: &username,
                     pending: &mut pending,
+                    inflight: &mut inflight,
                     first_import: &mut first_import,
                     trackers: &mut trackers,
                     journal: &mut journal,
@@ -504,6 +522,7 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
                     progress: &mut progress,
                     results: &mut results,
                     total,
+                    wait: !cfg.continue_on_error,
                 })?;
                 if !request_ok && !cfg.continue_on_error {
                     aborted = true;
@@ -520,12 +539,13 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
             let batch = pending.get_or_insert_with(|| ImportBatch::new(&prepared.source));
             batch.push(idx, chunk);
             if batch.messages.len() >= batch_size || batch.body.len() >= MAX_IMPORT_BODY_BYTES {
-                let request_ok = flush_import_batch(FlushImportBatch {
+                let request_ok = flush_import_pipeline(FlushImportPipeline {
                     cfg,
                     http: &http,
                     url: &url,
                     username: &username,
                     pending: &mut pending,
+                    inflight: &mut inflight,
                     first_import: &mut first_import,
                     trackers: &mut trackers,
                     journal: &mut journal,
@@ -534,6 +554,7 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
                     progress: &mut progress,
                     results: &mut results,
                     total,
+                    wait: !cfg.continue_on_error,
                 })?;
                 if !request_ok && !cfg.continue_on_error {
                     aborted = true;
@@ -553,6 +574,8 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
         if let Some(tracker) = trackers[idx].as_mut() {
             tracker.queue_complete = true;
         }
+        // File may still have outstanding messages in `pending` / `inflight`; finish runs
+        // when those imports complete (overlapped with the next prepare_file).
         finish_file_if_ready(FinishFile {
             index: idx,
             total,
@@ -567,13 +590,14 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
         })?;
     }
 
-    if !aborted && pending.is_some() {
-        let request_ok = flush_import_batch(FlushImportBatch {
+    if !aborted {
+        let request_ok = flush_import_pipeline(FlushImportPipeline {
             cfg,
             http: &http,
             url: &url,
             username: &username,
             pending: &mut pending,
+            inflight: &mut inflight,
             first_import: &mut first_import,
             trackers: &mut trackers,
             journal: &mut journal,
@@ -582,10 +606,26 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
             progress: &mut progress,
             results: &mut results,
             total,
+            wait: true,
         })?;
         if !request_ok && !cfg.continue_on_error {
             aborted = true;
         }
+    } else {
+        // Best-effort drain so journal/trackers stay consistent on abort.
+        let _ = join_inflight_import(JoinInflightImport {
+            inflight: &mut inflight,
+            first_import: &mut first_import,
+            trackers: &mut trackers,
+            journal: &mut journal,
+            journal_path: &journal_path,
+            url: &url,
+            username: &username,
+            log: &mut log,
+            progress: &mut progress,
+            results: &mut results,
+            total,
+        });
     }
 
     let results: Vec<FileResult> = results.into_iter().flatten().collect();
@@ -739,11 +779,16 @@ fn prepare_file(args: PrepareFileArgs<'_>) -> Result<PreparedFile> {
                     .filter(|s| !s.is_empty())
                 {
                     Some(d) => {
-                        let actual = hash_file(&abs)?;
-                        if actual != d.to_ascii_lowercase() {
-                            bail!("{name}: sha256 mismatch for {rel}");
+                        let claimed = normalize_digest_sha256(d).with_context(|| {
+                            format!("{name}: invalid digest_sha256 for {rel}")
+                        })?;
+                        if cfg.verify_digests {
+                            let actual = hash_file(&abs)?;
+                            if actual != claimed {
+                                bail!("{name}: sha256 mismatch for {rel}");
+                            }
                         }
-                        actual
+                        claimed
                     }
                     None => hash_file(&abs)?,
                 };
@@ -1177,12 +1222,28 @@ fn finish_file_if_ready(args: FinishFile<'_, '_, '_>) -> Result<()> {
     Ok(())
 }
 
-struct FlushImportBatch<'a, 'p, 'f> {
+struct InFlightImport {
+    handle: JoinHandle<ImportHttpOutcome>,
+}
+
+struct ImportHttpOutcome {
+    batch: ImportBatch,
+    mode: String,
+    request_ms: u64,
+    messages_per_second: f64,
+    mebibytes_per_second: f64,
+    body_bytes: usize,
+    message_count: usize,
+    response: Result<http::ImportResponse, String>,
+}
+
+struct FlushImportPipeline<'a, 'p, 'f> {
     cfg: &'a VaultPushConfig,
     http: &'a HttpSession,
     url: &'a str,
     username: &'a str,
     pending: &'a mut Option<ImportBatch>,
+    inflight: &'a mut Option<InFlightImport>,
     first_import: &'a mut bool,
     trackers: &'a mut [Option<FileTracker>],
     journal: &'a mut JournalState,
@@ -1191,35 +1252,180 @@ struct FlushImportBatch<'a, 'p, 'f> {
     progress: &'a mut Option<&'p mut ProgressFn<'f>>,
     results: &'a mut [Option<FileResult>],
     total: usize,
+    /// When true, wait for the newly spawned import (also used at end-of-run).
+    wait: bool,
 }
 
-fn flush_import_batch(args: FlushImportBatch<'_, '_, '_>) -> Result<bool> {
-    let Some(batch) = args.pending.take() else {
-        return Ok(true);
-    };
+struct JoinInflightImport<'a, 'p, 'f> {
+    inflight: &'a mut Option<InFlightImport>,
+    first_import: &'a mut bool,
+    trackers: &'a mut [Option<FileTracker>],
+    journal: &'a mut JournalState,
+    journal_path: &'a Path,
+    url: &'a str,
+    username: &'a str,
+    log: &'a mut LogWriter,
+    progress: &'a mut Option<&'p mut ProgressFn<'f>>,
+    results: &'a mut [Option<FileResult>],
+    total: usize,
+}
+
+/// Join at most one in-flight import, then optionally spawn the current pending batch.
+/// With `wait=false` and `continue_on_error`, prepare of later files overlaps the HTTP import.
+fn flush_import_pipeline(args: FlushImportPipeline<'_, '_, '_>) -> Result<bool> {
+    let mut ok = join_inflight_import(JoinInflightImport {
+        inflight: args.inflight,
+        first_import: args.first_import,
+        trackers: args.trackers,
+        journal: args.journal,
+        journal_path: args.journal_path,
+        url: args.url,
+        username: args.username,
+        log: args.log,
+        progress: args.progress,
+        results: args.results,
+        total: args.total,
+    })?;
+    if !ok && !args.cfg.continue_on_error {
+        *args.pending = None;
+        return Ok(false);
+    }
+    if args.pending.is_none() {
+        return Ok(ok);
+    }
     check_cancel(args.cfg.cancel.as_ref()).map_err(|_| anyhow::anyhow!("cancelled"))?;
     let mode = if args.cfg.mode == "replace" && *args.first_import {
-        "replace"
+        "replace".to_string()
     } else {
-        "append"
+        "append".to_string()
     };
-    let request_started = Instant::now();
-    let body_bytes = batch.body.len();
-    let message_count = batch.messages.len();
-    let response = http::with_retries(args.cfg.max_retries, || {
-        args.http.post_import(
-            args.url,
-            &args.cfg.key,
-            args.username,
-            &batch.source,
+    let batch = args.pending.take().expect("pending checked");
+    *args.inflight = Some(spawn_import_http(SpawnImportHttp {
+        http: args.http.clone(),
+        url: args.url.to_string(),
+        key: args.cfg.key.clone(),
+        username: args.username.to_string(),
+        max_retries: args.cfg.max_retries,
+        mode,
+        batch,
+    }));
+    if args.wait {
+        ok = join_inflight_import(JoinInflightImport {
+            inflight: args.inflight,
+            first_import: args.first_import,
+            trackers: args.trackers,
+            journal: args.journal,
+            journal_path: args.journal_path,
+            url: args.url,
+            username: args.username,
+            log: args.log,
+            progress: args.progress,
+            results: args.results,
+            total: args.total,
+        })?;
+    }
+    Ok(ok)
+}
+
+struct SpawnImportHttp {
+    http: HttpSession,
+    url: String,
+    key: String,
+    username: String,
+    max_retries: u32,
+    mode: String,
+    batch: ImportBatch,
+}
+
+fn spawn_import_http(args: SpawnImportHttp) -> InFlightImport {
+    let handle = std::thread::spawn(move || {
+        let SpawnImportHttp {
+            http,
+            url,
+            key,
+            username,
+            max_retries,
             mode,
-            batch.body.clone(),
-        )
+            batch,
+        } = args;
+        let request_started = Instant::now();
+        let body_bytes = batch.body.len();
+        let message_count = batch.messages.len();
+        let response = http::with_retries(max_retries, || {
+            http.post_import(
+                &url,
+                &key,
+                &username,
+                &batch.source,
+                &mode,
+                batch.body.clone(),
+            )
+        })
+        .map_err(|error| error.to_string());
+        let request_ms = elapsed_ms(request_started);
+        let seconds = request_started.elapsed().as_secs_f64().max(0.001);
+        ImportHttpOutcome {
+            batch,
+            mode,
+            request_ms,
+            messages_per_second: message_count as f64 / seconds,
+            mebibytes_per_second: body_bytes as f64 / (1024.0 * 1024.0) / seconds,
+            body_bytes,
+            message_count,
+            response,
+        }
     });
-    let request_ms = elapsed_ms(request_started);
-    let seconds = request_started.elapsed().as_secs_f64().max(0.001);
-    let messages_per_second = message_count as f64 / seconds;
-    let mebibytes_per_second = body_bytes as f64 / (1024.0 * 1024.0) / seconds;
+    InFlightImport { handle }
+}
+
+fn join_inflight_import(args: JoinInflightImport<'_, '_, '_>) -> Result<bool> {
+    let Some(job) = args.inflight.take() else {
+        return Ok(true);
+    };
+    let outcome = job
+        .handle
+        .join()
+        .map_err(|_| anyhow::anyhow!("import worker panicked"))?;
+    apply_import_outcome(ApplyImportOutcome {
+        outcome,
+        first_import: args.first_import,
+        trackers: args.trackers,
+        journal: args.journal,
+        journal_path: args.journal_path,
+        url: args.url,
+        username: args.username,
+        log: args.log,
+        progress: args.progress,
+        results: args.results,
+        total: args.total,
+    })
+}
+
+struct ApplyImportOutcome<'a, 'p, 'f> {
+    outcome: ImportHttpOutcome,
+    first_import: &'a mut bool,
+    trackers: &'a mut [Option<FileTracker>],
+    journal: &'a mut JournalState,
+    journal_path: &'a Path,
+    url: &'a str,
+    username: &'a str,
+    log: &'a mut LogWriter,
+    progress: &'a mut Option<&'p mut ProgressFn<'f>>,
+    results: &'a mut [Option<FileResult>],
+    total: usize,
+}
+
+fn apply_import_outcome(args: ApplyImportOutcome<'_, '_, '_>) -> Result<bool> {
+    let ImportHttpOutcome {
+        batch,
+        mode,
+        request_ms,
+        messages_per_second,
+        mebibytes_per_second,
+        body_bytes,
+        message_count,
+        response,
+    } = args.outcome;
     let represented: BTreeSet<usize> = batch
         .messages
         .iter()
@@ -1287,7 +1493,6 @@ fn flush_import_batch(args: FlushImportBatch<'_, '_, '_>) -> Result<bool> {
             Ok(true)
         }
         Err(error) => {
-            let error = error.to_string();
             let request_line = format!(
                 "IMPORT_REQUEST fail source={} mode={mode} conversations={} messages={} \
                  bytes={body_bytes} elapsed_ms={request_ms} \
@@ -1372,5 +1577,12 @@ mod tests {
         assert_eq!(format_duration_ms(12_000), "12s");
         assert_eq!(format_duration_ms(2_052_000), "34m12s");
         assert_eq!(format_duration_ms(3_723_000), "1h02m03s");
+    }
+
+    #[test]
+    fn normalize_digest_sha256_accepts_hex() {
+        let d = "A".repeat(64);
+        assert_eq!(normalize_digest_sha256(&d).unwrap(), "a".repeat(64));
+        assert!(normalize_digest_sha256("not-a-digest").is_err());
     }
 }

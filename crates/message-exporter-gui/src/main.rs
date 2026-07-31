@@ -951,6 +951,7 @@ fn start_vault_import(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<AppSta
                 continue_on_error,
                 force,
                 skip_attachments,
+                verify_digests: false,
                 max_retries: 3,
                 batch_size: vault_push::DEFAULT_BATCH_SIZE,
                 asset_upload_workers: vault_push::DEFAULT_ASSET_UPLOAD_WORKERS,

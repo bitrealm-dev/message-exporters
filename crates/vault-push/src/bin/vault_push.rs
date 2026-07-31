@@ -51,6 +51,10 @@ struct Cli {
     #[arg(long)]
     skip_attachments: bool,
 
+    /// Re-hash attachment files and verify against export digest_sha256
+    #[arg(long, default_value_t = false)]
+    verify_digests: bool,
+
     /// Max retries for transient HTTP errors
     #[arg(long, default_value_t = 3)]
     max_retries: u32,
@@ -118,6 +122,7 @@ fn real_main() -> Result<ExitCode> {
         continue_on_error: cli.continue_on_error,
         force: cli.force,
         skip_attachments: cli.skip_attachments,
+        verify_digests: cli.verify_digests,
         max_retries: cli.max_retries,
         batch_size: cli.batch_size,
         asset_upload_workers: cli.asset_upload_workers,
