@@ -21,8 +21,9 @@ cargo build --workspace --release
 
 On Windows the final command is `target\release\message-exporter.exe`.
 
-The app searches for helper binaries (`wtsexporter`, `ffmpeg`, `ffprobe`) beside
-its own executable, then in `MESSAGE_EXPORTERS_BIN`, then on `PATH`.
+The app searches for helpers under `lib/` (`ffmpeg`/`ffprobe`) and `cli/`
+(`wtsexporter`) next to its own executable, then in `MESSAGE_EXPORTERS_BIN`,
+then on `PATH`.
 
 ## Look and feel
 

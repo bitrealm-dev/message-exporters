@@ -466,7 +466,7 @@ impl Form {
             && !media::ffmpeg_available()
         {
             errors.push(
-                "Convert/Compress require ffmpeg and ffprobe beside the program, in MESSAGE_EXPORTERS_BIN, or on PATH.".into(),
+                "Convert/Compress require ffmpeg and ffprobe in lib/ (or beside the program), in MESSAGE_EXPORTERS_BIN, or on PATH.".into(),
             );
         }
         let media = self.media_config_for(
@@ -754,7 +754,7 @@ impl Form {
         // Obfuscate skips copy/convert, so ffmpeg is not required.
         if !obfuscate_active && mode.needs_tools() && !media::ffmpeg_available() {
             errors.push(
-                "Convert/Compress require ffmpeg and ffprobe beside the program, in MESSAGE_EXPORTERS_BIN, or on PATH.".into(),
+                "Convert/Compress require ffmpeg and ffprobe in lib/ (or beside the program), in MESSAGE_EXPORTERS_BIN, or on PATH.".into(),
             );
         }
         self.media_config_for(matches!(mode, MediaMode::Compress), errors)

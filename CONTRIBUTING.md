@@ -93,7 +93,7 @@ Most export work runs in-process as Rust libraries. A few features still shell o
 | `wtsexporter` | WhatsApp extract step |
 | `ffmpeg` / `ffprobe` | Media convert / compress |
 
-Lookup order: beside the current executable → one directory up (release ZIP layout) → directory in `MESSAGE_EXPORTERS_BIN` → `PATH`. WhatsApp also accepts an explicit `WTSEXPORTER` path.
+Lookup order: beside the current executable → `lib/` / `cli/` next to the GUI (or `../lib/` from `cli/`) → legacy one directory up → directory in `MESSAGE_EXPORTERS_BIN` → `PATH`. WhatsApp also accepts an explicit `WTSEXPORTER` path.
 
 | Variable | Purpose |
 |----------|---------|

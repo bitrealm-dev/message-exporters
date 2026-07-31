@@ -39,8 +39,8 @@ pub(crate) struct WtsexporterArgs {
     pub move_media: bool,
 }
 
-/// Resolve `wtsexporter`: `WTSEXPORTER` → sibling of this exe → parent of exe dir →
-/// `MESSAGE_EXPORTERS_BIN` → `PATH`.
+/// Resolve `wtsexporter`: `WTSEXPORTER` → sibling of this exe → `cli/` next to the GUI →
+/// legacy parent dir → `MESSAGE_EXPORTERS_BIN` → `PATH`.
 pub(crate) fn resolve_wtsexporter() -> Result<PathBuf> {
     if let Some(explicit) = env::var_os("WTSEXPORTER") {
         let path = PathBuf::from(explicit);
@@ -49,7 +49,7 @@ pub(crate) fn resolve_wtsexporter() -> Result<PathBuf> {
         }
         bail!(
             "WTSEXPORTER is set but not a file: {}. Install with \
-             pip install '{PINNED_HINT}' or place the release binary beside this tool.",
+             pip install '{PINNED_HINT}' or place the release binary in cli/ next to this tool.",
             path.display()
         );
     }
@@ -64,17 +64,21 @@ pub(crate) fn resolve_wtsexporter() -> Result<PathBuf> {
     if let Ok(current) = env::current_exe()
         && let Some(dir) = current.parent()
     {
-        let sibling = dir.join(executable);
-        tried.push(sibling.clone());
-        if sibling.is_file() {
-            return Ok(sibling);
-        }
-        // Release ZIPs put helpers beside the GUI and CLIs under cli/; look one level up.
-        if let Some(parent) = dir.parent() {
-            let up = parent.join(executable);
-            tried.push(up.clone());
-            if up.is_file() {
-                return Ok(up);
+        let candidates = [
+            dir.join(executable),
+            dir.join("cli").join(executable),
+            // Legacy flat-root archives.
+            dir.parent()
+                .map(|p| p.join(executable))
+                .unwrap_or_default(),
+        ];
+        for candidate in candidates {
+            if candidate.as_os_str().is_empty() {
+                continue;
+            }
+            tried.push(candidate.clone());
+            if candidate.is_file() {
+                return Ok(candidate);
             }
         }
     }
@@ -99,7 +103,7 @@ pub(crate) fn resolve_wtsexporter() -> Result<PathBuf> {
     bail!(
         "Could not find {executable}. Install with: pip install '{PINNED_HINT}' \
          (or pip install 'whatsapp-chat-exporter[android_backup,crypt15]'), \
-         put the KnugiHK release binary next to this tool / in MESSAGE_EXPORTERS_BIN, \
+         put the KnugiHK release binary in cli/ next to this tool / in MESSAGE_EXPORTERS_BIN, \
          or set WTSEXPORTER. Tried: {}",
         tried
             .iter()

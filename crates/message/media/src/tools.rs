@@ -14,8 +14,8 @@ pub(crate) fn require_ffmpeg() -> Result<()> {
     } else {
         bail!(
             "ffmpeg and ffprobe are required for --media-mode convert/compress. \
-             Keep the release-bundled tools beside this program, install ffmpeg on PATH, \
-             or set MESSAGE_EXPORTERS_BIN to a directory that contains both."
+             Keep the release-bundled tools in lib/ next to this program (or ../lib/ from cli/), \
+             install ffmpeg on PATH, or set MESSAGE_EXPORTERS_BIN to a directory that contains both."
         )
     }
 }
@@ -31,8 +31,8 @@ fn command_ok(bin: &Path, args: &[&str]) -> bool {
         .unwrap_or(false)
 }
 
-/// Resolve `ffmpeg` / `ffprobe`: sibling of current exe, then parent of exe dir,
-/// then `MESSAGE_EXPORTERS_BIN`, then PATH.
+/// Resolve `ffmpeg` / `ffprobe`: sibling of current exe, `lib/` next to the GUI,
+/// `../lib/` from `cli/`, legacy parent dir, then `MESSAGE_EXPORTERS_BIN`, then PATH.
 fn resolve_tool(name: &str) -> Option<PathBuf> {
     static FFMPEG: OnceLock<Option<PathBuf>> = OnceLock::new();
     static FFPROBE: OnceLock<Option<PathBuf>> = OnceLock::new();
@@ -50,15 +50,23 @@ fn find_tool(name: &str) -> Option<PathBuf> {
     if let Ok(current) = std::env::current_exe()
         && let Some(dir) = current.parent()
     {
-        let sibling = dir.join(&executable);
-        if sibling.is_file() && command_ok(&sibling, &["-version"]) {
-            return Some(sibling);
-        }
-        // Release ZIPs put helpers beside the GUI and CLIs under cli/; look one level up.
-        if let Some(parent) = dir.parent() {
-            let up = parent.join(&executable);
-            if up.is_file() && command_ok(&up, &["-version"]) {
-                return Some(up);
+        let candidates = [
+            dir.join(&executable),
+            dir.join("lib").join(&executable),
+            dir.parent()
+                .map(|p| p.join("lib").join(&executable))
+                .unwrap_or_default(),
+            // Legacy flat-root archives.
+            dir.parent()
+                .map(|p| p.join(&executable))
+                .unwrap_or_default(),
+        ];
+        for candidate in candidates {
+            if candidate.as_os_str().is_empty() {
+                continue;
+            }
+            if candidate.is_file() && command_ok(&candidate, &["-version"]) {
+                return Some(candidate);
             }
         }
     }
@@ -99,7 +107,7 @@ fn executable_name(name: &str) -> String {
 pub(crate) fn run_ffmpeg(args: &[String]) -> Result<()> {
     let ffmpeg = resolve_tool("ffmpeg").ok_or_else(|| {
         anyhow::anyhow!(
-            "ffmpeg not found beside this program, in MESSAGE_EXPORTERS_BIN, or on PATH"
+            "ffmpeg not found in lib/ (or beside this program), in MESSAGE_EXPORTERS_BIN, or on PATH"
         )
     })?;
     let status = Command::new(ffmpeg)
@@ -126,7 +134,7 @@ pub(crate) struct Probe {
 pub(crate) fn probe_video(path: &std::path::Path) -> Result<Probe> {
     let ffprobe = resolve_tool("ffprobe").ok_or_else(|| {
         anyhow::anyhow!(
-            "ffprobe not found beside this program, in MESSAGE_EXPORTERS_BIN, or on PATH"
+            "ffprobe not found in lib/ (or beside this program), in MESSAGE_EXPORTERS_BIN, or on PATH"
         )
     })?;
     let output = Command::new(ffprobe)

@@ -66,7 +66,7 @@ appending to the Log tab's `VecModel` and the session log file.
 
 Contacts, Extract Messages, Format, and Vault are linked libraries (no sibling
 exporter CLIs required). WhatsApp’s `wtsexporter` and media tools `ffmpeg` /
-`ffprobe` still resolve beside the GUI, via `MESSAGE_EXPORTERS_BIN`, or on `PATH`.
+`ffprobe` still resolve under `lib/` next to the GUI, via `MESSAGE_EXPORTERS_BIN`, or on `PATH`.
 
 ## Persistence
 
@@ -295,7 +295,7 @@ chats use the `__whatsapp` stem suffix. See
 Product: [WhatsApp Chat Exporter](https://github.com/KnugiHK/WhatsApp-Chat-Exporter)
 (`wtsexporter`)
 
-Requires `wtsexporter` beside the GUI, on `PATH`, in `MESSAGE_EXPORTERS_BIN`, or
+Requires `wtsexporter` under `cli/` next to the GUI, on `PATH`, in `MESSAGE_EXPORTERS_BIN`, or
 via `WTSEXPORTER` (pip install or release-bundled binary).
 
 No Input directory and no Contacts file row in the GUI. `wtsexporter` runs in a

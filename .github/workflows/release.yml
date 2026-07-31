@@ -1,5 +1,9 @@
-# Manually cut a semantic-versioned GitHub Release with platform ZIP archives.
+# Manually cut a semantic-versioned GitHub Release with platform archives
+# (Linux .tgz, Windows/macOS .zip).
 # Does not run on push/PR — only via Actions → Release → Run workflow.
+#
+# Version comes from crates/message-exporter-gui/Cargo.toml (single source of truth;
+# also shown in the GUI title via CARGO_PKG_VERSION). Bump that field before releasing.
 #
 # Optional signing (no-op until the matching repo secrets are set):
 #   Windows: WINDOWS_CERTIFICATE_BASE64, WINDOWS_CERTIFICATE_PASSWORD
@@ -11,11 +15,6 @@ name: Release
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Semantic version without leading v (e.g. 0.1.0)"
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -27,19 +26,23 @@ jobs:
       version: ${{ steps.semver.outputs.version }}
       tag: ${{ steps.semver.outputs.tag }}
     steps:
+      - uses: actions/checkout@v4
+
       - id: semver
-        env:
-          RAW: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          V="${RAW#v}"
+          V="$(sed -n 's/^version *= *"\([^"]*\)".*/\1/p' crates/message-exporter-gui/Cargo.toml | head -n1)"
+          if [[ -z "$V" ]]; then
+            echo "version not found in crates/message-exporter-gui/Cargo.toml" >&2
+            exit 1
+          fi
           if [[ ! "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid semantic version: ${RAW@Q} (expected e.g. 0.1.0)"
+            echo "Invalid semantic version from Cargo.toml: ${V@Q} (expected e.g. 0.4.0)"
             exit 1
           fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "tag=v$V" >> "$GITHUB_OUTPUT"
-          echo "Will release tag v$V"
+          echo "Will release tag v$V (from crates/message-exporter-gui/Cargo.toml)"
 
   build:
     needs: validate
@@ -49,12 +52,15 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact_suffix: x86_64-unknown-linux-gnu
+            archive_ext: ".tgz"
             ext: ""
           - os: windows-latest
             artifact_suffix: x86_64-pc-windows-msvc
+            archive_ext: ".zip"
             ext: ".exe"
           - os: macos-latest
             artifact_suffix: aarch64-apple-darwin
+            archive_ext: ".zip"
             ext: ""
     runs-on: ${{ matrix.os }}
     # Job-level env so `if:` can detect whether signing secrets are configured
@@ -202,7 +208,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: package-${{ matrix.artifact_suffix }}
-          path: dist/message-exporters-${{ needs.validate.outputs.version }}-${{ matrix.artifact_suffix }}.zip
+          path: dist/message-exporters-${{ needs.validate.outputs.version }}-${{ matrix.artifact_suffix }}${{ matrix.archive_ext }}
           if-no-files-found: error
 
   release:
@@ -225,11 +231,17 @@ jobs:
         run: |
           set -euo pipefail
           ls -la dist
-          gh release create "$TAG" dist/*.zip \
+          shopt -s nullglob
+          assets=(dist/*.zip dist/*.tgz)
+          if [[ ${#assets[@]} -eq 0 ]]; then
+            echo "no release archives found under dist/" >&2
+            exit 1
+          fi
+          gh release create "$TAG" "${assets[@]}" \
             --title "message-exporters ${VERSION}" \
             --notes "Release ${VERSION} of Message Exporters.
 
-          Download the ZIP for your platform, extract the whole archive into one folder, and keep every file together. Start the desktop app:
+          Download the archive for your platform, extract the whole archive into one folder, and keep every file together. Start the desktop app:
 
           - Linux: \`message-exporter\`
           - Windows: \`message-exporter.exe\`
@@ -237,16 +249,18 @@ jobs:
 
           ### Archives
 
-          - \`message-exporters-${VERSION}-x86_64-unknown-linux-gnu.zip\`
+          - \`message-exporters-${VERSION}-x86_64-unknown-linux-gnu.tgz\`
           - \`message-exporters-${VERSION}-x86_64-pc-windows-msvc.zip\`
           - \`message-exporters-${VERSION}-aarch64-apple-darwin.zip\`
 
           ### Layout
 
-          - **ZIP root:** \`message-exporter\`, WhatsApp \`wtsexporter\` 0.13.0, bundled \`ffmpeg\` / \`ffprobe\` (eugeneware/ffmpeg-static \`b6.1.1\`), and license notices. The GUI runs exporters as libraries; keep the helpers beside it.
-          - **\`cli/\`:** standalone exporter CLIs, \`message-reexporter\`, and \`vault-push\`.
+          - **Root:** \`message-exporter\` (GUI; exporters run as libraries).
+          - **\`lib/\`:** bundled \`ffmpeg\` / \`ffprobe\` (eugeneware/ffmpeg-static \`b6.1.1\`).
+          - **\`cli/\`:** standalone exporter CLIs, WhatsApp \`wtsexporter\` 0.13.0, \`message-reexporter\`, and \`vault-push\`.
+          - **\`licenses/\`:** project and third-party license notices.
 
           ### Notes
 
           - Builds are unsigned until code-signing secrets are configured (see \`docs/maintainers/signing.md\`). Windows SmartScreen and macOS Gatekeeper may warn on first launch; allow the app once if you trust the download.
-          - See \`THIRD_PARTY_NOTICES.md\` in each archive for bundled helper provenance and licenses."
+          - See \`licenses/THIRD_PARTY_NOTICES.md\` in each archive for bundled helper provenance and licenses."

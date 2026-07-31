@@ -110,7 +110,7 @@ Setup, build, run, test, and contribution rules: [CONTRIBUTING.md](CONTRIBUTING.
 
 ## Releases
 
-Prebuilt Linux, Windows, and macOS Apple Silicon ZIPs (GUI + CLIs + helpers): [Releases](https://github.com/bitrealm-dev/message-exporters/releases).
+Prebuilt Linux (`.tgz`), Windows, and macOS Apple Silicon (`.zip`) archives (GUI + `lib/` + `cli/` + `licenses/`): [Releases](https://github.com/bitrealm-dev/message-exporters/releases).
 
 Maintainer documentation (architecture, GUI design, signing): [`docs/maintainers/`](docs/maintainers/README.md). Release steps: [Development and releases](docs/maintainers/developing.md).
 

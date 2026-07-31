@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Stage a self-contained platform ZIP for a message-exporters release.
+# Stage a self-contained platform archive for a message-exporters release.
 #
 # Layout:
-#   ZIP root  — message-exporter + wtsexporter + ffmpeg/ffprobe + notices
-#   cli/      — exporter CLIs, message-reexporter, vault-push
+#   root       — message-exporter (GUI)
+#   lib/       — ffmpeg, ffprobe
+#   cli/       — exporter CLIs, wtsexporter, message-reexporter, vault-push
+#   licenses/  — LICENSE + third-party notices
 #
 # Usage:
 #   scripts/package-release.sh <version> <artifact_suffix> [ext]
@@ -13,7 +15,9 @@
 #   scripts/package-release.sh 0.3.0 x86_64-pc-windows-msvc .exe
 #
 # Expects release binaries already built under target/release/.
-# Writes dist/message-exporters-<version>-<suffix>.zip
+# Writes:
+#   Linux  → dist/message-exporters-<version>-<suffix>.tgz
+#   Windows/macOS → dist/message-exporters-<version>-<suffix>.zip
 set -euo pipefail
 
 VERSION="${1:?version required (e.g. 0.3.0)}"
@@ -23,13 +27,18 @@ EXT="${3:-}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+case "$SUFFIX" in
+  *unknown-linux*) ARCHIVE_EXT=".tgz" ;;
+  *) ARCHIVE_EXT=".zip" ;;
+esac
+
 STAGE="dist/stage-${SUFFIX}"
-OUT_ZIP="dist/message-exporters-${VERSION}-${SUFFIX}.zip"
+OUT_ARCHIVE="dist/message-exporters-${VERSION}-${SUFFIX}${ARCHIVE_EXT}"
 RELEASE_DIR="${CARGO_TARGET_DIR:-target}/release"
 rm -rf "$STAGE"
 mkdir -p "$STAGE" dist
 
-# --- desktop app at ZIP root (uses exporter crates as libraries) ---
+# --- desktop app at archive root ---
 GUI_BIN="message-exporter${EXT}"
 src="${RELEASE_DIR}/${GUI_BIN}"
 if [[ ! -f "$src" ]]; then
@@ -41,7 +50,9 @@ chmod +x "${STAGE}/${GUI_BIN}" || true
 
 # --- CLI exporters / utilities under cli/ ---
 CLI_DIR="${STAGE}/cli"
-mkdir -p "$CLI_DIR"
+LIB_DIR="${STAGE}/lib"
+LICENSES_DIR="${STAGE}/licenses"
+mkdir -p "$CLI_DIR" "$LIB_DIR" "$LICENSES_DIR"
 for bin in \
   go-sms-pro-exporter \
   sms-backup-restore-exporter \
@@ -144,12 +155,12 @@ esac
 
 download \
   "https://github.com/KnugiHK/WhatsApp-Chat-Exporter/releases/download/${WTSEXPORTER_VERSION}/${WTS_ASSET}" \
-  "${STAGE}/${WTS_OUT}" \
+  "${CLI_DIR}/${WTS_OUT}" \
   "$WTS_SHA"
-chmod +x "${STAGE}/${WTS_OUT}" || true
+chmod +x "${CLI_DIR}/${WTS_OUT}" || true
 download \
   "https://raw.githubusercontent.com/KnugiHK/WhatsApp-Chat-Exporter/${WTSEXPORTER_VERSION}/LICENSE" \
-  "${STAGE}/THIRD_PARTY_WTSEXPORTER.LICENSE" \
+  "${LICENSES_DIR}/THIRD_PARTY_WTSEXPORTER.LICENSE" \
   "5db9b4306fed174f2a9462b8ba0728dea3ad5ee261644ca077c1de030f5d6772"
 
 download \
@@ -162,7 +173,7 @@ download \
   "$FFPROBE_SHA"
 download \
   "https://github.com/eugeneware/ffmpeg-static/releases/download/${FFMPEG_STATIC_TAG}/${FFMPEG_LICENSE_ASSET}" \
-  "${STAGE}/THIRD_PARTY_FFMPEG.LICENSE" \
+  "${LICENSES_DIR}/THIRD_PARTY_FFMPEG.LICENSE" \
   "$FFMPEG_LICENSE_SHA"
 
 gunzip_to() {
@@ -174,22 +185,27 @@ gunzip_to() {
     python3 -c 'import gzip,sys; open(sys.argv[2],"wb").write(gzip.open(sys.argv[1],"rb").read())' "$src" "$dest"
   fi
 }
-gunzip_to "${TMP}/${FFMPEG_ASSET}" "${STAGE}/${FFMPEG_BIN}"
-gunzip_to "${TMP}/${FFPROBE_ASSET}" "${STAGE}/${FFPROBE_BIN}"
-chmod +x "${STAGE}/${FFMPEG_BIN}" "${STAGE}/${FFPROBE_BIN}" || true
+gunzip_to "${TMP}/${FFMPEG_ASSET}" "${LIB_DIR}/${FFMPEG_BIN}"
+gunzip_to "${TMP}/${FFPROBE_ASSET}" "${LIB_DIR}/${FFPROBE_BIN}"
+chmod +x "${LIB_DIR}/${FFMPEG_BIN}" "${LIB_DIR}/${FFPROBE_BIN}" || true
 
-# --- notices ---
-cp LICENSE "${STAGE}/LICENSE"
-cp scripts/release/THIRD_PARTY_NOTICES.md "${STAGE}/THIRD_PARTY_NOTICES.md"
+# --- licenses ---
+cp LICENSE "${LICENSES_DIR}/LICENSE"
+cp scripts/release/THIRD_PARTY_NOTICES.md "${LICENSES_DIR}/THIRD_PARTY_NOTICES.md"
 
-# --- zip (paths relative to stage root; no nested folder) ---
-rm -f "$OUT_ZIP"
+# --- archive (paths relative to stage root; no nested folder) ---
+rm -f "$OUT_ARCHIVE"
 (
   cd "$STAGE"
-  if command -v zip >/dev/null 2>&1; then
-    zip -9 -r "../$(basename "$OUT_ZIP")" .
-  else
-    python3 -c '
+  case "$ARCHIVE_EXT" in
+    .tgz)
+      tar -czf "../$(basename "$OUT_ARCHIVE")" .
+      ;;
+    .zip)
+      if command -v zip >/dev/null 2>&1; then
+        zip -9 -r "../$(basename "$OUT_ARCHIVE")" .
+      else
+        python3 -c '
 import pathlib, zipfile, sys
 out = pathlib.Path(sys.argv[1])
 stage = pathlib.Path(".")
@@ -198,10 +214,16 @@ with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         if path.is_file():
             zf.write(path, path.as_posix())
 print(f"wrote {out}")
-' "../$(basename "$OUT_ZIP")"
-  fi
+' "../$(basename "$OUT_ARCHIVE")"
+      fi
+      ;;
+    *)
+      echo "unsupported archive extension: ${ARCHIVE_EXT@Q}" >&2
+      exit 1
+      ;;
+  esac
 )
 
-ls -la "$OUT_ZIP"
+ls -la "$OUT_ARCHIVE"
 echo "Staged contents:"
-ls -la "$STAGE"
+find "$STAGE" -type f | sort

@@ -7,7 +7,7 @@ WhatsApp export uses `wtsexporter` to read an iPhone backup. Message Exporters t
 
 ## Prepare the input
 
-1. Install Message Exporters and keep `wtsexporter` beside the desktop app.
+1. Install Message Exporters and keep the release folder together (`cli/wtsexporter` ships with the archive).
 2. Locate the iPhone backup that contains WhatsApp data.
 3. Create a new empty output folder.
 
@@ -26,7 +26,7 @@ Extraction happens first. Conversion starts after `wtsexporter` succeeds. Conver
 
 ## If it fails
 
-- Confirm that `wtsexporter` or `wtsexporter.exe` is beside the app, available through `MESSAGE_EXPORTERS_BIN` or `PATH`, or named by `WTSEXPORTER`.
+- Confirm that `wtsexporter` or `wtsexporter.exe` is under `cli/` next to the app, available through `MESSAGE_EXPORTERS_BIN` or `PATH`, or named by `WTSEXPORTER`.
 - Confirm that the backup path is set and points to the expected iPhone backup.
 - Wait for extraction to finish or fail. The desktop app cannot cancel `wtsexporter` in the middle of its run.
 
