@@ -267,10 +267,25 @@ pub fn detect_source(input: &Path) -> Result<Option<String>> {
     Ok(Some(project::validate_header(&header)?))
 }
 
-/// Push every `.jsonl` conversation under `cfg.input`.
-pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> Result<PushReport> {
-    let run_started = Instant::now();
-    let started_at = now_stamp();
+struct RunSetup {
+    input: PathBuf,
+    report_path: PathBuf,
+    journal_path: PathBuf,
+    log: LogWriter,
+    url: String,
+    username: String,
+    http: HttpSession,
+    auth: AuthInfo,
+    journal: JournalState,
+    files: Vec<PathBuf>,
+    total: usize,
+    batch_size: usize,
+}
+
+fn prepare_run_setup(
+    cfg: &VaultPushConfig,
+    progress: &mut Option<&mut ProgressFn<'_>>,
+) -> Result<RunSetup> {
     let input = if cfg.input.is_file() {
         cfg.input
             .parent()
@@ -329,7 +344,7 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
         }
     }
 
-    let mut journal = if cfg.force || cfg.mode == "replace" {
+    let journal = if cfg.force || cfg.mode == "replace" {
         JournalState::default()
     } else {
         journal::load(&journal_path, &url, &username)?
@@ -343,13 +358,145 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
         );
     }
 
-    let total = files.len();
+    Ok(RunSetup {
+        input,
+        report_path,
+        journal_path,
+        log,
+        url,
+        username,
+        http,
+        auth,
+        journal,
+        total: files.len(),
+        files,
+        batch_size: cfg.batch_size.max(1),
+    })
+}
+
+struct FinishRunArgs<'a> {
+    cfg: &'a VaultPushConfig,
+    run_started: Instant,
+    started_at: String,
+    report_path: PathBuf,
+    auth: AuthInfo,
+    url: String,
+    username: String,
+    journal_path: PathBuf,
+    journal: JournalState,
+    total: usize,
+    results: Vec<Option<FileResult>>,
+    assets_uploaded: u64,
+    assets_skipped: u64,
+    aborted: bool,
+}
+
+fn finish_run(
+    args: FinishRunArgs<'_>,
+    progress: &mut Option<&mut ProgressFn<'_>>,
+    log: &mut LogWriter,
+) -> Result<PushReport> {
+    let FinishRunArgs {
+        cfg,
+        run_started,
+        started_at,
+        report_path,
+        auth,
+        url,
+        username,
+        journal_path,
+        journal,
+        total,
+        results,
+        assets_uploaded,
+        assets_skipped,
+        aborted,
+    } = args;
+
+    let results: Vec<FileResult> = results.into_iter().flatten().collect();
+    let ok_n = results
+        .iter()
+        .filter(|result| result.status == "ok")
+        .count() as u64;
+    let fail_n = results
+        .iter()
+        .filter(|result| result.status == "failed")
+        .count() as u64;
+    let skip_n = results
+        .iter()
+        .filter(|result| result.status == "skipped")
+        .count() as u64;
+    let messages = results
+        .iter()
+        .filter(|result| result.status == "ok")
+        .map(|result| result.messages)
+        .sum();
+    if fail_n == 0 && !aborted {
+        let _ = journal::compact(&journal_path, &url, &username, &journal);
+    }
+
+    let elapsed = elapsed_ms(run_started);
+    let report = PushReport {
+        ok: fail_n == 0 && !aborted,
+        account: auth.account_id,
+        username,
+        mode: cfg.mode.clone(),
+        started_at,
+        finished_at: now_stamp(),
+        elapsed_ms: elapsed,
+        conversations_total: total as u64,
+        conversations_ok: ok_n,
+        conversations_failed: fail_n,
+        conversations_skipped: skip_n,
+        messages,
+        assets_uploaded,
+        assets_skipped,
+        results,
+    };
+    if let Some(parent) = report_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(
+        &report_path,
+        serde_json::to_string_pretty(&report).context("serialize report")?,
+    )
+    .with_context(|| format!("write report {}", report_path.display()))?;
+    log.line(&format!(
+        "finished ok={} conversations_ok={ok_n} failed={fail_n} skipped={skip_n} messages={messages} \
+         elapsed_ms={elapsed} ({})",
+        report.ok,
+        format_duration_ms(elapsed)
+    ));
+    if let Some(cb) = progress.as_mut() {
+        cb(ProgressEvent::Finished(report.clone()));
+    }
+    Ok(report)
+}
+
+/// Push every `.jsonl` conversation under `cfg.input`.
+pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> Result<PushReport> {
+    let run_started = Instant::now();
+    let started_at = now_stamp();
+    let RunSetup {
+        input,
+        report_path,
+        journal_path,
+        mut log,
+        url,
+        username,
+        http,
+        auth,
+        mut journal,
+        files,
+        total,
+        batch_size,
+    } = prepare_run_setup(cfg, &mut progress)?;
+
     let mut results: Vec<Option<FileResult>> = vec![None; total];
     let mut assets_uploaded = 0u64;
     let mut assets_skipped = 0u64;
     let mut first_import = true;
     let mut aborted = false;
-    let batch_size = cfg.batch_size.max(1);
     let mut trackers: Vec<Option<FileTracker>> =
         std::iter::repeat_with(|| None).take(total).collect();
     let mut pending: Option<ImportBatch> = None;
@@ -628,64 +775,26 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
         });
     }
 
-    let results: Vec<FileResult> = results.into_iter().flatten().collect();
-    let ok_n = results
-        .iter()
-        .filter(|result| result.status == "ok")
-        .count() as u64;
-    let fail_n = results
-        .iter()
-        .filter(|result| result.status == "failed")
-        .count() as u64;
-    let skip_n = results
-        .iter()
-        .filter(|result| result.status == "skipped")
-        .count() as u64;
-    let messages = results
-        .iter()
-        .filter(|result| result.status == "ok")
-        .map(|result| result.messages)
-        .sum();
-    if fail_n == 0 && !aborted {
-        let _ = journal::compact(&journal_path, &url, &username, &journal);
-    }
-
-    let elapsed = elapsed_ms(run_started);
-    let report = PushReport {
-        ok: fail_n == 0 && !aborted,
-        account: auth.account_id,
-        username,
-        mode: cfg.mode.clone(),
-        started_at,
-        finished_at: now_stamp(),
-        elapsed_ms: elapsed,
-        conversations_total: total as u64,
-        conversations_ok: ok_n,
-        conversations_failed: fail_n,
-        conversations_skipped: skip_n,
-        messages,
-        assets_uploaded,
-        assets_skipped,
-        results,
-    };
-    if let Some(parent) = report_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(
-        &report_path,
-        serde_json::to_string_pretty(&report).context("serialize report")?,
+    finish_run(
+        FinishRunArgs {
+            cfg,
+            run_started,
+            started_at,
+            report_path,
+            auth,
+            url,
+            username,
+            journal_path,
+            journal,
+            total,
+            results,
+            assets_uploaded,
+            assets_skipped,
+            aborted,
+        },
+        &mut progress,
+        &mut log,
     )
-    .with_context(|| format!("write report {}", report_path.display()))?;
-    log.line(&format!(
-        "finished ok={} conversations_ok={ok_n} failed={fail_n} skipped={skip_n} messages={messages} \
-         elapsed_ms={elapsed} ({})",
-        report.ok,
-        format_duration_ms(elapsed)
-    ));
-    if let Some(cb) = progress.as_mut() {
-        cb(ProgressEvent::Finished(report.clone()));
-    }
-    Ok(report)
 }
 
 struct PrepareFileArgs<'a> {

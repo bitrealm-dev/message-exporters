@@ -23,10 +23,6 @@ const EXPORT_SOURCE: &str = "imazing";
 const EXPORT_TOOL: &str = "iMazing";
 const EXPORT_TOOL_VERSION: &str = "3.5.5";
 
-fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
-    message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)
-}
-
 #[derive(Debug, Default)]
 pub(crate) struct ExportReport {
     pub conversations: u64,
@@ -135,7 +131,7 @@ pub(crate) fn convert_export(
     let mut conversations: BTreeMap<String, PendingConversation> = BTreeMap::new();
 
     for discovered in &files {
-        check_cancel(cancel)?;
+        message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)?;
         match discovered.kind {
             SourceKind::Messages => report.messages_files += 1,
             SourceKind::WhatsApp => report.whatsapp_files += 1,
@@ -451,7 +447,7 @@ fn resolve_chat_identifier(
             let title = session.trim().to_string();
             return (peer_handles.join(","), title, false);
         }
-        return (name_stem(session), session.trim().to_string(), true);
+        return (message_exporter_core::name_stem(session), session.trim().to_string(), true);
     }
 
     if let Some(handle) = peer_handles.first() {
@@ -480,7 +476,7 @@ fn resolve_chat_identifier(
     if let Some(e164) = book.lookup_e164_by_name(session) {
         return (e164, session.to_string(), false);
     }
-    (name_stem(session), session.to_string(), true)
+    (message_exporter_core::name_stem(session), session.to_string(), true)
 }
 
 fn resolve_sender(
@@ -536,24 +532,6 @@ fn resolve_sender(
     }
 
     (handle, display)
-}
-
-fn name_stem(value: &str) -> String {
-    let raw: String = value
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '+' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    if raw.is_empty() || raw.chars().all(|c| c == '_') {
-        "unknown".to_string()
-    } else {
-        raw
-    }
 }
 
 fn prepare_conversation(convo: &mut PendingConversation, report: &mut ExportReport) -> bool {

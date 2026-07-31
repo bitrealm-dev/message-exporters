@@ -8,7 +8,8 @@ mod emit;
 mod parse;
 mod run;
 
-pub use run::{RunResult, parse_date_range, run};
+pub use message_exporter_core::{RunResult, parse_date_range_tz as parse_date_range};
+pub use run::run;
 
 #[cfg(test)]
 #[path = "../tests/convert_smoke.rs"]

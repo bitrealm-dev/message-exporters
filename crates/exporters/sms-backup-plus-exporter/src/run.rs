@@ -3,18 +3,11 @@
 use crate::emit::{ExportReport, convert_export};
 use anyhow::{Context, Result, bail};
 use contacts::{NameMapping, resolve_contacts_cli};
-use csv::DateRange;
-use message_exporter_core::{ExporterConfig, SourceConfig};
+use message_exporter_core::{RunResult, ExporterConfig, SourceConfig};
 use ir::ExportTransforms;
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
-
-/// Result of [`run`]: convert report plus human-readable log lines.
-#[derive(Debug)]
-pub struct RunResult {
-    pub messages: Vec<String>,
-}
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -207,9 +200,3 @@ fn report_summary_lines(report: &ExportReport, output: &Path) -> Vec<String> {
     lines
 }
 
-/// Helper used by CLI to parse date strings into [`DateRange`].
-pub fn parse_date_range(start_date: Option<&str>, end_date: Option<&str>) -> Result<DateRange> {
-    DateRange::parse(start_date, end_date)
-        .map_err(anyhow::Error::msg)
-        .context("invalid date range")
-}

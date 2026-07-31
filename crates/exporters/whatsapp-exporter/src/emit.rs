@@ -24,10 +24,6 @@ const EXPORT_TOOL: &str = "WhatsApp Chat Exporter";
 /// Pinned documented upstream version (JSON convert path; shell-out may differ).
 pub(crate) const EXPORT_TOOL_VERSION: &str = "0.13.0";
 
-fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
-    message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)
-}
-
 #[derive(Debug, Default)]
 pub(crate) struct ExportReport {
     pub conversations: u64,
@@ -100,7 +96,7 @@ pub(crate) fn convert_json(
     let mut conversations: BTreeMap<String, PendingConversation> = BTreeMap::new();
 
     for (jid, chat) in store {
-        check_cancel(cancel)?;
+        message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)?;
         if jid.starts_with('_') {
             // Reserved / system keys if any.
             continue;
@@ -123,7 +119,7 @@ pub(crate) fn convert_json(
     }
 
     for (chat_id, mut convo) in conversations {
-        check_cancel(cancel)?;
+        message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)?;
         if !prepare_conversation(&mut convo, &mut report) {
             continue;
         }

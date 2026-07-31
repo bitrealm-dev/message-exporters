@@ -43,7 +43,7 @@ use crate::{
     fields::{
         TapbackCell, balloon_kind_label, balloon_summary, build_balloon_value, build_edit_records,
         build_part_records, expressive_label, parse_thread_part, shared_location_label,
-        sticker_extras, transcription_for_attachment,
+        PartRecord, sticker_extras, transcription_for_attachment,
     },
     options::AttachmentEmbed,
     session::MailSession,
@@ -665,10 +665,21 @@ fn try_handwriting_svg(session: &MailSession, message: &Message) -> Option<MailA
     })
 }
 
-fn build_mail_message(
+struct MailConversationContext {
+    chat_identifier: String,
+    conversation_type: String,
+    group_title: Option<String>,
+    participants: Vec<Participant>,
+    is_from_me: bool,
+    sender_handle: Option<String>,
+    sender_display_name: Option<String>,
+    service: String,
+}
+
+fn resolve_mail_conversation_context(
     session: &MailSession,
     message: &Message,
-) -> Result<MailMessage, RuntimeError> {
+) -> MailConversationContext {
     let (chat_identifier, conversation_type, group_title, participants) =
         match session.conversation(message) {
             Some((chatroom, _)) => {
@@ -704,6 +715,22 @@ fn build_mail_message(
         other => other.to_string(),
     };
 
+    MailConversationContext {
+        chat_identifier,
+        conversation_type,
+        group_title,
+        participants,
+        is_from_me,
+        sender_handle,
+        sender_display_name,
+        service,
+    }
+}
+
+fn collect_mail_parts_and_attachments(
+    session: &MailSession,
+    message: &Message,
+) -> Result<(Vec<PartRecord>, Vec<MailAttachment>), RuntimeError> {
     let mut attachments = Attachment::from_message(session.data_source.db(), message)?;
     let referenced = referenced_attachment_indices(message, &attachments);
     let emitted_index: std::collections::HashMap<usize, usize> = referenced
@@ -746,6 +773,26 @@ fn build_mail_message(
     if let Some(svg) = try_handwriting_svg(session, message) {
         mail_attachments.push(svg);
     }
+
+    Ok((parts, mail_attachments))
+}
+
+fn build_mail_message(
+    session: &MailSession,
+    message: &Message,
+) -> Result<MailMessage, RuntimeError> {
+    let MailConversationContext {
+        chat_identifier,
+        conversation_type,
+        group_title,
+        participants,
+        is_from_me,
+        sender_handle,
+        sender_display_name,
+        service,
+    } = resolve_mail_conversation_context(session, message);
+
+    let (parts, mail_attachments) = collect_mail_parts_and_attachments(session, message)?;
 
     let send_effect = expressive_label(message.get_expressive());
     let shared_location = message

@@ -21,10 +21,6 @@ const EXPORT_SOURCE: &str = "openextract";
 const EXPORT_TOOL: &str = "OpenExtract";
 const EXPORT_TOOL_VERSION: &str = "0.5.1";
 
-fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
-    message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)
-}
-
 #[derive(Debug, Default)]
 pub(crate) struct ExportReport {
     pub conversations: u64,
@@ -79,7 +75,7 @@ pub(crate) fn convert_export(
 
     // For per-chat files, infer peer once from all rows in that file.
     for path in &files {
-        check_cancel(cancel)?;
+        message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)?;
         let rows = match parse_csv_file(path) {
             Ok(r) => r,
             Err(e) => {
@@ -145,7 +141,7 @@ pub(crate) fn convert_export(
         }
     }
 
-    check_cancel(cancel)?;
+    message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)?;
 
     for (chat_id, mut convo) in conversations {
         if !prepare_conversation(&mut convo, &mut report) {
@@ -217,25 +213,7 @@ fn resolve_chat(book: &ContactsBook, peer: &str) -> (String, String, bool) {
         return (e164, peer.to_string(), false);
     }
     // Name-only chat id — not fatal; vault may struggle later.
-    (name_stem(peer), peer.to_string(), true)
-}
-
-fn name_stem(value: &str) -> String {
-    let raw: String = value
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '+' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    if raw.is_empty() || raw.chars().all(|c| c == '_') {
-        "unknown".to_string()
-    } else {
-        raw
-    }
+    (message_exporter_core::name_stem(peer), peer.to_string(), true)
 }
 
 fn resolve_is_from_me(row: &RawRow) -> bool {

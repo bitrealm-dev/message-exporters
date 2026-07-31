@@ -84,7 +84,8 @@ struct Cli {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let date_range = parse_date_range(cli.start_date.as_deref(), cli.end_date.as_deref())?;
+    let date_range = parse_date_range(cli.start_date.as_deref(), cli.end_date.as_deref())
+        .map_err(anyhow::Error::msg)?;
     let output_format = OutputFormat::parse(&cli.format).map_err(anyhow::Error::msg)?;
     let compress = compress_options_from_cli(
         cli.media_max_resolution,

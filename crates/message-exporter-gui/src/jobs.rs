@@ -5,7 +5,9 @@ use std::sync::mpsc;
 use go_sms_pro_exporter::run as run_go_sms_pro;
 use imazing_exporter::run as run_imazing;
 use imessage_ir_exporter::run as run_imessage;
-use message_exporter_core::{CancelFlag, Exporter, ExporterConfig, LogSink, ProcessEvent};
+use message_exporter_core::{
+    CancelFlag, Exporter, ExporterConfig, LogSink, ProcessEvent, RunResult,
+};
 use openextract_exporter::run as run_openextract;
 use sms_backup_plus_exporter::run as run_sms_plus;
 use sms_backup_restore_exporter::run as run_sms_restore;
@@ -90,25 +92,8 @@ pub trait HasMessages {
     fn into_messages(self) -> Vec<String>;
 }
 
-macro_rules! impl_has_messages {
-    ($($ty:ty),+ $(,)?) => {
-        $(
-            impl HasMessages for $ty {
-                fn into_messages(self) -> Vec<String> {
-                    self.messages
-                }
-            }
-        )+
-    };
+impl HasMessages for RunResult {
+    fn into_messages(self) -> Vec<String> {
+        self.messages
+    }
 }
-
-impl_has_messages!(
-    go_sms_pro_exporter::RunResult,
-    sms_backup_restore_exporter::RunResult,
-    sms_backup_plus_exporter::RunResult,
-    openextract_exporter::RunResult,
-    imazing_exporter::RunResult,
-    imessage_ir_exporter::RunResult,
-    whatsapp_exporter::RunResult,
-    ir::reexport::RunResult,
-);

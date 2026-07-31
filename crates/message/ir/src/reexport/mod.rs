@@ -7,16 +7,11 @@ use crate::{
 };
 use anyhow::{Context, Result, bail};
 use message_exporter_core::{ExporterConfig, OutputFormat};
+pub use message_exporter_core::RunResult;
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-
-/// Result returned by [`run`].
-#[derive(Debug, Default)]
-pub struct RunResult {
-    pub messages: Vec<String>,
-}
 
 /// Convert the prior export in `config.inputs[0]` to `config.output_format`.
 ///

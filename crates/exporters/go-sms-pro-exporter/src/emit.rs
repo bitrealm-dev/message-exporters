@@ -24,10 +24,6 @@ const EXPORT_TOOL: &str = "GO SMS Pro";
 /// Upstream app version not pinned yet (empty in CSV).
 const EXPORT_TOOL_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
-    message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)
-}
-
 #[derive(Debug, Default)]
 pub(crate) struct ExportReport {
     pub conversations: u64,
@@ -680,7 +676,7 @@ pub(crate) fn convert_export(
     xml_paths.sort();
 
     for xml_path in xml_paths {
-        check_cancel(cancel)?;
+        message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)?;
         match parse_xml_file(&xml_path) {
             Ok((msgs, stats)) => {
                 report.xml_messages_seen += stats.messages;
@@ -721,7 +717,7 @@ pub(crate) fn convert_export(
     pdu_paths.sort();
 
     for pdu_path in pdu_paths {
-        check_cancel(cancel)?;
+        message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)?;
         match parse_pdu_file(&pdu_path, &owners.all_digits, &owners.primary_digits) {
             Ok(None) => {
                 report.skipped_unparseable_pdu += 1;
@@ -752,7 +748,7 @@ pub(crate) fn convert_export(
         }
     }
 
-    check_cancel(cancel)?;
+    message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)?;
 
     for (chat_id, mut convo) in conversations {
         for msg in &mut convo.messages {

@@ -83,7 +83,8 @@ fn main() -> Result<()> {
         cli.start_date.as_deref(),
         cli.end_date.as_deref(),
         cli.timezone.as_deref(),
-    )?;
+    )
+    .map_err(anyhow::Error::msg)?;
     let output_format = OutputFormat::parse(&cli.format).map_err(anyhow::Error::msg)?;
     let compress = compress_options_from_cli(
         cli.media_max_resolution,

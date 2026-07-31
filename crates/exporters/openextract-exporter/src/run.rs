@@ -1,18 +1,11 @@
 //! Full export pipeline for CLI and in-process GUI.
 
 use crate::emit::{ExportReport, convert_export};
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use contacts::resolve_contacts_cli;
-use csv::DateRange;
-use message_exporter_core::{ExporterConfig, SourceConfig};
+use message_exporter_core::{RunResult, ExporterConfig, SourceConfig};
 use ir::ExportTransforms;
 use std::path::Path;
-
-/// Result of [`run`]: convert report plus human-readable log lines.
-#[derive(Debug)]
-pub struct RunResult {
-    pub messages: Vec<String>,
-}
 
 /// Resolve contacts, convert, apply media/obfuscate via FormatSink.
 pub fn run(config: &ExporterConfig) -> Result<RunResult> {
@@ -95,9 +88,3 @@ fn report_summary_lines(
     lines
 }
 
-/// Helper used by CLI to parse date strings into [`DateRange`].
-pub fn parse_date_range(start_date: Option<&str>, end_date: Option<&str>) -> Result<DateRange> {
-    DateRange::parse(start_date, end_date)
-        .map_err(anyhow::Error::msg)
-        .context("invalid date range")
-}

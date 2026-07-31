@@ -133,7 +133,8 @@ fn main() -> Result<()> {
             media_min_size,
             media_skip_efficient,
         } => {
-            let date_range = parse_date_range(start_date.as_deref(), end_date.as_deref())?;
+            let date_range = parse_date_range(start_date.as_deref(), end_date.as_deref())
+                .map_err(anyhow::Error::msg)?;
             let output_format = OutputFormat::parse(&format).map_err(anyhow::Error::msg)?;
             let compress = compress_options_from_cli(
                 media_max_resolution,

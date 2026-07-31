@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use imessage_database::util::{
     dirs::default_db_path, platform::Platform, query_context::QueryContext,
 };
-use message_exporter_core::{ApplePlatform, ExporterConfig, SourceConfig};
+use message_exporter_core::{RunResult, ApplePlatform, ExporterConfig, SourceConfig};
 use ir::ExportTransforms;
 
 use crate::{
@@ -14,12 +14,6 @@ use crate::{
     options::{AttachmentEmbed, MailOptions, validate_export_path},
     session::MailSession,
 };
-
-/// Result of [`run`]. Logging goes to stderr during export.
-#[derive(Debug, Default)]
-pub struct RunResult {
-    pub messages: Vec<String>,
-}
 
 /// Build options from [`ExporterConfig`], open the DB, and write the export.
 pub fn run(config: &ExporterConfig) -> anyhow::Result<RunResult> {

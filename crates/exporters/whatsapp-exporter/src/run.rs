@@ -3,27 +3,18 @@
 use crate::emit::{ExportReport, convert_json};
 use crate::wtsexporter::{Platform, WtsexporterArgs, resolve_wtsexporter, run_wtsexporter};
 use anyhow::{Context, Result, bail};
-use csv::DateRange;
-use message_exporter_core::{
-    CancelFlag, ExporterConfig, SourceConfig, WhatsappPlatform as CorePlatform,
-};
+use message_exporter_core::{RunResult, ExporterConfig, SourceConfig, WhatsappPlatform as CorePlatform};
 use ir::ExportTransforms;
 use std::env;
 use std::fs;
 use std::path::Path;
-
-/// Result of [`run`]: convert report plus human-readable log lines.
-#[derive(Debug)]
-pub struct RunResult {
-    pub messages: Vec<String>,
-}
 
 /// Resolve JSON (via wtsexporter or `--json`), convert, apply media/obfuscate via FormatSink.
 pub fn run(config: &ExporterConfig) -> Result<RunResult> {
     let SourceConfig::Whatsapp(source) = &config.source else {
         bail!("whatsapp-exporter requires SourceConfig::Whatsapp");
     };
-    check_cancel(config.cancel.as_ref())?;
+    message_exporter_core::check_cancel(config.cancel.as_ref()).map_err(anyhow::Error::msg)?;
     let mut messages = Vec::new();
 
     let platform = match source.platform {
@@ -55,7 +46,7 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
             None => env::current_dir().context("resolve current working directory")?,
         };
 
-        check_cancel(config.cancel.as_ref())?;
+        message_exporter_core::check_cancel(config.cancel.as_ref()).map_err(anyhow::Error::msg)?;
         let bin = resolve_wtsexporter()?;
         fs::create_dir_all(&config.output)
             .with_context(|| format!("create {}", config.output.display()))?;
@@ -73,7 +64,7 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
 
         // Cooperative only: we check cancel before and after the external process.
         // Killing wtsexporter mid-run is not implemented.
-        check_cancel(config.cancel.as_ref())?;
+        message_exporter_core::check_cancel(config.cancel.as_ref()).map_err(anyhow::Error::msg)?;
         let log = run_wtsexporter(
             &bin,
             &WtsexporterArgs {
@@ -90,7 +81,7 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
             },
             &json_out,
         )?;
-        check_cancel(config.cancel.as_ref())?;
+        message_exporter_core::check_cancel(config.cancel.as_ref()).map_err(anyhow::Error::msg)?;
 
         if !log.trim().is_empty() {
             let trimmed = log.trim_end_matches('\n');
@@ -114,7 +105,7 @@ pub fn run(config: &ExporterConfig) -> Result<RunResult> {
         bail!("JSON not found: {}", json_path.display());
     }
 
-    check_cancel(config.cancel.as_ref())?;
+    message_exporter_core::check_cancel(config.cancel.as_ref()).map_err(anyhow::Error::msg)?;
     let mut transforms = ExportTransforms::from_configs(&config.media, &config.obfuscate);
     transforms.log = config.log.clone();
     let needs_media_tools = transforms.needs_media_tools();
@@ -178,13 +169,3 @@ fn report_summary_lines(report: &ExportReport, output: &Path) -> Vec<String> {
     lines
 }
 
-/// Helper used by CLI to parse date strings into [`DateRange`].
-pub fn parse_date_range(start_date: Option<&str>, end_date: Option<&str>) -> Result<DateRange> {
-    DateRange::parse(start_date, end_date)
-        .map_err(anyhow::Error::msg)
-        .context("invalid date range")
-}
-
-fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
-    message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)
-}
