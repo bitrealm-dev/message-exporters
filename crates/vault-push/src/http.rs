@@ -164,6 +164,61 @@ impl HttpSession {
         })
     }
 
+    /// Probe whether the vault already has this SHA. Returns `Some` when present,
+    /// `None` when missing (HTTP 404). Does not transfer the file body.
+    pub fn head_asset(
+        &self,
+        base_url: &str,
+        key: &str,
+        username: &str,
+        source: &str,
+        sha256: &str,
+    ) -> Result<Option<AssetPutResponse>> {
+        let base = base_url.trim_end_matches('/');
+        let url = format!(
+            "{base}/v1/assets/{}?source={}&account={}",
+            encode(sha256),
+            encode(source),
+            encode(username)
+        );
+        let response = self
+            .client
+            .head(&url)
+            .timeout(Duration::from_secs(15))
+            .header("Authorization", format!("Bearer {}", key.trim()))
+            .send()
+            .with_context(|| format!("HEAD {url}"))?;
+        let status = response.status();
+        if status.as_u16() == 404 {
+            return Ok(None);
+        }
+        if status.as_u16() == 401 {
+            bail!("invalid vault key");
+        }
+        if status.as_u16() == 403 {
+            bail!("username does not match vault key");
+        }
+        if !status.is_success() {
+            let text = response.text().unwrap_or_default();
+            bail!("asset HEAD failed (HTTP {status}): {text}");
+        }
+        // Prefer JSON body when present; some servers omit HEAD bodies.
+        let text = response.text().unwrap_or_default();
+        if text.trim().is_empty() {
+            return Ok(Some(AssetPutResponse {
+                ok: true,
+                already_present: true,
+                error: None,
+            }));
+        }
+        let parsed: AssetPutResponse = serde_json::from_str(&text).unwrap_or(AssetPutResponse {
+            ok: true,
+            already_present: true,
+            error: None,
+        });
+        Ok(Some(parsed))
+    }
+
     pub fn put_asset(&self, request: AssetPutRequest<'_>) -> Result<AssetPutResponse> {
         let base = request.base_url.trim_end_matches('/');
         let url = format!(

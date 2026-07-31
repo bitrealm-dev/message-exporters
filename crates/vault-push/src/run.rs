@@ -965,6 +965,15 @@ fn upload_assets(args: UploadAssets<'_>) -> Result<AssetUploadStats> {
                         .map_err(|_| "cancelled".to_string())
                         .and_then(|_| {
                             http::with_retries(cfg.max_retries, || {
+                                if let Some(existing) = http.head_asset(
+                                    url,
+                                    &cfg.key,
+                                    username,
+                                    source,
+                                    &job.digest,
+                                )? {
+                                    return Ok(existing);
+                                }
                                 http.put_asset(AssetPutRequest {
                                     base_url: url,
                                     key: &cfg.key,

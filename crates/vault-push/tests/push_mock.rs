@@ -362,6 +362,13 @@ fn profiles_attachment_upload_phases() {
         }));
     });
     let digest = hex::encode(Sha256::digest(ASSET_BYTES));
+    let head = server.mock(|when, then| {
+        when.method("HEAD").path(format!("/v1/assets/{digest}"));
+        then.status(404).json_body(json!({
+            "ok": false,
+            "error": "asset not found"
+        }));
+    });
     let asset = server.mock(|when, then| {
         when.method(PUT).path(format!("/v1/assets/{digest}"));
         then.status(200).json_body(json!({
@@ -425,6 +432,7 @@ fn profiles_attachment_upload_phases() {
         run(&cfg, Some(&mut progress)).unwrap()
     };
 
+    head.assert();
     asset.assert();
     import.assert();
     let profile = report.results[0].profile.as_ref().unwrap();
@@ -444,4 +452,73 @@ fn profiles_attachment_upload_phases() {
     );
     let persisted_log = fs::read_to_string(log_path).unwrap();
     assert!(persisted_log.contains("attachment_scan_hash_ms="));
+}
+
+#[test]
+fn skips_put_when_head_reports_asset_present() {
+    const ASSET_BYTES: &[u8] = b"already on vault";
+
+    let server = MockServer::start();
+    let _auth = server.mock(|when, then| {
+        when.method(GET).path("/v1/auth/check");
+        then.status(200).json_body(json!({
+            "ok": true,
+            "account_id": "acct-1",
+            "username": "alice",
+            "account_ok": true,
+            "sources": ["sms-backup-restore"]
+        }));
+    });
+    let digest = hex::encode(Sha256::digest(ASSET_BYTES));
+    let head = server.mock(|when, then| {
+        when.method("HEAD").path(format!("/v1/assets/{digest}"));
+        then.status(200).json_body(json!({
+            "ok": true,
+            "sha256": digest,
+            "assets_path": format!("ab/{digest}.txt"),
+            "already_present": true
+        }));
+    });
+    let put = server.mock(|when, then| {
+        when.method(PUT).path(format!("/v1/assets/{digest}"));
+        then.status(200).json_body(json!({
+            "ok": true,
+            "already_present": false
+        }));
+    });
+    let import = server.mock(|when, then| {
+        when.method(POST).path("/v1/import");
+        then.status(200).json_body(json!({
+            "ok": true,
+            "messages": 1,
+            "messages_appended": 1
+        }));
+    });
+
+    let dir = tempdir().unwrap();
+    let attachment_dir = dir.path().join("attachments");
+    fs::create_dir(&attachment_dir).unwrap();
+    fs::write(attachment_dir.join("fixture.txt"), ASSET_BYTES).unwrap();
+    let mut doc = sample_doc();
+    doc.messages[0].attachments.push(IrAttachment {
+        path: Some("attachments/fixture.txt".into()),
+        original_name: Some("fixture.txt".into()),
+        mime_type: Some("text/plain".into()),
+        digest_sha256: Some(digest.clone()),
+        is_sticker: false,
+        transcription: None,
+        sticker_effect: None,
+        bytes: None,
+    });
+    write_jsonl(dir.path(), &doc);
+
+    let mut cfg = text_only_config(dir.path(), server.base_url());
+    cfg.force = true;
+    let report = run(&cfg, None).unwrap();
+
+    head.assert();
+    assert_eq!(put.hits(), 0, "PUT must be skipped when HEAD says present");
+    import.assert();
+    assert_eq!(report.assets_uploaded, 0);
+    assert_eq!(report.assets_skipped, 1);
 }
