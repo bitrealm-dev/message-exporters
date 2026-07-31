@@ -5,6 +5,7 @@ use std::thread;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+use reqwest::blocking::Client;
 use serde::Deserialize;
 
 #[derive(Debug, Clone)]
@@ -61,11 +62,29 @@ pub struct ImportResponse {
     pub assets_missing: u64,
 }
 
-fn client(timeout_secs: u64) -> Result<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(timeout_secs))
-        .build()
-        .context("build HTTP client")
+#[derive(Clone)]
+pub struct HttpSession {
+    client: Client,
+}
+
+pub struct AssetPutRequest<'a> {
+    pub base_url: &'a str,
+    pub key: &'a str,
+    pub username: &'a str,
+    pub source: &'a str,
+    pub sha256: &'a str,
+    pub file: &'a Path,
+    pub mime: Option<&'a str>,
+}
+
+impl HttpSession {
+    pub fn new() -> Result<Self> {
+        let client = Client::builder()
+            .pool_max_idle_per_host(16)
+            .build()
+            .context("build HTTP client")?;
+        Ok(Self { client })
+    }
 }
 
 fn looks_like_html(body: &str) -> bool {
@@ -94,146 +113,149 @@ fn encode(s: &str) -> String {
     out
 }
 
+impl HttpSession {
+    pub fn auth_check(&self, base_url: &str, key: &str, username: &str) -> Result<AuthInfo> {
+        let base = base_url.trim_end_matches('/');
+        let url = format!("{base}/v1/auth/check?account={}", encode(username.trim()));
+        let response = self
+            .client
+            .get(&url)
+            .timeout(Duration::from_secs(15))
+            .header("Authorization", format!("Bearer {}", key.trim()))
+            .send()
+            .with_context(|| format!("GET {url}"))?;
+        let status = response.status();
+        let text = response.text().context("read auth/check body")?;
+        if looks_like_html(&text) {
+            bail!(
+                "auth/check returned HTML from {url} (HTTP {status}). \
+                 Vault URL must point at `message-vault-rs serve` (usually port 8080), \
+                 not the Next.js browse UI (port 3000)"
+            );
+        }
+        if status.as_u16() == 401 {
+            bail!("invalid vault key");
+        }
+        if status.as_u16() == 403 {
+            bail!("username does not match vault key: {text}");
+        }
+        if !status.is_success() {
+            bail!("auth/check failed (HTTP {status}): {text}");
+        }
+        let parsed: AuthCheckResponse = serde_json::from_str(&text).with_context(|| {
+            format!(
+                "parse auth/check JSON from {url} (HTTP {status}): {}",
+                truncate(&text, 200)
+            )
+        })?;
+        if !parsed.ok {
+            bail!("auth/check rejected: {}", parsed.error.unwrap_or(text));
+        }
+        if parsed.account_ok == Some(false) {
+            bail!("account not found for username {username}");
+        }
+        let account_id = parsed
+            .account_id
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| anyhow::anyhow!("auth/check did not return account_id"))?;
+        Ok(AuthInfo {
+            account_id,
+            username: parsed.username,
+        })
+    }
+
+    pub fn put_asset(&self, request: AssetPutRequest<'_>) -> Result<AssetPutResponse> {
+        let base = request.base_url.trim_end_matches('/');
+        let url = format!(
+            "{base}/v1/assets/{}?source={}&account={}",
+            encode(request.sha256),
+            encode(request.source),
+            encode(request.username)
+        );
+        let bytes = std::fs::read(request.file)
+            .with_context(|| format!("read {}", request.file.display()))?;
+        let mut req = self
+            .client
+            .put(&url)
+            .timeout(Duration::from_secs(600))
+            .header("Authorization", format!("Bearer {}", request.key.trim()))
+            .body(bytes);
+        if let Some(mime) = request.mime.filter(|m| !m.is_empty()) {
+            req = req.header("Content-Type", mime);
+        } else {
+            req = req.header("Content-Type", "application/octet-stream");
+        }
+        let response = req.send().with_context(|| format!("PUT {url}"))?;
+        let status = response.status();
+        let text = response.text().context("read asset response")?;
+        let parsed: AssetPutResponse = serde_json::from_str(&text).unwrap_or(AssetPutResponse {
+            ok: false,
+            already_present: false,
+            error: Some(text.clone()),
+        });
+        if !status.is_success() || !parsed.ok {
+            bail!(
+                "{}",
+                parsed
+                    .error
+                    .unwrap_or_else(|| format!("HTTP {status}: {text}"))
+            );
+        }
+        Ok(parsed)
+    }
+
+    pub fn post_import(
+        &self,
+        base_url: &str,
+        key: &str,
+        username: &str,
+        source: &str,
+        mode: &str,
+        ndjson: Vec<u8>,
+    ) -> Result<ImportResponse> {
+        let base = base_url.trim_end_matches('/');
+        let url = format!(
+            "{base}/v1/import?source={}&account={}&mode={}",
+            encode(source),
+            encode(username),
+            encode(mode)
+        );
+        let response = self
+            .client
+            .post(&url)
+            .timeout(Duration::from_secs(600))
+            .header("Authorization", format!("Bearer {}", key.trim()))
+            .header("Content-Type", "application/jsonl")
+            .body(ndjson)
+            .send()
+            .with_context(|| format!("POST {url}"))?;
+        let status = response.status();
+        let text = response.text().context("read import response")?;
+        let parsed: ImportResponse = serde_json::from_str(&text).unwrap_or(ImportResponse {
+            ok: false,
+            error: Some(text.clone()),
+            messages: 0,
+            messages_appended: 0,
+            messages_deduped: 0,
+            conversations: 0,
+            attachments: 0,
+            assets_copied: 0,
+            assets_missing: 0,
+        });
+        if !status.is_success() || !parsed.ok {
+            bail!(
+                "{}",
+                parsed
+                    .error
+                    .unwrap_or_else(|| format!("HTTP {status}: {text}"))
+            );
+        }
+        Ok(parsed)
+    }
+}
+
 pub fn auth_check(base_url: &str, key: &str, username: &str) -> Result<AuthInfo> {
-    let base = base_url.trim_end_matches('/');
-    let url = format!("{base}/v1/auth/check?account={}", encode(username.trim()));
-    let client = client(15)?;
-    let response = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", key.trim()))
-        .send()
-        .with_context(|| format!("GET {url}"))?;
-    let status = response.status();
-    let text = response.text().context("read auth/check body")?;
-    if looks_like_html(&text) {
-        bail!(
-            "auth/check returned HTML from {url} (HTTP {status}). \
-             Vault URL must point at `message-vault-rs serve` (usually port 8080), \
-             not the Next.js browse UI (port 3000)"
-        );
-    }
-    if status.as_u16() == 401 {
-        bail!("invalid vault key");
-    }
-    if status.as_u16() == 403 {
-        bail!("username does not match vault key: {text}");
-    }
-    if !status.is_success() {
-        bail!("auth/check failed (HTTP {status}): {text}");
-    }
-    let parsed: AuthCheckResponse = serde_json::from_str(&text).with_context(|| {
-        format!(
-            "parse auth/check JSON from {url} (HTTP {status}): {}",
-            truncate(&text, 200)
-        )
-    })?;
-    if !parsed.ok {
-        bail!("auth/check rejected: {}", parsed.error.unwrap_or(text));
-    }
-    if parsed.account_ok == Some(false) {
-        bail!("account not found for username {username}");
-    }
-    let account_id = parsed
-        .account_id
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("auth/check did not return account_id"))?;
-    Ok(AuthInfo {
-        account_id,
-        username: parsed.username,
-    })
-}
-
-pub fn put_asset(
-    base_url: &str,
-    key: &str,
-    username: &str,
-    source: &str,
-    sha256: &str,
-    file: &Path,
-    mime: Option<&str>,
-) -> Result<AssetPutResponse> {
-    let base = base_url.trim_end_matches('/');
-    let url = format!(
-        "{base}/v1/assets/{}?source={}&account={}",
-        encode(sha256),
-        encode(source),
-        encode(username)
-    );
-    let bytes = std::fs::read(file).with_context(|| format!("read {}", file.display()))?;
-    let client = client(600)?;
-    let mut req = client
-        .put(&url)
-        .header("Authorization", format!("Bearer {}", key.trim()))
-        .body(bytes);
-    if let Some(mime) = mime.filter(|m| !m.is_empty()) {
-        req = req.header("Content-Type", mime);
-    } else {
-        req = req.header("Content-Type", "application/octet-stream");
-    }
-    let response = req.send().with_context(|| format!("PUT {url}"))?;
-    let status = response.status();
-    let text = response.text().context("read asset response")?;
-    let parsed: AssetPutResponse = serde_json::from_str(&text).unwrap_or(AssetPutResponse {
-        ok: false,
-        already_present: false,
-        error: Some(text.clone()),
-    });
-    if !status.is_success() || !parsed.ok {
-        bail!(
-            "{}",
-            parsed
-                .error
-                .unwrap_or_else(|| format!("HTTP {status}: {text}"))
-        );
-    }
-    Ok(parsed)
-}
-
-pub fn post_import(
-    base_url: &str,
-    key: &str,
-    username: &str,
-    source: &str,
-    mode: &str,
-    ndjson: Vec<u8>,
-) -> Result<ImportResponse> {
-    let base = base_url.trim_end_matches('/');
-    let url = format!(
-        "{base}/v1/import?source={}&account={}&mode={}",
-        encode(source),
-        encode(username),
-        encode(mode)
-    );
-    let client = client(600)?;
-    let response = client
-        .post(&url)
-        .header("Authorization", format!("Bearer {}", key.trim()))
-        .header("Content-Type", "application/jsonl")
-        .body(ndjson)
-        .send()
-        .with_context(|| format!("POST {url}"))?;
-    let status = response.status();
-    let text = response.text().context("read import response")?;
-    let parsed: ImportResponse = serde_json::from_str(&text).unwrap_or(ImportResponse {
-        ok: false,
-        error: Some(text.clone()),
-        messages: 0,
-        messages_appended: 0,
-        messages_deduped: 0,
-        conversations: 0,
-        attachments: 0,
-        assets_copied: 0,
-        assets_missing: 0,
-    });
-    if !status.is_success() || !parsed.ok {
-        bail!(
-            "{}",
-            parsed
-                .error
-                .unwrap_or_else(|| format!("HTTP {status}: {text}"))
-        );
-    }
-    Ok(parsed)
+    HttpSession::new()?.auth_check(base_url, key, username)
 }
 
 pub fn with_retries<T, F>(max_retries: u32, mut op: F) -> Result<T>

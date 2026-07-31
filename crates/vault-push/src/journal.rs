@@ -13,6 +13,12 @@ pub const REPORT_NAME: &str = "vault-push-report.json";
 pub const LOG_NAME: &str = "vault-push.log";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JournalMessage {
+    pub file: String,
+    pub guid: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum JournalEvent {
     AssetOk {
@@ -27,6 +33,12 @@ pub enum JournalEvent {
         source: String,
         file: String,
         guid: String,
+    },
+    MessageBatchOk {
+        url: String,
+        username: String,
+        source: String,
+        messages: Vec<JournalMessage>,
     },
     FileOk {
         url: String,
@@ -100,6 +112,18 @@ pub fn load(path: &Path, url: &str, username: &str) -> Result<JournalState> {
                     .messages
                     .insert(JournalState::message_key(&file, &guid));
             }
+            JournalEvent::MessageBatchOk {
+                url: u,
+                username: a,
+                messages,
+                ..
+            } if u == url && a == username => {
+                state.messages.extend(
+                    messages
+                        .into_iter()
+                        .map(|message| JournalState::message_key(&message.file, &message.guid)),
+                );
+            }
             JournalEvent::FileOk {
                 url: u,
                 username: a,
@@ -131,7 +155,9 @@ pub fn append(path: &Path, event: &JournalEvent) -> Result<()> {
 
 pub fn compact(path: &Path, url: &str, username: &str, state: &JournalState) -> Result<()> {
     let mut events = Vec::new();
-    for sha in &state.assets {
+    let mut assets: Vec<_> = state.assets.iter().collect();
+    assets.sort_unstable();
+    for sha in assets {
         events.push(JournalEvent::AssetOk {
             url: url.to_string(),
             username: username.to_string(),
@@ -139,19 +165,27 @@ pub fn compact(path: &Path, url: &str, username: &str, state: &JournalState) -> 
             sha256: sha.clone(),
         });
     }
-    for key in &state.messages {
-        let Some((file, guid)) = key.split_once('\0') else {
-            continue;
-        };
-        events.push(JournalEvent::MessageOk {
+    let mut messages: Vec<_> = state
+        .messages
+        .iter()
+        .filter_map(|key| key.split_once('\0'))
+        .map(|(file, guid)| JournalMessage {
+            file: file.to_string(),
+            guid: guid.to_string(),
+        })
+        .collect();
+    messages.sort_unstable_by(|a, b| (&a.file, &a.guid).cmp(&(&b.file, &b.guid)));
+    for batch in messages.chunks(1_000) {
+        events.push(JournalEvent::MessageBatchOk {
             url: url.to_string(),
             username: username.to_string(),
             source: String::new(),
-            file: file.to_string(),
-            guid: guid.to_string(),
+            messages: batch.to_vec(),
         });
     }
-    for file in &state.files {
+    let mut files: Vec<_> = state.files.iter().collect();
+    files.sort_unstable();
+    for file in files {
         events.push(JournalEvent::FileOk {
             url: url.to_string(),
             username: username.to_string(),
@@ -169,4 +203,38 @@ pub fn compact(path: &Path, url: &str, username: &str, state: &JournalState) -> 
     }
     fs::rename(&tmp, path)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loads_legacy_and_batch_message_success_events() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(JOURNAL_NAME);
+        fs::write(
+            &path,
+            concat!(
+                "{\"event\":\"message_ok\",\"url\":\"http://vault\",\"username\":\"alice\",",
+                "\"source\":\"sms\",\"file\":\"first.jsonl\",\"guid\":\"guid-1\"}\n",
+                "{\"event\":\"message_batch_ok\",\"url\":\"http://vault\",\"username\":\"alice\",",
+                "\"source\":\"sms\",\"messages\":[{\"file\":\"second.jsonl\",\"guid\":\"guid-2\"}]}\n"
+            ),
+        )
+        .unwrap();
+
+        let state = load(&path, "http://vault", "alice").unwrap();
+
+        assert!(
+            state
+                .messages
+                .contains(&JournalState::message_key("first.jsonl", "guid-1"))
+        );
+        assert!(
+            state
+                .messages
+                .contains(&JournalState::message_key("second.jsonl", "guid-2"))
+        );
+    }
 }

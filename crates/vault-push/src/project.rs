@@ -150,6 +150,19 @@ pub fn conversation_line(header: &ConversationHeader) -> Result<Vec<u8>> {
 }
 
 pub fn message_line(msg: &IrMessage, digests: &[(usize, String)]) -> Result<(Vec<u8>, String)> {
+    message_line_inner(msg, digests, true)
+}
+
+/// Like [`message_line`], but omits attachment metadata (text-only import).
+pub fn message_line_without_attachments(msg: &IrMessage) -> Result<(Vec<u8>, String)> {
+    message_line_inner(msg, &[], false)
+}
+
+fn message_line_inner(
+    msg: &IrMessage,
+    digests: &[(usize, String)],
+    include_attachments: bool,
+) -> Result<(Vec<u8>, String)> {
     let secs = msg.timestamp_unix_ms.div_euclid(1000);
     let (ts_local, ts_utc, _) = format_local_ts(secs).ok_or_else(|| {
         anyhow::anyhow!(
@@ -159,7 +172,11 @@ pub fn message_line(msg: &IrMessage, digests: &[(usize, String)]) -> Result<(Vec
     })?;
     let is_from_me = msg.direction == IrDirection::Outgoing;
     let im = msg.imessage.as_ref();
-    let attachments = project_attachments(&msg.attachments, digests);
+    let attachments = if include_attachments {
+        project_attachments(&msg.attachments, digests)
+    } else {
+        Vec::new()
+    };
     let guid = if msg.guid.trim().is_empty() {
         None
     } else {

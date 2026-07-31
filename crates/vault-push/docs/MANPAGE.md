@@ -12,7 +12,7 @@ Prefer `VAULT_KEY` / `VAULT_URL` environment variables over putting the key on t
 
 ## Description
 
-Reads per-conversation `.jsonl` files (message-ir schema v3) under `--input`, uploads each unique attachment by SHA-256 (`PUT /v1/assets/{sha256}`), then imports bounded vault-NDJSON message batches (`POST /v1/import`). Attachment uploads run concurrently. Import requests stay sequential because the server reserves one temporary import area for each account.
+Reads per-conversation `.jsonl` files (message-ir schema v3) under `--input`, uploads each unique attachment by SHA-256 (`PUT /v1/assets/{sha256}`), then combines conversations into bounded vault-NDJSON message batches (`POST /v1/import`). Requests reuse HTTP connections and are flushed at the configured message count or a 16 MiB body target. Attachment uploads run concurrently. Import requests stay sequential because the server reserves one temporary import area for each account.
 
 Progress and a durable journal (`.vault-import-state.jsonl`) live under the input directory so re-runs can resume. Secrets are never written to the journal or report.
 
@@ -27,8 +27,9 @@ Progress and a durable journal (`.vault-import-state.jsonl`) live under the inpu
 | `--mode append\|replace` | | Default `append` (resume-safe) |
 | `--continue-on-error` | | Keep going after a failed conversation (default true) |
 | `--force` | | Ignore journal; re-upload and re-import |
+| `--skip-attachments` | | Import messages without uploading attachments |
 | `--max-retries N` | | Transient HTTP retries (default 3) |
-| `--batch-size N` | | Messages per import request (default 100) |
+| `--batch-size N` | | Target messages per import request across conversations (default 1000; requests also flush near 16 MiB) |
 | `--asset-upload-workers N` | | Simultaneous attachment uploads (default 4). Use `1` to disable parallel uploads. Message imports always remain sequential. |
 | `--auth-only` | | Authenticate and exit |
 | `--report` / `--log` / `--journal` | | Override artifact paths |

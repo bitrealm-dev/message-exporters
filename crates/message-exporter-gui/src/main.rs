@@ -939,6 +939,7 @@ fn start_vault_import(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<AppSta
         }
         let continue_on_error = st.export_ini.vault.continue_on_error;
         let force = st.export_ini.vault.force;
+        let skip_attachments = st.export_ini.vault.skip_attachments;
         let label = "vault-push (library)".to_string();
         let job: LibraryJob = Box::new(move |cancel, tx| {
             let cfg = VaultPushConfig {
@@ -949,6 +950,7 @@ fn start_vault_import(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<AppSta
                 mode: "append".into(),
                 continue_on_error,
                 force,
+                skip_attachments,
                 max_retries: 3,
                 batch_size: vault_push::DEFAULT_BATCH_SIZE,
                 asset_upload_workers: vault_push::DEFAULT_ASSET_UPLOAD_WORKERS,
@@ -977,12 +979,15 @@ fn start_vault_import(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<AppSta
                 }
                 VaultProgressEvent::Finished(report) => {
                     let _ = tx.send(ProcessEvent::Log(format!(
-                        "Import finished ok={} conversations_ok={} failed={} skipped={} messages={}",
+                        "Import finished ok={} conversations_ok={} failed={} skipped={} messages={} \
+                         elapsed_ms={} ({})",
                         report.ok,
                         report.conversations_ok,
                         report.conversations_failed,
                         report.conversations_skipped,
-                        report.messages
+                        report.messages,
+                        report.elapsed_ms,
+                        vault_push::format_duration_ms(report.elapsed_ms)
                     )));
                 }
             };

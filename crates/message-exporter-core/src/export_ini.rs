@@ -36,6 +36,7 @@ pub struct VaultSection {
     pub input: String,
     pub continue_on_error: bool,
     pub force: bool,
+    pub skip_attachments: bool,
 }
 
 /// Per-exporter path / type-specific fields kept when switching backup types.
@@ -391,7 +392,8 @@ fn build_ini(state: &ExportIniState, form: &Form) -> Ini {
             .set("key", state.vault.key.trim())
             .set("input", state.vault.input.trim())
             .set("continue_on_error", bool_str(state.vault.continue_on_error))
-            .set("force", bool_str(state.vault.force));
+            .set("force", bool_str(state.vault.force))
+            .set("skip_attachments", bool_str(state.vault.skip_attachments));
     }
     ini
 }
@@ -413,6 +415,7 @@ fn read_vault_section(ini: &Ini) -> VaultSection {
         input: get(ini, Some(VAULT), "input"),
         continue_on_error: parse_bool(&get(ini, Some(VAULT), "continue_on_error"), true),
         force: parse_bool(&get(ini, Some(VAULT), "force"), false),
+        skip_attachments: parse_bool(&get(ini, Some(VAULT), "skip_attachments"), false),
     }
 }
 

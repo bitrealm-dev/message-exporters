@@ -240,6 +240,7 @@ pub fn push_vault(ui: &AppWindow, state: &mut AppState) {
     vault.set_input(SharedString::from(v.input.as_str()));
     vault.set_continue_on_error(v.continue_on_error);
     vault.set_force(v.force);
+    vault.set_skip_attachments(v.skip_attachments);
 
     let note = if !state.vault_source_note.is_empty() {
         state.vault_source_note.clone()
@@ -261,6 +262,7 @@ pub fn pull_vault(ui: &AppWindow, state: &mut AppState) {
     state.export_ini.vault.input = vault.get_input().to_string();
     state.export_ini.vault.continue_on_error = vault.get_continue_on_error();
     state.export_ini.vault.force = vault.get_force();
+    state.export_ini.vault.skip_attachments = vault.get_skip_attachments();
 }
 
 pub fn set_log_lines(ui: &AppWindow, lines: &[String]) {

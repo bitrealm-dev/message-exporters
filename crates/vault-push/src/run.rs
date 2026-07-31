@@ -1,25 +1,27 @@
 //! Folder push: stream JSONL, upload assets by digest, import message batches.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
-use message_exporter_core::{CancelFlag, check_cancel};
 use ir::{ConversationHeader, read_conversation_jsonl};
+use message_exporter_core::{CancelFlag, check_cancel};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::http::{self, AuthInfo};
-use crate::journal::{self, JournalEvent, JournalState};
+use crate::http::{self, AssetPutRequest, AuthInfo, HttpSession};
+use crate::journal::{self, JournalEvent, JournalMessage, JournalState};
 use crate::project;
 
 /// Default messages per HTTP import request.
-pub const DEFAULT_BATCH_SIZE: usize = 100;
+pub const DEFAULT_BATCH_SIZE: usize = 1_000;
+/// Target maximum encoded NDJSON body size for one import request.
+pub const MAX_IMPORT_BODY_BYTES: usize = 16 * 1024 * 1024;
 /// Default number of simultaneous attachment uploads.
 pub const DEFAULT_ASSET_UPLOAD_WORKERS: usize = 4;
 
@@ -33,6 +35,8 @@ pub struct VaultPushConfig {
     pub mode: String,
     pub continue_on_error: bool,
     pub force: bool,
+    /// Import message text only; do not upload or reference attachments.
+    pub skip_attachments: bool,
     pub max_retries: u32,
     pub batch_size: usize,
     /// Maximum simultaneous attachment uploads. Message import requests remain serialized.
@@ -51,6 +55,19 @@ pub struct FileResult {
     pub error: Option<String>,
     pub messages: u64,
     pub attachments: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<UploadProfile>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct UploadProfile {
+    pub read_ms: u64,
+    pub attachment_scan_hash_ms: u64,
+    pub asset_upload_ms: u64,
+    pub message_import_ms: u64,
+    pub total_ms: u64,
+    pub unique_assets: u64,
+    pub asset_bytes: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +78,8 @@ pub struct PushReport {
     pub mode: String,
     pub started_at: String,
     pub finished_at: String,
+    /// Wall-clock duration of the full push (auth through last import).
+    pub elapsed_ms: u64,
     pub conversations_total: u64,
     pub conversations_ok: u64,
     pub conversations_failed: u64,
@@ -120,6 +139,27 @@ fn now_stamp() -> String {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs().to_string())
         .unwrap_or_else(|_| "0".into())
+}
+
+fn elapsed_ms(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+/// Human-readable duration for summary lines, e.g. `34m12s` or `1h02m03s`.
+pub fn format_duration_ms(ms: u64) -> String {
+    let total_secs = ms / 1000;
+    let hours = total_secs / 3600;
+    let minutes = (total_secs % 3600) / 60;
+    let seconds = total_secs % 60;
+    if hours > 0 {
+        format!("{hours}h{minutes:02}m{seconds:02}s")
+    } else if minutes > 0 {
+        format!("{minutes}m{seconds:02}s")
+    } else if total_secs > 0 || ms == 0 {
+        format!("{seconds}s")
+    } else {
+        format!("{ms}ms")
+    }
 }
 
 fn is_push_artifact(name: &str) -> bool {
@@ -217,6 +257,7 @@ pub fn detect_source(input: &Path) -> Result<Option<String>> {
 
 /// Push every `.jsonl` conversation under `cfg.input`.
 pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> Result<PushReport> {
+    let run_started = Instant::now();
     let started_at = now_stamp();
     let input = if cfg.input.is_file() {
         cfg.input
@@ -246,9 +287,10 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
     let mut log = LogWriter::open(&log_path)?;
     let url = cfg.base_url.trim_end_matches('/').to_string();
     let username = cfg.username.trim().to_string();
+    let http = HttpSession::new()?;
 
     check_cancel(cfg.cancel.as_ref()).map_err(|_| anyhow::anyhow!("cancelled"))?;
-    let auth = http::auth_check(&url, &cfg.key, &username)?;
+    let auth = http.auth_check(&url, &cfg.key, &username)?;
     let account_label = auth
         .username
         .clone()
@@ -266,6 +308,14 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
             "Authenticated as {account_label}"
         )));
     }
+    if cfg.skip_attachments {
+        log.line("skip_attachments=true (text-only import)");
+        if let Some(cb) = progress.as_mut() {
+            cb(ProgressEvent::Log(
+                "Skipping attachments (text-only import)".into(),
+            ));
+        }
+    }
 
     let mut journal = if cfg.force || cfg.mode == "replace" {
         JournalState::default()
@@ -282,16 +332,15 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
     }
 
     let total = files.len();
-    let mut results = Vec::new();
-    let mut ok_n = 0u64;
-    let mut fail_n = 0u64;
-    let mut skip_n = 0u64;
-    let mut messages = 0u64;
+    let mut results: Vec<Option<FileResult>> = vec![None; total];
     let mut assets_uploaded = 0u64;
     let mut assets_skipped = 0u64;
     let mut first_import = true;
     let mut aborted = false;
     let batch_size = cfg.batch_size.max(1);
+    let mut trackers: Vec<Option<FileTracker>> =
+        std::iter::repeat_with(|| None).take(total).collect();
+    let mut pending: Option<ImportBatch> = None;
 
     for (idx, path) in files.iter().enumerate() {
         check_cancel(cfg.cancel.as_ref()).map_err(|_| anyhow::anyhow!("cancelled"))?;
@@ -309,7 +358,6 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
         }
 
         if cfg.mode == "append" && !cfg.force && journal.files.contains(&name) {
-            skip_n += 1;
             let msg = format!(
                 "PROGRESS {}/{total} skip {name} (already imported)",
                 idx + 1
@@ -322,98 +370,247 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
                     status: "skipped".into(),
                 });
             }
-            results.push(FileResult {
+            results[idx] = Some(FileResult {
                 file: name,
                 status: "skipped".into(),
                 error: None,
                 messages: 0,
                 attachments: 0,
+                profile: None,
             });
             continue;
         }
 
-        match push_one_file(PushFileArgs {
+        let prepared = prepare_file(PrepareFileArgs {
             input: &input,
             path,
             name: &name,
             cfg,
+            http: &http,
             url: &url,
             username: &username,
             journal: &mut journal,
             journal_path: &journal_path,
             batch_size,
-            first_import: &mut first_import,
             assets_uploaded: &mut assets_uploaded,
             assets_skipped: &mut assets_skipped,
             log: &mut log,
-        }) {
-            Ok((count, atts)) => {
-                ok_n += 1;
-                messages += count;
-                let msg = format!(
-                    "PROGRESS {}/{total} ok {name} msgs={count} attachments={atts}",
-                    idx + 1
-                );
-                log.line(&msg);
-                if let Some(cb) = progress.as_mut() {
-                    cb(ProgressEvent::Log(msg));
-                    cb(ProgressEvent::FileDone {
-                        file: name.clone(),
-                        status: "ok".into(),
-                    });
-                }
-                results.push(FileResult {
-                    file: name,
-                    status: "ok".into(),
-                    error: None,
-                    messages: count,
-                    attachments: atts,
-                });
-            }
+        });
+        let prepared = match prepared {
+            Ok(prepared) => prepared,
             Err(e) => {
-                fail_n += 1;
-                let err = e.to_string();
-                let msg = format!("PROGRESS {}/{total} fail {name} {err}", idx + 1);
-                log.line(&msg);
-                let _ = journal::append(
-                    &journal_path,
-                    &JournalEvent::Fail {
-                        url: url.clone(),
-                        username: username.clone(),
-                        source: String::new(),
-                        file: name.clone(),
-                        guid: None,
-                        sha256: None,
-                        stage: "file".into(),
-                        error: err.clone(),
-                    },
-                );
-                if let Some(cb) = progress.as_mut() {
-                    cb(ProgressEvent::Log(msg));
-                    cb(ProgressEvent::FileDone {
-                        file: name.clone(),
-                        status: "failed".into(),
-                    });
+                if !cfg.continue_on_error && pending.is_some() {
+                    let request_ok = flush_import_batch(FlushImportBatch {
+                        cfg,
+                        http: &http,
+                        url: &url,
+                        username: &username,
+                        pending: &mut pending,
+                        first_import: &mut first_import,
+                        trackers: &mut trackers,
+                        journal: &mut journal,
+                        journal_path: &journal_path,
+                        log: &mut log,
+                        progress: &mut progress,
+                        results: &mut results,
+                        total,
+                    })?;
+                    if !request_ok {
+                        aborted = true;
+                        break;
+                    }
                 }
-                results.push(FileResult {
-                    file: name,
-                    status: "failed".into(),
-                    error: Some(err),
-                    messages: 0,
-                    attachments: 0,
+                let err = e.to_string();
+                record_file_failure(RecordFileFailure {
+                    index: idx,
+                    total,
+                    name: &name,
+                    error: &err,
+                    source: "",
+                    url: &url,
+                    username: &username,
+                    journal_path: &journal_path,
+                    log: &mut log,
+                    progress: &mut progress,
+                    results: &mut results,
                 });
                 if !cfg.continue_on_error {
                     aborted = true;
                     break;
                 }
+                continue;
             }
+        };
+
+        if pending
+            .as_ref()
+            .is_some_and(|batch| batch.source != prepared.source)
+        {
+            let request_ok = flush_import_batch(FlushImportBatch {
+                cfg,
+                http: &http,
+                url: &url,
+                username: &username,
+                pending: &mut pending,
+                first_import: &mut first_import,
+                trackers: &mut trackers,
+                journal: &mut journal,
+                journal_path: &journal_path,
+                log: &mut log,
+                progress: &mut progress,
+                results: &mut results,
+                total,
+            })?;
+            if !request_ok && !cfg.continue_on_error {
+                aborted = true;
+                break;
+            }
+        }
+
+        let message_count = prepared
+            .chunks
+            .iter()
+            .map(|chunk| chunk.messages.len())
+            .sum();
+        trackers[idx] = Some(FileTracker {
+            name: name.clone(),
+            source: prepared.source.clone(),
+            attachments: prepared.attachments,
+            profile: prepared.profile,
+            total_started: prepared.total_started,
+            outstanding_messages: message_count,
+            successful_messages: 0,
+            queue_complete: false,
+            failed: None,
+            done: false,
+        });
+
+        for chunk in prepared.chunks {
+            let must_flush = pending.as_ref().is_some_and(|batch| {
+                should_flush_before_chunk(batch, &chunk, batch_size, MAX_IMPORT_BODY_BYTES)
+            });
+            if must_flush {
+                let request_ok = flush_import_batch(FlushImportBatch {
+                    cfg,
+                    http: &http,
+                    url: &url,
+                    username: &username,
+                    pending: &mut pending,
+                    first_import: &mut first_import,
+                    trackers: &mut trackers,
+                    journal: &mut journal,
+                    journal_path: &journal_path,
+                    log: &mut log,
+                    progress: &mut progress,
+                    results: &mut results,
+                    total,
+                })?;
+                if !request_ok && !cfg.continue_on_error {
+                    aborted = true;
+                    break;
+                }
+                if trackers[idx]
+                    .as_ref()
+                    .is_some_and(|tracker| tracker.failed.is_some())
+                {
+                    break;
+                }
+            }
+
+            let batch = pending.get_or_insert_with(|| ImportBatch::new(&prepared.source));
+            batch.push(idx, chunk);
+            if batch.messages.len() >= batch_size || batch.body.len() >= MAX_IMPORT_BODY_BYTES {
+                let request_ok = flush_import_batch(FlushImportBatch {
+                    cfg,
+                    http: &http,
+                    url: &url,
+                    username: &username,
+                    pending: &mut pending,
+                    first_import: &mut first_import,
+                    trackers: &mut trackers,
+                    journal: &mut journal,
+                    journal_path: &journal_path,
+                    log: &mut log,
+                    progress: &mut progress,
+                    results: &mut results,
+                    total,
+                })?;
+                if !request_ok && !cfg.continue_on_error {
+                    aborted = true;
+                    break;
+                }
+                if trackers[idx]
+                    .as_ref()
+                    .is_some_and(|tracker| tracker.failed.is_some())
+                {
+                    break;
+                }
+            }
+        }
+        if aborted {
+            break;
+        }
+        if let Some(tracker) = trackers[idx].as_mut() {
+            tracker.queue_complete = true;
+        }
+        finish_file_if_ready(FinishFile {
+            index: idx,
+            total,
+            trackers: &mut trackers,
+            journal: &mut journal,
+            journal_path: &journal_path,
+            url: &url,
+            username: &username,
+            log: &mut log,
+            progress: &mut progress,
+            results: &mut results,
+        })?;
+    }
+
+    if !aborted && pending.is_some() {
+        let request_ok = flush_import_batch(FlushImportBatch {
+            cfg,
+            http: &http,
+            url: &url,
+            username: &username,
+            pending: &mut pending,
+            first_import: &mut first_import,
+            trackers: &mut trackers,
+            journal: &mut journal,
+            journal_path: &journal_path,
+            log: &mut log,
+            progress: &mut progress,
+            results: &mut results,
+            total,
+        })?;
+        if !request_ok && !cfg.continue_on_error {
+            aborted = true;
         }
     }
 
+    let results: Vec<FileResult> = results.into_iter().flatten().collect();
+    let ok_n = results
+        .iter()
+        .filter(|result| result.status == "ok")
+        .count() as u64;
+    let fail_n = results
+        .iter()
+        .filter(|result| result.status == "failed")
+        .count() as u64;
+    let skip_n = results
+        .iter()
+        .filter(|result| result.status == "skipped")
+        .count() as u64;
+    let messages = results
+        .iter()
+        .filter(|result| result.status == "ok")
+        .map(|result| result.messages)
+        .sum();
     if fail_n == 0 && !aborted {
         let _ = journal::compact(&journal_path, &url, &username, &journal);
     }
 
+    let elapsed = elapsed_ms(run_started);
     let report = PushReport {
         ok: fail_n == 0 && !aborted,
         account: auth.account_id,
@@ -421,6 +618,7 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
         mode: cfg.mode.clone(),
         started_at,
         finished_at: now_stamp(),
+        elapsed_ms: elapsed,
         conversations_total: total as u64,
         conversations_ok: ok_n,
         conversations_failed: fail_n,
@@ -439,8 +637,10 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
     )
     .with_context(|| format!("write report {}", report_path.display()))?;
     log.line(&format!(
-        "finished ok={} conversations_ok={ok_n} failed={fail_n} skipped={skip_n} messages={messages}",
-        report.ok
+        "finished ok={} conversations_ok={ok_n} failed={fail_n} skipped={skip_n} messages={messages} \
+         elapsed_ms={elapsed} ({})",
+        report.ok,
+        format_duration_ms(elapsed)
     ));
     if let Some(cb) = progress.as_mut() {
         cb(ProgressEvent::Finished(report.clone()));
@@ -448,106 +648,147 @@ pub fn run(cfg: &VaultPushConfig, mut progress: Option<&mut ProgressFn<'_>>) -> 
     Ok(report)
 }
 
-struct PushFileArgs<'a> {
+struct PrepareFileArgs<'a> {
     input: &'a Path,
     path: &'a Path,
     name: &'a str,
     cfg: &'a VaultPushConfig,
+    http: &'a HttpSession,
     url: &'a str,
     username: &'a str,
     journal: &'a mut JournalState,
     journal_path: &'a Path,
     batch_size: usize,
-    first_import: &'a mut bool,
     assets_uploaded: &'a mut u64,
     assets_skipped: &'a mut u64,
     log: &'a mut LogWriter,
 }
 
-fn push_one_file(args: PushFileArgs<'_>) -> Result<(u64, u64)> {
-    let PushFileArgs {
+struct PreparedFile {
+    source: String,
+    chunks: Vec<ImportChunk>,
+    attachments: u64,
+    profile: UploadProfile,
+    total_started: Instant,
+}
+
+struct ImportChunk {
+    body: Vec<u8>,
+    messages: Vec<JournalMessage>,
+}
+
+fn prepare_file(args: PrepareFileArgs<'_>) -> Result<PreparedFile> {
+    let total_started = Instant::now();
+    let PrepareFileArgs {
         input,
         path,
         name,
         cfg,
+        http,
         url,
         username,
         journal,
         journal_path,
         batch_size,
-        first_import,
         assets_uploaded,
         assets_skipped,
         log,
     } = args;
 
+    let read_started = Instant::now();
     let doc = read_conversation_jsonl(path)?;
+    let read_ms = elapsed_ms(read_started);
     let header = ConversationHeader::from_document(&doc);
     let source = project::validate_header(&header)?;
     let messages = &doc.messages;
 
     let mut per_message_digests: Vec<Vec<(usize, String)>> = Vec::with_capacity(messages.len());
-    // digest -> (rel path, mime)
-    let mut unique: BTreeMap<String, (String, Option<String>)> = BTreeMap::new();
     let mut attachment_count = 0u64;
+    let mut profile = UploadProfile {
+        read_ms,
+        ..UploadProfile::default()
+    };
+    let attachment_scan_hash_started = Instant::now();
 
-    for msg in messages {
-        let mut digests = Vec::new();
-        for (att_i, att) in msg.attachments.iter().enumerate() {
-            attachment_count += 1;
-            let Some(rel) = att.path.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
-                bail!("{name}: attachment {att_i} has no path");
-            };
-            safe_rel(rel)?;
-            let abs = resolve_attachment(input, rel)
-                .ok_or_else(|| anyhow::anyhow!("{name}: missing attachment {rel}"))?;
-            let digest = match att
-                .digest_sha256
-                .as_deref()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-            {
-                Some(d) => {
-                    let actual = hash_file(&abs)?;
-                    if actual != d.to_ascii_lowercase() {
-                        bail!("{name}: sha256 mismatch for {rel}");
-                    }
-                    actual
-                }
-                None => hash_file(&abs)?,
-            };
-            unique
-                .entry(digest.clone())
-                .or_insert_with(|| (rel.to_string(), att.mime_type.clone()));
-            digests.push((att_i, digest));
+    if cfg.skip_attachments {
+        for msg in messages {
+            let n = msg.attachments.len() as u64;
+            attachment_count += n;
+            *assets_skipped += n;
+            per_message_digests.push(Vec::new());
         }
-        per_message_digests.push(digests);
+        profile.attachment_scan_hash_ms = elapsed_ms(attachment_scan_hash_started);
+    } else {
+        // digest -> (rel path, mime)
+        let mut unique: BTreeMap<String, (String, Option<String>)> = BTreeMap::new();
+
+        for msg in messages {
+            let mut digests = Vec::new();
+            for (att_i, att) in msg.attachments.iter().enumerate() {
+                attachment_count += 1;
+                let Some(rel) = att.path.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
+                    bail!("{name}: attachment {att_i} has no path");
+                };
+                safe_rel(rel)?;
+                let abs = resolve_attachment(input, rel)
+                    .ok_or_else(|| anyhow::anyhow!("{name}: missing attachment {rel}"))?;
+                let digest = match att
+                    .digest_sha256
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                {
+                    Some(d) => {
+                        let actual = hash_file(&abs)?;
+                        if actual != d.to_ascii_lowercase() {
+                            bail!("{name}: sha256 mismatch for {rel}");
+                        }
+                        actual
+                    }
+                    None => hash_file(&abs)?,
+                };
+                unique
+                    .entry(digest.clone())
+                    .or_insert_with(|| (rel.to_string(), att.mime_type.clone()));
+                digests.push((att_i, digest));
+            }
+            per_message_digests.push(digests);
+        }
+
+        profile.attachment_scan_hash_ms = elapsed_ms(attachment_scan_hash_started);
+        profile.unique_assets = u64::try_from(unique.len()).unwrap_or(u64::MAX);
+        let asset_upload_started = Instant::now();
+        let upload_stats = upload_assets(UploadAssets {
+            input,
+            name,
+            cfg,
+            http,
+            url,
+            username,
+            source: &source,
+            unique: &unique,
+            journal,
+            journal_path,
+            assets_uploaded,
+            assets_skipped,
+            log,
+        })?;
+        profile.asset_upload_ms = elapsed_ms(asset_upload_started);
+        profile.asset_bytes = upload_stats.bytes;
     }
 
-    upload_assets(UploadAssets {
-        input,
-        name,
-        cfg,
-        url,
-        username,
-        source: &source,
-        unique: &unique,
-        journal,
-        journal_path,
-        assets_uploaded,
-        assets_skipped,
-        log,
-    })?;
-
     let header_line = project::document_conversation_line(&doc)?;
-    let mut pending = header_line.clone();
-    let mut pending_guids: Vec<String> = Vec::new();
-    let mut imported = 0u64;
-    let mut batch_i = 0usize;
+    let mut chunks = Vec::new();
+    let mut chunk_body = header_line.clone();
+    let mut chunk_messages: Vec<JournalMessage> = Vec::new();
 
     for (i, msg) in messages.iter().enumerate() {
         check_cancel(cfg.cancel.as_ref()).map_err(|_| anyhow::anyhow!("cancelled"))?;
-        let (line, guid) = project::message_line(msg, &per_message_digests[i])?;
+        let (line, guid) = if cfg.skip_attachments {
+            project::message_line_without_attachments(msg)?
+        } else {
+            project::message_line(msg, &per_message_digests[i])?
+        };
         if !cfg.force
             && journal
                 .messages
@@ -555,55 +796,35 @@ fn push_one_file(args: PushFileArgs<'_>) -> Result<(u64, u64)> {
         {
             continue;
         }
-        pending.extend_from_slice(&line);
-        pending_guids.push(guid);
-        batch_i += 1;
-        if batch_i >= batch_size {
-            flush_batch(FlushBatch {
-                cfg,
-                url,
-                username,
-                source: &source,
-                name,
-                header_line: &header_line,
-                pending: &mut pending,
-                pending_guids: &mut pending_guids,
-                first_import,
-                imported: &mut imported,
-                journal,
-                journal_path,
-            })?;
-            batch_i = 0;
+        if !chunk_messages.is_empty()
+            && (chunk_messages.len() >= batch_size
+                || chunk_body.len() + line.len() > MAX_IMPORT_BODY_BYTES)
+        {
+            chunks.push(ImportChunk {
+                body: std::mem::replace(&mut chunk_body, header_line.clone()),
+                messages: std::mem::take(&mut chunk_messages),
+            });
         }
+        chunk_body.extend_from_slice(&line);
+        chunk_messages.push(JournalMessage {
+            file: name.to_string(),
+            guid,
+        });
     }
-    if !pending_guids.is_empty() {
-        flush_batch(FlushBatch {
-            cfg,
-            url,
-            username,
-            source: &source,
-            name,
-            header_line: &header_line,
-            pending: &mut pending,
-            pending_guids: &mut pending_guids,
-            first_import,
-            imported: &mut imported,
-            journal,
-            journal_path,
-        })?;
+    if !chunk_messages.is_empty() {
+        chunks.push(ImportChunk {
+            body: chunk_body,
+            messages: chunk_messages,
+        });
     }
 
-    journal.files.insert(name.to_string());
-    journal::append(
-        journal_path,
-        &JournalEvent::FileOk {
-            url: url.to_string(),
-            username: username.to_string(),
-            source,
-            file: name.to_string(),
-        },
-    )?;
-    Ok((imported, attachment_count))
+    Ok(PreparedFile {
+        source,
+        chunks,
+        attachments: attachment_count,
+        profile,
+        total_started,
+    })
 }
 
 struct AssetUploadJob {
@@ -617,10 +838,16 @@ struct AssetUploadResult {
     response: http::AssetPutResponse,
 }
 
+#[derive(Default)]
+struct AssetUploadStats {
+    bytes: u64,
+}
+
 struct UploadAssets<'a> {
     input: &'a Path,
     name: &'a str,
     cfg: &'a VaultPushConfig,
+    http: &'a HttpSession,
     url: &'a str,
     username: &'a str,
     source: &'a str,
@@ -632,11 +859,12 @@ struct UploadAssets<'a> {
     log: &'a mut LogWriter,
 }
 
-fn upload_assets(args: UploadAssets<'_>) -> Result<()> {
+fn upload_assets(args: UploadAssets<'_>) -> Result<AssetUploadStats> {
     let UploadAssets {
         input,
         name,
         cfg,
+        http,
         url,
         username,
         source,
@@ -648,6 +876,7 @@ fn upload_assets(args: UploadAssets<'_>) -> Result<()> {
         log,
     } = args;
     let mut jobs = Vec::with_capacity(unique.len());
+    let mut stats = AssetUploadStats::default();
     for (digest, (rel, mime)) in unique {
         check_cancel(cfg.cancel.as_ref()).map_err(|_| anyhow::anyhow!("cancelled"))?;
         if !cfg.force && journal.assets.contains(digest) {
@@ -656,6 +885,11 @@ fn upload_assets(args: UploadAssets<'_>) -> Result<()> {
         }
         let path = resolve_attachment(input, rel)
             .ok_or_else(|| anyhow::anyhow!("{name}: missing attachment {rel}"))?;
+        stats.bytes = stats.bytes.saturating_add(
+            fs::metadata(&path)
+                .with_context(|| format!("stat {}", path.display()))?
+                .len(),
+        );
         jobs.push(AssetUploadJob {
             digest: digest.clone(),
             path,
@@ -663,7 +897,7 @@ fn upload_assets(args: UploadAssets<'_>) -> Result<()> {
         });
     }
     if jobs.is_empty() {
-        return Ok(());
+        return Ok(stats);
     }
 
     let worker_count = cfg.asset_upload_workers.max(1).min(jobs.len());
@@ -686,15 +920,15 @@ fn upload_assets(args: UploadAssets<'_>) -> Result<()> {
                         .map_err(|_| "cancelled".to_string())
                         .and_then(|_| {
                             http::with_retries(cfg.max_retries, || {
-                                http::put_asset(
-                                    url,
-                                    &cfg.key,
+                                http.put_asset(AssetPutRequest {
+                                    base_url: url,
+                                    key: &cfg.key,
                                     username,
                                     source,
-                                    &job.digest,
-                                    &job.path,
-                                    job.mime.as_deref(),
-                                )
+                                    sha256: &job.digest,
+                                    file: &job.path,
+                                    mime: job.mime.as_deref(),
+                                })
                             })
                             .map(|response| AssetUploadResult {
                                 digest: job.digest.clone(),
@@ -737,58 +971,406 @@ fn upload_assets(args: UploadAssets<'_>) -> Result<()> {
             uploaded.digest
         ));
     }
+    Ok(stats)
+}
+
+struct FileTracker {
+    name: String,
+    source: String,
+    attachments: u64,
+    profile: UploadProfile,
+    total_started: Instant,
+    outstanding_messages: usize,
+    successful_messages: u64,
+    queue_complete: bool,
+    failed: Option<String>,
+    done: bool,
+}
+
+struct BatchMessage {
+    file_index: usize,
+    journal: JournalMessage,
+}
+
+struct ImportBatch {
+    source: String,
+    body: Vec<u8>,
+    messages: Vec<BatchMessage>,
+    conversations: usize,
+}
+
+impl ImportBatch {
+    fn new(source: &str) -> Self {
+        Self {
+            source: source.to_string(),
+            body: Vec::new(),
+            messages: Vec::new(),
+            conversations: 0,
+        }
+    }
+
+    fn push(&mut self, file_index: usize, chunk: ImportChunk) {
+        self.body.extend_from_slice(&chunk.body);
+        self.messages
+            .extend(chunk.messages.into_iter().map(|journal| BatchMessage {
+                file_index,
+                journal,
+            }));
+        self.conversations += 1;
+    }
+}
+
+fn should_flush_before_chunk(
+    batch: &ImportBatch,
+    chunk: &ImportChunk,
+    max_messages: usize,
+    max_body_bytes: usize,
+) -> bool {
+    !batch.messages.is_empty()
+        && (batch.messages.len() + chunk.messages.len() > max_messages
+            || batch.body.len() + chunk.body.len() > max_body_bytes)
+}
+
+struct RecordFileFailure<'a, 'p, 'f> {
+    index: usize,
+    total: usize,
+    name: &'a str,
+    error: &'a str,
+    source: &'a str,
+    url: &'a str,
+    username: &'a str,
+    journal_path: &'a Path,
+    log: &'a mut LogWriter,
+    progress: &'a mut Option<&'p mut ProgressFn<'f>>,
+    results: &'a mut [Option<FileResult>],
+}
+
+fn record_file_failure(args: RecordFileFailure<'_, '_, '_>) {
+    let msg = format!(
+        "PROGRESS {}/{} fail {} {}",
+        args.index + 1,
+        args.total,
+        args.name,
+        args.error
+    );
+    args.log.line(&msg);
+    let _ = journal::append(
+        args.journal_path,
+        &JournalEvent::Fail {
+            url: args.url.to_string(),
+            username: args.username.to_string(),
+            source: args.source.to_string(),
+            file: args.name.to_string(),
+            guid: None,
+            sha256: None,
+            stage: "file".into(),
+            error: args.error.to_string(),
+        },
+    );
+    if let Some(cb) = args.progress.as_mut() {
+        cb(ProgressEvent::Log(msg));
+        cb(ProgressEvent::FileDone {
+            file: args.name.to_string(),
+            status: "failed".into(),
+        });
+    }
+    args.results[args.index] = Some(FileResult {
+        file: args.name.to_string(),
+        status: "failed".into(),
+        error: Some(args.error.to_string()),
+        messages: 0,
+        attachments: 0,
+        profile: None,
+    });
+}
+
+struct FinishFile<'a, 'p, 'f> {
+    index: usize,
+    total: usize,
+    trackers: &'a mut [Option<FileTracker>],
+    journal: &'a mut JournalState,
+    journal_path: &'a Path,
+    url: &'a str,
+    username: &'a str,
+    log: &'a mut LogWriter,
+    progress: &'a mut Option<&'p mut ProgressFn<'f>>,
+    results: &'a mut [Option<FileResult>],
+}
+
+fn finish_file_if_ready(args: FinishFile<'_, '_, '_>) -> Result<()> {
+    let Some(tracker) = args.trackers[args.index].as_mut() else {
+        return Ok(());
+    };
+    if tracker.done
+        || (tracker.failed.is_none()
+            && (!tracker.queue_complete || tracker.outstanding_messages != 0))
+    {
+        return Ok(());
+    }
+
+    tracker.done = true;
+    tracker.profile.total_ms = elapsed_ms(tracker.total_started);
+    let name = tracker.name.clone();
+    let source = tracker.source.clone();
+    let attachments = tracker.attachments;
+    let messages = tracker.successful_messages;
+    let profile = tracker.profile.clone();
+    let error = tracker.failed.clone();
+
+    let (status, result_messages) = if error.is_some() {
+        ("failed", 0)
+    } else {
+        args.journal.files.insert(name.clone());
+        journal::append(
+            args.journal_path,
+            &JournalEvent::FileOk {
+                url: args.url.to_string(),
+                username: args.username.to_string(),
+                source,
+                file: name.clone(),
+            },
+        )?;
+        ("ok", messages)
+    };
+    let msg = if let Some(error) = error.as_ref() {
+        format!(
+            "PROGRESS {}/{} fail {name} {error}",
+            args.index + 1,
+            args.total
+        )
+    } else {
+        format!(
+            "PROGRESS {}/{} ok {name} msgs={messages} attachments={attachments}",
+            args.index + 1,
+            args.total
+        )
+    };
+    args.log.line(&msg);
+    let profile_msg = format!(
+        "PROFILE {name} read_ms={} attachment_scan_hash_ms={} asset_upload_ms={} \
+         message_import_ms={} total_ms={} unique_assets={} asset_bytes={}",
+        profile.read_ms,
+        profile.attachment_scan_hash_ms,
+        profile.asset_upload_ms,
+        profile.message_import_ms,
+        profile.total_ms,
+        profile.unique_assets,
+        profile.asset_bytes
+    );
+    args.log.line(&profile_msg);
+    if let Some(cb) = args.progress.as_mut() {
+        cb(ProgressEvent::Log(msg));
+        cb(ProgressEvent::Log(profile_msg));
+        cb(ProgressEvent::FileDone {
+            file: name.clone(),
+            status: status.into(),
+        });
+    }
+    args.results[args.index] = Some(FileResult {
+        file: name,
+        status: status.into(),
+        error,
+        messages: result_messages,
+        attachments,
+        profile: Some(profile),
+    });
     Ok(())
 }
 
-struct FlushBatch<'a> {
+struct FlushImportBatch<'a, 'p, 'f> {
     cfg: &'a VaultPushConfig,
+    http: &'a HttpSession,
     url: &'a str,
     username: &'a str,
-    source: &'a str,
-    name: &'a str,
-    header_line: &'a [u8],
-    pending: &'a mut Vec<u8>,
-    pending_guids: &'a mut Vec<String>,
+    pending: &'a mut Option<ImportBatch>,
     first_import: &'a mut bool,
-    imported: &'a mut u64,
+    trackers: &'a mut [Option<FileTracker>],
     journal: &'a mut JournalState,
     journal_path: &'a Path,
+    log: &'a mut LogWriter,
+    progress: &'a mut Option<&'p mut ProgressFn<'f>>,
+    results: &'a mut [Option<FileResult>],
+    total: usize,
 }
 
-fn flush_batch(args: FlushBatch<'_>) -> Result<()> {
+fn flush_import_batch(args: FlushImportBatch<'_, '_, '_>) -> Result<bool> {
+    let Some(batch) = args.pending.take() else {
+        return Ok(true);
+    };
+    check_cancel(args.cfg.cancel.as_ref()).map_err(|_| anyhow::anyhow!("cancelled"))?;
     let mode = if args.cfg.mode == "replace" && *args.first_import {
         "replace"
     } else {
         "append"
     };
-    let ndjson = std::mem::take(args.pending);
-    let resp = http::with_retries(args.cfg.max_retries, || {
-        http::post_import(
+    let request_started = Instant::now();
+    let body_bytes = batch.body.len();
+    let message_count = batch.messages.len();
+    let response = http::with_retries(args.cfg.max_retries, || {
+        args.http.post_import(
             args.url,
             &args.cfg.key,
             args.username,
-            args.source,
+            &batch.source,
             mode,
-            ndjson.clone(),
+            batch.body.clone(),
         )
-    })?;
-    *args.first_import = false;
-    *args.imported += resp.messages.max(resp.messages_appended);
-    for guid in args.pending_guids.drain(..) {
-        args.journal
-            .messages
-            .insert(JournalState::message_key(args.name, &guid));
-        journal::append(
-            args.journal_path,
-            &JournalEvent::MessageOk {
-                url: args.url.to_string(),
-                username: args.username.to_string(),
-                source: args.source.to_string(),
-                file: args.name.to_string(),
-                guid,
-            },
-        )?;
+    });
+    let request_ms = elapsed_ms(request_started);
+    let seconds = request_started.elapsed().as_secs_f64().max(0.001);
+    let messages_per_second = message_count as f64 / seconds;
+    let mebibytes_per_second = body_bytes as f64 / (1024.0 * 1024.0) / seconds;
+    let represented: BTreeSet<usize> = batch
+        .messages
+        .iter()
+        .map(|message| message.file_index)
+        .collect();
+
+    match response {
+        Ok(response) => {
+            *args.first_import = false;
+            let journal_messages: Vec<JournalMessage> = batch
+                .messages
+                .iter()
+                .map(|message| message.journal.clone())
+                .collect();
+            journal::append(
+                args.journal_path,
+                &JournalEvent::MessageBatchOk {
+                    url: args.url.to_string(),
+                    username: args.username.to_string(),
+                    source: batch.source.clone(),
+                    messages: journal_messages.clone(),
+                },
+            )?;
+            for message in &batch.messages {
+                args.journal.messages.insert(JournalState::message_key(
+                    &message.journal.file,
+                    &message.journal.guid,
+                ));
+                if let Some(tracker) = args.trackers[message.file_index].as_mut() {
+                    tracker.outstanding_messages = tracker.outstanding_messages.saturating_sub(1);
+                    tracker.successful_messages = tracker.successful_messages.saturating_add(1);
+                }
+            }
+            let request_line = format!(
+                "IMPORT_REQUEST ok source={} mode={mode} conversations={} messages={} \
+                 server_messages={} bytes={body_bytes} elapsed_ms={request_ms} \
+                 messages_per_second={messages_per_second:.1} mib_per_second={mebibytes_per_second:.2}",
+                batch.source,
+                batch.conversations,
+                message_count,
+                response.messages.max(response.messages_appended),
+            );
+            args.log.line(&request_line);
+            if let Some(cb) = args.progress.as_mut() {
+                cb(ProgressEvent::Log(request_line));
+            }
+            for index in represented {
+                if let Some(tracker) = args.trackers[index].as_mut() {
+                    tracker.profile.message_import_ms =
+                        tracker.profile.message_import_ms.saturating_add(request_ms);
+                }
+                finish_file_if_ready(FinishFile {
+                    index,
+                    total: args.total,
+                    trackers: args.trackers,
+                    journal: args.journal,
+                    journal_path: args.journal_path,
+                    url: args.url,
+                    username: args.username,
+                    log: args.log,
+                    progress: args.progress,
+                    results: args.results,
+                })?;
+            }
+            Ok(true)
+        }
+        Err(error) => {
+            let error = error.to_string();
+            let request_line = format!(
+                "IMPORT_REQUEST fail source={} mode={mode} conversations={} messages={} \
+                 bytes={body_bytes} elapsed_ms={request_ms} \
+                 messages_per_second={messages_per_second:.1} mib_per_second={mebibytes_per_second:.2} \
+                 error={error}",
+                batch.source, batch.conversations, message_count,
+            );
+            args.log.line(&request_line);
+            if let Some(cb) = args.progress.as_mut() {
+                cb(ProgressEvent::Log(request_line));
+            }
+            for index in represented {
+                let Some(tracker) = args.trackers[index].as_mut() else {
+                    continue;
+                };
+                tracker.profile.message_import_ms =
+                    tracker.profile.message_import_ms.saturating_add(request_ms);
+                if tracker.failed.is_none() {
+                    tracker.failed = Some(error.clone());
+                    let _ = journal::append(
+                        args.journal_path,
+                        &JournalEvent::Fail {
+                            url: args.url.to_string(),
+                            username: args.username.to_string(),
+                            source: batch.source.clone(),
+                            file: tracker.name.clone(),
+                            guid: None,
+                            sha256: None,
+                            stage: "import".into(),
+                            error: error.clone(),
+                        },
+                    );
+                }
+                finish_file_if_ready(FinishFile {
+                    index,
+                    total: args.total,
+                    trackers: args.trackers,
+                    journal: args.journal,
+                    journal_path: args.journal_path,
+                    url: args.url,
+                    username: args.username,
+                    log: args.log,
+                    progress: args.progress,
+                    results: args.results,
+                })?;
+            }
+            Ok(false)
+        }
     }
-    *args.pending = args.header_line.to_vec();
-    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn chunk(body_bytes: usize, messages: usize) -> ImportChunk {
+        ImportChunk {
+            body: vec![b'x'; body_bytes],
+            messages: (0..messages)
+                .map(|index| JournalMessage {
+                    file: "conversation.jsonl".into(),
+                    guid: format!("guid-{index}"),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn import_batch_flushes_for_message_or_byte_limit() {
+        let mut batch = ImportBatch::new("imessage");
+        batch.push(0, chunk(40, 2));
+
+        assert!(should_flush_before_chunk(&batch, &chunk(10, 2), 3, 100));
+        assert!(should_flush_before_chunk(&batch, &chunk(70, 1), 10, 100));
+        assert!(!should_flush_before_chunk(&batch, &chunk(10, 1), 3, 100));
+    }
+
+    #[test]
+    fn format_duration_ms_humanizes() {
+        assert_eq!(format_duration_ms(0), "0s");
+        assert_eq!(format_duration_ms(999), "999ms");
+        assert_eq!(format_duration_ms(12_000), "12s");
+        assert_eq!(format_duration_ms(2_052_000), "34m12s");
+        assert_eq!(format_duration_ms(3_723_000), "1h02m03s");
+    }
 }

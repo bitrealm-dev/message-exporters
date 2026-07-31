@@ -11,6 +11,7 @@ export global VaultAdapter {
     in-out property <string> input;
     in-out property <bool> continue-on-error: true;
     in-out property <bool> force: false;
+    in-out property <bool> skip-attachments: false;
     in property <string> source-note;
     in property <bool> enabled: true;
 
@@ -63,6 +64,10 @@ export component VaultPage inherits AnchoredScrollPage {
     CheckBoxRow {
         text: "Force re-upload (ignore journal)";
         checked <=> VaultAdapter.force;
+    }
+    CheckBoxRow {
+        text: "Skip attachments";
+        checked <=> VaultAdapter.skip-attachments;
     }
 
     ActionRow {

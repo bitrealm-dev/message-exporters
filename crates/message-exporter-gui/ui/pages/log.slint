@@ -17,6 +17,39 @@ export component LogPage inherits VerticalLayout {
     spacing: FormMetrics.row-spacing;
     alignment: stretch;
 
+    // Follow new output unless the user scrolls up to read history.
+    private property <bool> stick-to-end: true;
+    private property <int> line-count: LogAdapter.lines.length;
+
+    changed line-count => {
+        if root.stick-to-end {
+            scroll-timer.running = true;
+        }
+    }
+
+    function scroll-to-end() {
+        log-view.viewport-y = min(0px, log-view.visible-height - log-view.viewport-height);
+    }
+
+    // ListView geometry often updates a frame after the model; defer the snap.
+    scroll-timer := Timer {
+        interval: 16ms;
+        running: false;
+        triggered => {
+            self.running = false;
+            if root.stick-to-end {
+                root.scroll-to-end();
+            }
+        }
+    }
+
+    // Keep following while a job streams lines (covers layout lag after push).
+    follow-timer := Timer {
+        interval: 100ms;
+        running: LogAdapter.running && root.stick-to-end;
+        triggered => { root.scroll-to-end(); }
+    }
+
     PageSummary {
         message: "Review progress and errors from the current or most recent operation.";
     }
@@ -43,7 +76,13 @@ export component LogPage inherits VerticalLayout {
         vertical-stretch: 1;
         min-height: 160px;
 
-        ListView {
+        log-view := ListView {
+            scrolled => {
+                // Any upward scroll is user-driven; layout growth only moves
+                // viewport-y more negative when content is appended.
+                root.stick-to-end =
+                    log-view.viewport-y <= log-view.visible-height - log-view.viewport-height + 8px;
+            }
             for line[i] in LogAdapter.lines: HorizontalLayout {
                 padding: 3px;
                 Text {

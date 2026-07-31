@@ -47,6 +47,10 @@ struct Cli {
     #[arg(long)]
     force: bool,
 
+    /// Import messages without uploading attachments
+    #[arg(long)]
+    skip_attachments: bool,
+
     /// Max retries for transient HTTP errors
     #[arg(long, default_value_t = 3)]
     max_retries: u32,
@@ -113,6 +117,7 @@ fn real_main() -> Result<ExitCode> {
         mode: cli.mode,
         continue_on_error: cli.continue_on_error,
         force: cli.force,
+        skip_attachments: cli.skip_attachments,
         max_retries: cli.max_retries,
         batch_size: cli.batch_size,
         asset_upload_workers: cli.asset_upload_workers,
@@ -129,12 +134,14 @@ fn real_main() -> Result<ExitCode> {
     };
     let report = run(&cfg, Some(&mut on_progress))?;
     println!(
-        "done ok={} conversations_ok={} failed={} skipped={} messages={}",
+        "done ok={} conversations_ok={} failed={} skipped={} messages={} elapsed_ms={} ({})",
         report.ok,
         report.conversations_ok,
         report.conversations_failed,
         report.conversations_skipped,
-        report.messages
+        report.messages,
+        report.elapsed_ms,
+        vault_push::format_duration_ms(report.elapsed_ms)
     );
     Ok(if report.ok {
         ExitCode::SUCCESS
