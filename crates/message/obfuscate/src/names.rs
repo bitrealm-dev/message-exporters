@@ -1,6 +1,6 @@
 //! Human-looking first/last names for obfuscated display names.
 
-pub const FIRST_NAMES: &[&str] = &[
+pub(crate) const FIRST_NAMES: &[&str] = &[
     "Alex", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Avery", "Quinn", "Jamie", "Reese",
     "Cameron", "Drew", "Logan", "Parker", "Sawyer", "Emerson", "Finley", "Harper", "Hayden",
     "Jesse", "Kendall", "Lane", "Micah", "Noah", "Owen", "Peyton", "River", "Rowan", "Sage",
@@ -22,7 +22,7 @@ pub const FIRST_NAMES: &[&str] = &[
     "Priya",
 ];
 
-pub const LAST_NAMES: &[&str] = &[
+pub(crate) const LAST_NAMES: &[&str] = &[
     "Adams",
     "Baker",
     "Carter",

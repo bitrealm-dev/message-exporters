@@ -9,7 +9,7 @@ use crate::{
 };
 
 /// Read attachment bytes for embedding. Empty when embed is disabled or read fails.
-pub fn load_attachment_bytes(
+pub(crate) fn load_attachment_bytes(
     session: &MailSession,
     attachment: &Attachment,
 ) -> Result<Vec<u8>, RuntimeError> {

@@ -115,7 +115,7 @@ pub fn mail_messages_from_mbox(path: &Path) -> Result<Vec<MailMessage>> {
 }
 
 /// Split mboxrd text into raw EML payloads (envelope `From ` lines removed).
-pub fn split_mboxrd(text: &str) -> Vec<Vec<u8>> {
+pub(crate) fn split_mboxrd(text: &str) -> Vec<Vec<u8>> {
     let mut records = Vec::new();
     let mut current: Option<Vec<String>> = None;
     for line in text.split('\n') {

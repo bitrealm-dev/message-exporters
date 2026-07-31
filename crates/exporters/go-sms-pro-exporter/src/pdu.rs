@@ -49,7 +49,7 @@ const ATTACHMENT_MAGICS: &[(&[u8], &str)] = &[
 ];
 
 #[derive(Debug, Clone)]
-pub struct ParsedAttachment {
+pub(crate) struct ParsedAttachment {
     pub ext: String,
     pub data: Vec<u8>,
     pub smil_name: Option<String>,
@@ -62,7 +62,7 @@ enum FieldSource {
 }
 
 #[derive(Debug, Clone)]
-pub struct ParsedPdu {
+pub(crate) struct ParsedPdu {
     pub path: std::path::PathBuf,
     pub timestamp: i64,
     pub participants: Vec<String>,
@@ -684,7 +684,7 @@ fn score_decode_quality(
 }
 
 /// Parse one PDU file. Returns `None` for unparseable / bad filenames.
-pub fn parse_pdu_file(
+pub(crate) fn parse_pdu_file(
     path: &Path,
     owners: &HashSet<String>,
     primary_digits: &str,

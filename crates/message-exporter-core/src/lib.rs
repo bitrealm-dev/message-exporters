@@ -18,5 +18,5 @@ pub use exporters::{
 };
 pub use process::{
     CancelFlag, LogSink, ProcessControl, ProcessEvent, check_cancel, emit_log, is_cancelled,
-    resolve_binary, spawn, spawn_job,
+    spawn_job,
 };

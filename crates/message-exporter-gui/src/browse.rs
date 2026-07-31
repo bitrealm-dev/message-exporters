@@ -108,8 +108,7 @@ fn windows_to_wsl_path(path: &Path) -> io::Result<PathBuf> {
     }
 }
 
-const WINDOWS_FILE_PICKER: &str = concat!(
-    r#"
+const WINDOWS_FILE_PICKER: &str = r#"
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 Add-Type -AssemblyName System.Windows.Forms
 $dialog = New-Object System.Windows.Forms.OpenFileDialog
@@ -118,11 +117,9 @@ $dialog.CheckFileExists = $true
 if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     [Console]::Write($dialog.FileName)
 }
-"#
-);
+"#;
 
-const WINDOWS_FOLDER_PICKER: &str = concat!(
-    r#"
+const WINDOWS_FOLDER_PICKER: &str = r#"
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 Add-Type -AssemblyName System.Windows.Forms
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
@@ -131,11 +128,9 @@ $dialog.ShowNewFolderButton = $true
 if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     [Console]::Write($dialog.SelectedPath)
 }
-"#
-);
+"#;
 
-const WINDOWS_FILE_OR_FOLDER_PICKER: &str = concat!(
-    r#"
+const WINDOWS_FILE_OR_FOLDER_PICKER: &str = r#"
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 Add-Type -AssemblyName System.Windows.Forms
 $sentinel = '__MESSAGE_EXPORTERS_SELECT_THIS_FOLDER__'
@@ -152,8 +147,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     }
     [Console]::Write($selected)
 }
-"#
-);
+"#;
 
 fn apply_path(ui: &AppWindow, field_id: &str, path: SharedString) {
     match field_id {

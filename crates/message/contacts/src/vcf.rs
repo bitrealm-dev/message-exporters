@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 
 #[derive(Debug, Clone, Default)]
-pub struct VcfCard {
+pub(crate) struct VcfCard {
     pub fn_raw: String,
     pub n_family: String,
     pub n_given: String,
@@ -13,7 +13,7 @@ pub struct VcfCard {
 }
 
 /// Parse a VCF file into cards (unfolded lines).
-pub fn parse_vcf(path: &Path) -> Result<Vec<VcfCard>> {
+pub(crate) fn parse_vcf(path: &Path) -> Result<Vec<VcfCard>> {
     let text = fs::read_to_string(path)
         .with_context(|| format!("failed to read VCF {}", path.display()))?;
     let lines = unfold_lines(&text);
@@ -92,7 +92,7 @@ fn unescape(s: &str) -> String {
 }
 
 /// Strip `[Tag]` markers from a VCF name field.
-pub fn strip_tags(raw: &str) -> String {
+pub(crate) fn strip_tags(raw: &str) -> String {
     let mut out = String::new();
     let mut chars = raw.chars().peekable();
     while let Some(ch) = chars.next() {

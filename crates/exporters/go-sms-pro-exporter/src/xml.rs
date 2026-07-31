@@ -16,7 +16,7 @@ struct GoSmsFile {
 }
 
 #[derive(Debug, Clone)]
-pub struct XmlMessage {
+pub(crate) struct XmlMessage {
     /// Other-party digits (sanitized).
     pub other_digits: String,
     pub name_hint: Option<String>,
@@ -37,7 +37,7 @@ pub struct XmlMessage {
 
 /// Diagnostic row when an XML SMS has no usable `<address>` digits.
 #[derive(Debug, Clone)]
-pub struct SkippedBadAddrDetail {
+pub(crate) struct SkippedBadAddrDetail {
     pub xml_file: String,
     pub address: String,
     pub contact_name: String,
@@ -47,7 +47,7 @@ pub struct SkippedBadAddrDetail {
 }
 
 #[derive(Debug, Default)]
-pub struct XmlParseStats {
+pub(crate) struct XmlParseStats {
     pub messages: u64,
     pub sent: u64,
     pub received: u64,
@@ -57,7 +57,7 @@ pub struct XmlParseStats {
     pub skipped_unknown_address_details: Vec<SkippedBadAddrDetail>,
 }
 
-pub fn parse_xml_file(path: &Path) -> Result<(Vec<XmlMessage>, XmlParseStats)> {
+pub(crate) fn parse_xml_file(path: &Path) -> Result<(Vec<XmlMessage>, XmlParseStats)> {
     let text = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read {}", path.display()))?;
     let (msgs, mut stats) = parse_xml_str(&text)?;
@@ -72,7 +72,7 @@ pub fn parse_xml_file(path: &Path) -> Result<(Vec<XmlMessage>, XmlParseStats)> {
     Ok((msgs, stats))
 }
 
-pub fn parse_xml_str(text: &str) -> Result<(Vec<XmlMessage>, XmlParseStats)> {
+pub(crate) fn parse_xml_str(text: &str) -> Result<(Vec<XmlMessage>, XmlParseStats)> {
     let file: GoSmsFile = quick_xml::de::from_str(text).context("failed to parse GoSms XML")?;
     let mut stats = XmlParseStats::default();
     let mut out = Vec::new();

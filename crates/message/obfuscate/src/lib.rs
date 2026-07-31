@@ -136,10 +136,6 @@ impl Obfuscator {
         }
     }
 
-    pub fn key_hex(&self) -> String {
-        hex::encode(self.key)
-    }
-
     fn digest(&self, domain: &str, value: &str) -> [u8; 32] {
         let mut mac = HmacSha256::new_from_slice(&self.key).expect("HMAC accepts any key length");
         mac.update(domain.as_bytes());

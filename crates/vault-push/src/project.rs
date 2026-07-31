@@ -217,9 +217,9 @@ fn message_line_inner(
         app: im.and_then(|i| i.app.clone()),
         is_reply: im.map(|i| i.is_reply).unwrap_or(false),
         thread_originator_guid: im.and_then(|i| i.in_reply_to_guid.clone()),
-        thread_originator_part: im.and_then(|i| i.thread_originator_part.map(|p| i64::from(p))),
+        thread_originator_part: im.and_then(|i| i.thread_originator_part.map(i64::from)),
         num_replies: im
-            .and_then(|i| i.num_replies.map(|n| i64::from(n)))
+            .and_then(|i| i.num_replies.map(i64::from))
             .unwrap_or(0),
     };
     // Preserve standalone tapback rows that only set kind/emoji on the IR bag.

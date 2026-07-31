@@ -12,7 +12,7 @@ use imessage_database::tables::{
 use rusqlite::Connection;
 
 /// Apply typedstream body when parse succeeds (fills `components` / text).
-pub fn apply_body(msg: &mut Message, db: &Connection) {
+pub(crate) fn apply_body(msg: &mut Message, db: &Connection) {
     if let Ok(body) = msg.parse_body(db) {
         msg.apply_body(body);
     }
@@ -66,7 +66,7 @@ pub(crate) fn resolve_run<'r>(
 /// Indices into `attachments` referenced by the message body.
 ///
 /// When `components` is empty (parse failure), falls back to every join row.
-pub fn referenced_attachment_indices(message: &Message, attachments: &[Attachment]) -> Vec<usize> {
+pub(crate) fn referenced_attachment_indices(message: &Message, attachments: &[Attachment]) -> Vec<usize> {
     if attachments.is_empty() {
         return Vec::new();
     }

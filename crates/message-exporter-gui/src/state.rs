@@ -1,9 +1,7 @@
 //! Application state: the same `ExportIniState` + `Form` the other GUIs use,
 //! plus job control and the session log.
 
-use std::sync::mpsc::Receiver;
-
-use message_exporter_core::{ExportIniState, Exporter, Form, ProcessControl, ProcessEvent};
+use message_exporter_core::{ExportIniState, Exporter, Form, ProcessControl};
 
 use crate::session_log::SessionLog;
 
@@ -16,7 +14,6 @@ pub struct AppState {
     pub validate_usa: bool,
     pub running: bool,
     pub control: ProcessControl,
-    pub rx: Option<Receiver<ProcessEvent>>,
     pub session_log: Option<SessionLog>,
     pub errors: Vec<String>,
     /// Tab index that produced `errors` (banner also shows on Log).
@@ -38,7 +35,6 @@ impl AppState {
             validate_usa: true,
             running: false,
             control: ProcessControl::default(),
-            rx: None,
             session_log: None,
             errors: load_error.into_iter().collect(),
             error_source_tab,
@@ -55,7 +51,9 @@ impl AppState {
     }
 
     pub fn persist_on_exit(&mut self) {
-        let _ = self.save_export_ini();
+        if let Err(error) = self.save_export_ini() {
+            eprintln!("Could not save settings: {error}");
+        }
     }
 
     pub fn set_errors(&mut self, errors: Vec<String>, source_tab: i32) {
@@ -109,8 +107,4 @@ impl AppState {
             format!("Settings: {}", self.export_ini.path.display())
         }
     }
-}
-
-pub fn ensure_output_dir_checked(output: &std::path::Path) -> Result<(), String> {
-    message_exporter_core::ensure_output_dir(output)
 }

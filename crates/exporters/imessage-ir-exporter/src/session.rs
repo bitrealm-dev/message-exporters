@@ -16,7 +16,7 @@ use imessage_database::{
 use crate::{contacts::Name, data_source::DataSource, error::RuntimeError, options::MailOptions};
 
 /// Bootstrap state for one mail export.
-pub struct MailSession {
+pub(crate) struct MailSession {
     pub options: MailOptions,
     pub offset: i64,
     pub data_source: DataSource,

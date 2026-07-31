@@ -1,315 +1,3 @@
-/*
-mod jobs;
-
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::mpsc;
-
-use jobs::library_job_for_exporter;
-use message_exporter_core::{
-    ATTACHMENT_MEDIA, EXPORTERS, OUTPUT_FORMATS_MAIL, ExportIniState, Exporter, Form,
-    ProcessControl, ProcessEvent, ensure_output_dir, spawn_job,
-};
-use slint::{ModelRc, SharedString, VecModel};
-
-slint::include_modules!();
-
-struct AppState {
-    export_ini: ExportIniState,
-    form: Form,
-    exporter: Exporter,
-}
-
-fn model(values: impl IntoIterator<Item = String>) -> ModelRc<SharedString> {
-    let values = values
-        .into_iter()
-        .map(SharedString::from)
-        .collect::<Vec<_>>();
-    Rc::new(VecModel::from(values)).into()
-}
-
-fn item_index<T: PartialEq>(items: &[T], value: &T) -> i32 {
-    items
-        .iter()
-        .position(|item| item == value)
-        .and_then(|index| i32::try_from(index).ok())
-        .unwrap_or_default()
-}
-
-fn exporter_at(index: i32) -> Exporter {
-    usize::try_from(index)
-        .ok()
-        .and_then(|index| EXPORTERS.get(index))
-        .copied()
-        .unwrap_or_default()
-}
-
-fn sync_window(window: &AppWindow, state: &AppState) {
-    window.set_backup_type_index(item_index(&EXPORTERS, &state.exporter));
-    window.set_exporter_name(state.exporter.binary().into());
-    window.set_output_format_index(item_index(
-        &OUTPUT_FORMATS_MAIL,
-        &state.form.output_format,
-    ));
-    window.set_attachment_mode_index(item_index(
-        &ATTACHMENT_MEDIA,
-        &state.form.attachment_media,
-    ));
-
-    let backup_path = match state.exporter {
-        Exporter::Imessage => &state.form.db_path,
-        Exporter::Whatsapp => &state.form.whatsapp_backup,
-        _ => &state.form.input,
-    };
-    window.set_backup_path(backup_path.as_str().into());
-    window.set_output_directory(state.form.output.as_str().into());
-    window.set_start_date(state.form.start_date.as_str().into());
-    window.set_end_date(state.form.end_date.as_str().into());
-    window.set_obfuscate(state.form.obfuscate);
-    window.set_advanced_open(state.form.advanced);
-    window.set_backup_password(state.form.backup_password.as_str().into());
-    window.set_contacts_path(state.form.apple_contacts.as_str().into());
-    window.set_attachment_root(state.form.attachment_root.as_str().into());
-}
-
-fn pull_window(window: &AppWindow, state: &mut AppState) {
-    state.exporter = exporter_at(window.get_backup_type_index());
-    state.export_ini.exporter = state.exporter;
-
-    let backup_path = window.get_backup_path().to_string();
-    match state.exporter {
-        Exporter::Imessage => state.form.db_path = backup_path,
-        Exporter::Whatsapp => state.form.whatsapp_backup = backup_path,
-        _ => state.form.input = backup_path,
-    }
-
-    if let Some(format) = usize::try_from(window.get_output_format_index())
-        .ok()
-        .and_then(|index| OUTPUT_FORMATS_MAIL.get(index))
-    {
-        state.form.output_format = *format;
-    }
-    if let Some(mode) = usize::try_from(window.get_attachment_mode_index())
-        .ok()
-        .and_then(|index| ATTACHMENT_MEDIA.get(index))
-    {
-        state.form.attachment_media = *mode;
-    }
-
-    state.form.output = window.get_output_directory().to_string();
-    state.form.start_date = window.get_start_date().to_string();
-    state.form.end_date = window.get_end_date().to_string();
-    state.form.obfuscate = window.get_obfuscate();
-    state.form.advanced = window.get_advanced_open();
-    state.form.backup_password = window.get_backup_password().to_string();
-    state.form.apple_contacts = window.get_contacts_path().to_string();
-    state.form.attachment_root = window.get_attachment_root().to_string();
-}
-
-fn install_folder_picker(
-    window: &AppWindow,
-    connect: impl FnOnce(Box<dyn Fn()>) + 'static,
-    apply: impl Fn(&AppWindow, SharedString) + Copy + 'static,
-) {
-    let weak = window.as_weak();
-    connect(Box::new(move || {
-        let Some(path) = rfd::FileDialog::new().pick_folder() else {
-            return;
-        };
-        if let Some(window) = weak.upgrade() {
-            apply(&window, path.to_string_lossy().into_owned().into());
-        }
-    }));
-}
-
-fn main() -> Result<(), slint::PlatformError> {
-    let (export_ini, form, load_error) = ExportIniState::load_or_default();
-    let exporter = export_ini.exporter;
-    let state = Rc::new(RefCell::new(AppState {
-        export_ini,
-        form,
-        exporter,
-    }));
-
-    let window = AppWindow::new()?;
-    window.set_backup_types(model(
-        EXPORTERS.into_iter().map(Exporter::dropdown_label),
-    ));
-    window.set_output_formats(model(
-        OUTPUT_FORMATS_MAIL
-            .into_iter()
-            .map(|format| format.to_string()),
-    ));
-    window.set_attachment_modes(model(
-        ["Clone", "Convert", "Convert & compress", "Do not copy"]
-            .into_iter()
-            .map(str::to_string),
-    ));
-    sync_window(&window, &state.borrow());
-
-    let initial_status = load_error.unwrap_or_else(|| {
-        format!("Settings: {}", state.borrow().export_ini.path.display())
-    });
-    window.set_status_text(initial_status.into());
-
-    {
-        let weak = window.as_weak();
-        let state = Rc::clone(&state);
-        window.on_backup_type_changed(move |index| {
-            let exporter = exporter_at(index);
-            let mut state = state.borrow_mut();
-            state
-                .export_ini
-                .switch_exporter(exporter, &mut state.form);
-            state.exporter = exporter;
-            state.form.advanced = false;
-            if let Some(window) = weak.upgrade() {
-                sync_window(&window, &state);
-            }
-        });
-    }
-
-    install_folder_picker(
-        &window,
-        {
-            let window = window.as_weak();
-            move |handler| {
-                if let Some(window) = window.upgrade() {
-                    window.on_browse_backup(handler);
-                }
-            }
-        },
-        |window, path| window.set_backup_path(path),
-    );
-    install_folder_picker(
-        &window,
-        {
-            let window = window.as_weak();
-            move |handler| {
-                if let Some(window) = window.upgrade() {
-                    window.on_browse_output(handler);
-                }
-            }
-        },
-        |window, path| window.set_output_directory(path),
-    );
-    install_folder_picker(
-        &window,
-        {
-            let window = window.as_weak();
-            move |handler| {
-                if let Some(window) = window.upgrade() {
-                    window.on_browse_contacts(handler);
-                }
-            }
-        },
-        |window, path| window.set_contacts_path(path),
-    );
-    install_folder_picker(
-        &window,
-        {
-            let window = window.as_weak();
-            move |handler| {
-                if let Some(window) = window.upgrade() {
-                    window.on_browse_attachments(handler);
-                }
-            }
-        },
-        |window, path| window.set_attachment_root(path),
-    );
-
-    {
-        let weak = window.as_weak();
-        let state = Rc::clone(&state);
-        window.on_clear(move || {
-            let Some(window) = weak.upgrade() else {
-                return;
-            };
-            let mut state = state.borrow_mut();
-            pull_window(&window, &mut state);
-            state
-                .export_ini
-                .clear_active_section(&mut state.form);
-            let _ = state.export_ini.save(&state.form);
-            sync_window(&window, &state);
-            window.set_status_text("Fields cleared.".into());
-        });
-    }
-
-    {
-        let weak = window.as_weak();
-        let state = Rc::clone(&state);
-        window.on_run_exporter(move || {
-            let Some(window) = weak.upgrade() else {
-                return;
-            };
-
-            let (exporter, config) = {
-                let mut state = state.borrow_mut();
-                pull_window(&window, &mut state);
-                if let Err(error) = state.export_ini.save(&state.form) {
-                    window.set_status_text(error.into());
-                    return;
-                }
-                let config = match state.form.to_config(state.exporter) {
-                    Ok(config) => config,
-                    Err(errors) => {
-                        window.set_status_text(errors.join(" ").into());
-                        return;
-                    }
-                };
-                if let Err(error) = ensure_output_dir(&config.output) {
-                    window.set_status_text(error.into());
-                    return;
-                }
-                (state.exporter, config)
-            };
-
-            window.set_running(true);
-            window.set_status_text(format!("Starting {}…", exporter.binary()).into());
-
-            let (tx, rx) = mpsc::channel();
-            spawn_job(
-                ProcessControl::default(),
-                tx,
-                format!("{} (library)", exporter.binary()),
-                library_job_for_exporter(exporter, config),
-            );
-
-            let weak = weak.clone();
-            std::thread::spawn(move || {
-                while let Ok(event) = rx.recv() {
-                    let (text, done) = match event {
-                        ProcessEvent::Started(command) => (format!("Running: {command}"), false),
-                        ProcessEvent::Log(line) => (line, false),
-                        ProcessEvent::Finished(summary) => (summary, true),
-                        ProcessEvent::Error(error) => (format!("Error: {error}"), true),
-                    };
-                    let weak = weak.clone();
-                    let _ = slint::invoke_from_event_loop(move || {
-                        if let Some(window) = weak.upgrade() {
-                            window.set_status_text(text.into());
-                            if done {
-                                window.set_running(false);
-                            }
-                        }
-                    });
-                    if done {
-                        break;
-                    }
-                }
-            });
-        });
-    }
-
-    window.run()?;
-
-    let mut state = state.borrow_mut();
-    pull_window(&window, &mut state);
-    let _ = state.export_ini.save(&state.form);
-    Ok(())
-}
-*/
 //! Slint desktop GUI for message-exporters.
 //!
 //! In-process exporter libraries and `export.ini` persistence.
@@ -328,11 +16,11 @@ use std::sync::{Arc, Mutex, mpsc};
 use chrono::{Datelike, Local, NaiveDate};
 use jobs::{LibraryJob, library_job_for_exporter, prepare_library_config, run_and_log};
 use contacts::{ValidateMode, probe_contacts_input, validate_contacts_file};
-use message_exporter_core::{ProcessEvent, VaultSection, spawn_job};
+use message_exporter_core::{ProcessEvent, VaultSection, ensure_output_dir, spawn_job};
 use ir::reexport::run as run_reexport;
 use phone::PhoneRegion;
 use slint::ComponentHandle;
-use state::{AppState, ensure_output_dir_checked};
+use state::AppState;
 use vault_push::{
     ProgressEvent as VaultProgressEvent, VaultPushConfig, authenticate as vault_authenticate,
     run as run_vault_push,
@@ -487,7 +175,9 @@ fn wire_export(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
                 *exporter = next;
                 form.advanced = false;
                 st.clear_errors();
-                let _ = st.save_export_ini();
+                if let Err(error) = st.save_export_ini() {
+                    report_errors(&ui, &mut st, vec![error]);
+                }
             }
             // Refresh visibility helpers after attachment / platform changes too.
             sync::push_export(&ui, &st);
@@ -515,8 +205,10 @@ fn wire_export(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
                 } = &mut *st;
                 export_ini.clear_active_section(form);
             }
-            let _ = st.save_export_ini();
             st.clear_errors();
+            if let Err(error) = st.save_export_ini() {
+                report_errors(&ui, &mut st, vec![error]);
+            }
             sync::push_export(&ui, &st);
             sync::push_chrome(&ui, &st);
         }
@@ -561,8 +253,10 @@ fn wire_convert(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
             };
             let mut st = state.lock().expect("state lock");
             st.export_ini.reexport = Default::default();
-            let _ = st.save_export_ini();
             st.clear_errors();
+            if let Err(error) = st.save_export_ini() {
+                report_errors(&ui, &mut st, vec![error]);
+            }
             sync::push_convert(&ui, &st);
             sync::push_chrome(&ui, &st);
         }
@@ -603,8 +297,10 @@ fn wire_vault(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
                 ..Default::default()
             };
             st.vault_source_note.clear();
-            let _ = st.save_export_ini();
             st.clear_errors();
+            if let Err(error) = st.save_export_ini() {
+                report_errors(&ui, &mut st, vec![error]);
+            }
             sync::push_vault(&ui, &mut st);
             sync::push_chrome(&ui, &st);
         }
@@ -668,7 +364,6 @@ fn start_library_job(
         st.begin_session_log();
         st.clear_errors();
         st.running = true;
-        st.rx = None;
         spawn_job(st.control.clone(), tx, label, job);
     }
     ui.set_tab_index(TAB_LOG);
@@ -795,7 +490,7 @@ fn start_export(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<AppState>>) 
                 return;
             }
         };
-        if let Err(error) = ensure_output_dir_checked(&config.output) {
+        if let Err(error) = ensure_output_dir(&config.output) {
             report_errors(&ui, &mut st, vec![error]);
             return;
         }
@@ -834,7 +529,7 @@ fn start_reexport(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<AppState>>
                 return;
             }
         };
-        if let Err(error) = ensure_output_dir_checked(&config.output) {
+        if let Err(error) = ensure_output_dir(&config.output) {
             report_errors(&ui, &mut st, vec![error]);
             return;
         }

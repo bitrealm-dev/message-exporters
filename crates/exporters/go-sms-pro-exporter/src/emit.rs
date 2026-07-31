@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 const EXPORT_SOURCE: &str = "go-sms-pro";
 const EXPORT_TOOL: &str = "GO SMS Pro";
 /// Upstream app version not pinned yet (empty in CSV).
-const EXPORT_TOOL_VERSION: &str = "";
+const EXPORT_TOOL_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn check_cancel(cancel: Option<&CancelFlag>) -> Result<()> {
     message_exporter_core::check_cancel(cancel).map_err(anyhow::Error::msg)

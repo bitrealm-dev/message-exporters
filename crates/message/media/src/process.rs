@@ -11,7 +11,6 @@ use crate::{CompressOptions, MediaMode};
 pub struct MediaReport {
     pub processed: usize,
     pub skipped: usize,
-    pub csv_files_updated: usize,
     pub errors: Vec<String>,
 }
 

@@ -14,7 +14,7 @@ use crate::error::RuntimeError;
 /// Whether to resolve attachment bytes for embedding (`.eml` / `.mbox`) or
 /// persisting under `attachments/` (CSV / JSON).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AttachmentEmbed {
+pub(crate) enum AttachmentEmbed {
     /// Resolve and embed media bytes (macOS path or iOS decrypt).
     Embed,
     /// Skip media bytes (empty attachment parts still possible via other fields).
@@ -23,7 +23,7 @@ pub enum AttachmentEmbed {
 
 /// Parsed options for one mail export run.
 #[derive(Debug)]
-pub struct MailOptions {
+pub(crate) struct MailOptions {
     pub db_path: PathBuf,
     pub attachment_root: Option<String>,
     pub export_path: PathBuf,
@@ -57,7 +57,7 @@ impl MailOptions {
 }
 
 /// Validate export directory does not already contain mail-archive data for `format`.
-pub fn validate_export_path(
+pub(crate) fn validate_export_path(
     export_path: &Path,
     format: OutputFormat,
 ) -> Result<PathBuf, RuntimeError> {

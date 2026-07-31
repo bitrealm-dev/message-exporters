@@ -21,7 +21,7 @@ const MAX_IN_MEMORY_DECRYPT: u64 = 25 * 1024 * 1024;
 /// Open the iOS backup, prompting for a password if encrypted and none was provided.
 ///
 /// Returns `Ok(None)` for non-iOS platforms or unencrypted iOS backups.
-pub fn decrypt_backup(options: &MailOptions) -> Result<Option<Backup>, RuntimeError> {
+pub(crate) fn decrypt_backup(options: &MailOptions) -> Result<Option<Backup>, RuntimeError> {
     if !matches!(options.platform, Platform::iOS) {
         return Ok(None);
     }
@@ -73,7 +73,7 @@ fn prompt_for_password() -> Result<String, RuntimeError> {
 }
 
 /// Write the decrypted Messages database from the iOS backup to a temp file.
-pub fn get_decrypted_message_database(
+pub(crate) fn get_decrypted_message_database(
     backup: &Backup,
     log: Option<&LogSink>,
 ) -> Result<PathBuf, RuntimeError> {
@@ -91,7 +91,7 @@ pub fn get_decrypted_message_database(
 }
 
 /// Write the decrypted Contacts database from the iOS backup to a temp file.
-pub fn get_decrypted_contacts_database(
+pub(crate) fn get_decrypted_contacts_database(
     backup: &Backup,
     log: Option<&LogSink>,
 ) -> Result<PathBuf, RuntimeError> {
@@ -110,7 +110,7 @@ pub fn get_decrypted_contacts_database(
 }
 
 /// Decrypt one iOS backup file into a temporary file.
-pub fn decrypt_file(backup: &Backup, from: &Path) -> Result<PathBuf, RuntimeError> {
+pub(crate) fn decrypt_file(backup: &Backup, from: &Path) -> Result<PathBuf, RuntimeError> {
     match backup.get_file(
         from.file_name()
             .ok_or_else(|| RuntimeError::FileNameError {

@@ -46,7 +46,7 @@ impl Drop for TempDatabase {
     }
 }
 
-pub struct DataSource {
+pub(crate) struct DataSource {
     messages_connection: Option<Connection>,
     pub contacts_index: ContactsIndex,
     pub backup: Option<Backup>,

@@ -12,7 +12,7 @@ use imessage_database::error::{message::MessageError, plist::PlistParseError, ta
 
 /// Runtime failures while opening sources or writing mail archives.
 #[derive(Debug)]
-pub enum RuntimeError {
+pub(crate) enum RuntimeError {
     InvalidOptions(String),
     DiskError(IoError),
     DatabaseError(TableError),

@@ -32,7 +32,7 @@ use crate::body::{AttachmentResolver, resolve_run};
 
 /// One historical edit (or unsent marker) for a body part.
 #[derive(Serialize)]
-pub struct EditEventRecord {
+pub(crate) struct EditEventRecord {
     pub part_index: usize,
     pub status: &'static str,
     pub text: String,
@@ -43,7 +43,7 @@ pub struct EditEventRecord {
 
 /// One logical message body part.
 #[derive(Serialize)]
-pub struct PartRecord {
+pub(crate) struct PartRecord {
     pub index: usize,
     pub kind: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -58,7 +58,7 @@ pub struct PartRecord {
 
 /// Compact tapback row for parent `X-ME-Tapbacks`.
 #[derive(Serialize)]
-pub struct TapbackCell {
+pub(crate) struct TapbackCell {
     pub part_index: usize,
     pub kind: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -69,7 +69,7 @@ pub struct TapbackCell {
     pub reactor_display_name: Option<String>,
 }
 
-pub fn optional_rfc3339(
+pub(crate) fn optional_rfc3339(
     result: Result<
         chrono::DateTime<chrono::Local>,
         imessage_database::error::message::MessageError,
@@ -81,12 +81,12 @@ pub fn optional_rfc3339(
     }
 }
 
-pub fn expressive_label(expressive: Expressive<'_>) -> Option<String> {
+pub(crate) fn expressive_label(expressive: Expressive<'_>) -> Option<String> {
     let label = expressive.to_string();
     if label.is_empty() { None } else { Some(label) }
 }
 
-pub fn shared_location_label(kind: SharedLocation) -> &'static str {
+pub(crate) fn shared_location_label(kind: SharedLocation) -> &'static str {
     match kind {
         SharedLocation::Started => "started",
         SharedLocation::Stopped => "stopped",
@@ -110,7 +110,7 @@ fn effect_label(effect: &TextEffect) -> String {
 }
 
 /// Build edit-history records from parsed [`EditedMessage`] metadata.
-pub fn build_edit_records(edited: &EditedMessage, offset: &i64) -> Vec<EditEventRecord> {
+pub(crate) fn build_edit_records(edited: &EditedMessage, offset: &i64) -> Vec<EditEventRecord> {
     let mut out = Vec::new();
     for (part_index, part) in edited.parts.iter().enumerate() {
         let status = match part.status {
@@ -147,7 +147,7 @@ pub fn build_edit_records(edited: &EditedMessage, offset: &i64) -> Vec<EditEvent
 }
 
 /// Build multipart `parts` from the message body components.
-pub fn build_part_records(message: &Message, attachments: &[Attachment]) -> Vec<PartRecord> {
+pub(crate) fn build_part_records(message: &Message, attachments: &[Attachment]) -> Vec<PartRecord> {
     if message.components.is_empty() {
         return Vec::new();
     }
@@ -224,7 +224,7 @@ pub fn build_part_records(message: &Message, attachments: &[Attachment]) -> Vec<
 }
 
 /// Collect transcription text from body ranges matching an attachment GUID.
-pub fn transcription_for_attachment(message: &Message, attachment: &Attachment) -> Option<String> {
+pub(crate) fn transcription_for_attachment(message: &Message, attachment: &Attachment) -> Option<String> {
     let guid = attachment.guid.as_deref()?;
     for component in &message.components {
         let BubbleComponent::Run(ranges) = component else {
@@ -273,7 +273,7 @@ fn url_message_json(bubble: &URLMessage<'_>) -> Value {
 }
 
 /// Best-effort structured balloon/app payload for archival.
-pub fn build_balloon_value(db: &Connection, message: &Message) -> Option<Value> {
+pub(crate) fn build_balloon_value(db: &Connection, message: &Message) -> Option<Value> {
     let Variant::App(balloon) = message.variant() else {
         return None;
     };
@@ -428,12 +428,12 @@ pub fn build_balloon_value(db: &Connection, message: &Message) -> Option<Value> 
 }
 
 /// Balloon kind string for `X-ME-Balloon-Kind` (from `X-ME-App` JSON or variant).
-pub fn balloon_kind_label(app: &Value) -> Option<String> {
+pub(crate) fn balloon_kind_label(app: &Value) -> Option<String> {
     app.get("kind").and_then(|v| v.as_str()).map(str::to_string)
 }
 
 /// Plain-text summary for balloon messages.
-pub fn balloon_summary(app: &Value, fallback_text: Option<&str>) -> String {
+pub(crate) fn balloon_summary(app: &Value, fallback_text: Option<&str>) -> String {
     if let Some(data) = app.get("data") {
         for key in ["title", "caption", "app_name", "url", "track_name", "name"] {
             if let Some(s) = data
@@ -466,7 +466,7 @@ pub fn balloon_summary(app: &Value, fallback_text: Option<&str>) -> String {
 }
 
 /// Sticker presentation extras when available from the attachment row.
-pub fn sticker_extras(
+pub(crate) fn sticker_extras(
     attachment: &Attachment,
     platform: &Platform,
     db_path: &Path,
@@ -484,6 +484,6 @@ pub fn sticker_extras(
     (prompt, effect)
 }
 
-pub fn parse_thread_part(part: &str) -> Option<u32> {
+pub(crate) fn parse_thread_part(part: &str) -> Option<u32> {
     part.split('/').next()?.parse().ok()
 }
