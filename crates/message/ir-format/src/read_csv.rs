@@ -1,11 +1,24 @@
 //! Reverse projector: unified CSV → [`ConversationDocument`].
 
 use crate::normalize::{imessage_from_parts, source_from_parts};
-use crate::{
-    CSV_HEADERS, ConversationDocument, ConversationHeader, ConversationMeta, ConversationStats,
-    ExportMeta, IrAttachment, IrConversationType, IrDirection, IrImessage, IrMessage,
-    IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION, parse_android_type,
+use message_ir::{
+    ConversationDocument,
+    ConversationHeader,
+    ConversationMeta,
+    ConversationStats,
+    ExportMeta,
+    IrAttachment,
+    IrConversationType,
+    IrDirection,
+    IrImessage,
+    IrMessage,
+    IrMessageKind,
+    IrParticipant,
+    IrService,
+    SCHEMA_VERSION,
+    parse_android_type,
 };
+use crate::CSV_HEADERS;
 use anyhow::{Context, Result, bail};
 use message_csv::AttachmentCell;
 use serde::Deserialize;
@@ -25,7 +38,7 @@ struct ParticipantCell {
 /// Read a conversation CSV written by [`crate::write_conversation_csv`].
 ///
 /// Conversation / export header is taken from the first data row.
-pub(crate) fn read_conversation_csv(path: &Path) -> Result<ConversationDocument> {
+pub fn read_conversation_csv(path: &Path) -> Result<ConversationDocument> {
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
     let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)

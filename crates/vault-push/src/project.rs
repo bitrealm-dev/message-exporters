@@ -3,8 +3,14 @@
 use anyhow::{Context, Result, bail};
 use message_csv::format_local_ts;
 use message_ir::{
-    ConversationDocument, ConversationHeader, IrAttachment, IrDirection, IrImessage, IrMessage,
-    IrService, SCHEMA_VERSION,
+    ConversationDocument,
+    ConversationHeader,
+    IrAttachment,
+    IrDirection,
+    IrImessage,
+    IrMessage,
+    IrService,
+    SCHEMA_VERSION,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -316,9 +322,13 @@ pub fn document_conversation_line(doc: &ConversationDocument) -> Result<Vec<u8>>
 mod tests {
     use super::*;
     use message_ir::{
-        ConversationMeta, ConversationStats, ExportMeta, IrConversationType, IrMessageKind,
-        IrParticipant,
-    };
+    ConversationMeta,
+    ConversationStats,
+    ExportMeta,
+    IrConversationType,
+    IrMessageKind,
+    IrParticipant,
+};
 
     #[test]
     fn projects_basic_sms() {

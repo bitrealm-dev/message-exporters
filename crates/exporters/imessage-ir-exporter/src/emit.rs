@@ -4,7 +4,7 @@
 //! `MailMessage` mapping), converted to [`IrMessage`] (core fields + a nested
 //! `imessage` extension bag), and accumulated per conversation.
 //! After the DB stream ends, conversations are written via
-//! [`message_ir::FormatSink`] (see the [message-ir architecture](../../../docs/maintainers/architecture/message-ir.md)).
+//! [`message_ir_format::FormatSink`] (see the [message-ir architecture](../../../docs/maintainers/architecture/message-ir.md)).
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -29,9 +29,24 @@ use imessage_database::{
 };
 use message_exporter_core::OutputFormat;
 use message_ir::{
-    ConversationDocument, ConversationMeta, ExportMeta, FormatSink, FormatSinkResult, IrAttachment,
-    IrConversationType, IrDirection, IrImessage, IrMessage, IrMessageKind, IrParticipant,
-    IrService, SCHEMA_VERSION, owner_sender, parse_json_value,
+    ConversationDocument,
+    ConversationMeta,
+    ExportMeta,
+    IrAttachment,
+    IrConversationType,
+    IrDirection,
+    IrImessage,
+    IrMessage,
+    IrMessageKind,
+    IrParticipant,
+    IrService,
+    SCHEMA_VERSION,
+    owner_sender,
+    parse_json_value,
+};
+use message_ir_format::{
+    FormatSink,
+    FormatSinkResult,
 };
 use mail::{Direction as MailDirection, MailAttachment, MailMessage, Participant};
 use sha2::{Digest, Sha256};
@@ -265,7 +280,7 @@ fn collect_one(
 ///
 /// For CSV / JSON / JSONL / XML, non-empty attachment bytes are persisted under
 /// `attachments/` and referenced by `path`. For EML / MBOX, bytes stay in
-/// memory for [`message_ir::document_to_mail_messages`] to embed directly.
+/// memory for [`message_ir_format::document_to_mail_messages`] to embed directly.
 fn mail_message_to_ir(
     mail: &MailMessage,
     attachments_dir: &Path,

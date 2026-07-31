@@ -25,6 +25,7 @@ go-sms-mms = { path = "../../message/go-sms-mms" }
 message-csv = { path = "../../message/csv" }
 message-exporter-core = { path = "../../message-exporter-core" }
 message-ir = { path = "../../message/ir" }
+message-ir-format = { path = "../../message/ir-format" }
 media = { path = "../../message/media" }
 phone = { path = "../../message/phone" }
 quick-xml = { version = "0.41.0", features = ["serialize"] }

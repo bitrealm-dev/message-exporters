@@ -2,7 +2,8 @@
 
 use crate::export_transforms::{ExportTransforms, apply_transforms};
 use crate::write_sbr::SbrBackupSession;
-use crate::{ConversationDocument, write_format};
+use crate::write::write_format;
+use message_ir::ConversationDocument;
 use anyhow::Result;
 use message_exporter_core::OutputFormat;
 use media::MediaReport;
@@ -138,10 +139,19 @@ fn remove_staged_attachments(output_dir: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        ConversationMeta, ConversationStats, ExportMeta, IrAttachment, IrConversationType,
-        IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION,
-    };
+    use message_ir::{
+    ConversationMeta,
+    ConversationStats,
+    ExportMeta,
+    IrAttachment,
+    IrConversationType,
+    IrDirection,
+    IrMessage,
+    IrMessageKind,
+    IrParticipant,
+    IrService,
+    SCHEMA_VERSION,
+};
     use media::MediaMode;
     use std::fs;
 

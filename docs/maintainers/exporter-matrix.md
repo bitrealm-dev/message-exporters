@@ -4,7 +4,7 @@ What each converter writes (and where it falls short). Marks: **yes** / **partia
 
 ## Shared model
 
-All converters build a **common message** per conversation (`ConversationDocument`, schema v3 in [`message-ir`](../../crates/message/ir/)), then project the user-picked format via `FormatSink` (default **JSON**). When packaging is CSV, columns follow [`CSV_HEADERS`](../../crates/message/ir/src/lib.rs). Across the board:
+All converters build a **common message** per conversation (`ConversationDocument`, schema v3 in [`message-ir`](../../crates/message/ir/)), then project the user-picked format via `FormatSink` in [`message-ir-format`](../../crates/message/ir-format/) (default **JSON**). When packaging is CSV, columns follow [`CSV_HEADERS`](../../crates/message/ir-format/src/write.rs). Across the board:
 
 - The peer is `chat_identifier` — there is **no** dedicated receiver-phone column
 - Direction is `direction` (`incoming` / `outgoing`) — there is **no** `is_from_me` column
@@ -62,6 +62,6 @@ All converters build a **common message** per conversation (`ConversationDocumen
 | WhatsApp | [`crates/exporters/whatsapp-exporter/docs/MANPAGE.md`](../../crates/exporters/whatsapp-exporter/docs/MANPAGE.md) |
 | iMessage | [`crates/exporters/imessage-ir-exporter/docs/MANPAGE.md`](../../crates/exporters/imessage-ir-exporter/docs/MANPAGE.md) |
 
-**Common message:** end-user [export structure](../src/content/docs/understand-output/export-structure.md); schema [message-ir architecture](architecture/message-ir.md). All exporters parse to `ConversationDocument` then project via `ir::FormatSink` (per-chat JSON/JSONL/CSV/EML/MBOX, or one SyncTech `smses.xml` with `--format xml`). Output formats: [mail archives](formats/mail-archive.md) and [SMS Backup & Restore XML](formats/sms-backup-restore-xml.md). Attachment modes (none / copy / convert / compress) and obfuscate apply through `FormatSink` for every format.
+**Common message:** end-user [export structure](../src/content/docs/understand-output/export-structure.md); schema [message-ir architecture](architecture/message-ir.md). All exporters parse to `ConversationDocument` then project via `message_ir_format::FormatSink` (per-chat JSON/JSONL/CSV/EML/MBOX, or one SyncTech `smses.xml` with `--format xml`). Output formats: [mail archives](formats/mail-archive.md) and [SMS Backup & Restore XML](formats/sms-backup-restore-xml.md). Attachment modes (none / copy / convert / compress) and obfuscate apply through `FormatSink` for every format.
 
-**Convert:** the [`message-reexporter` command](../../crates/message/ir/docs/REEXPORT.md), owned by `message-ir`, converts an existing Message Exporters output directory to another format (auto-detect input; GUI **Format** tab). Not a vendor backup source.
+**Convert:** the [`message-reexporter` command](../../crates/message/reexport/docs/REEXPORT.md), owned by `message-reexport`, converts an existing Message Exporters output directory to another format (auto-detect input; GUI **Format** tab). Not a vendor backup source.

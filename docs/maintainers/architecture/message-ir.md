@@ -2,7 +2,15 @@
 
 **Common message** is the shared per-conversation structure after source parse and before packaging (CSV / EML / MBOX / JSON / JSONL / XML). End-user overview: [What’s inside an export](../../src/content/docs/understand-output/export-structure.md).
 
-Typed model: [`crates/message/ir/`](../../../crates/message/ir/) (crate name still `message-ir`; type `ConversationDocument`). On-disk forms:
+Three crates:
+
+| Package | Path | Owns |
+|---------|------|------|
+| **`message-ir`** | [`crates/message/ir/`](../../../crates/message/ir/) | Schema types only (`ConversationDocument`, `Ir*` bags, helpers) |
+| **`message-ir-format`** | [`crates/message/ir-format/`](../../../crates/message/ir-format/) | `FormatSink`, readers/writers, transforms, `CSV_HEADERS` |
+| **`message-reexport`** | [`crates/message/reexport/`](../../../crates/message/reexport/) | Directory convert + `message-reexporter` binary |
+
+On-disk forms:
 
 - **JSON** (CLI/GUI default) — one pretty-printed `<conversation-stem>.json` per chat
 - **JSONL** — one `<conversation-stem>.jsonl` per chat: header line, then one `IrMessage` per line
@@ -13,7 +21,7 @@ Pipeline: `backup → common message → FormatSink → user-picked format`.
 
 ## Status
 
-- **Common-message path** (`ConversationDocument` → `message_ir::FormatSink`, `--format json|jsonl|csv|eml|mbox|xml`): all exporters, including iMessage (`imessage-ir-exporter`). Per-chat formats also accept `write_format`; XML uses a single `smses.xml` via the sink.
+- **Common-message path** (`ConversationDocument` → `message_ir_format::FormatSink`, `--format json|jsonl|csv|eml|mbox|xml`): all exporters, including iMessage (`imessage-ir-exporter`). Per-chat formats also accept `write_format`; XML uses a single `smses.xml` via the sink.
 - **Media + obfuscate** run inside `FormatSink::finish` for every format (`ExportTransforms`: none / copy / convert / compress, plus optional obfuscate). When obfuscate is on, exporters skip staging real attachment bytes and convert/compress is not run — only placeholder files are written. Exporters pass transforms from `ExporterConfig.media` / `.obfuscate`; there is no CSV-only post-step. EML / MBOX / XML embed media and drop the staged `attachments/` directory afterward.
 - **Schema version 3 only** (breaking). Typed enums/bags, filled outgoing identity, conversation stats, stable null/`[]` keys. Older common-message JSON is not read — regenerate exports after schema changes.
 
@@ -111,11 +119,11 @@ Line 1 is the header (includes `conversation.stats`; no `messages` array). Each 
 |--------|--------|--------|
 | JSON | pretty-printed `ConversationDocument` | `read_conversation_json` |
 | JSONL | header + one message per line | `read_conversation_jsonl` |
-| CSV | unified [`CSV_HEADERS`](../../../crates/message/ir/src/lib.rs) (header from first data row on read) | `read_conversation_csv` |
+| CSV | unified [`CSV_HEADERS`](../../../crates/message/ir-format/src/write.rs) (header from first data row on read) | `read_conversation_csv` |
 | EML / MBOX | common message → `MailMessage` → [`message-mail`](../../../crates/message/mail/) | `read_conversation_eml_dir` / `read_conversation_mbox` |
-| XML | single `smses.xml` via [`FormatSink`](../../../crates/message/ir/) + [`message-sbr`](../../../crates/message/sbr/) | `message_ir::read_sbr_documents` (owner inferred when omitted) |
+| XML | single `smses.xml` via [`FormatSink`](../../../crates/message/ir-format/) + [`message-sbr`](../../../crates/message/sbr/) | `message_ir_format::read_sbr_documents` (owner inferred when omitted) |
 
-**Directory convert:** [`message-ir::reexport`](../../../crates/message/ir/src/reexport/) powers the `message-reexporter` command. It auto-detects one format in an export folder and writes another via `FormatSink` (GUI **Format** tab / CLI).
+**Directory convert:** [`message-reexport`](../../../crates/message/reexport/) powers the `message-reexporter` command. It auto-detects one format in an export folder and writes another via `FormatSink` (GUI **Format** tab / CLI).
 
 **XML packaging differs:** one SyncTech backup for the whole export (not per conversation). iMessage-only fields are dropped. See [SMS Backup & Restore XML output](../formats/sms-backup-restore-xml.md).
 
@@ -125,7 +133,7 @@ Library APIs support content-preserving cycles:
 
 `ConversationDocument` → CSV \| EML \| MBOX \| JSON \| JSONL → `ConversationDocument`
 
-Use the [`message-reexporter` command](../../../crates/message/ir/docs/REEXPORT.md) to convert a whole export directory between formats.
+Use the [`message-reexporter` command](../../../crates/message/reexport/docs/REEXPORT.md) to convert a whole export directory between formats.
 
 XML is **lossy** for non-Android common messages (Apple bags omitted). SBR-origin `source.fields` can restore many SyncTech attrs on write-back.
 

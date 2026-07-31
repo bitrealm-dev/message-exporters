@@ -1,6 +1,6 @@
 //! Small shared helpers for IR readers / projectors.
 
-use crate::IrAttachment;
+use message_ir::IrAttachment;
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
@@ -53,7 +53,7 @@ pub(crate) fn read_attachment_file(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::IrAttachment;
+    use message_ir::IrAttachment;
     use std::fs;
     use std::io::Write;
 

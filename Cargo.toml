@@ -4,6 +4,8 @@ members = [
     "crates/message/phone",
     "crates/message/csv",
     "crates/message/ir",
+    "crates/message/ir-format",
+    "crates/message/reexport",
     "crates/message/mail",
     "crates/message/sbr",
     "crates/message/contacts",

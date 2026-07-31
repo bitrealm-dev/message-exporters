@@ -1,10 +1,21 @@
 //! Reverse projectors: EML folder / mboxrd → [`ConversationDocument`].
 
 use crate::normalize::{imessage_from_parts, source_from_parts};
-use crate::{
-    ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, IrAttachment,
-    IrConversationType, IrDirection, IrImessage, IrMessage, IrMessageKind, IrParticipant,
-    IrService, SCHEMA_VERSION, parse_android_type,
+use message_ir::{
+    ConversationDocument,
+    ConversationMeta,
+    ConversationStats,
+    ExportMeta,
+    IrAttachment,
+    IrConversationType,
+    IrDirection,
+    IrImessage,
+    IrMessage,
+    IrMessageKind,
+    IrParticipant,
+    IrService,
+    SCHEMA_VERSION,
+    parse_android_type,
 };
 use anyhow::{Context, Result, bail};
 use mail::{
@@ -14,7 +25,7 @@ use std::fs;
 use std::path::Path;
 
 /// Scan a conversation directory of `.eml` files into IR.
-pub(crate) fn read_conversation_eml_dir(dir: &Path) -> Result<ConversationDocument> {
+pub fn read_conversation_eml_dir(dir: &Path) -> Result<ConversationDocument> {
     if !dir.is_dir() {
         bail!("not a directory: {}", dir.display());
     }
@@ -53,7 +64,7 @@ pub(crate) fn read_conversation_eml_dir(dir: &Path) -> Result<ConversationDocume
 }
 
 /// Read a conversation `.mbox` (mboxrd) into IR.
-pub(crate) fn read_conversation_mbox(path: &Path) -> Result<ConversationDocument> {
+pub fn read_conversation_mbox(path: &Path) -> Result<ConversationDocument> {
     let mut mail_messages = mail_messages_from_mbox(path)?;
     if mail_messages.is_empty() {
         bail!("mbox has no messages: {}", path.display());

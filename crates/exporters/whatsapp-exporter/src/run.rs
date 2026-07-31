@@ -4,7 +4,7 @@ use crate::emit::{ExportReport, convert_json};
 use crate::wtsexporter::{Platform, WtsexporterArgs, resolve_wtsexporter, run_wtsexporter};
 use anyhow::{Context, Result, bail};
 use message_exporter_core::{RunResult, ExporterConfig, SourceConfig, WhatsappPlatform as CorePlatform};
-use message_ir::ExportTransforms;
+use message_ir_format::ExportTransforms;
 use std::env;
 use std::fs;
 use std::path::Path;

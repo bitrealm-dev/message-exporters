@@ -8,10 +8,27 @@ use contacts::ContactsBook;
 use message_csv::{DateRange, format_local_ts, stable_guid};
 use message_exporter_core::{CancelFlag, OutputFormat};
 use message_ir::{
-    ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
-    FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
-    IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION, clean_previous_ir_output,
-    owner_sender, parse_android_type,
+    ConversationDocument,
+    ConversationMeta,
+    ConversationStats,
+    ExportMeta,
+    IrAttachment,
+    IrConversationType,
+    IrDirection,
+    IrMessage,
+    IrMessageKind,
+    IrParticipant,
+    IrService,
+    IrSource,
+    SCHEMA_VERSION,
+    owner_sender,
+    parse_android_type,
+};
+use message_ir_format::{
+    ExportTransforms,
+    FormatSink,
+    FormatSinkResult,
+    clean_previous_ir_output,
 };
 use phone::{OwnerPhoneSet, to_e164};
 use sha2::{Digest, Sha256};

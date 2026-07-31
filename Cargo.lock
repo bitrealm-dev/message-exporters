@@ -2397,6 +2397,7 @@ dependencies = [
  "message-csv",
  "message-exporter-core",
  "message-ir",
+ "message-ir-format",
  "obfuscate",
  "phone",
  "quick-xml 0.41.0",
@@ -3272,6 +3273,7 @@ dependencies = [
  "message-csv",
  "message-exporter-core",
  "message-ir",
+ "message-ir-format",
  "obfuscate",
  "phone",
  "serde_json",
@@ -3310,6 +3312,7 @@ dependencies = [
  "message-csv",
  "message-exporter-core",
  "message-ir",
+ "message-ir-format",
  "rpassword",
  "rusqlite",
  "serde",
@@ -3952,7 +3955,7 @@ dependencies = [
  "imessage-ir-exporter",
  "media",
  "message-exporter-core",
- "message-ir",
+ "message-reexport",
  "open",
  "openextract-exporter",
  "phone",
@@ -3969,17 +3972,41 @@ dependencies = [
 name = "message-ir"
 version = "0.1.0"
 dependencies = [
+ "message-csv",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "message-ir-format"
+version = "0.1.0"
+dependencies = [
  "anyhow",
- "clap",
  "csv",
  "mail",
  "media",
  "message-csv",
  "message-exporter-core",
+ "message-ir",
  "obfuscate",
  "phone",
  "sbr",
  "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "message-reexport"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "csv",
+ "media",
+ "message-exporter-core",
+ "message-ir",
+ "message-ir-format",
  "serde_json",
  "tempfile",
 ]
@@ -4647,6 +4674,7 @@ dependencies = [
  "message-csv",
  "message-exporter-core",
  "message-ir",
+ "message-ir-format",
  "obfuscate",
  "phone",
  "serde_json",
@@ -6270,6 +6298,7 @@ dependencies = [
  "message-csv",
  "message-exporter-core",
  "message-ir",
+ "message-ir-format",
  "obfuscate",
  "phone",
  "rayon",
@@ -6292,6 +6321,7 @@ dependencies = [
  "message-csv",
  "message-exporter-core",
  "message-ir",
+ "message-ir-format",
  "serde_json",
  "tempfile",
 ]
@@ -7188,6 +7218,7 @@ dependencies = [
  "message-csv",
  "message-exporter-core",
  "message-ir",
+ "message-ir-format",
  "reqwest",
  "serde",
  "serde_json",
@@ -7516,6 +7547,7 @@ dependencies = [
  "message-csv",
  "message-exporter-core",
  "message-ir",
+ "message-ir-format",
  "obfuscate",
  "phone",
  "serde",

@@ -24,6 +24,7 @@ imessage-database = "4.2.0"
 message-csv = { path = "../../message/csv" }
 message-exporter-core = { path = "../../message-exporter-core" }
 message-ir = { path = "../../message/ir" }
+message-ir-format = { path = "../../message/ir-format" }
 mail = { path = "../../message/mail" }
 rpassword = "=7.5.3"
 rusqlite = { version = "=0.40.0", features = ["blob", "bundled"] }

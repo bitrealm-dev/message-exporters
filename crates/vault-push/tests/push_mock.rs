@@ -6,8 +6,17 @@ use std::path::Path;
 
 use httpmock::prelude::*;
 use message_ir::{
-    ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, IrAttachment,
-    IrConversationType, IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService,
+    ConversationDocument,
+    ConversationMeta,
+    ConversationStats,
+    ExportMeta,
+    IrAttachment,
+    IrConversationType,
+    IrDirection,
+    IrMessage,
+    IrMessageKind,
+    IrParticipant,
+    IrService,
     SCHEMA_VERSION,
 };
 use serde_json::json;

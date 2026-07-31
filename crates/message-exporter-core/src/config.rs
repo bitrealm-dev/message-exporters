@@ -74,7 +74,7 @@ impl OutputFormat {
         matches!(self, Self::Eml | Self::Mbox)
     }
 
-    /// True when export writes a single SyncTech `smses.xml` (use [`message_ir::FormatSink`]).
+    /// True when export writes a single SyncTech `smses.xml` (use [`message_ir_format::FormatSink`]).
     pub fn is_sbr_xml(self) -> bool {
         matches!(self, Self::Xml)
     }

@@ -7,7 +7,7 @@ The observed iMazing 3.5.5 directory layout, CSV headers, and source limitations
 ## Goals
 
 - Accept either one iMazing Messages/WhatsApp CSV **or** a folder at any level of a device export tree.
-- Emit the common message → packaging via `FormatSink` (CSV uses shared [`CSV_HEADERS`](../../../message-ir/src/lib.rs); default JSON), with WhatsApp kept separate from SMS/iMessage.
+- Emit the common message → packaging via `FormatSink` (CSV uses shared [`CSV_HEADERS`](../../../message/ir-format/src/write.rs); default JSON), with WhatsApp kept separate from SMS/iMessage.
 - Resolve phones/names through an optional iMazing Contacts CSV.
 
 ## Input discovery
@@ -16,7 +16,7 @@ Discovery walks the selected path recursively without following directory symbol
 
 ## Output policy
 
-- Pipeline: iMazing CSV → `ConversationDocument` → [`ir::FormatSink`](../../../message-ir/src/format_sink.rs) (`--format csv|eml|mbox|json|jsonl|xml`). Shared header: [`CSV_HEADERS`](../../../message-ir/src/lib.rs) / [CSV columns](../../../../docs/src/content/docs/understand-output/csv-columns.md).
+- Pipeline: iMazing CSV → `ConversationDocument` → [`message_ir_format::FormatSink`](../../../message/ir-format/src/format_sink.rs) (`--format csv|eml|mbox|json|jsonl|xml`). Shared header: [`CSV_HEADERS`](../../../message/ir-format/src/write.rs) / [CSV columns](../../../../docs/src/content/docs/understand-output/csv-columns.md).
 - SMS + iMessage for the same peer merge into one conversation (Messages family).
 - WhatsApp for the same peer is a **separate** file (`…__whatsapp.csv` / matching stem suffix for other formats).
 - Notification rows keep `imazing_type=Notification` in `source_fields_json`; direction is emitted as `incoming`.

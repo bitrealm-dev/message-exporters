@@ -1,6 +1,11 @@
 //! Reverse projectors: JSON / JSONL → [`ConversationDocument`].
 
-use crate::{ConversationDocument, ConversationHeader, IrMessage, SCHEMA_VERSION};
+use message_ir::{
+    ConversationDocument,
+    ConversationHeader,
+    IrMessage,
+    SCHEMA_VERSION,
+};
 use anyhow::{Context, Result, bail};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};

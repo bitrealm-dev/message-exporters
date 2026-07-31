@@ -1,7 +1,12 @@
 //! Attachment media + obfuscate transforms applied before IR projection.
 
 use crate::util::read_attachment_file;
-use crate::{ConversationDocument, IrAttachment, IrDirection, IrParticipant};
+use message_ir::{
+    ConversationDocument,
+    IrAttachment,
+    IrDirection,
+    IrParticipant,
+};
 use anyhow::Result;
 use message_exporter_core::{LogSink, MediaConfig, ObfuscateConfig, emit_log};
 use media::{CompressOptions, MediaMode, MediaReport};
@@ -246,10 +251,17 @@ pub(crate) fn apply_transforms(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        ConversationMeta, ConversationStats, ExportMeta, IrConversationType, IrMessage,
-        IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION,
-    };
+    use message_ir::{
+    ConversationMeta,
+    ConversationStats,
+    ExportMeta,
+    IrConversationType,
+    IrMessage,
+    IrMessageKind,
+    IrParticipant,
+    IrService,
+    SCHEMA_VERSION,
+};
     use media::MediaMode;
     use std::fs;
 

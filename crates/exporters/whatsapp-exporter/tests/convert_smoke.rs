@@ -1,7 +1,7 @@
 use crate::emit::convert_json;
 use message_csv::DateRange;
 use message_exporter_core::OutputFormat;
-use message_ir::ExportTransforms;
+use message_ir_format::ExportTransforms;
 use std::fs;
 use std::path::PathBuf;
 

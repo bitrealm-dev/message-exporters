@@ -2,7 +2,7 @@
 //!
 //! Messages stream from `chat.db`, build [`mail::MailMessage`] per row,
 //! convert to canonical [`message_ir::IrMessage`], and project via
-//! [`message_ir::FormatSink`].
+//! [`message_ir_format::FormatSink`].
 
 mod attachments;
 mod backup;

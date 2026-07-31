@@ -8,10 +8,26 @@ use contacts::ContactsBook;
 use message_csv::{AttachmentCell, DateRange, format_local_ts, parse_utc_offset, stable_guid};
 use message_exporter_core::{CancelFlag, OutputFormat};
 use message_ir::{
-    ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
-    FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
-    IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION, clean_previous_ir_output,
+    ConversationDocument,
+    ConversationMeta,
+    ConversationStats,
+    ExportMeta,
+    IrAttachment,
+    IrConversationType,
+    IrDirection,
+    IrMessage,
+    IrMessageKind,
+    IrParticipant,
+    IrService,
+    IrSource,
+    SCHEMA_VERSION,
     owner_sender,
+};
+use message_ir_format::{
+    ExportTransforms,
+    FormatSink,
+    FormatSinkResult,
+    clean_previous_ir_output,
 };
 use phone::{sanitize_number, to_e164};
 use serde_json::Map;

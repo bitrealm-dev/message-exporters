@@ -1,0 +1,23 @@
+[package]
+name = "message-ir-format"
+version = "0.1.0"
+edition = "2024"
+description = "FormatSink, readers/writers, and transforms for message-ir ConversationDocument"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+anyhow = "1.0.103"
+csv = "1.4.0"
+message-csv = { path = "../csv" }
+message-exporter-core = { path = "../../message-exporter-core" }
+message-ir = { path = "../ir" }
+mail = { path = "../mail" }
+media = { path = "../media" }
+obfuscate = { path = "../obfuscate" }
+phone = { path = "../phone" }
+sbr = { path = "../sbr" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+
+[dev-dependencies]
+tempfile = "3.27.0"

@@ -22,6 +22,7 @@ obfuscate = { path = "../../message/obfuscate" }
 message-csv = { path = "../../message/csv" }
 message-exporter-core = { path = "../../message-exporter-core" }
 message-ir = { path = "../../message/ir" }
+message-ir-format = { path = "../../message/ir-format" }
 media = { path = "../../message/media" }
 phone = { path = "../../message/phone" }
 serde = { version = "1.0.228", features = ["derive"] }

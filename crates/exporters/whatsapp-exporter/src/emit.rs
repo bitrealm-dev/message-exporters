@@ -8,10 +8,26 @@ use anyhow::{Context, Result};
 use message_csv::{DateRange, format_local_ts, json_cell, stable_guid};
 use message_exporter_core::{CancelFlag, OutputFormat};
 use message_ir::{
-    ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
-    FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
-    IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION, clean_previous_ir_output,
+    ConversationDocument,
+    ConversationMeta,
+    ConversationStats,
+    ExportMeta,
+    IrAttachment,
+    IrConversationType,
+    IrDirection,
+    IrMessage,
+    IrMessageKind,
+    IrParticipant,
+    IrService,
+    IrSource,
+    SCHEMA_VERSION,
     owner_sender,
+};
+use message_ir_format::{
+    ExportTransforms,
+    FormatSink,
+    FormatSinkResult,
+    clean_previous_ir_output,
 };
 use serde_json::Map;
 use sha2::{Digest, Sha256};

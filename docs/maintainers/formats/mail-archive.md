@@ -108,7 +108,7 @@ Browse-oriented so mail-client **Correspondents** / Subject columns stay readabl
 
 Empty owner handle falls back to `me@sms.local` with display name `Me`. Outgoing rows set `X-ME-Sender-*` from owner identity (same as common message / CSV). Owner is always mirrored in `X-ME-Owner-*` when known.
 
-Reverse import (EML/MBOX → common-message JSON) is available via [`message-ir`](../../../crates/message/ir/) (`read_conversation_eml_dir` / `read_conversation_mbox`).
+Reverse import (EML/MBOX → common-message JSON) is available via [`message-ir-format`](../../../crates/message/ir-format/) (`read_conversation_eml_dir` / `read_conversation_mbox`).
 
 ## Core `X-ME-*` headers (SMS / MMS / shared)
 
@@ -200,7 +200,7 @@ Media is transformed then embedded; FormatSink removes the staged `attachments/`
 
 ## iMessage extension
 
-Align with the unified CSV inventory in [`message-ir::CSV_HEADERS`](../../../crates/message/ir/src/lib.rs). Apple-only cells are empty for SMS rows.
+Align with the unified CSV inventory in [`message_ir_format::CSV_HEADERS`](../../../crates/message/ir-format/src/write.rs). Apple-only cells are empty for SMS rows.
 
 ### Threading (replies)
 

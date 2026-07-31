@@ -5,7 +5,7 @@ use clap::Parser;
 use message_exporter_core::{
     ExporterConfig, MediaConfig, FormatConfig, ObfuscateConfig, OutputFormat, SourceConfig,
 };
-use message_ir::reexport::run;
+use message_reexport::run;
 use media::{MaxResolution, MediaMode, compress_options_from_cli};
 
 #[derive(Parser, Debug)]

@@ -1,9 +1,20 @@
 //! Read SMS Backup & Restore XML into [`ConversationDocument`] values.
 
-use crate::{
-    ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, IrAttachment,
-    IrConversationType, IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService, IrSource,
-    SCHEMA_VERSION, owner_sender,
+use message_ir::{
+    ConversationDocument,
+    ConversationMeta,
+    ConversationStats,
+    ExportMeta,
+    IrAttachment,
+    IrConversationType,
+    IrDirection,
+    IrMessage,
+    IrMessageKind,
+    IrParticipant,
+    IrService,
+    IrSource,
+    SCHEMA_VERSION,
+    owner_sender,
 };
 use anyhow::{Result, bail};
 use message_csv::{DateRange, format_local_ts, stable_guid};

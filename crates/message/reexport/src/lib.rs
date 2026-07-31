@@ -1,8 +1,9 @@
 //! Convert an existing Message Exporters output directory to another format.
 
-use crate::{
-    CSV_HEADERS, ConversationDocument, ExportTransforms, FormatSink, FormatSinkResult,
-    SbrReadOptions, clean_previous_ir_output, read_conversation_csv, read_conversation_eml_dir,
+use message_ir::ConversationDocument;
+use message_ir_format::{
+    CSV_HEADERS, ExportTransforms, FormatSink, FormatSinkResult, SbrReadOptions,
+    clean_previous_ir_output, read_conversation_csv, read_conversation_eml_dir,
     read_conversation_json, read_conversation_jsonl, read_conversation_mbox, read_sbr_documents,
 };
 use anyhow::{Context, Result, bail};
@@ -366,11 +367,11 @@ fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
+    use message_ir::{
         ConversationMeta, ConversationStats, ExportMeta, IrConversationType, IrDirection,
-        IrMessage, IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION, read_conversation_csv,
-        read_conversation_json,
+        IrMessage, IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION,
     };
+    use message_ir_format::{read_conversation_csv, read_conversation_json};
     use message_exporter_core::{
         MediaConfig, FormatConfig, ObfuscateConfig, SourceConfig,
     };

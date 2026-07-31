@@ -25,7 +25,7 @@ sms-backup-restore-exporter = { path = "../exporters/sms-backup-restore-exporter
 whatsapp-exporter = { path = "../exporters/whatsapp-exporter", default-features = false }
 contacts = { path = "../message/contacts" }
 message-exporter-core = { path = "../message-exporter-core" }
-message-ir = { path = "../message/ir", default-features = false }
+message-reexport = { path = "../message/reexport" }
 media = { path = "../message/media" }
 phone = { path = "../message/phone" }
 vault-push = { path = "../vault-push", default-features = false }

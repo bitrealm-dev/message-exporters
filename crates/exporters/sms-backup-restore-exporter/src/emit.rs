@@ -5,8 +5,16 @@ use contacts::ContactsBook;
 use message_csv::DateRange;
 use message_exporter_core::{CancelFlag, OutputFormat};
 use message_ir::{
-    ConversationDocument, ExportTransforms, FormatSink, FormatSinkResult, SbrReadOptions,
-    SbrReadReport, clean_previous_ir_output, read_sbr_documents,
+    ConversationDocument,
+};
+use message_ir_format::{
+    ExportTransforms,
+    FormatSink,
+    FormatSinkResult,
+    SbrReadOptions,
+    SbrReadReport,
+    clean_previous_ir_output,
+    read_sbr_documents,
 };
 use std::fs;
 use std::path::Path;

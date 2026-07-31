@@ -135,7 +135,7 @@ output folder to another packaging format (via the common message).
 
 Persists under `[format]` in `export.ini` (loads legacy `[message-reexport]` if
 present). Mixed or unrecognized input dirs fail with a clear error. See
-[`crates/message/ir/docs/MESSAGE_REEXPORTER.md`](../../crates/message/ir/docs/MESSAGE_REEXPORTER.md).
+[`crates/message/reexport/docs/MESSAGE_REEXPORTER.md`](../../crates/message/reexport/docs/MESSAGE_REEXPORTER.md).
 
 ### Vault — `vault-push`
 
