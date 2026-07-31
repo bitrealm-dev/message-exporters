@@ -113,7 +113,7 @@ MMS from `I_<unix>_*.pdu` files use the same shared conversation model. Differen
 
 ### MMS parse path
 
-1. **Structured decode** (`mms_enc`): WAP-209 headers (From/To/Cc/Bcc/Date/Subject/Status/…) + Content-Location named parts + mid-file / offset-0 multipart (part Content-ID, Content-Disposition/Filename, Content-Type Name/Filename/Start/Type/Start-info). Direction from decoded address roles; body from named parts, multipart text (including SMIL `cid:` → Content-ID), or Subject; attachments from named/typed parts and SMIL `src` / `cid:` / filename.
+1. **Structured decode** (`go-sms-mms` / `mms_enc`): WAP-209 headers (From/To/Cc/Bcc/Date/Subject/Status/…) + Content-Location named parts + mid-file / offset-0 multipart (part Content-ID, Content-Disposition/Filename, Content-Type Name/Filename/Start/Type/Start-info). Direction from decoded address roles; body from named parts, multipart text (including SMIL `cid:` → Content-ID), or Subject; attachments from named/typed parts and SMIL `src` / `cid:` / filename.
 2. **Heuristic fallback**: PLMN regex for raw address lists, legacy `text_*.txt` markers / `</smil>` printable tails, and magic-byte attachment splits — only when the structured path left that field empty.
 
 Algorithm reference: OMA WAP-209 / WAP-230 and the decode concepts in [python-messaging](https://github.com/pmarti/python-messaging) `messaging/mms` (not a dependency; not copied).

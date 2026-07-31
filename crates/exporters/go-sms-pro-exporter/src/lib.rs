@@ -4,9 +4,6 @@
 //! The `go-sms-pro-exporter` binary is a thin CLI over [`run`].
 
 mod emit;
-mod emoji;
-mod mms_enc;
-mod pdu;
 mod phone;
 mod run;
 mod xml;

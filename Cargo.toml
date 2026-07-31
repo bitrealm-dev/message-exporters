@@ -9,6 +9,7 @@ members = [
     "crates/message/contacts",
     "crates/message/obfuscate",
     "crates/message/media",
+    "crates/message/go-sms-mms",
     "crates/exporters/go-sms-pro-exporter",
     "crates/exporters/sms-backup-restore-exporter",
     "crates/exporters/sms-backup-plus-exporter",

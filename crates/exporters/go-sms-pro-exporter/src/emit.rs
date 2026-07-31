@@ -1,7 +1,7 @@
 //! Convert GO SMS Pro export → common message → packaging via FormatSink.
 
-use crate::pdu::{ParsedPdu, parse_pdu_file};
 use crate::xml::{SkippedBadAddrDetail, XmlMessage, parse_xml_file};
+use go_sms_mms::{ParsedPdu, parse_pdu_file};
 use anyhow::{Context, Result, bail};
 use chrono::{Local, TimeZone};
 use contacts::ContactsBook;

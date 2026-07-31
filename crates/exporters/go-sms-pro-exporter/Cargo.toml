@@ -21,6 +21,7 @@ csv = "1.4.0"
 hex = "0.4.3"
 obfuscate = { path = "../../message/obfuscate" }
 contacts = { path = "../../message/contacts" }
+go-sms-mms = { path = "../../message/go-sms-mms" }
 message-csv = { path = "../../message/csv" }
 message-exporter-core = { path = "../../message-exporter-core" }
 message-ir = { path = "../../message/ir" }

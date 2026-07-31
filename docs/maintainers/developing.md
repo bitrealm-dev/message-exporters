@@ -45,7 +45,7 @@ Each ZIP has the desktop app and helpers at the archive root, and standalone CLI
 
 **`cli/` — exporter / utility CLIs**
 
-- `go-sms-pro-exporter`
+- `go-sms-pro-exporter` (MMS PDU decode lives in library crate `go-sms-mms`)
 - `sms-backup-restore-exporter`
 - `sms-backup-plus-exporter`
 - `openextract-exporter`

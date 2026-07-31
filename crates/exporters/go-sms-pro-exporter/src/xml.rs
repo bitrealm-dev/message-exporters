@@ -1,7 +1,7 @@
 //! Parse GO SMS Pro `gosms_sys*.xml` SMS backups.
 
-use crate::emoji::decode_gosms_emojis;
 use crate::phone::parse_google_voice_voicemail_caller;
+use go_sms_mms::decode_gosms_emojis;
 use anyhow::{Context, Result};
 use phone::sanitize_number;
 use serde::Deserialize;

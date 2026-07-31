@@ -18,7 +18,7 @@ This directory contains implementation and release documentation for contributor
 
 ## Crate-specific documentation
 
-Shared libraries live under `crates/message/<name>/` (`ir`, `contacts`, `media`, …). Exporter crates live under `crates/exporters/<name>/` and keep their command reference in `docs/MANPAGE.md`. Other binary crates use `crates/<name>/docs/MANPAGE.md`. Importers may also provide:
+Shared libraries live under `crates/message/<name>/` (`message-ir`, `contacts`, `media`, `go-sms-mms`, …). Exporter crates live under `crates/exporters/<name>/` and keep their command reference in `docs/MANPAGE.md`. Other binary crates use `crates/<name>/docs/MANPAGE.md`. Importers may also provide:
 
 - `INPUT_FORMAT.md` for facts about the vendor or source format;
 - `IMPORT_MAPPING.md` for source fields, skip rules, and conversion into the shared message model;

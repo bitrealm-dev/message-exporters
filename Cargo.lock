@@ -2372,6 +2372,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "go-sms-mms"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "phone",
+ "quick-xml 0.41.0",
+ "regex",
+ "tempfile",
+]
+
+[[package]]
 name = "go-sms-pro-exporter"
 version = "0.1.0"
 dependencies = [
@@ -2380,6 +2391,7 @@ dependencies = [
  "clap",
  "contacts",
  "csv",
+ "go-sms-mms",
  "hex",
  "media",
  "message-csv",
