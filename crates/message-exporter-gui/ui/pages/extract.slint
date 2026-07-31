@@ -5,7 +5,7 @@ import {
     PageSummary, CheckBoxRow, AnchoredScrollPage
 } from "../widgets.slint";
 
-export global ExportAdapter {
+export global ExtractAdapter {
     in-out property <string> exporter-key;
     in-out property <int> exporter-index;
     in property <[string]> exporter-options;
@@ -73,213 +73,213 @@ export global ExportAdapter {
     callback clear();
 }
 
-export component ExportPage inherits AnchoredScrollPage {
+export component ExtractPage inherits AnchoredScrollPage {
         PageSummary {
             message: "Choose a backup to extract its messages to a JSONL archive.";
         }
 
         LabeledComboBox {
             label: "Backup type";
-            model: ExportAdapter.exporter-options;
-            current-index <=> ExportAdapter.exporter-index;
-            separator-before-index: ExportAdapter.exporter-separator-before-index;
-            selected(_) => { ExportAdapter.exporter-changed(ExportAdapter.exporter-index); }
+            model: ExtractAdapter.exporter-options;
+            current-index <=> ExtractAdapter.exporter-index;
+            separator-before-index: ExtractAdapter.exporter-separator-before-index;
+            selected(_) => { ExtractAdapter.exporter-changed(ExtractAdapter.exporter-index); }
         }
 
-        if ExportAdapter.is-whatsapp: LabeledComboBox {
+        if ExtractAdapter.is-whatsapp: LabeledComboBox {
             label: "Platform";
-            model: ExportAdapter.whatsapp-platform-options;
-            current-index <=> ExportAdapter.whatsapp-platform-index;
-            selected(_) => { ExportAdapter.exporter-changed(ExportAdapter.exporter-index); }
+            model: ExtractAdapter.whatsapp-platform-options;
+            current-index <=> ExtractAdapter.whatsapp-platform-index;
+            selected(_) => { ExtractAdapter.exporter-changed(ExtractAdapter.exporter-index); }
         }
 
-        if !ExportAdapter.is-whatsapp && ExportAdapter.is-imessage: LabeledPathField {
+        if !ExtractAdapter.is-whatsapp && ExtractAdapter.is-imessage: LabeledPathField {
             label: "Backup path";
             placeholder: "Path";
-            field-id: "export.db_path";
-            value <=> ExportAdapter.db-path;
-            browse-requested(id) => { ExportAdapter.browse(id); }
+            field-id: "extract.db_path";
+            value <=> ExtractAdapter.db-path;
+            browse-requested(id) => { ExtractAdapter.browse(id); }
         }
-        if !ExportAdapter.is-whatsapp && !ExportAdapter.is-imessage: LabeledPathField {
-            label: ExportAdapter.input-label;
+        if !ExtractAdapter.is-whatsapp && !ExtractAdapter.is-imessage: LabeledPathField {
+            label: ExtractAdapter.input-label;
             required: true;
             placeholder: "Path";
-            field-id: "export.input";
-            value <=> ExportAdapter.input;
-            browse-requested(id) => { ExportAdapter.browse(id); }
+            field-id: "extract.input";
+            value <=> ExtractAdapter.input;
+            browse-requested(id) => { ExtractAdapter.browse(id); }
         }
-        if !ExportAdapter.is-whatsapp: LabeledPathField {
+        if !ExtractAdapter.is-whatsapp: LabeledPathField {
             label: "Output directory";
             required: true;
             placeholder: "Path";
-            field-id: "export.output";
-            value <=> ExportAdapter.output;
-            browse-requested(id) => { ExportAdapter.browse(id); }
+            field-id: "extract.output";
+            value <=> ExtractAdapter.output;
+            browse-requested(id) => { ExtractAdapter.browse(id); }
         }
 
-        if ExportAdapter.is-whatsapp && ExportAdapter.whatsapp-is-ios: LabeledPathField {
+        if ExtractAdapter.is-whatsapp && ExtractAdapter.whatsapp-is-ios: LabeledPathField {
             label: "Backup path";
             required: true;
             placeholder: "Path";
-            field-id: "export.whatsapp_backup";
-            value <=> ExportAdapter.whatsapp-backup;
-            browse-requested(id) => { ExportAdapter.browse(id); }
+            field-id: "extract.whatsapp_backup";
+            value <=> ExtractAdapter.whatsapp-backup;
+            browse-requested(id) => { ExtractAdapter.browse(id); }
         }
-        if ExportAdapter.is-whatsapp && ExportAdapter.whatsapp-is-ios: LabeledPathField {
+        if ExtractAdapter.is-whatsapp && ExtractAdapter.whatsapp-is-ios: LabeledPathField {
             label: "Contacts";
             placeholder: "ContactsV2.sqlite (optional)";
-            field-id: "export.whatsapp_wa";
-            value <=> ExportAdapter.whatsapp-wa;
-            browse-requested(id) => { ExportAdapter.browse(id); }
+            field-id: "extract.whatsapp_wa";
+            value <=> ExtractAdapter.whatsapp-wa;
+            browse-requested(id) => { ExtractAdapter.browse(id); }
         }
-        if ExportAdapter.is-whatsapp && !ExportAdapter.whatsapp-is-ios: LabeledPathField {
+        if ExtractAdapter.is-whatsapp && !ExtractAdapter.whatsapp-is-ios: LabeledPathField {
             label: "Backup path";
             placeholder: "Path";
-            field-id: "export.whatsapp_backup";
-            value <=> ExportAdapter.whatsapp-backup;
-            browse-requested(id) => { ExportAdapter.browse(id); }
+            field-id: "extract.whatsapp_backup";
+            value <=> ExtractAdapter.whatsapp-backup;
+            browse-requested(id) => { ExtractAdapter.browse(id); }
         }
-        if ExportAdapter.is-whatsapp && !ExportAdapter.whatsapp-is-ios: LabeledPathField {
+        if ExtractAdapter.is-whatsapp && !ExtractAdapter.whatsapp-is-ios: LabeledPathField {
             label: "Contacts";
             placeholder: "wa.db (optional)";
-            field-id: "export.whatsapp_wa";
-            value <=> ExportAdapter.whatsapp-wa;
-            browse-requested(id) => { ExportAdapter.browse(id); }
+            field-id: "extract.whatsapp_wa";
+            value <=> ExtractAdapter.whatsapp-wa;
+            browse-requested(id) => { ExtractAdapter.browse(id); }
         }
-        if ExportAdapter.is-whatsapp: LabeledPathField {
+        if ExtractAdapter.is-whatsapp: LabeledPathField {
             label: "Output directory";
             required: true;
             placeholder: "Path";
-            field-id: "export.output";
-            value <=> ExportAdapter.output;
-            browse-requested(id) => { ExportAdapter.browse(id); }
+            field-id: "extract.output";
+            value <=> ExtractAdapter.output;
+            browse-requested(id) => { ExtractAdapter.browse(id); }
         }
 
-        if ExportAdapter.show-contacts: LabeledPathField {
+        if ExtractAdapter.show-contacts: LabeledPathField {
             label: "Contacts file";
             placeholder: ".csv or .vcf (optional)";
-            field-id: "export.contacts";
-            value <=> ExportAdapter.contacts;
-            browse-requested(id) => { ExportAdapter.browse(id); }
+            field-id: "extract.contacts";
+            value <=> ExtractAdapter.contacts;
+            browse-requested(id) => { ExtractAdapter.browse(id); }
         }
 
         LabeledComboBox {
             label: "Attachments";
-            model: ExportAdapter.attachment-media-options;
-            current-index <=> ExportAdapter.attachment-media-index;
-            selected(_) => { ExportAdapter.exporter-changed(ExportAdapter.exporter-index); }
+            model: ExtractAdapter.attachment-media-options;
+            current-index <=> ExtractAdapter.attachment-media-index;
+            selected(_) => { ExtractAdapter.exporter-changed(ExtractAdapter.exporter-index); }
         }
-        if ExportAdapter.obfuscate: Hint {
+        if ExtractAdapter.obfuscate: Hint {
             message: "Obfuscate replaces all media with shared placeholders (real files are not copied or converted).";
         }
-        if ExportAdapter.show-ffmpeg-warning: DangerHint {
+        if ExtractAdapter.show-ffmpeg-warning: DangerHint {
             message: "The Convert and Compress & Convert attachment modes need ffmpeg and ffprobe beside the app, in MESSAGE_EXPORTERS_BIN, or on PATH.";
         }
-        if ExportAdapter.show-compress-options: LabeledComboBox {
+        if ExtractAdapter.show-compress-options: LabeledComboBox {
             label: "Max resolution";
-            model: ExportAdapter.max-resolution-options;
-            current-index <=> ExportAdapter.max-resolution-index;
+            model: ExtractAdapter.max-resolution-options;
+            current-index <=> ExtractAdapter.max-resolution-index;
         }
-        if ExportAdapter.show-compress-options: LabeledLineEdit {
+        if ExtractAdapter.show-compress-options: LabeledLineEdit {
             label: "Max fps";
             required: true;
             placeholder: "e.g. 30";
-            value <=> ExportAdapter.media-max-fps;
+            value <=> ExtractAdapter.media-max-fps;
         }
-        if ExportAdapter.show-compress-options: LabeledLineEdit {
+        if ExtractAdapter.show-compress-options: LabeledLineEdit {
             label: "Min size";
             required: true;
             placeholder: "e.g. 20M";
-            value <=> ExportAdapter.media-min-size;
+            value <=> ExtractAdapter.media-min-size;
         }
-        if ExportAdapter.show-compress-options: CheckBoxRow {
+        if ExtractAdapter.show-compress-options: CheckBoxRow {
             text: "Skip already-efficient HEVC";
-            checked <=> ExportAdapter.media-skip-efficient;
+            checked <=> ExtractAdapter.media-skip-efficient;
         }
 
-        if ExportAdapter.needs-owner-phones: LabeledTextEdit {
+        if ExtractAdapter.needs-owner-phones: LabeledTextEdit {
             label: "Your phone number(s)";
             required: true;
             placeholder: "+19995551234 (one per line)";
-            value <=> ExportAdapter.owner-phones;
+            value <=> ExtractAdapter.owner-phones;
         }
-        if ExportAdapter.is-sms-backup-plus: LabeledTextEdit {
+        if ExtractAdapter.is-sms-backup-plus: LabeledTextEdit {
             label: "Backup email(s)";
             required: true;
             placeholder: "you@example.com (one per line)";
-            value <=> ExportAdapter.owner-emails;
+            value <=> ExtractAdapter.owner-emails;
         }
-        if ExportAdapter.is-sms-backup-plus: LabeledPathField {
+        if ExtractAdapter.is-sms-backup-plus: LabeledPathField {
             label: "Name mapping";
             placeholder: "Phone,Incorrect Name CSV (optional)";
-            field-id: "export.name_mapping";
-            value <=> ExportAdapter.name-mapping;
-            browse-requested(id) => { ExportAdapter.browse(id); }
+            field-id: "extract.name_mapping";
+            value <=> ExtractAdapter.name-mapping;
+            browse-requested(id) => { ExtractAdapter.browse(id); }
         }
-        if ExportAdapter.is-imazing: LabeledComboBox {
+        if ExtractAdapter.is-imazing: LabeledComboBox {
             label: "Timezone";
-            model: ExportAdapter.timezone-options;
-            current-index <=> ExportAdapter.timezone-index;
+            model: ExtractAdapter.timezone-options;
+            current-index <=> ExtractAdapter.timezone-index;
         }
 
-        if ExportAdapter.is-whatsapp && !ExportAdapter.whatsapp-is-ios: LabeledLineEdit {
+        if ExtractAdapter.is-whatsapp && !ExtractAdapter.whatsapp-is-ios: LabeledLineEdit {
             label: "Decryption key";
             placeholder: "Key file or crypt15 hex";
-            value <=> ExportAdapter.whatsapp-key;
+            value <=> ExtractAdapter.whatsapp-key;
         }
-        if ExportAdapter.is-whatsapp: AdvancedSection {
-            open <=> ExportAdapter.advanced;
-            if !ExportAdapter.whatsapp-is-ios: LabeledPathField {
+        if ExtractAdapter.is-whatsapp: AdvancedSection {
+            open <=> ExtractAdapter.advanced;
+            if !ExtractAdapter.whatsapp-is-ios: LabeledPathField {
                 label: "Media folder";
                 placeholder: "WhatsApp media directory (optional)";
-                field-id: "export.whatsapp_media";
-                value <=> ExportAdapter.whatsapp-media;
-                browse-requested(id) => { ExportAdapter.browse(id); }
+                field-id: "extract.whatsapp_media";
+                value <=> ExtractAdapter.whatsapp-media;
+                browse-requested(id) => { ExtractAdapter.browse(id); }
             }
-            if !ExportAdapter.whatsapp-is-ios: LabeledPathField {
+            if !ExtractAdapter.whatsapp-is-ios: LabeledPathField {
                 label: "Message database";
                 placeholder: "msgstore.db override (optional)";
-                field-id: "export.whatsapp_db";
-                value <=> ExportAdapter.whatsapp-db;
-                browse-requested(id) => { ExportAdapter.browse(id); }
+                field-id: "extract.whatsapp_db";
+                value <=> ExtractAdapter.whatsapp-db;
+                browse-requested(id) => { ExtractAdapter.browse(id); }
             }
             CheckBoxRow {
                 text: "WhatsApp Business";
-                checked <=> ExportAdapter.whatsapp-business;
+                checked <=> ExtractAdapter.whatsapp-business;
             }
         }
 
-        if ExportAdapter.is-imessage: AdvancedSection {
-            open <=> ExportAdapter.advanced;
+        if ExtractAdapter.is-imessage: AdvancedSection {
+            open <=> ExtractAdapter.advanced;
             LabeledComboBox {
                 label: "Platform";
-                model: ExportAdapter.apple-platform-options;
-                current-index <=> ExportAdapter.apple-platform-index;
+                model: ExtractAdapter.apple-platform-options;
+                current-index <=> ExtractAdapter.apple-platform-index;
             }
             LabeledLineEdit {
                 label: "Backup password";
                 placeholder: "Encrypted iOS backup password (optional)";
                 password: true;
-                value <=> ExportAdapter.backup-password;
+                value <=> ExtractAdapter.backup-password;
             }
             LabeledPathField {
                 label: "AddressBook DB";
                 placeholder: "Path (optional)";
-                field-id: "export.apple_contacts";
-                value <=> ExportAdapter.apple-contacts;
-                browse-requested(id) => { ExportAdapter.browse(id); }
+                field-id: "extract.apple_contacts";
+                value <=> ExtractAdapter.apple-contacts;
+                browse-requested(id) => { ExtractAdapter.browse(id); }
             }
             LabeledPathField {
                 label: "Attachment root";
                 placeholder: "Path (optional)";
-                field-id: "export.attachment_root";
-                value <=> ExportAdapter.attachment-root;
-                browse-requested(id) => { ExportAdapter.browse(id); }
+                field-id: "extract.attachment_root";
+                value <=> ExtractAdapter.attachment-root;
+                browse-requested(id) => { ExtractAdapter.browse(id); }
             }
             LabeledLineEdit {
                 label: "Conversation filter";
                 placeholder: "Names, numbers, or emails (optional)";
-                value <=> ExportAdapter.conversation-filter;
+                value <=> ExtractAdapter.conversation-filter;
             }
         }
 
@@ -290,38 +290,38 @@ export component ExportPage inherits AnchoredScrollPage {
         }
         LabeledDateEdit {
             label: "Start date";
-            value <=> ExportAdapter.start-date;
-            date-for-text(value) => { return ExportAdapter.date-for-text(value); }
+            value <=> ExtractAdapter.start-date;
+            date-for-text(value) => { return ExtractAdapter.date-for-text(value); }
         }
         LabeledDateEdit {
             label: "End date (exclusive)";
-            value <=> ExportAdapter.end-date;
-            date-for-text(value) => { return ExportAdapter.date-for-text(value); }
+            value <=> ExtractAdapter.end-date;
+            date-for-text(value) => { return ExtractAdapter.date-for-text(value); }
         }
         CheckBoxRow {
             text: "Obfuscate";
-            checked <=> ExportAdapter.obfuscate;
+            checked <=> ExtractAdapter.obfuscate;
         }
-        if ExportAdapter.obfuscate: Hint {
+        if ExtractAdapter.obfuscate: Hint {
             message: "Names, phones, message text, and media are replaced. Attachment files become placeholders only.";
         }
-        if ExportAdapter.obfuscate: LabeledLineEdit {
+        if ExtractAdapter.obfuscate: LabeledLineEdit {
             label: "Seed";
             placeholder: "8-hex seed (optional)";
-            value <=> ExportAdapter.obfuscate-seed;
+            value <=> ExtractAdapter.obfuscate-seed;
         }
 
     ActionRow {
         Button {
             text: "Clear";
-            enabled: ExportAdapter.enabled;
-            clicked => { ExportAdapter.clear(); }
+            enabled: ExtractAdapter.enabled;
+            clicked => { ExtractAdapter.clear(); }
         }
         Button {
             text: "Extract messages";
             primary: true;
-            enabled: ExportAdapter.enabled;
-            clicked => { ExportAdapter.run(); }
+            enabled: ExtractAdapter.enabled;
+            clicked => { ExtractAdapter.run(); }
         }
     }
 }

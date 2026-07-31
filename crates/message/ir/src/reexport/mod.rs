@@ -372,7 +372,7 @@ mod tests {
         read_conversation_json,
     };
     use message_exporter_core::{
-        MediaConfig, MessageReexportConfig, ObfuscateConfig, SourceConfig,
+        MediaConfig, FormatConfig, ObfuscateConfig, SourceConfig,
     };
 
     fn sample_doc() -> ConversationDocument {
@@ -434,7 +434,7 @@ mod tests {
             cancel: None,
             log: None,
             output_format,
-            source: SourceConfig::MessageReexport(MessageReexportConfig {}),
+            source: SourceConfig::Format(FormatConfig {}),
         }
     }
 

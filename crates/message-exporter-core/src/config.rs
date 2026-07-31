@@ -190,8 +190,8 @@ pub enum SourceConfig {
     Apple(AppleConfig),
     Whatsapp(WhatsappConfig),
     /// Existing Message Exporters output → another IR format (`message-reexporter`).
-    /// Not listed in [`crate::exporters::EXPORTERS`] (own GUI tab).
-    MessageReexport(MessageReexportConfig),
+    /// Not listed in [`crate::exporters::EXPORTERS`] (own GUI Format tab).
+    Format(FormatConfig),
 }
 
 impl SourceConfig {
@@ -204,13 +204,13 @@ impl SourceConfig {
             Self::Imazing(_) => Some(Exporter::Imazing),
             Self::Apple(_) => Some(Exporter::Imessage),
             Self::Whatsapp(_) => Some(Exporter::Whatsapp),
-            Self::MessageReexport(_) => None,
+            Self::Format(_) => None,
         }
     }
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct MessageReexportConfig {}
+pub struct FormatConfig {}
 
 #[derive(Debug, Clone)]
 pub struct GoSmsProConfig {

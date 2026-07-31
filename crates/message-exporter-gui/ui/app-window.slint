@@ -2,14 +2,14 @@ import {
     AboutSlint, Button, TabWidget
 } from "std-widgets.slint";
 import { ContactsPage } from "pages/contacts.slint";
-import { ExportPage } from "pages/export.slint";
-import { ConvertPage } from "pages/convert.slint";
+import { ExtractPage } from "pages/extract.slint";
+import { FormatPage } from "pages/format.slint";
 import { VaultPage } from "pages/vault.slint";
 import { LogPage } from "pages/log.slint";
 
 export { ContactsAdapter } from "pages/contacts.slint";
-export { ExportAdapter } from "pages/export.slint";
-export { ConvertAdapter } from "pages/convert.slint";
+export { ExtractAdapter } from "pages/extract.slint";
+export { FormatAdapter } from "pages/format.slint";
 export { VaultAdapter } from "pages/vault.slint";
 export { LogAdapter } from "pages/log.slint";
 
@@ -130,11 +130,11 @@ export component AppWindow inherits Window {
             vertical-stretch: 1;
             Tab {
                 title: "Extract Messages";
-                ExportPage { }
+                ExtractPage { }
             }
             Tab {
                 title: "Format";
-                ConvertPage { }
+                FormatPage { }
             }
             Tab {
                 title: "Vault";

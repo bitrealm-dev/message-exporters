@@ -9,8 +9,8 @@ use slint::{ComponentHandle, SharedString, Weak};
 
 use crate::AppWindow;
 use crate::ContactsAdapter;
-use crate::ConvertAdapter;
-use crate::ExportAdapter;
+use crate::FormatAdapter;
+use crate::ExtractAdapter;
 use crate::VaultAdapter;
 
 #[derive(Debug, Clone, Copy)]
@@ -23,14 +23,14 @@ pub enum BrowseKind {
 pub fn browse_kind_for_field(field_id: &str) -> BrowseKind {
     match field_id {
         "contacts.input"
-        | "export.contacts"
-        | "export.name_mapping"
-        | "export.whatsapp_wa"
-        | "export.whatsapp_db"
-        | "export.apple_contacts" => BrowseKind::File,
-        "export.input" => BrowseKind::FileOrFolder,
-        "export.db_path" => BrowseKind::FileOrFolder,
-        "export.whatsapp_backup" => BrowseKind::FileOrFolder,
+        | "extract.contacts"
+        | "extract.name_mapping"
+        | "extract.whatsapp_wa"
+        | "extract.whatsapp_db"
+        | "extract.apple_contacts" => BrowseKind::File,
+        "extract.input" => BrowseKind::FileOrFolder,
+        "extract.db_path" => BrowseKind::FileOrFolder,
+        "extract.whatsapp_backup" => BrowseKind::FileOrFolder,
         _ => BrowseKind::Folder,
     }
 }
@@ -152,19 +152,19 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 fn apply_path(ui: &AppWindow, field_id: &str, path: SharedString) {
     match field_id {
         "contacts.input" => ui.global::<ContactsAdapter>().set_input(path),
-        "export.input" => ui.global::<ExportAdapter>().set_input(path),
-        "export.output" => ui.global::<ExportAdapter>().set_output(path),
-        "export.db_path" => ui.global::<ExportAdapter>().set_db_path(path),
-        "export.contacts" => ui.global::<ExportAdapter>().set_contacts(path),
-        "export.name_mapping" => ui.global::<ExportAdapter>().set_name_mapping(path),
-        "export.whatsapp_backup" => ui.global::<ExportAdapter>().set_whatsapp_backup(path),
-        "export.whatsapp_wa" => ui.global::<ExportAdapter>().set_whatsapp_wa(path),
-        "export.whatsapp_media" => ui.global::<ExportAdapter>().set_whatsapp_media(path),
-        "export.whatsapp_db" => ui.global::<ExportAdapter>().set_whatsapp_db(path),
-        "export.apple_contacts" => ui.global::<ExportAdapter>().set_apple_contacts(path),
-        "export.attachment_root" => ui.global::<ExportAdapter>().set_attachment_root(path),
-        "convert.input" => ui.global::<ConvertAdapter>().set_input(path),
-        "convert.output" => ui.global::<ConvertAdapter>().set_output(path),
+        "extract.input" => ui.global::<ExtractAdapter>().set_input(path),
+        "extract.output" => ui.global::<ExtractAdapter>().set_output(path),
+        "extract.db_path" => ui.global::<ExtractAdapter>().set_db_path(path),
+        "extract.contacts" => ui.global::<ExtractAdapter>().set_contacts(path),
+        "extract.name_mapping" => ui.global::<ExtractAdapter>().set_name_mapping(path),
+        "extract.whatsapp_backup" => ui.global::<ExtractAdapter>().set_whatsapp_backup(path),
+        "extract.whatsapp_wa" => ui.global::<ExtractAdapter>().set_whatsapp_wa(path),
+        "extract.whatsapp_media" => ui.global::<ExtractAdapter>().set_whatsapp_media(path),
+        "extract.whatsapp_db" => ui.global::<ExtractAdapter>().set_whatsapp_db(path),
+        "extract.apple_contacts" => ui.global::<ExtractAdapter>().set_apple_contacts(path),
+        "extract.attachment_root" => ui.global::<ExtractAdapter>().set_attachment_root(path),
+        "format.input" => ui.global::<FormatAdapter>().set_input(path),
+        "format.output" => ui.global::<FormatAdapter>().set_output(path),
         "vault.input" => ui.global::<VaultAdapter>().set_input(path),
         _ => {}
     }

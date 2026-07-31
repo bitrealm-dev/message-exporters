@@ -51,7 +51,7 @@ grows when the window is resized vertically.
 - `src/state.rs` — `AppState` holding `ExportIniState` + `Form` + job control
   (behind `Arc<Mutex<_>>` so the log bridge thread can wake the UI).
 - `src/jobs.rs` — in-process `LibraryJob` dispatch for exporters, contacts,
-  re-export, and vault.
+  Format, and vault.
 - `src/sync.rs` — push `AppState` into Slint adapters / pull adapter values back
   into `Form` before validate/save.
 - `src/browse.rs` — `rfd` file/folder dialogs on a background thread, results
@@ -79,7 +79,8 @@ Backup passwords are never written. The vault key is persisted in plain text und
 
 Saved after exporter switch / Run / Clear, and again when the window exits.
 Running Extract Messages sets the shared output format to JSONL; the Format tab
-keeps its own re-export format under `[message-reexport]`.
+keeps its own output format under `[format]`. Older files with
+`[message-reexport]` are still loaded; the next save writes `[format]` only.
 
 ## Licensing
 
@@ -99,7 +100,7 @@ cargo run -p message-exporter-gui
 
 1. Top tabs — **Extract Messages** | **Format** | **Vault** | **Contacts** | **Log**
 2. **Extract Messages:** backup source picker + global options + per-source form
-3. **Format:** convert a prior Message Exporters output (`message-reexport`) —
+3. **Format:** format a prior Message Exporters output (`message-reexporter`) —
    input dir, output dir, output format, attachments, obfuscate. Input format is
    auto-detected.
 4. **Vault:** import a JSONL export folder into Message Vault — URL, username,
@@ -132,8 +133,8 @@ output folder to another packaging format (via the common message).
 | Attachments | enum | no | `--media-mode` |
 | Obfuscate / seed | checkbox + text | no | `--obfuscate` / `--obfuscate-seed` |
 
-Persists under `[message-reexport]` in `export.ini`. Mixed or unrecognized input
-dirs fail with a clear error. See
+Persists under `[format]` in `export.ini` (loads legacy `[message-reexport]` if
+present). Mixed or unrecognized input dirs fail with a clear error. See
 [`crates/message/ir/docs/MESSAGE_REEXPORTER.md`](../../crates/message/ir/docs/MESSAGE_REEXPORTER.md).
 
 ### Vault — `vault-push`

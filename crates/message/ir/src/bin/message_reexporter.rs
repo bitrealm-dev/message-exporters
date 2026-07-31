@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 use message_exporter_core::{
-    ExporterConfig, MediaConfig, MessageReexportConfig, ObfuscateConfig, OutputFormat, SourceConfig,
+    ExporterConfig, MediaConfig, FormatConfig, ObfuscateConfig, OutputFormat, SourceConfig,
 };
 use ir::reexport::run;
 use media::{MaxResolution, MediaMode, compress_options_from_cli};
@@ -82,7 +82,7 @@ fn main() -> Result<()> {
         cancel: None,
         log: None,
         output_format,
-        source: SourceConfig::MessageReexport(MessageReexportConfig {}),
+        source: SourceConfig::Format(FormatConfig {}),
     };
     for line in run(&config)?.messages {
         println!("{line}");

@@ -14,13 +14,14 @@ use crate::exporters::{
 };
 
 const COMMON: &str = "common";
-const MESSAGE_REEXPORT: &str = "message-reexport";
+const FORMAT: &str = "format";
+const MESSAGE_REEXPORT_LEGACY: &str = "message-reexport";
 const VAULT: &str = "vault";
 const EXPORT_INI_NAME: &str = "export.ini";
 
-/// Fields for the Re-export top-level tab (`message-reexporter`).
+/// Fields for the Format top-level tab (`message-reexporter`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ReexportSection {
+pub struct FormatSection {
     pub input: String,
     pub output: String,
     pub output_format: OutputFormat,
@@ -65,7 +66,7 @@ pub struct ExportIniState {
     pub path: PathBuf,
     pub exporter: Exporter,
     sections: [ExporterSection; 7],
-    pub reexport: ReexportSection,
+    pub format: FormatSection,
     pub vault: VaultSection,
 }
 
@@ -103,7 +104,7 @@ impl ExportIniState {
             path,
             exporter: Exporter::default(),
             sections: Default::default(),
-            reexport: ReexportSection::default(),
+            format: FormatSection::default(),
             vault: VaultSection {
                 continue_on_error: true,
                 ..VaultSection::default()
@@ -132,14 +133,14 @@ impl ExportIniState {
         for (i, exp) in EXPORTERS.iter().copied().enumerate() {
             sections[i] = read_section(&ini, exp);
         }
-        let reexport = read_reexport_section(&ini);
+        let format = read_format_section(&ini);
         let vault = read_vault_section(&ini);
 
         let state = Self {
             path: path.to_path_buf(),
             exporter,
             sections,
-            reexport,
+            format,
             vault,
         };
         state.apply_section_to_form(&mut form);
@@ -380,10 +381,10 @@ fn build_ini(state: &ExportIniState, form: &Form) -> Ini {
     }
 
     {
-        let mut s = ini.with_section(Some(MESSAGE_REEXPORT));
-        s.set("input", state.reexport.input.trim())
-            .set("output", state.reexport.output.trim())
-            .set("output_format", state.reexport.output_format.as_str());
+        let mut s = ini.with_section(Some(FORMAT));
+        s.set("input", state.format.input.trim())
+            .set("output", state.format.output.trim())
+            .set("output_format", state.format.output_format.as_str());
     }
     {
         let mut s = ini.with_section(Some(VAULT));
@@ -398,12 +399,18 @@ fn build_ini(state: &ExportIniState, form: &Form) -> Ini {
     ini
 }
 
-fn read_reexport_section(ini: &Ini) -> ReexportSection {
-    let format = get(ini, Some(MESSAGE_REEXPORT), "output_format");
-    ReexportSection {
-        input: get(ini, Some(MESSAGE_REEXPORT), "input"),
-        output: get(ini, Some(MESSAGE_REEXPORT), "output"),
-        output_format: OutputFormat::parse(&format).unwrap_or_default(),
+fn read_format_section(ini: &Ini) -> FormatSection {
+    // Prefer `[format]`; fall back to legacy `[message-reexport]` for older files.
+    let section = if ini.section(Some(FORMAT)).is_some() {
+        FORMAT
+    } else {
+        MESSAGE_REEXPORT_LEGACY
+    };
+    let output_format = get(ini, Some(section), "output_format");
+    FormatSection {
+        input: get(ini, Some(section), "input"),
+        output: get(ini, Some(section), "output"),
+        output_format: OutputFormat::parse(&output_format).unwrap_or_default(),
     }
 }
 
@@ -471,7 +478,7 @@ mod tests {
             path: PathBuf::from("unused"),
             exporter: Exporter::GoSmsPro,
             sections: Default::default(),
-            reexport: ReexportSection::default(),
+            format: FormatSection::default(),
             vault: VaultSection {
                 continue_on_error: true,
                 ..VaultSection::default()
@@ -523,7 +530,7 @@ mod tests {
             path: PathBuf::from("unused"),
             exporter: Exporter::GoSmsPro,
             sections: Default::default(),
-            reexport: ReexportSection::default(),
+            format: FormatSection::default(),
             vault: VaultSection {
                 continue_on_error: true,
                 ..VaultSection::default()
@@ -592,5 +599,32 @@ apple_platform = ios
         assert!(form.input.is_empty());
         assert!(form.output.is_empty());
         assert!(error.is_none());
+    }
+
+    #[test]
+    fn loads_legacy_message_reexport_section_and_saves_as_format() {
+        let text = r#"
+[common]
+exporter = go-sms-pro
+
+[message-reexport]
+input = /old/in
+output = /old/out
+output_format = csv
+"#;
+        let mut file = NamedTempFile::new().unwrap();
+        write!(file, "{text}").unwrap();
+
+        let (mut state, form) = ExportIniState::load(file.path()).unwrap();
+        assert_eq!(state.format.input, "/old/in");
+        assert_eq!(state.format.output, "/old/out");
+        assert_eq!(state.format.output_format, OutputFormat::Csv);
+
+        state.path = file.path().to_path_buf();
+        state.save(&form).unwrap();
+        let saved = fs::read_to_string(file.path()).unwrap();
+        assert!(saved.contains("[format]"));
+        assert!(!saved.contains("[message-reexport]"));
+        assert!(saved.contains("input=/old/in") || saved.contains("input = /old/in"));
     }
 }

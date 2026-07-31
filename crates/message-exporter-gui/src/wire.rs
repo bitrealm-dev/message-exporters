@@ -13,7 +13,7 @@ use crate::state::AppState;
 use crate::sync;
 use crate::wsl;
 use crate::{
-    AppWindow, ContactsAdapter, ConvertAdapter, Date, ExportAdapter, LogAdapter, VaultAdapter,
+    AppWindow, ContactsAdapter, FormatAdapter, Date, ExtractAdapter, LogAdapter, VaultAdapter,
 };
 
 pub fn wire_all(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
@@ -21,8 +21,8 @@ pub fn wire_all(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
     wire_error_dismiss(ui, Arc::clone(&state));
     wire_help(ui, Arc::clone(&state));
     wire_contacts(ui, Arc::clone(&state));
-    wire_export(ui, Arc::clone(&state));
-    wire_convert(ui, Arc::clone(&state));
+    wire_extract(ui, Arc::clone(&state));
+    wire_format(ui, Arc::clone(&state));
     wire_vault(ui, Arc::clone(&state));
     wire_log(ui, Arc::clone(&state));
 }
@@ -84,10 +84,10 @@ fn wire_contacts(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
     });
 }
 
-fn wire_export(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
+fn wire_extract(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
     let ui_weak = ui.as_weak();
 
-    ui.global::<ExportAdapter>().on_date_for_text(|value| {
+    ui.global::<ExtractAdapter>().on_date_for_text(|value| {
         let date = NaiveDate::parse_from_str(value.trim(), "%Y-%m-%d")
             .unwrap_or_else(|_| Local::now().date_naive());
         Date {
@@ -97,7 +97,7 @@ fn wire_export(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
         }
     });
 
-    ui.global::<ExportAdapter>().on_browse({
+    ui.global::<ExtractAdapter>().on_browse({
         let ui_weak = ui_weak.clone();
         move |field_id| {
             let kind = browse::browse_kind_for_field(&field_id);
@@ -105,7 +105,7 @@ fn wire_export(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
         }
     });
 
-    ui.global::<ExportAdapter>().on_open_product_url({
+    ui.global::<ExtractAdapter>().on_open_product_url({
         let ui_weak = ui_weak.clone();
         let state = Arc::clone(&state);
         move || {
@@ -124,7 +124,7 @@ fn wire_export(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
         }
     });
 
-    ui.global::<ExportAdapter>().on_exporter_changed({
+    ui.global::<ExtractAdapter>().on_exporter_changed({
         let ui_weak = ui_weak.clone();
         let state = Arc::clone(&state);
         move |index| {
@@ -132,7 +132,7 @@ fn wire_export(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
                 return;
             };
             let mut st = state.lock().expect("state lock");
-            sync::pull_export(&ui, &mut st);
+            sync::pull_extract(&ui, &mut st);
             let next = options::exporter_at(index);
             if next != st.exporter {
                 let AppState {
@@ -150,17 +150,17 @@ fn wire_export(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
                 }
             }
             // Refresh visibility helpers after attachment / platform changes too.
-            sync::push_export(&ui, &st);
+            sync::push_extract(&ui, &st);
             sync::push_chrome(&ui, &st);
         }
     });
 
-    ui.global::<ExportAdapter>().on_run({
+    ui.global::<ExtractAdapter>().on_run({
         let ui_weak = ui_weak.clone();
         let state = Arc::clone(&state);
-        move || start::start_export(&ui_weak, &state)
+        move || start::start_extract(&ui_weak, &state)
     });
-    ui.global::<ExportAdapter>().on_clear({
+    ui.global::<ExtractAdapter>().on_clear({
         let ui_weak = ui_weak.clone();
         let state = Arc::clone(&state);
         move || {
@@ -168,7 +168,7 @@ fn wire_export(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
                 return;
             };
             let mut st = state.lock().expect("state lock");
-            sync::pull_export(&ui, &mut st);
+            sync::pull_extract(&ui, &mut st);
             {
                 let AppState {
                     export_ini, form, ..
@@ -179,16 +179,16 @@ fn wire_export(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
             if let Err(error) = st.save_export_ini() {
                 start::report_errors(&ui, &mut st, vec![error]);
             }
-            sync::push_export(&ui, &st);
+            sync::push_extract(&ui, &st);
             sync::push_chrome(&ui, &st);
         }
     });
 }
 
-fn wire_convert(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
+fn wire_format(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
     let ui_weak = ui.as_weak();
 
-    ui.global::<ConvertAdapter>().on_browse({
+    ui.global::<FormatAdapter>().on_browse({
         let ui_weak = ui_weak.clone();
         move |field_id| {
             let kind = browse::browse_kind_for_field(&field_id);
@@ -196,7 +196,7 @@ fn wire_convert(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
         }
     });
 
-    ui.global::<ConvertAdapter>().on_media_changed({
+    ui.global::<FormatAdapter>().on_media_changed({
         let ui_weak = ui_weak.clone();
         let state = Arc::clone(&state);
         move || {
@@ -204,17 +204,17 @@ fn wire_convert(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
                 return;
             };
             let mut st = state.lock().expect("state lock");
-            sync::pull_convert(&ui, &mut st);
-            sync::push_convert(&ui, &st);
+            sync::pull_format(&ui, &mut st);
+            sync::push_format(&ui, &st);
         }
     });
 
-    ui.global::<ConvertAdapter>().on_run({
+    ui.global::<FormatAdapter>().on_run({
         let ui_weak = ui_weak.clone();
         let state = Arc::clone(&state);
-        move || start::start_reexport(&ui_weak, &state)
+        move || start::start_format(&ui_weak, &state)
     });
-    ui.global::<ConvertAdapter>().on_clear({
+    ui.global::<FormatAdapter>().on_clear({
         let ui_weak = ui_weak.clone();
         let state = Arc::clone(&state);
         move || {
@@ -222,12 +222,12 @@ fn wire_convert(ui: &AppWindow, state: Arc<Mutex<AppState>>) {
                 return;
             };
             let mut st = state.lock().expect("state lock");
-            st.export_ini.reexport = Default::default();
+            st.export_ini.format = Default::default();
             st.clear_errors();
             if let Err(error) = st.save_export_ini() {
                 start::report_errors(&ui, &mut st, vec![error]);
             }
-            sync::push_convert(&ui, &st);
+            sync::push_format(&ui, &st);
             sync::push_chrome(&ui, &st);
         }
     });

@@ -7,7 +7,7 @@ use media::{MaxResolution, MediaMode};
 
 use crate::config::{
     AppleConfig, ContactsConfig, ExporterConfig, GoSmsProConfig, ImazingConfig, MediaConfig,
-    MessageReexportConfig, ObfuscateConfig, OpenExtractConfig, OutputFormat, SmsBackupPlusConfig,
+    FormatConfig, ObfuscateConfig, OpenExtractConfig, OutputFormat, SmsBackupPlusConfig,
     SmsBackupRestoreConfig, SourceConfig, WhatsappConfig,
 };
 
@@ -422,8 +422,8 @@ impl Form {
         }
     }
 
-    /// Validate shared output options and build a message re-export configuration.
-    pub fn to_reexport_config(
+    /// Validate shared output options and build a Format-tab configuration.
+    pub fn to_format_config(
         &self,
         input: &str,
         output: &str,
@@ -444,7 +444,7 @@ impl Form {
             cancel: None,
             log: None,
             output_format,
-            source: SourceConfig::MessageReexport(MessageReexportConfig {}),
+            source: SourceConfig::Format(FormatConfig {}),
         };
 
         if errors.is_empty() {
@@ -1200,17 +1200,17 @@ mod tests {
         };
 
         let config = form
-            .to_reexport_config(input.path().to_str().unwrap(), "out", OutputFormat::Json)
+            .to_format_config(input.path().to_str().unwrap(), "out", OutputFormat::Json)
             .unwrap();
 
         assert_eq!(config.inputs, vec![input.path().to_path_buf()]);
         assert!(config.obfuscate.enabled);
         assert_eq!(config.obfuscate.seed.as_deref(), Some("01234567"));
-        assert!(matches!(config.source, SourceConfig::MessageReexport(_)));
+        assert!(matches!(config.source, SourceConfig::Format(_)));
     }
 
     #[test]
-    fn reexport_config_reports_paths_and_shared_options_together() {
+    fn format_config_reports_paths_and_shared_options_together() {
         let form = Form {
             obfuscate_seed: "invalid".into(),
             attachment_media: AttachmentMedia::Disabled,
@@ -1218,7 +1218,7 @@ mod tests {
         };
 
         let errors = form
-            .to_reexport_config("", "", OutputFormat::Json)
+            .to_format_config("", "", OutputFormat::Json)
             .unwrap_err();
 
         assert!(errors.iter().any(|error| error.contains("Input directory")));

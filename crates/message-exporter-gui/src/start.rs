@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 
 use contacts::{ValidateMode, probe_contacts_input, validate_contacts_file};
-use ir::reexport::run as run_reexport;
+use ir::reexport::run as run_format;
 use message_exporter_core::{ProcessEvent, ensure_output_dir, spawn_job};
 use phone::PhoneRegion;
 use vault_push::{
@@ -145,7 +145,7 @@ pub(crate) fn start_validate(
     }
 }
 
-pub(crate) fn start_export(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<AppState>>) {
+pub(crate) fn start_extract(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<AppState>>) {
     let Some(ui) = ui_weak.upgrade() else {
         return;
     };
@@ -154,7 +154,7 @@ pub(crate) fn start_export(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<A
         if st.running {
             return;
         }
-        sync::pull_export(&ui, &mut st);
+        sync::pull_extract(&ui, &mut st);
         st.export_ini.exporter = st.exporter;
         if let Err(error) = st.save_export_ini() {
             report_errors(&ui, &mut st, vec![error]);
@@ -181,7 +181,7 @@ pub(crate) fn start_export(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<A
     }
 }
 
-pub(crate) fn start_reexport(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<AppState>>) {
+pub(crate) fn start_format(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex<AppState>>) {
     let Some(ui) = ui_weak.upgrade() else {
         return;
     };
@@ -190,15 +190,15 @@ pub(crate) fn start_reexport(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex
         if st.running {
             return;
         }
-        sync::pull_convert(&ui, &mut st);
+        sync::pull_format(&ui, &mut st);
         if let Err(error) = st.save_export_ini() {
             report_errors(&ui, &mut st, vec![error]);
             return;
         }
-        let result = st.form.to_reexport_config(
-            &st.export_ini.reexport.input,
-            &st.export_ini.reexport.output,
-            st.export_ini.reexport.output_format,
+        let result = st.form.to_format_config(
+            &st.export_ini.format.input,
+            &st.export_ini.format.output,
+            st.export_ini.format.output_format,
         );
         let config = match result {
             Ok(config) => config,
@@ -211,10 +211,10 @@ pub(crate) fn start_reexport(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mutex
             report_errors(&ui, &mut st, vec![error]);
             return;
         }
-        let label = "message-reexporter (library)".to_string();
+        let label = "Format (library)".to_string();
         let job: LibraryJob = Box::new(move |cancel, tx| {
             let config = prepare_library_config(config, cancel, &tx);
-            run_and_log(run_reexport(&config), tx)
+            run_and_log(run_format(&config), tx)
         });
         Some((label, job))
     };
