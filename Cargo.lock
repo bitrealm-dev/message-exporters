@@ -1242,7 +1242,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "csv 1.4.0",
+ "csv",
  "phone",
  "tempfile",
 ]
@@ -1458,17 +1458,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce6e4c961d6cd6c9a86db418387425e8bdeaf05b3c8bc1411e6dca4c252f1453"
 dependencies = [
  "hybrid-array",
-]
-
-[[package]]
-name = "csv"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "hex",
- "serde",
- "serde_json",
- "sha2 0.11.0",
 ]
 
 [[package]]
@@ -2390,12 +2379,12 @@ dependencies = [
  "chrono",
  "clap",
  "contacts",
- "csv 0.1.0",
- "csv 1.4.0",
+ "csv",
  "hex",
- "ir",
  "media",
+ "message-csv",
  "message-exporter-core",
+ "message-ir",
  "obfuscate",
  "phone",
  "quick-xml 0.41.0",
@@ -3265,12 +3254,12 @@ dependencies = [
  "chrono",
  "clap",
  "contacts",
- "csv 0.1.0",
- "csv 1.4.0",
+ "csv",
  "hex",
- "ir",
  "media",
+ "message-csv",
  "message-exporter-core",
+ "message-ir",
  "obfuscate",
  "phone",
  "serde_json",
@@ -3303,12 +3292,12 @@ dependencies = [
  "chrono",
  "clap",
  "crabapple",
- "csv 0.1.0",
  "hex",
  "imessage-database",
- "ir",
  "mail",
+ "message-csv",
  "message-exporter-core",
+ "message-ir",
  "rpassword",
  "rusqlite",
  "serde",
@@ -3398,25 +3387,6 @@ name = "ipnet"
 version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d98f6fed1fde3f8c21bc40a1abb88dd75e67924f9cffc3ef95607bad8017f8e2"
-
-[[package]]
-name = "ir"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "csv 0.1.0",
- "csv 1.4.0",
- "mail",
- "media",
- "message-exporter-core",
- "obfuscate",
- "phone",
- "sbr",
- "serde",
- "serde_json",
- "tempfile",
-]
 
 [[package]]
 name = "is-docker"
@@ -3866,9 +3836,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "csv 0.1.0",
  "mail-builder",
  "mailparse",
+ "message-csv",
  "serde",
  "serde_json",
  "tempfile",
@@ -3909,7 +3879,7 @@ name = "media"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "csv 1.4.0",
+ "csv",
  "serde_json",
  "tempfile",
 ]
@@ -3939,11 +3909,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "message-csv"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+]
+
+[[package]]
 name = "message-exporter-core"
 version = "0.1.0"
 dependencies = [
- "csv 0.1.0",
  "media",
+ "message-csv",
  "rust-ini",
  "tempfile",
 ]
@@ -3957,9 +3938,9 @@ dependencies = [
  "go-sms-pro-exporter",
  "imazing-exporter",
  "imessage-ir-exporter",
- "ir",
  "media",
  "message-exporter-core",
+ "message-ir",
  "open",
  "openextract-exporter",
  "phone",
@@ -3970,6 +3951,25 @@ dependencies = [
  "sms-backup-restore-exporter",
  "vault-push",
  "whatsapp-exporter",
+]
+
+[[package]]
+name = "message-ir"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "csv",
+ "mail",
+ "media",
+ "message-csv",
+ "message-exporter-core",
+ "obfuscate",
+ "phone",
+ "sbr",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -4211,7 +4211,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "csv 1.4.0",
+ "csv",
  "hex",
  "hmac 0.12.1",
  "rand 0.9.5",
@@ -4630,11 +4630,11 @@ dependencies = [
  "chrono",
  "clap",
  "contacts",
- "csv 0.1.0",
- "csv 1.4.0",
- "ir",
+ "csv",
  "media",
+ "message-csv",
  "message-exporter-core",
+ "message-ir",
  "obfuscate",
  "phone",
  "serde_json",
@@ -6251,13 +6251,13 @@ dependencies = [
  "chrono",
  "clap",
  "contacts",
- "csv 0.1.0",
- "csv 1.4.0",
+ "csv",
  "hex",
- "ir",
  "mailparse",
  "media",
+ "message-csv",
  "message-exporter-core",
+ "message-ir",
  "obfuscate",
  "phone",
  "rayon",
@@ -6276,10 +6276,10 @@ dependencies = [
  "anyhow",
  "clap",
  "contacts",
- "csv 0.1.0",
- "ir",
  "media",
+ "message-csv",
  "message-exporter-core",
+ "message-ir",
  "serde_json",
  "tempfile",
 ]
@@ -7171,11 +7171,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "csv 0.1.0",
  "hex",
  "httpmock",
- "ir",
+ "message-csv",
  "message-exporter-core",
+ "message-ir",
  "reqwest",
  "serde",
  "serde_json",
@@ -7499,11 +7499,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "csv 0.1.0",
  "hex",
- "ir",
  "media",
+ "message-csv",
  "message-exporter-core",
+ "message-ir",
  "obfuscate",
  "phone",
  "serde",

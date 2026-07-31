@@ -59,7 +59,7 @@ Exits non-zero when arguments are invalid, input and output paths are the same, 
 # EXAMPLES
 
 ```bash
-cargo run -p ir --bin message-reexporter -- \
+cargo run -p message-ir --bin message-reexporter -- \
   --input /path/to/prior-export \
   --output /path/to/new-export \
   --format eml

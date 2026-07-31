@@ -6,7 +6,7 @@ use imessage_database::util::{
     dirs::default_db_path, platform::Platform, query_context::QueryContext,
 };
 use message_exporter_core::{RunResult, ApplePlatform, ExporterConfig, SourceConfig};
-use ir::ExportTransforms;
+use message_ir::ExportTransforms;
 
 use crate::{
     emit::run_export,

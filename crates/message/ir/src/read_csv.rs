@@ -7,7 +7,7 @@ use crate::{
     IrMessageKind, IrParticipant, IrService, SCHEMA_VERSION, parse_android_type,
 };
 use anyhow::{Context, Result, bail};
-use csv::AttachmentCell;
+use message_csv::AttachmentCell;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -27,7 +27,7 @@ struct ParticipantCell {
 /// Conversation / export header is taken from the first data row.
 pub(crate) fn read_conversation_csv(path: &Path) -> Result<ConversationDocument> {
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-    let mut rdr = csv_io::ReaderBuilder::new()
+    let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
         .from_reader(BufReader::new(file));
 
@@ -74,7 +74,7 @@ pub(crate) fn read_conversation_csv(path: &Path) -> Result<ConversationDocument>
     Ok(doc)
 }
 
-fn header_from_row(headers: &[String], row: &csv_io::StringRecord) -> Result<ConversationHeader> {
+fn header_from_row(headers: &[String], row: &csv::StringRecord) -> Result<ConversationHeader> {
     let get = |name: &str| cell(headers, row, name).unwrap_or("");
     let participants = parse_participants(get("participants_json"));
     let group_title = {
@@ -104,7 +104,7 @@ fn header_from_row(headers: &[String], row: &csv_io::StringRecord) -> Result<Con
     })
 }
 
-fn message_from_record(headers: &[String], row: &csv_io::StringRecord) -> Result<IrMessage> {
+fn message_from_record(headers: &[String], row: &csv::StringRecord) -> Result<IrMessage> {
     let get = |name: &str| cell(headers, row, name).unwrap_or("");
     let timestamp_unix_ms = get("timestamp_unix_ms")
         .parse::<i64>()
@@ -186,7 +186,7 @@ fn validate_headers(headers: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn cell<'a>(headers: &[String], row: &'a csv_io::StringRecord, name: &str) -> Option<&'a str> {
+fn cell<'a>(headers: &[String], row: &'a csv::StringRecord, name: &str) -> Option<&'a str> {
     let idx = headers.iter().position(|h| h == name)?;
     row.get(idx)
 }

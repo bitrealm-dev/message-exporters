@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 use imessage_ir_exporter::run;
-use csv::DateRange;
+use message_csv::DateRange;
 use message_exporter_core::{
     AppleConfig, ApplePlatform, ExporterConfig, MediaConfig, ObfuscateConfig, OutputFormat,
     SourceConfig,

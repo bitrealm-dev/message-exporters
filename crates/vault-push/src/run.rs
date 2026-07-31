@@ -10,7 +10,7 @@ use std::thread::JoinHandle;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
-use ir::{ConversationHeader, read_conversation_jsonl};
+use message_ir::{ConversationHeader, read_conversation_jsonl};
 use message_exporter_core::{CancelFlag, check_cancel};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

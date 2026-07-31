@@ -5,9 +5,9 @@ use crate::parse::{
     ChatJson, MessageJson, load_chat_store, media_path, message_text, timestamp_secs,
 };
 use anyhow::{Context, Result};
-use csv::{DateRange, format_local_ts, json_cell, stable_guid};
+use message_csv::{DateRange, format_local_ts, json_cell, stable_guid};
 use message_exporter_core::{CancelFlag, OutputFormat};
-use ir::{
+use message_ir::{
     ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
     FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
     IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION, clean_previous_ir_output,

@@ -1,8 +1,8 @@
 use crate::emit::convert_export;
 use contacts::ContactsBook;
-use csv::DateRange;
+use message_csv::DateRange;
 use message_exporter_core::OutputFormat;
-use ir::ExportTransforms;
+use message_ir::ExportTransforms;
 use std::fs;
 use std::path::PathBuf;
 

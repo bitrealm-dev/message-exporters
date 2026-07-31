@@ -7,9 +7,9 @@ use crate::identity::{chat_id_for, cover_identity, timestamp_ms};
 use crate::types::{AttachmentBlob, ParsedMessage};
 use anyhow::{Result, bail};
 use contacts::{ContactsBook, NameMapping};
-use csv::{DateRange, format_local_ts, stable_guid};
+use message_csv::{DateRange, format_local_ts, stable_guid};
 use message_exporter_core::{CancelFlag, LogSink, OutputFormat, emit_log};
-use ir::{
+use message_ir::{
     ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
     FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
     IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION, clean_previous_ir_output,

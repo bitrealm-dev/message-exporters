@@ -333,7 +333,7 @@ fn detect_csv_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> 
     let file = File::open(path).map_err(|e| {
         ContactsInputError::simple(format!("Could not open {}: {e}", path.display()))
     })?;
-    let mut rdr = csv_io::ReaderBuilder::new()
+    let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
         .has_headers(true)
         .from_reader(file);
@@ -635,14 +635,14 @@ fn rewrite_imazing_csv(
     cards: &mut Vec<OutCard>,
 ) -> Result<()> {
     let file = File::open(input).with_context(|| format!("open {}", input.display()))?;
-    let mut rdr = csv_io::ReaderBuilder::new().flexible(true).from_reader(file);
+    let mut rdr = csv::ReaderBuilder::new().flexible(true).from_reader(file);
     let headers = rdr.headers()?.clone();
     let cols = ImazingContactsColumns::from_headers(headers.iter());
 
     let mut wtr = if write {
         let out_file =
             File::create(output).with_context(|| format!("create {}", output.display()))?;
-        let mut wtr = csv_io::Writer::from_writer(out_file);
+        let mut wtr = csv::Writer::from_writer(out_file);
         wtr.write_record(&headers)?;
         Some(wtr)
     } else {

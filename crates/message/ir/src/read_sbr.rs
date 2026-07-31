@@ -6,7 +6,7 @@ use crate::{
     SCHEMA_VERSION, owner_sender,
 };
 use anyhow::{Result, bail};
-use csv::{DateRange, format_local_ts, stable_guid};
+use message_csv::{DateRange, format_local_ts, stable_guid};
 use message_exporter_core::{CancelFlag, check_cancel};
 use phone::{OwnerPhoneSet, to_e164};
 use sbr::{

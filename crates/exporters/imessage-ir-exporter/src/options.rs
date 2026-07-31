@@ -7,7 +7,7 @@ use imessage_database::{
     util::{platform::Platform, query_context::QueryContext},
 };
 use message_exporter_core::{LogSink, OutputFormat, emit_log};
-use ir::ExportTransforms;
+use message_ir::ExportTransforms;
 
 use crate::error::RuntimeError;
 
@@ -34,7 +34,7 @@ pub(crate) struct MailOptions {
     pub cleartext_password: Option<String>,
     pub contacts_path: Option<PathBuf>,
     pub attachment_embed: AttachmentEmbed,
-    /// Media / obfuscate transforms applied by [`ir::FormatSink`].
+    /// Media / obfuscate transforms applied by [`message_ir::FormatSink`].
     pub transforms: ExportTransforms,
     /// CSV, EML, MBOX, JSON, or JSONL.
     pub output_format: OutputFormat,

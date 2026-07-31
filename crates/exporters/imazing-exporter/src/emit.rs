@@ -5,9 +5,9 @@ use crate::parse::{RawRow, SourceKind, discover_csv_files, parse_csv_file};
 use anyhow::{Context, Result};
 use chrono::{FixedOffset, Local, NaiveDateTime, TimeZone};
 use contacts::ContactsBook;
-use csv::{AttachmentCell, DateRange, format_local_ts, parse_utc_offset, stable_guid};
+use message_csv::{AttachmentCell, DateRange, format_local_ts, parse_utc_offset, stable_guid};
 use message_exporter_core::{CancelFlag, OutputFormat};
-use ir::{
+use message_ir::{
     ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
     FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
     IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION, clean_previous_ir_output,

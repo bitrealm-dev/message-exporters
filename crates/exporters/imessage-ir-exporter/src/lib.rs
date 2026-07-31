@@ -1,8 +1,8 @@
 //! iMessage → per-conversation CSV / EML / MBOX / JSON / JSONL / XML via `imessage-database`.
 //!
 //! Messages stream from `chat.db`, build [`mail::MailMessage`] per row,
-//! convert to canonical [`ir::IrMessage`], and project via
-//! [`ir::FormatSink`].
+//! convert to canonical [`message_ir::IrMessage`], and project via
+//! [`message_ir::FormatSink`].
 
 mod attachments;
 mod backup;

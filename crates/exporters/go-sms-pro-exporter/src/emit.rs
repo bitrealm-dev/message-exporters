@@ -5,9 +5,9 @@ use crate::xml::{SkippedBadAddrDetail, XmlMessage, parse_xml_file};
 use anyhow::{Context, Result, bail};
 use chrono::{Local, TimeZone};
 use contacts::ContactsBook;
-use csv::{DateRange, format_local_ts, stable_guid};
+use message_csv::{DateRange, format_local_ts, stable_guid};
 use message_exporter_core::{CancelFlag, OutputFormat};
-use ir::{
+use message_ir::{
     ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
     FormatSink, FormatSinkResult, IrAttachment, IrConversationType, IrDirection, IrMessage,
     IrMessageKind, IrParticipant, IrService, IrSource, SCHEMA_VERSION, clean_previous_ir_output,
@@ -789,7 +789,7 @@ fn write_skipped_invalid_address_csv(
         return Ok(());
     }
     let mut wtr =
-        csv_io::Writer::from_path(&path).with_context(|| format!("create {}", path.display()))?;
+        csv::Writer::from_path(&path).with_context(|| format!("create {}", path.display()))?;
     wtr.write_record([
         "xml_file",
         "address",
@@ -819,7 +819,7 @@ fn write_skipped_empty_pdu_csv(output_dir: &Path, details: &[SkippedEmptyPduDeta
         return Ok(());
     }
     let mut wtr =
-        csv_io::Writer::from_path(&path).with_context(|| format!("create {}", path.display()))?;
+        csv::Writer::from_path(&path).with_context(|| format!("create {}", path.display()))?;
     wtr.write_record(["pdu_filename"])?;
     for d in details {
         wtr.write_record([d.pdu_filename.as_str()])?;
@@ -835,7 +835,7 @@ fn write_skipped_no_party_csv(output_dir: &Path, details: &[SkippedNoPartyDetail
         return Ok(());
     }
     let mut wtr =
-        csv_io::Writer::from_path(&path).with_context(|| format!("create {}", path.display()))?;
+        csv::Writer::from_path(&path).with_context(|| format!("create {}", path.display()))?;
     wtr.write_record([
         "pdu_filename",
         "participants",

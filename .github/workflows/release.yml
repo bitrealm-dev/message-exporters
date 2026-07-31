@@ -76,7 +76,7 @@ jobs:
       - name: Build release binaries
         run: |
           cargo build --workspace --release
-          cargo build --release -p ir --bin message-reexporter --features cli
+          cargo build --release -p message-ir --bin message-reexporter --features cli
           cargo build --release -p vault-push --features cli
 
       - name: Sign Windows binaries

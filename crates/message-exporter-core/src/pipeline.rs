@@ -3,7 +3,7 @@
 //! Kept free of `anyhow` so GUI/core stay lightweight; callers map `String`
 //! errors at the edge when needed.
 
-use csv::DateRange;
+use message_csv::DateRange;
 
 /// Result of a successful exporter [`crate`]-style `run`: human-readable log lines.
 #[derive(Debug, Default)]

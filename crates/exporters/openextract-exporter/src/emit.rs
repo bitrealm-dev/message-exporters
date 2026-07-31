@@ -4,9 +4,9 @@ use crate::parse::{RawRow, SourceKind, discover_csv_files, parse_csv_file};
 use anyhow::{Context, Result};
 use chrono::DateTime;
 use contacts::ContactsBook;
-use csv::{DateRange, format_local_ts, stable_guid};
+use message_csv::{DateRange, format_local_ts, stable_guid};
 use message_exporter_core::{CancelFlag, OutputFormat};
-use ir::{
+use message_ir::{
     ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, ExportTransforms,
     FormatSink, FormatSinkResult, IrConversationType, IrDirection, IrMessage, IrMessageKind,
     IrParticipant, IrService, IrSource, SCHEMA_VERSION, clean_previous_ir_output, owner_sender,

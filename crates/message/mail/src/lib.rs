@@ -14,7 +14,7 @@ use mail_builder::MessageBuilder;
 use mail_builder::headers::address::Address;
 use mail_builder::headers::date::Date;
 use mail_builder::headers::text::Text;
-use csv::conversation_filename;
+use message_csv::conversation_filename;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufWriter, Write};

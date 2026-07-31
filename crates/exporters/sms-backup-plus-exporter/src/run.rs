@@ -4,7 +4,7 @@ use crate::emit::{ExportReport, convert_export};
 use anyhow::{Context, Result, bail};
 use contacts::{NameMapping, resolve_contacts_cli};
 use message_exporter_core::{RunResult, ExporterConfig, SourceConfig};
-use ir::ExportTransforms;
+use message_ir::ExportTransforms;
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};

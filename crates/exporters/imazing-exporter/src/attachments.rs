@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 use chrono::{Local, TimeZone};
-use csv::AttachmentCell;
+use message_csv::AttachmentCell;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};

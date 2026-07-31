@@ -13,7 +13,7 @@ Pipeline: `backup → common message → FormatSink → user-picked format`.
 
 ## Status
 
-- **Common-message path** (`ConversationDocument` → `ir::FormatSink`, `--format json|jsonl|csv|eml|mbox|xml`): all exporters, including iMessage (`imessage-ir-exporter`). Per-chat formats also accept `write_format`; XML uses a single `smses.xml` via the sink.
+- **Common-message path** (`ConversationDocument` → `message_ir::FormatSink`, `--format json|jsonl|csv|eml|mbox|xml`): all exporters, including iMessage (`imessage-ir-exporter`). Per-chat formats also accept `write_format`; XML uses a single `smses.xml` via the sink.
 - **Media + obfuscate** run inside `FormatSink::finish` for every format (`ExportTransforms`: none / copy / convert / compress, plus optional obfuscate). When obfuscate is on, exporters skip staging real attachment bytes and convert/compress is not run — only placeholder files are written. Exporters pass transforms from `ExporterConfig.media` / `.obfuscate`; there is no CSV-only post-step. EML / MBOX / XML embed media and drop the staged `attachments/` directory afterward.
 - **Schema version 3 only** (breaking). Typed enums/bags, filled outgoing identity, conversation stats, stable null/`[]` keys. Older common-message JSON is not read — regenerate exports after schema changes.
 
@@ -113,7 +113,7 @@ Line 1 is the header (includes `conversation.stats`; no `messages` array). Each 
 | JSONL | header + one message per line | `read_conversation_jsonl` |
 | CSV | unified [`CSV_HEADERS`](../../../crates/message/ir/src/lib.rs) (header from first data row on read) | `read_conversation_csv` |
 | EML / MBOX | common message → `MailMessage` → [`message-mail`](../../../crates/message/mail/) | `read_conversation_eml_dir` / `read_conversation_mbox` |
-| XML | single `smses.xml` via [`FormatSink`](../../../crates/message/ir/) + [`message-sbr`](../../../crates/message/sbr/) | `ir::read_sbr_documents` (owner inferred when omitted) |
+| XML | single `smses.xml` via [`FormatSink`](../../../crates/message/ir/) + [`message-sbr`](../../../crates/message/sbr/) | `message_ir::read_sbr_documents` (owner inferred when omitted) |
 
 **Directory convert:** [`message-ir::reexport`](../../../crates/message/ir/src/reexport/) powers the `message-reexporter` command. It auto-detects one format in an export folder and writes another via `FormatSink` (GUI **Format** tab / CLI).
 

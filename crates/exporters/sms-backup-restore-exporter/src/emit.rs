@@ -2,9 +2,9 @@
 
 use anyhow::Result;
 use contacts::ContactsBook;
-use csv::DateRange;
+use message_csv::DateRange;
 use message_exporter_core::{CancelFlag, OutputFormat};
-use ir::{
+use message_ir::{
     ConversationDocument, ExportTransforms, FormatSink, FormatSinkResult, SbrReadOptions,
     SbrReadReport, clean_previous_ir_output, read_sbr_documents,
 };

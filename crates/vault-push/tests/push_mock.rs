@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::Path;
 
 use httpmock::prelude::*;
-use ir::{
+use message_ir::{
     ConversationDocument, ConversationMeta, ConversationStats, ExportMeta, IrAttachment,
     IrConversationType, IrDirection, IrMessage, IrMessageKind, IrParticipant, IrService,
     SCHEMA_VERSION,

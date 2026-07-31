@@ -2,7 +2,7 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use csv::DateRange;
+use message_csv::DateRange;
 use media::{MaxResolution, MediaMode};
 
 use crate::config::{

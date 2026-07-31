@@ -616,7 +616,7 @@ fn rename_chat_csv_files(output_dir: &Path) -> Result<()> {
         .collect();
     csv_paths.sort();
     for path in csv_paths {
-        let mut rdr = csv_io::ReaderBuilder::new().flexible(true).from_path(&path)?;
+        let mut rdr = csv::ReaderBuilder::new().flexible(true).from_path(&path)?;
         let headers = rdr.headers()?.clone();
         let Some(chat_idx) = headers.iter().position(|h| h == "chat_identifier") else {
             continue;
@@ -648,12 +648,12 @@ fn rename_chat_csv_files(output_dir: &Path) -> Result<()> {
 
 #[cfg(test)]
 fn obfuscate_export_csv_file(input: &Path, output: &Path, anon: &mut Obfuscator) -> Result<()> {
-    let mut rdr = csv_io::ReaderBuilder::new()
+    let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
         .from_path(input)
         .with_context(|| format!("read {}", input.display()))?;
     let headers = rdr.headers()?.clone();
-    let mut rows: Vec<csv_io::StringRecord> = Vec::new();
+    let mut rows: Vec<csv::StringRecord> = Vec::new();
     for result in rdr.records() {
         let record = result?;
         rows.push(obfuscate_export_record(&headers, &record, anon)?);
@@ -662,7 +662,7 @@ fn obfuscate_export_csv_file(input: &Path, output: &Path, anon: &mut Obfuscator)
     let tmp = output.with_extension("csv.tmp");
     {
         let mut wtr =
-            csv_io::Writer::from_path(&tmp).with_context(|| format!("write {}", tmp.display()))?;
+            csv::Writer::from_path(&tmp).with_context(|| format!("write {}", tmp.display()))?;
         wtr.write_record(&headers)?;
         for row in &rows {
             wtr.write_record(row)?;
@@ -675,11 +675,11 @@ fn obfuscate_export_csv_file(input: &Path, output: &Path, anon: &mut Obfuscator)
 
 #[cfg(test)]
 fn obfuscate_export_record(
-    headers: &csv_io::StringRecord,
-    record: &csv_io::StringRecord,
+    headers: &csv::StringRecord,
+    record: &csv::StringRecord,
     anon: &mut Obfuscator,
-) -> Result<csv_io::StringRecord> {
-    let mut out = csv_io::StringRecord::new();
+) -> Result<csv::StringRecord> {
+    let mut out = csv::StringRecord::new();
     let mut sender_handle_original = String::new();
     for (i, header) in headers.iter().enumerate() {
         let val = record.get(i).unwrap_or("");
@@ -839,7 +839,7 @@ pub fn obfuscate_imazing(input: &Path, output_dir: &Path, anon: &mut Obfuscator)
 }
 
 fn obfuscate_imazing_csv_file(input: &Path, output: &Path, anon: &mut Obfuscator) -> Result<()> {
-    let mut rdr = csv_io::ReaderBuilder::new()
+    let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
         .from_path(input)
         .with_context(|| format!("read {}", input.display()))?;
@@ -850,7 +850,7 @@ fn obfuscate_imazing_csv_file(input: &Path, output: &Path, anon: &mut Obfuscator
         rows.push(obfuscate_imazing_record(&headers, &record, anon));
     }
     let mut wtr =
-        csv_io::Writer::from_path(output).with_context(|| format!("write {}", output.display()))?;
+        csv::Writer::from_path(output).with_context(|| format!("write {}", output.display()))?;
     wtr.write_record(&headers)?;
     for row in &rows {
         wtr.write_record(row)?;
@@ -888,11 +888,11 @@ fn obfuscate_imazing_session(raw: &str, anon: &mut Obfuscator) -> String {
 }
 
 fn obfuscate_imazing_record(
-    headers: &csv_io::StringRecord,
-    record: &csv_io::StringRecord,
+    headers: &csv::StringRecord,
+    record: &csv::StringRecord,
     anon: &mut Obfuscator,
-) -> csv_io::StringRecord {
-    let mut out = csv_io::StringRecord::new();
+) -> csv::StringRecord {
+    let mut out = csv::StringRecord::new();
     let mut chat_session_original = String::new();
     let mut sender_id_original = String::new();
     for (i, header) in headers.iter().enumerate() {
@@ -1087,7 +1087,7 @@ mod tests {
     fn export_dir_smoke() {
         let dir = tempfile::tempdir().unwrap();
         let csv_path = dir.path().join("+15555550100.csv");
-        let mut wtr = csv_io::Writer::from_path(&csv_path).unwrap();
+        let mut wtr = csv::Writer::from_path(&csv_path).unwrap();
         wtr.write_record([
             "chat_identifier",
             "sender_handle",

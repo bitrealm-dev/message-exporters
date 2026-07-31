@@ -6,7 +6,7 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use csv::DateRange;
+use message_csv::DateRange;
 use media::{CompressOptions, MediaMode};
 
 use crate::exporters::{ApplePlatform, ContactsKind, Exporter, WhatsappPlatform};
@@ -74,7 +74,7 @@ impl OutputFormat {
         matches!(self, Self::Eml | Self::Mbox)
     }
 
-    /// True when export writes a single SyncTech `smses.xml` (use [`ir::FormatSink`]).
+    /// True when export writes a single SyncTech `smses.xml` (use [`message_ir::FormatSink`]).
     pub fn is_sbr_xml(self) -> bool {
         matches!(self, Self::Xml)
     }

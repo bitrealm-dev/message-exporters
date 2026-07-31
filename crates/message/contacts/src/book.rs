@@ -82,7 +82,7 @@ impl ContactsBook {
     /// tokens scraped from `Notes` (including `PROP-ID: +…`).
     pub fn load_imazing_contacts_csv(path: &Path) -> Result<Self> {
         let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-        let mut rdr = csv_io::ReaderBuilder::new().flexible(true).from_reader(file);
+        let mut rdr = csv::ReaderBuilder::new().flexible(true).from_reader(file);
         let headers = rdr
             .headers()
             .with_context(|| format!("headers {}", path.display()))?

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 
 use contacts::{ValidateMode, probe_contacts_input, validate_contacts_file};
-use ir::reexport::run as run_format;
+use message_ir::reexport::run as run_format;
 use message_exporter_core::{ProcessEvent, ensure_output_dir, spawn_job};
 use phone::PhoneRegion;
 use vault_push::{

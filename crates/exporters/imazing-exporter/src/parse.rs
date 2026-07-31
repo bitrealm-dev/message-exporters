@@ -146,7 +146,7 @@ pub(crate) fn parse_csv_file(path: &Path, kind: SourceKind) -> Result<Vec<RawRow
     if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
         bytes.drain(..3);
     }
-    let mut rdr = csv_io::ReaderBuilder::new()
+    let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
         .from_reader(bytes.as_slice());
     let headers = rdr
@@ -228,7 +228,7 @@ fn col(headers: &[String], name: &str) -> Result<usize> {
         .with_context(|| format!("missing column {name:?} (have {headers:?})"))
 }
 
-fn field(rec: &csv_io::StringRecord, idx: usize) -> String {
+fn field(rec: &csv::StringRecord, idx: usize) -> String {
     rec.get(idx).unwrap_or("").trim().to_string()
 }
 

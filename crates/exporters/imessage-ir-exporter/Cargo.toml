@@ -21,9 +21,9 @@ clap = { version = "4", features = ["derive"] }
 crabapple = { version = "=0.4.7" }
 hex = "0.4.3"
 imessage-database = "4.2.0"
-csv = { path = "../../message/csv" }
+message-csv = { path = "../../message/csv" }
 message-exporter-core = { path = "../../message-exporter-core" }
-ir = { path = "../../message/ir" }
+message-ir = { path = "../../message/ir" }
 mail = { path = "../../message/mail" }
 rpassword = "=7.5.3"
 rusqlite = { version = "=0.40.0", features = ["blob", "bundled"] }

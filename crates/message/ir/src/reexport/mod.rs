@@ -313,7 +313,7 @@ fn looks_like_ir_jsonl(path: &Path) -> Result<bool> {
 
 fn looks_like_ir_csv(path: &Path) -> Result<bool> {
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-    let mut reader = csv_io::ReaderBuilder::new()
+    let mut reader = csv::ReaderBuilder::new()
         .flexible(true)
         .from_reader(BufReader::new(file));
     let Ok(headers) = reader.headers() else {

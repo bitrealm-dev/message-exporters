@@ -35,7 +35,7 @@ pub use read_sbr::{SbrReadOptions, SbrReadReport, read_sbr_documents};
 use write_sbr::SbrBackupSession;
 
 use anyhow::{Context, Result, bail};
-use csv::{AttachmentCell, conversation_filename, format_local_ts, json_cell};
+use message_csv::{AttachmentCell, conversation_filename, format_local_ts, json_cell};
 use message_exporter_core::OutputFormat;
 use mail::{
     Direction as MailDirection, MailAttachment, MailMessage, MailPackage, Participant,
@@ -600,7 +600,7 @@ fn write_conversation_csv(output_dir: &Path, doc: &ConversationDocument) -> Resu
     tmp_name.push(".tmp");
     let tmp_path = path.with_file_name(tmp_name);
     let file = File::create(&tmp_path).with_context(|| format!("create {}", tmp_path.display()))?;
-    let mut wtr = csv_io::Writer::from_writer(file);
+    let mut wtr = csv::Writer::from_writer(file);
     wtr.write_record(CSV_HEADERS)
         .with_context(|| format!("write header {}", path.display()))?;
 
@@ -1168,7 +1168,7 @@ mod tests {
                 "app_json",
             ];
             for line in csv.lines().skip(1) {
-                let mut rdr = csv_io::ReaderBuilder::new()
+                let mut rdr = csv::ReaderBuilder::new()
                     .has_headers(false)
                     .from_reader(line.as_bytes());
                 let record = rdr.records().next().unwrap().unwrap();
@@ -1226,7 +1226,7 @@ mod tests {
         let mut saw_trivial_empty = false;
         let mut saw_rich = false;
         for line in csv.lines().skip(1) {
-            let mut rdr = csv_io::ReaderBuilder::new()
+            let mut rdr = csv::ReaderBuilder::new()
                 .has_headers(false)
                 .from_reader(line.as_bytes());
             let record = rdr.records().next().unwrap().unwrap();
