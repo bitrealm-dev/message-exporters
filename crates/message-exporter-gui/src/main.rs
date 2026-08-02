@@ -37,7 +37,14 @@ fn main() -> Result<(), slint::PlatformError> {
     wire::wire_all(&ui, Arc::clone(&state));
 
     // Persist when the process exits after `run()` returns.
+    // Pull UI fields first so Vault key / Format / Extract edits are not lost.
     let result = ui.run();
-    state.lock().expect("state lock").persist_on_exit();
+    {
+        let mut st = state.lock().expect("state lock");
+        sync::pull_extract(&ui, &mut st);
+        sync::pull_format(&ui, &mut st);
+        sync::pull_vault(&ui, &mut st);
+        st.persist_on_exit();
+    }
     result
 }

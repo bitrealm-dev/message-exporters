@@ -2,10 +2,14 @@
 
 use std::env;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use ini::Ini;
 use media::MaxResolution;
+
+#[cfg(unix)]
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use crate::config::OutputFormat;
 use crate::exporters::{
@@ -32,7 +36,7 @@ pub struct FormatSection {
 pub struct VaultSection {
     pub url: String,
     pub username: String,
-    /// Import API token (persisted in export.ini; treat the file as secret).
+    /// Import API token (persisted in `[vault] key`; treat `export.ini` as secret).
     pub key: String,
     pub input: String,
     pub continue_on_error: bool,
@@ -230,9 +234,50 @@ impl ExportIniState {
                     .map_err(|e| format!("Could not create {}: {e}", parent.display()))?;
             }
         }
-        ini.write_to_file(&self.path)
-            .map_err(|e| format!("Could not write {}: {e}", self.path.display()))
+        write_ini_restricted(&self.path, &ini)
     }
+}
+
+/// Write INI contents. On Unix, create/update with mode `0o600` (owner read/write only).
+fn write_ini_restricted(path: &Path, ini: &Ini) -> Result<(), String> {
+    let mut buf = Vec::new();
+    ini.write_to(&mut buf)
+        .map_err(|e| format!("Could not serialize {}: {e}", path.display()))?;
+
+    #[cfg(unix)]
+    {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)
+            .map_err(|e| format!("Could not open {}: {e}", path.display()))?;
+        file.write_all(&buf)
+            .map_err(|e| format!("Could not write {}: {e}", path.display()))?;
+        file.flush()
+            .map_err(|e| format!("Could not flush {}: {e}", path.display()))?;
+        // `.mode()` applies only on create; tighten an existing world-readable file.
+        let mut perms = file
+            .metadata()
+            .map_err(|e| format!("Could not stat {}: {e}", path.display()))?
+            .permissions();
+        perms.set_mode(0o600);
+        fs::set_permissions(path, perms)
+            .map_err(|e| format!("Could not set permissions on {}: {e}", path.display()))?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        let mut file = fs::File::create(path)
+            .map_err(|e| format!("Could not create {}: {e}", path.display()))?;
+        file.write_all(&buf)
+            .map_err(|e| format!("Could not write {}: {e}", path.display()))?;
+        file.flush()
+            .map_err(|e| format!("Could not flush {}: {e}", path.display()))?;
+    }
+
+    Ok(())
 }
 
 /// Prefer an existing `export.ini` in cwd, then beside the executable; otherwise cwd.
@@ -599,6 +644,68 @@ apple_platform = ios
         assert!(form.input.is_empty());
         assert!(form.output.is_empty());
         assert!(error.is_none());
+    }
+
+    #[test]
+    fn persists_vault_api_token_roundtrip() {
+        let form = Form::default();
+        let mut state = ExportIniState {
+            path: PathBuf::from("unused"),
+            exporter: Exporter::GoSmsPro,
+            sections: Default::default(),
+            format: FormatSection::default(),
+            vault: VaultSection {
+                url: "http://127.0.0.1:8080".into(),
+                username: "alice".into(),
+                key: "secret-import-token".into(),
+                input: "/data/jsonl".into(),
+                continue_on_error: true,
+                force: false,
+                skip_attachments: false,
+            },
+        };
+        let file = NamedTempFile::new().unwrap();
+        state.path = file.path().to_path_buf();
+        state.save(&form).unwrap();
+
+        let (loaded, _) = ExportIniState::load(file.path()).unwrap();
+        assert_eq!(loaded.vault.url, "http://127.0.0.1:8080");
+        assert_eq!(loaded.vault.username, "alice");
+        assert_eq!(loaded.vault.key, "secret-import-token");
+        assert_eq!(loaded.vault.input, "/data/jsonl");
+        let text = fs::read_to_string(file.path()).unwrap();
+        assert!(text.contains("key=secret-import-token") || text.contains("key = secret-import-token"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn export_ini_written_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let form = Form::default();
+        let mut state = ExportIniState {
+            path: PathBuf::from("unused"),
+            exporter: Exporter::GoSmsPro,
+            sections: Default::default(),
+            format: FormatSection::default(),
+            vault: VaultSection {
+                key: "token".into(),
+                continue_on_error: true,
+                ..VaultSection::default()
+            },
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("export.ini");
+        // Pre-create a world-readable file; save must tighten mode.
+        fs::write(&path, "stale\n").unwrap();
+        let mut loose = fs::metadata(&path).unwrap().permissions();
+        loose.set_mode(0o644);
+        fs::set_permissions(&path, loose).unwrap();
+
+        state.path = path.clone();
+        state.save(&form).unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "export.ini must be owner read/write only");
     }
 
     #[test]
