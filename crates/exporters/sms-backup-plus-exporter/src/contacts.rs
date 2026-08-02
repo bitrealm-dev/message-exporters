@@ -111,7 +111,7 @@ Jordan,Alias,15555550144\n",
             "Phone,Incorrect Name\n\
 +15555550144,Jordan Alias (SKIP)\n",
         );
-        let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
+        let book = ContactsBook::load_vcard_csv(&contacts).unwrap();
         let mapping = NameMapping::load(&mapping_path).unwrap();
 
         let mut msg = ParsedMessage {

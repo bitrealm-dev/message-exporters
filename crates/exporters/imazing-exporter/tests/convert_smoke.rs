@@ -7,14 +7,14 @@ use std::fs;
 use std::path::PathBuf;
 
 #[test]
-fn convert_messages_with_imazing_contacts() {
+fn convert_messages_with_vcard_csv_contacts() {
     let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let messages = fixture.join("messages.csv");
     let contacts = fixture.join("contacts.csv");
     assert!(messages.is_file(), "missing {}", messages.display());
     assert!(contacts.is_file(), "missing {}", contacts.display());
 
-    let book = ContactsBook::load_imazing_contacts_csv(&contacts).expect("load contacts");
+    let book = ContactsBook::load_vcard_csv(&contacts).expect("load contacts");
     let tmp = tempfile::tempdir().expect("tempdir");
     let (report, _) = convert_export(
         &messages,
@@ -50,7 +50,7 @@ fn convert_whatsapp_csv_direct() {
     let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let whatsapp = fixture.join("whatsapp.csv");
     let contacts = fixture.join("contacts.csv");
-    let book = ContactsBook::load_imazing_contacts_csv(&contacts).expect("load contacts");
+    let book = ContactsBook::load_vcard_csv(&contacts).expect("load contacts");
     let tmp = tempfile::tempdir().expect("tempdir");
     let (report, _) = convert_export(
         &whatsapp,
@@ -79,7 +79,7 @@ fn convert_whatsapp_csv_direct() {
 fn convert_export_root_recursively_keeps_services_separate() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/export_root");
     let contacts = root.join("Contacts/All contacts/All/Contacts - synthetic.csv");
-    let book = ContactsBook::load_imazing_contacts_csv(&contacts).expect("load contacts");
+    let book = ContactsBook::load_vcard_csv(&contacts).expect("load contacts");
     let tmp = tempfile::tempdir().expect("tempdir");
     let (report, _) = convert_export(
         &root,

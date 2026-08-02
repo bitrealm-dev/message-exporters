@@ -7215,7 +7215,6 @@ dependencies = [
  "clap",
  "hex",
  "httpmock",
- "message-csv",
  "message-exporter-core",
  "message-ir",
  "message-ir-format",

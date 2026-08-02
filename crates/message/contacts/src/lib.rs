@@ -4,8 +4,8 @@
 //! - [`ContactsBook`] — name↔phone indexes for backup→IR exporters
 //! - [`validate_contacts_file`] — contacts-validate rewrite tool
 //!
-//! Accepted inputs: VCF, or vCard / iMazing Contacts CSV (First Name, Last Name,
-//! phone columns).
+//! Accepted inputs: VCF, or vCard CSV (First Name, Last Name, phone columns —
+//! a contacts app VCF exported as CSV).
 
 mod book;
 mod mapping;

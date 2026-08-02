@@ -12,7 +12,7 @@ Prefer `VAULT_KEY` / `VAULT_URL` environment variables over putting the key on t
 
 ## Description
 
-Reads per-conversation `.jsonl` files (message-ir schema v3) under `--input`, uploads each unique attachment by SHA-256 (`PUT /v1/assets/{sha256}`), then combines conversations into bounded vault-NDJSON message batches (`POST /v1/import`). Requests reuse HTTP connections and are flushed at the configured message count or a 16 MiB body target. Attachment uploads run concurrently. Import requests stay sequential because the server reserves one temporary import area for each account.
+Reads per-conversation `.jsonl` files (message-ir schema v3) under `--input`, uploads each unique attachment by SHA-256 (`PUT /v1/assets/{sha256}`), then combines conversations into bounded message-ir JSONL batches (`POST /v1/import` with `Content-Type: application/jsonl`). Requests reuse HTTP connections and are flushed at the configured message count or a 16 MiB body target. Attachment uploads run concurrently. Import requests stay sequential because the server reserves one temporary import area for each account.
 
 Progress and a durable journal (`.vault-import-state.jsonl`) live under the input directory so re-runs can resume. Secrets are never written to the journal or report.
 

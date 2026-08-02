@@ -55,7 +55,7 @@ enum Commands {
         #[arg(long = "owner-email", value_name = "EMAIL")]
         owner_emails: Vec<String>,
 
-        /// Contacts file for name↔phone lookup (VCF or iMazing Contacts CSV; same as contacts-validate).
+        /// Contacts file for name↔phone lookup (VCF or vCard CSV; same as contacts-validate).
         /// Optional; without it (or `--vcf`) phone numbers are not resolved to names.
         #[arg(long)]
         contacts: Option<PathBuf>,

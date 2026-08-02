@@ -1,4 +1,4 @@
-//! Blocking HTTP helpers for vault auth, asset upload, and NDJSON import.
+//! Blocking HTTP helpers for vault auth, asset upload, and JSONL import.
 
 use std::path::Path;
 use std::thread;

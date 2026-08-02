@@ -1,4 +1,4 @@
-//! Shared vCard / iMazing Contacts CSV column layout and row reader.
+//! Shared vCard CSV column layout and row reader (VCF exported as CSV).
 
 use anyhow::{Context, Result, bail};
 use std::fs::File;
@@ -15,7 +15,7 @@ pub const VCARD_CSV_PHONE_COLUMNS: &[&str] = &[
     "other fax",
 ];
 
-/// One contact row from a vCard / iMazing Contacts CSV (raw phone strings).
+/// One contact row from a vCard CSV (raw phone strings).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ContactCsvRow {
     pub first: String,
@@ -35,7 +35,7 @@ pub fn normalize_vcard_csv_header(h: &str) -> String {
         .replace('_', " ")
 }
 
-/// True for iMazing/Outlook phone columns (`Mobile Phone`, …). Bare `phones` is excluded.
+/// True for phone columns (`Mobile Phone`, …). Bare `phones` is excluded.
 pub fn is_phone_header(h: &str) -> bool {
     h != "phones" && h.contains("phone")
 }
@@ -85,12 +85,12 @@ impl VcardCsvColumns {
     }
 
     /// Strict vault/validate shape: First Name, Last Name, and at least one phone column.
-    pub fn looks_like_imazing_contacts_csv(&self) -> bool {
+    pub fn has_name_and_phone_columns(&self) -> bool {
         self.first.is_some() && self.last.is_some() && !self.phones.is_empty()
     }
 }
 
-/// Read all contact rows from a vCard / iMazing Contacts CSV.
+/// Read all contact rows from a vCard CSV.
 ///
 /// Does not require a display name; skips rows with no phone cells.
 /// Phone values are raw (caller normalizes with the `phone` crate).
@@ -184,14 +184,14 @@ mod tests {
         assert_eq!(cols.phones, vec![3]);
         assert_eq!(cols.notes, Some(4));
         assert!(cols.looks_like_vcard_csv());
-        assert!(cols.looks_like_imazing_contacts_csv());
+        assert!(cols.has_name_and_phone_columns());
     }
 
     #[test]
     fn accepts_generic_phone_column() {
         let cols = VcardCsvColumns::from_headers(["First Name", "Last Name", "Phone 1"]);
         assert!(cols.phones.contains(&2));
-        assert!(cols.looks_like_imazing_contacts_csv());
+        assert!(cols.has_name_and_phone_columns());
     }
 
     #[test]

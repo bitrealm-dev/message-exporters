@@ -116,7 +116,7 @@ impl TransportFamily {
     }
 }
 
-/// Convert iMazing Messages / WhatsApp CSV(s) under `input` using `book` from Contacts CSV.
+/// Convert iMazing Messages / WhatsApp CSV(s) under `input` using `book` from a contacts VCF/vCard CSV.
 ///
 /// `timezone`: fixed UTC offset (e.g. `UTC-05:00`). When `None`, use the host local zone.
 /// When `transforms` copies attachments, media files are copied into `output/attachments/`.
@@ -787,7 +787,7 @@ Bob McRoy,2020-01-01 12:01:00,SMS,Outgoing,,,Read,,,Hi,,,\n",
             "First Name,Middle Name,Last Name,Mobile Phone,Notes\n\
 Bob,,McRoy,+13212462167,\n",
         );
-        let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
+        let book = ContactsBook::load_vcard_csv(&contacts).unwrap();
         let out = dir.path().join("out");
         let (report, _) = convert_export(
             dir.path(),
@@ -827,7 +827,7 @@ Mystery Person,2020-01-01 12:01:00,SMS,Outgoing,,,Read,,,Hi,,,\n",
             "First Name,Middle Name,Last Name,Mobile Phone,Notes\n\
 Other,,Person,+15555550999,\n",
         );
-        let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
+        let book = ContactsBook::load_vcard_csv(&contacts).unwrap();
         let out = dir.path().join("out");
         let (report, _) = convert_export(
             dir.path(),
@@ -861,7 +861,7 @@ Bob,2020-01-01 12:00:00,SMS,Outgoing,,,Read,,,Same,,,\n",
             "First Name,Middle Name,Last Name,Mobile Phone,Notes\n\
 Bob,,,+15555550100,\n",
         );
-        let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
+        let book = ContactsBook::load_vcard_csv(&contacts).unwrap();
         let out = dir.path().join("out");
         let (report, _) = convert_export(
             dir.path(),
@@ -894,7 +894,7 @@ Bob,2020-01-01 12:00:00,SMS,Incoming,+15555550100,Bob,Read,,,Photo,,b.jpg,Image\
             "First Name,Middle Name,Last Name,Mobile Phone,Notes\n\
 Bob,,,+15555550100,\n",
         );
-        let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
+        let book = ContactsBook::load_vcard_csv(&contacts).unwrap();
         let out = dir.path().join("out");
         let (report, _) = convert_export(
             dir.path(),
@@ -929,7 +929,7 @@ Alice,,Example,+15555550111,\n\
 Bob,,Example,+15555550122,\n\
 Carol,,Silent,+15555550133,\n",
         );
-        let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
+        let book = ContactsBook::load_vcard_csv(&contacts).unwrap();
         let out = dir.path().join("out");
         let (report, _) = convert_export(
             dir.path(),
@@ -967,7 +967,7 @@ Alice Example & Bob Example & Carol Silent,2020-01-01 12:01:00,iMessage,Incoming
 Alice,,Example,+15555550111,\n\
 Bob,,Example,+15555550122,\n",
         );
-        let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
+        let book = ContactsBook::load_vcard_csv(&contacts).unwrap();
         let out = dir.path().join("out");
         let (report, _) = convert_export(
             dir.path(),
@@ -1005,7 +1005,7 @@ Bob,2020-01-01 12:05:00,,Incoming,+15555550100,Bob,Read,,,WA hi,,,,\n",
             "First Name,Middle Name,Last Name,Mobile Phone,Notes\n\
 Bob,,,+15555550100,\n",
         );
-        let book = ContactsBook::load_imazing_contacts_csv(&contacts).unwrap();
+        let book = ContactsBook::load_vcard_csv(&contacts).unwrap();
         let out = dir.path().join("out");
         let (report, _) = convert_export(
             dir.path(),

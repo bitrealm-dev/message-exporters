@@ -1,4 +1,4 @@
-//! iMazing Messages / WhatsApp CSV (+ Contacts CSV) → shared per-chat CSV.
+//! iMazing Messages / WhatsApp CSV (+ vCard CSV / VCF contacts) → shared per-chat CSV.
 //!
 //! Library entrypoint: [`run`] for the full pipeline.
 //! The `imazing-exporter` binary is a thin CLI over [`run`].

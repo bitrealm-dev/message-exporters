@@ -1,4 +1,4 @@
-//! Folder push: stream JSONL, upload assets by digest, import message batches.
+//! Folder push: stream message-ir JSONL, upload assets by digest, import batches.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, OpenOptions};
@@ -936,7 +936,7 @@ fn prepare_file(args: PrepareFileArgs<'_>) -> Result<PreparedFile> {
         profile.asset_bytes = upload_stats.bytes;
     }
 
-    let header_line = project::document_conversation_line(&doc)?;
+    let header_line = project::document_header_line(&doc)?;
     let mut chunks = Vec::new();
     let mut chunk_body = header_line.clone();
     let mut chunk_messages: Vec<JournalMessage> = Vec::new();

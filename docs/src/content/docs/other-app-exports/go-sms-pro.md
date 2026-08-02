@@ -11,7 +11,7 @@ GO SMS Pro import is a rescue path. Its MMS PDU decoding uses best-effort rules,
 - At least one owner phone number, in E.164 form or as digits. Add every number that belonged to the backed-up device.
 - A separate output directory.
 
-A contacts VCF or iMazing Contacts CSV is optional and can fill display names.
+A contacts VCF or vCard CSV is optional and can fill display names.
 
 ## Run the import
 

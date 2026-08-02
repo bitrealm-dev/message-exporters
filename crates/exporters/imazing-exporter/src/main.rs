@@ -27,7 +27,7 @@ struct Cli {
     #[arg(long = "format", default_value = "json", value_name = "FORMAT")]
     format: String,
 
-    /// Contacts CSV or VCF used to resolve phone numbers to names.
+    /// vCard CSV or VCF used to resolve phone numbers to names.
     /// Optional; without it phone numbers are not resolved to names.
     #[arg(long)]
     contacts: Option<PathBuf>,

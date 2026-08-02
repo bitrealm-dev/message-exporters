@@ -10,7 +10,7 @@ The Contacts tab checks phone numbers in a VCF or contacts CSV. Updating writes 
 The input can be:
 
 - a VCF; or
-- a CSV with first name, last name, and phone columns. iMazing-style contacts CSV files are accepted where an exporter supports them.
+- a CSV with first name, last name, and phone columns. vCard CSV files are accepted where an exporter supports them.
 
 ## Check without changing anything
 

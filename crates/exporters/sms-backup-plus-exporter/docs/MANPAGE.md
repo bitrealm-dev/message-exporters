@@ -54,7 +54,7 @@ Owner phone and email may come from flags or `config/owner.toml` (`phones`, `ema
 : Owner email(s) for sent detection when `X-smssync-type` is missing. Default: `emails` in `config/owner.toml`.
 
 **--contacts** *PATH*
-: Contacts file (VCF or iMazing Contacts CSV). Optional.
+: Contacts file (VCF or vCard CSV). Optional.
 
 **--vcf** *PATH*
 : Contacts VCF (alternate to `--contacts`).

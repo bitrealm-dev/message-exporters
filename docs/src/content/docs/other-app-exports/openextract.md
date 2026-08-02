@@ -12,7 +12,7 @@ Provide either:
 - one `all_conversations.csv` or `conversation_*.csv`; or
 - a directory containing those conversation CSV files.
 
-A contacts VCF from the OpenExtract export is strongly recommended. You can instead use another contacts VCF or an iMazing Contacts CSV. Only one contacts input can be used.
+A contacts VCF from the OpenExtract export is strongly recommended. You can instead use another contacts VCF or a vCard CSV. Only one contacts input can be used.
 
 ## Run the import
 

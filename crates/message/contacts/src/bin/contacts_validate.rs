@@ -11,7 +11,7 @@ use phone::PhoneRegion;
 #[command(name = "contacts-validate")]
 #[command(about = "Check or update contacts phones; write corrected copy on update")]
 struct Cli {
-    /// Contacts file (.vcf or iMazing Contacts CSV)
+    /// Contacts file (.vcf or vCard CSV)
     #[arg(long)]
     input: PathBuf,
 

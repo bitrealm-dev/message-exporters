@@ -146,7 +146,7 @@ Top tab. Two-step workflow after Extract Messages: push message-ir v3 JSONL +
 |---------|------|:--------:|-------|
 | Vault URL | text | yes | e.g. `http://127.0.0.1:8080` |
 | Username | text | yes | Vault account username |
-| Vault key | text | yes | Import API token from Vault Settings; saved to `export.ini` as `key` (plain text) |
+| Vault key | text | yes | Import API token from Vault Settings; saved to `export.ini` as `[vault] key` (plain text). On Linux/macOS the file is written mode `0600` (owner read/write only). |
 | Input directory | folder | yes | JSONL export folder (prefills from last Extract Messages output when empty) |
 | Continue on error | checkbox | no | Default on |
 | Force re-upload | checkbox | no | Ignore `.vault-import-state.jsonl` |
@@ -178,8 +178,8 @@ Persists under `[vault]` in `export.ini`. See
 | DB path / Platform | — | — | — | — | — | platform (+ advanced) | primary |
 | Your phone number(s) | required | required | required\* | — | — | — | — |
 | Your email address(es) | — | — | required\* | — | — | — | — |
-| Contacts VCF / iMazing CSV | yes | yes | yes | yes | — | — (Contacts field) | — |
-| Contacts iMazing CSV | — | — | — | — | yes | — | — |
+| Contacts VCF / vCard CSV | yes | yes | yes | yes | — | — (Contacts field) | — |
+| Contacts vCard CSV | — | — | — | — | yes | — | — |
 | Contacts Apple AddressBook | — | — | — | — | — | — | advanced |
 | Timezone | — | — | — | — | yes | — | — |
 | Name mapping | — | — | advanced | — | — | — | — |
@@ -270,7 +270,7 @@ Product: [OpenExtract](https://www.openextract.app/)
 |---------|------|:--------:|-----|
 | Input | CSV file or folder | yes | `--input` |
 | Output | folder | yes | `--output` |
-| Contacts VCF / iMazing CSV | file | no† | `--vcf` / `--contacts` |
+| Contacts VCF / vCard CSV | file | no† | `--vcf` / `--contacts` |
 
 Media modes and obfuscate apply through FormatSink for every format. Mail is
 text-only (no media in source).
@@ -283,7 +283,7 @@ Product: [iMazing](https://imazing.com/)
 |---------|------|:--------:|-----|
 | Input | Messages/WhatsApp CSV, chat folder, `Messages/`, `WhatsApp/`, or device export root | yes | `--input` |
 | Output | folder | yes | `--output` |
-| Contacts | iMazing Contacts CSV only | no | `--contacts` |
+| Contacts | vCard CSV only | no | `--contacts` |
 | Timezone | IANA text | no | `--timezone` (default: host local) |
 
 Media modes and obfuscate apply through FormatSink for every format. WhatsApp
@@ -359,7 +359,7 @@ Advanced panel uses a chevron toggle (**Show advanced options**), not a checkbox
 1. **Contacts mutual exclusion:** for Android/OpenExtract, allow at most one of
    `--contacts` vs `--vcf`.
 2. **Contacts format:** label and file filters must match the exporter (VCF /
-   iMazing Contacts CSV vs Apple AddressBook).
+   vCard CSV vs Apple AddressBook).
 3. **Phone numbers:** required for GO SMS Pro and SMS Backup & Restore before Run;
    Plus also requires email address(es).
 4. **Path existence:** input must exist; output folder may be created on run.

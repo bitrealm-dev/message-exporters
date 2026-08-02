@@ -33,7 +33,7 @@ Normalizes **iMazing** Messages and/or WhatsApp CSV exports (targeted **3.5.5**)
 : Output packaging from the common message (`json` default).
 
 **--contacts** *PATH*
-: iMazing Contacts CSV from the same backup. Optional; without it phones are not resolved to names.
+: vCard CSV from the same backup. Optional; without it phones are not resolved to names.
 
 **--timezone** *OFFSET*
 : UTC offset for naive Message Date values (e.g. `UTC-05:00` or `America/New_York`). Default: host local.

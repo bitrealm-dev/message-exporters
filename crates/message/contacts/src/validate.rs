@@ -679,7 +679,7 @@ fn rewrite_vcard_csv(
                 if cell.trim().is_empty() {
                     continue;
                 }
-                // iMazing sometimes packs multiple phones with `;`
+                // Some exporters pack multiple phones with `;`
                 *cell = rewrite_phone_list(
                     cell,
                     &contact_dup,

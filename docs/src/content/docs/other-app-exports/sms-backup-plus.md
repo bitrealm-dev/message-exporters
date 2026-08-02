@@ -11,7 +11,7 @@ The SMS Backup+ importer targets version 1.5.11 EML layouts. It reads files alre
 - A separate output directory.
 - Owner phone numbers and owner email addresses needed to identify sent messages.
 
-Contacts are optional but recommended. Use a VCF or iMazing Contacts CSV. An optional name-mapping CSV has the columns `Phone,Incorrect Name`.
+Contacts are optional but recommended. Use a VCF or vCard CSV. An optional name-mapping CSV has the columns `Phone,Incorrect Name`.
 
 The command-line tool can accept more than one input root and can read defaults from `config/owner.toml`. The desktop app requires exactly one input path.
 

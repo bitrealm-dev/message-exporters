@@ -33,7 +33,7 @@ struct Cli {
     owner_phones: Vec<String>,
 
     /// Contacts file for phone→name fill (same formats as contacts-validate:
-    /// VCF, or CSV with First Name, Last Name, and a Phone column).
+    /// VCF or vCard CSV).
     /// Optional; without it (or `--vcf`) phone numbers are not resolved to names.
     #[arg(long)]
     contacts: Option<PathBuf>,

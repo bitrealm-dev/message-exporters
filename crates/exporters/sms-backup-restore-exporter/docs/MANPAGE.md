@@ -42,7 +42,7 @@ Library API: `ExporterConfig` / `run` (used by the desktop GUI).
 : Owner number (E.164 or digits). Repeat for multiple. Required.
 
 **--contacts** *PATH*
-: Contacts file (VCF or iMazing Contacts CSV). Optional.
+: Contacts file (VCF or vCard CSV). Optional.
 
 **--vcf** *PATH*
 : Contacts VCF (alternate to `--contacts`). At most one of `--contacts` / `--vcf`.

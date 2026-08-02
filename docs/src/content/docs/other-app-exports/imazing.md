@@ -14,7 +14,7 @@ Choose any one of these:
 - a `Messages/` or `WhatsApp/` directory; or
 - a full iMazing device export root.
 
-Discovery is recursive. A full export can contain Messages, WhatsApp, and Contacts trees. An iMazing Contacts CSV from the same backup is optional but strongly recommended because many `Chat Session` values are names rather than phone numbers.
+Discovery is recursive. A full export can contain Messages, WhatsApp, and Contacts trees. A vCard CSV from the same backup is optional but strongly recommended because many `Chat Session` values are names rather than phone numbers.
 
 Set the timezone when the CSV's `Message Date` values should not use the computer's local timezone. The field accepts a UTC offset such as `UTC-05:00` or a zone such as `America/New_York`.
 

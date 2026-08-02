@@ -38,7 +38,7 @@ Library API: `ExporterConfig` / `run` (desktop GUI). Thanks: [python-messaging](
 : Owner number (E.164 or digits). Repeat for multiple owner numbers. Required.
 
 **--contacts** *PATH*
-: Contacts file for phone→name fill (VCF or iMazing Contacts CSV). Optional.
+: Contacts file for phone→name fill (VCF or vCard CSV). Optional.
 
 **--vcf** *PATH*
 : Contacts VCF (alternate to `--contacts`). At most one of `--contacts` / `--vcf`.

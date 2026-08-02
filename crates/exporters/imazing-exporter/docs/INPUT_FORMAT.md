@@ -62,9 +62,9 @@ Replying to, Text, Reactions, Attachment, Attachment type, Attachment info
 
 The source has no complete group-roster field. A group member who never sent a message is absent from the CSV.
 
-## Contacts CSV
+## Contacts (vCard CSV)
 
-The Contacts export is a wide address-book CSV with fields such as `First Name` and `Mobile Phone`. Some phone numbers appear only in `Notes` as `PROP-ID: +…`. The shared `message-contacts` parser handles that representation.
+iMazing can emit contacts as a wide address-book CSV with vCard-style fields such as `First Name` and `Mobile Phone`. Some phone numbers appear only in `Notes` as `PROP-ID: +…`. The shared `message-contacts` parser treats this as a **vCard CSV** (not an iMazing-specific format).
 
 ## Source limitations
 

@@ -33,7 +33,7 @@ Reads **OpenExtract** conversation CSV (targeted **0.5.1**) — `all_conversatio
 : Contacts VCF from the OpenExtract export.
 
 **--contacts** *PATH*
-: Contacts file instead of `--vcf` (VCF or iMazing Contacts CSV). At most one of `--contacts` / `--vcf`.
+: Contacts file instead of `--vcf` (VCF or vCard CSV). At most one of `--contacts` / `--vcf`.
 
 **--start-date** *YYYY-MM-DD*
 : Include messages on or after this local date (inclusive).

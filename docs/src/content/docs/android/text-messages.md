@@ -11,7 +11,7 @@ The recommended Android SMS and MMS path starts with a readable SyncTech SMS Bac
 2. Copy the `.xml` file to the computer. You may also use a folder containing multiple `.xml` backups; they are combined into one export.
 3. If the app produced an encrypted ZIP, unlock and unzip it first. Message Exporters does not open encrypted ZIP backups.
 4. Write down every phone number that belonged to the backed-up device.
-5. Optionally prepare a contacts VCF or iMazing Contacts CSV.
+5. Optionally prepare a contacts VCF or vCard CSV.
 
 Owner phone numbers are required. They identify the owner in MMS groups and help determine chat membership and senders. A wrong number can reverse or mis-group messages.
 
