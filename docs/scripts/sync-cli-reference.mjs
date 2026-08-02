@@ -39,7 +39,7 @@ const pages = [
     title: 'Convert an existing export',
     description:
       'Command-line options for converting a Message Exporters output directory to another format.',
-    source: 'crates/message/ir/docs/MESSAGE_REEXPORTER.md',
+    source: 'crates/message/reexport/docs/MESSAGE_REEXPORTER.md',
   },
   {
     slug: 'vault-push',
