@@ -1,6 +1,6 @@
 //! Copy a contacts VCF/CSV and rewrite phones that [`normalize_certain`] accepts.
 
-use crate::imazing_csv::ImazingContactsColumns;
+use crate::vcard_csv::VcardCsvColumns;
 use crate::name::collapse_inner_whitespace;
 use anyhow::{Context, Result, bail};
 use phone::{PhoneRegion, normalize_certain, normalize_uncertain_reason};
@@ -52,9 +52,9 @@ struct UnableEntry {
 
 /// Formats accepted by contacts-validate and by [`crate::ContactsBook::load_contacts_file`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ContactsFormat {
+pub enum ContactsFormat {
     Vcf,
-    ImazingCsv,
+    VcardCsv,
 }
 
 /// Short red-box message when CSV/VCF content is not a known contacts format.
@@ -152,8 +152,8 @@ pub fn validate_contacts_file(
                 &mut by_e164,
             )?;
         }
-        ContactsFormat::ImazingCsv => {
-            rewrite_imazing_csv(
+        ContactsFormat::VcardCsv => {
+            rewrite_vcard_csv(
                 input,
                 &output_path,
                 region,
@@ -168,7 +168,7 @@ pub fn validate_contacts_file(
         }
     }
 
-    let vcf_path = if matches!(format, ContactsFormat::ImazingCsv) {
+    let vcf_path = if matches!(format, ContactsFormat::VcardCsv) {
         let vcf_path = output_path.with_extension("vcf");
         if write {
             write_vcf_cards(&vcf_path, &cards)?;
@@ -271,12 +271,12 @@ fn normalize_header_name(h: &str) -> String {
 }
 
 fn is_phone_header(h: &str) -> bool {
-    // Bare `phones` is not an iMazing/Outlook phone column name.
+    // Bare `phones` is not a vCard CSV / Outlook phone column name.
     h != "phones" && h.contains("phone")
 }
 
-/// Detect VCF or iMazing Contacts CSV (First Name, Last Name, phone columns).
-pub(crate) fn detect_contacts_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> {
+/// Detect VCF or vCard CSV (First Name, Last Name, phone columns).
+pub fn detect_contacts_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> {
     detect_format(path)
 }
 
@@ -354,7 +354,7 @@ fn detect_csv_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> 
     let has_phone = !phone_cols.is_empty();
 
     if has_first && has_last && has_phone {
-        return Ok(ContactsFormat::ImazingCsv);
+        return Ok(ContactsFormat::VcardCsv);
     }
 
     let mut details = vec![
@@ -374,7 +374,7 @@ fn detect_csv_format(path: &Path) -> Result<ContactsFormat, ContactsInputError> 
     }
     details.push(
         "valid CSV needs First Name, Last Name, and at least one Phone column \
-         (iMazing Contacts export)"
+         (vCard CSV)"
             .into(),
     );
     Err(ContactsInputError::unrecognized(details))
@@ -622,7 +622,7 @@ fn vcf_escape(s: &str) -> String {
         .replace('\n', "\\n")
 }
 
-fn rewrite_imazing_csv(
+fn rewrite_vcard_csv(
     input: &Path,
     output: &Path,
     region: PhoneRegion,
@@ -637,7 +637,7 @@ fn rewrite_imazing_csv(
     let file = File::open(input).with_context(|| format!("open {}", input.display()))?;
     let mut rdr = csv::ReaderBuilder::new().flexible(true).from_reader(file);
     let headers = rdr.headers()?.clone();
-    let cols = ImazingContactsColumns::from_headers(headers.iter());
+    let cols = VcardCsvColumns::from_headers(headers.iter());
 
     let mut wtr = if write {
         let out_file =
@@ -761,12 +761,12 @@ mod tests {
         assert_eq!(err.message, UNRECOGNIZED_CONTACTS_FORMAT);
         assert!(err.details.iter().any(|d| d.contains("BEGIN:VCARD")));
 
-        let imazing = write(
+        let vcard_csv = write(
             &dir,
-            "imazing.csv",
+            "vcard.csv",
             "First Name,Last Name,Mobile Phone\nAda,Lovelace,+15551234567\n",
         );
-        probe_contacts_input(&imazing).unwrap();
+        probe_contacts_input(&vcard_csv).unwrap();
 
         let vcf = write(&dir, "ok.vcf", "BEGIN:VCARD\nFN:Ada\nEND:VCARD\n");
         probe_contacts_input(&vcf).unwrap();
@@ -835,7 +835,7 @@ END:VCARD\n",
     }
 
     #[test]
-    fn validates_imazing_csv_usa() {
+    fn validates_vcard_csv_usa() {
         let dir = tempfile::tempdir().unwrap();
         let input = write(
             &dir,

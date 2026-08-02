@@ -1,12 +1,11 @@
 //! Bidirectional contacts index (name↔phone).
 
-use crate::imazing_csv::ImazingContactsColumns;
 use crate::name::{collapse_inner_whitespace, is_blank_or_unknown_name, normalize_name_key};
+use crate::vcard_csv::read_vcard_csv_rows;
 use crate::vcf::{self, strip_tags};
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use phone::{sanitize_number, to_e164};
 use std::collections::HashMap;
-use std::fs::File;
 use std::path::{Path, PathBuf};
 
 /// Name → phone digits and phone → display name.
@@ -38,7 +37,7 @@ impl ContactsBook {
         })?;
         match format {
             ContactsFormat::Vcf => Self::load_vcf(path),
-            ContactsFormat::ImazingCsv => Self::load_imazing_contacts_csv(path),
+            ContactsFormat::VcardCsv => Self::load_vcard_csv(path),
         }
     }
 
@@ -76,67 +75,37 @@ impl ContactsBook {
         Ok(book)
     }
 
-    /// Load an iMazing Contacts CSV export (wide address-book columns).
+    /// Load a vCard CSV export (wide address-book columns).
     ///
-    /// Phones come from Mobile/Home/Work/Other (and fax) columns, plus `+E.164`
-    /// tokens scraped from `Notes` (including `PROP-ID: +…`).
-    pub fn load_imazing_contacts_csv(path: &Path) -> Result<Self> {
-        let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-        let mut rdr = csv::ReaderBuilder::new().flexible(true).from_reader(file);
-        let headers = rdr
-            .headers()
-            .with_context(|| format!("headers {}", path.display()))?
-            .iter()
-            .map(str::to_string)
-            .collect::<Vec<_>>();
-        let cols = ImazingContactsColumns::from_headers(&headers);
-
-        if !cols.looks_like_imazing() {
-            bail!(
-                "contacts CSV {} does not look like an iMazing Contacts export \
-                 (expected First Name and/or phone columns)",
-                path.display()
-            );
-        }
-
+    /// Phones come from phone/fax columns, plus `+E.164` tokens scraped from
+    /// `Notes` (including `PROP-ID: +…`).
+    pub fn load_vcard_csv(path: &Path) -> Result<Self> {
+        let rows = read_vcard_csv_rows(path)?;
         let mut book = Self::empty();
-        for (idx, rec) in rdr.records().enumerate() {
-            let rec = rec.with_context(|| format!("row {} in {}", idx + 2, path.display()))?;
-            let first = cols
-                .first
-                .map(|i| rec.get(i).unwrap_or("").trim())
-                .unwrap_or("");
-            let middle = cols
-                .middle
-                .map(|i| rec.get(i).unwrap_or("").trim())
-                .unwrap_or("");
-            let last = cols
-                .last
-                .map(|i| rec.get(i).unwrap_or("").trim())
-                .unwrap_or("");
+        for row in rows {
             let mut name_parts = Vec::new();
-            if !first.is_empty() {
-                name_parts.push(first);
+            if !row.first.is_empty() {
+                name_parts.push(row.first.as_str());
             }
-            if !middle.is_empty() {
-                name_parts.push(middle);
+            if !row.middle.is_empty() {
+                name_parts.push(row.middle.as_str());
             }
-            if !last.is_empty() {
-                name_parts.push(last);
+            if !row.last.is_empty() {
+                name_parts.push(row.last.as_str());
             }
             let display = collapse_inner_whitespace(&name_parts.join(" "));
-
-            let mut phones = Vec::new();
-            for &i in &cols.phones {
-                push_phones_from_raw(rec.get(i).unwrap_or(""), &mut phones);
-            }
-            if let Some(ni) = cols.notes {
-                push_phones_from_raw(rec.get(ni).unwrap_or(""), &mut phones);
-            }
-            if phones.is_empty() {
+            if display.is_empty() {
                 continue;
             }
-            if display.is_empty() {
+
+            let mut phones = Vec::new();
+            for p in &row.phones {
+                push_phones_from_raw(p, &mut phones);
+            }
+            if let Some(notes) = &row.notes {
+                push_phones_from_raw(notes, &mut phones);
+            }
+            if phones.is_empty() {
                 continue;
             }
             book.insert_entry(&display, &phones);
@@ -199,8 +168,8 @@ impl ContactsBook {
 
 /// Load contacts from at most one of `--contacts` or `--vcf`.
 ///
-/// `--contacts` accepts the same files as contacts-validate (VCF or iMazing
-/// Contacts CSV). `--vcf` is a VCF-only alias.
+/// `--contacts` accepts the same files as contacts-validate (VCF or vCard
+/// CSV). `--vcf` is a VCF-only alias.
 ///
 /// When neither is passed, returns an empty book and emits a warning via `log`
 /// (or stderr when `log` is `None`).
@@ -293,6 +262,7 @@ fn push_phones_from_raw(raw: &str, out: &mut Vec<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::File;
     use std::io::Write;
 
     fn write_file(dir: &tempfile::TempDir, name: &str, body: &str) -> PathBuf {
@@ -303,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn loads_imazing_csv_both_directions() {
+    fn loads_vcard_csv_both_directions() {
         let dir = tempfile::tempdir().unwrap();
         let path = write_file(
             &dir,
@@ -312,7 +282,7 @@ mod tests {
 Sam,Example,15555550122,\n\
 Pat,Contact,+15555550133,+15555550144\n",
         );
-        let book = ContactsBook::load_imazing_contacts_csv(&path).unwrap();
+        let book = ContactsBook::load_vcard_csv(&path).unwrap();
         assert_eq!(
             book.lookup_phone_by_name("Sam Example").as_deref(),
             Some("5555550122")
@@ -368,7 +338,7 @@ TEL;TYPE=CELL:+1-555-555-0100\nEND:VCARD\n",
     }
 
     #[test]
-    fn resolve_cli_loads_imazing_csv_via_contacts() {
+    fn resolve_cli_loads_vcard_csv_via_contacts() {
         let dir = tempfile::tempdir().unwrap();
         let csv = write_file(
             &dir,
@@ -396,7 +366,7 @@ Ada,Lovelace,+15555550100\n",
     }
 
     #[test]
-    fn loads_imazing_contacts_phone_cols_and_notes() {
+    fn loads_vcard_csv_phone_cols_and_notes() {
         let dir = tempfile::tempdir().unwrap();
         let path = write_file(
             &dir,
@@ -406,7 +376,7 @@ Bob,,McRoy,+13212462167,,mcroyr@gmail.com\n\
 Kyle,,,,,PROP-ID: +17276875182; \n\
 NoPhone,,Person,,,,\n",
         );
-        let book = ContactsBook::load_imazing_contacts_csv(&path).unwrap();
+        let book = ContactsBook::load_vcard_csv(&path).unwrap();
         assert_eq!(
             book.lookup_phone_by_name("Bob McRoy").as_deref(),
             Some("3212462167")
