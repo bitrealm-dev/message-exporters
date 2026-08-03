@@ -53,8 +53,6 @@ pub fn push_chrome(ui: &AppWindow, state: &AppState) {
     ui.global::<LogAdapter>().set_running(state.running);
     ui.global::<LogAdapter>()
         .set_session_log_name(SharedString::from(state.session_log_name()));
-    ui.global::<LogAdapter>()
-        .set_status_text(SharedString::from(state.status_text()));
 }
 
 pub fn push_contacts(ui: &AppWindow, state: &AppState) {

@@ -1,13 +1,12 @@
 import { Button, ListView, Spinner } from "std-widgets.slint";
 import {
-    ActionRow, Hint, PageSummary, FormMetrics
+    ActionRow, PageSummary, FormMetrics
 } from "../widgets.slint";
 
 export global LogAdapter {
     in property <[string]> lines;
     in property <bool> running;
     in property <string> session-log-name;
-    in property <string> status-text;
     callback cancel();
     callback clear-view();
 }
@@ -95,10 +94,6 @@ export component LogPage inherits VerticalLayout {
                 }
             }
         }
-    }
-
-    Hint {
-        message: LogAdapter.status-text;
     }
 
     ActionRow {
