@@ -234,14 +234,10 @@ pub(crate) fn start_vault_auth(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mut
         }
         sync::pull_vault(&ui, &mut st);
         let url = st.export_ini.vault.url.trim().to_string();
-        let username = st.export_ini.vault.username.trim().to_string();
         let key = st.export_ini.vault.key.trim().to_string();
         let mut errors = Vec::new();
         if url.is_empty() {
             errors.push("Vault URL is required.".into());
-        }
-        if username.is_empty() {
-            errors.push("Vault username is required.".into());
         }
         if key.is_empty() {
             errors.push("Vault key is required.".into());
@@ -256,12 +252,14 @@ pub(crate) fn start_vault_auth(ui_weak: &slint::Weak<AppWindow>, state: &Arc<Mut
         }
         let label = "vault-push auth".to_string();
         let job: LibraryJob = Box::new(move |_cancel, tx| {
-            let _ = tx.send(ProcessEvent::Log(format!(
-                "Authenticating {username}@{url}…"
-            )));
-            match vault_authenticate(&url, &key, &username) {
+            let _ = tx.send(ProcessEvent::Log(format!("Authenticating {url}…")));
+            match vault_authenticate(&url, &key, "") {
                 Ok(auth) => {
-                    let name = auth.username.unwrap_or_else(|| auth.account_id.clone());
+                    let name = auth
+                        .username
+                        .clone()
+                        .filter(|s| !s.trim().is_empty())
+                        .unwrap_or_else(|| auth.account_id.clone());
                     let _ = tx.send(ProcessEvent::Log(format!(
                         "Authenticated as {name} ({})",
                         auth.account_id
@@ -290,15 +288,11 @@ pub(crate) fn start_vault_import(ui_weak: &slint::Weak<AppWindow>, state: &Arc<M
         sync::pull_vault(&ui, &mut st);
         st.prefill_vault_input();
         let url = st.export_ini.vault.url.trim().to_string();
-        let username = st.export_ini.vault.username.trim().to_string();
         let key = st.export_ini.vault.key.trim().to_string();
         let input = st.export_ini.vault.input.trim().to_string();
         let mut errors = Vec::new();
         if url.is_empty() {
             errors.push("Vault URL is required.".into());
-        }
-        if username.is_empty() {
-            errors.push("Vault username is required.".into());
         }
         if key.is_empty() {
             errors.push("Vault key is required.".into());
@@ -322,7 +316,7 @@ pub(crate) fn start_vault_import(ui_weak: &slint::Weak<AppWindow>, state: &Arc<M
             let cfg = VaultPushConfig {
                 input: PathBuf::from(input),
                 base_url: url,
-                username,
+                username: String::new(),
                 key,
                 mode: "append".into(),
                 continue_on_error,
@@ -332,6 +326,8 @@ pub(crate) fn start_vault_import(ui_weak: &slint::Weak<AppWindow>, state: &Arc<M
                 max_retries: 3,
                 batch_size: vault_push::DEFAULT_BATCH_SIZE,
                 asset_upload_workers: vault_push::DEFAULT_ASSET_UPLOAD_WORKERS,
+                asset_multipart_threshold: vault_push::MAX_PROXY_BODY_BYTES,
+                asset_max_bytes: vault_push::DEFAULT_ASSET_MAX_BYTES,
                 report_path: None,
                 log_path: None,
                 journal_path: None,

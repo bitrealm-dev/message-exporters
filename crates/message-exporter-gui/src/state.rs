@@ -2,6 +2,7 @@
 //! plus job control and the session log.
 
 use message_exporter_core::{ExportIniState, Exporter, Form, ProcessControl};
+use std::path::PathBuf;
 
 use crate::session_log::SessionLog;
 
@@ -81,7 +82,14 @@ impl AppState {
 
     pub fn begin_session_log(&mut self) {
         if self.session_log.is_none() {
-            self.session_log = Some(SessionLog::new());
+            let dir = self
+                .export_ini
+                .path
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| PathBuf::from("."));
+            self.session_log = Some(SessionLog::new(&dir));
         } else if let Some(log) = &self.session_log {
             log.truncate();
         }

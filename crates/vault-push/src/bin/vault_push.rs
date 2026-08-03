@@ -6,8 +6,8 @@ use std::process::ExitCode;
 use anyhow::{Result, bail};
 use clap::Parser;
 use vault_push::{
-    DEFAULT_ASSET_UPLOAD_WORKERS, DEFAULT_BATCH_SIZE, ProgressEvent, VaultPushConfig, authenticate,
-    run,
+    DEFAULT_ASSET_MAX_BYTES, DEFAULT_ASSET_UPLOAD_WORKERS, DEFAULT_BATCH_SIZE, ProgressEvent,
+    VaultPushConfig, authenticate, run,
 };
 
 #[derive(Debug, Parser)]
@@ -23,8 +23,8 @@ struct Cli {
     #[arg(long, env = "VAULT_URL")]
     url: String,
 
-    /// Vault account username
-    #[arg(long)]
+    /// Vault account username (optional; resolved from the vault key)
+    #[arg(long, default_value = "")]
     username: String,
 
     /// Per-account Import API token (Vault key). Prefer VAULT_KEY env.
@@ -66,6 +66,10 @@ struct Cli {
     /// Simultaneous attachment uploads; message imports remain sequential
     #[arg(long, default_value_t = DEFAULT_ASSET_UPLOAD_WORKERS)]
     asset_upload_workers: usize,
+
+    /// Max attachment size in bytes (must not exceed vault server.asset_max_bytes)
+    #[arg(long, default_value_t = DEFAULT_ASSET_MAX_BYTES)]
+    asset_max_bytes: u64,
 
     /// Authenticate only; do not import
     #[arg(long)]
@@ -126,6 +130,8 @@ fn real_main() -> Result<ExitCode> {
         max_retries: cli.max_retries,
         batch_size: cli.batch_size,
         asset_upload_workers: cli.asset_upload_workers,
+        asset_multipart_threshold: vault_push::MAX_PROXY_BODY_BYTES,
+        asset_max_bytes: cli.asset_max_bytes,
         report_path: cli.report,
         log_path: cli.log,
         journal_path: cli.journal,

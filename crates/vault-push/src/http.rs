@@ -75,6 +75,21 @@ pub struct AssetPutRequest<'a> {
     pub sha256: &'a str,
     pub file: &'a Path,
     pub mime: Option<&'a str>,
+    /// Files larger than this use multipart upload (typically [`crate::run::MAX_PROXY_BODY_BYTES`]).
+    pub multipart_threshold: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct UploadStartResponse {
+    ok: bool,
+    #[serde(default)]
+    upload_id: Option<String>,
+    #[serde(default)]
+    part_size: Option<usize>,
+    #[serde(default)]
+    already_present: bool,
+    #[serde(default)]
+    error: Option<String>,
 }
 
 impl HttpSession {
@@ -90,6 +105,26 @@ impl HttpSession {
 fn looks_like_html(body: &str) -> bool {
     let t = body.trim_start();
     t.starts_with("<!DOCTYPE") || t.starts_with("<html") || t.starts_with("<HTML")
+}
+
+fn looks_like_payload_too_large(status: reqwest::StatusCode, body: &str) -> bool {
+    status.as_u16() == 413
+        || body.contains("413 Payload Too Large")
+        || body.contains("413 Request Entity Too Large")
+        || (looks_like_html(body) && body.to_ascii_lowercase().contains("payload too large"))
+}
+
+fn payload_too_large_message(kind: &str, bytes: Option<usize>) -> String {
+    let size = bytes
+        .map(|n| format!(" (request was {n} bytes)"))
+        .unwrap_or_default();
+    format!(
+        "{kind} rejected: HTTP 413 Payload Too Large{size}. \
+         Cloudflare Free/Pro caps proxied uploads at ~100 MB. \
+         vault-push chunks message imports under 8 MiB and large assets via multipart; \
+         if this still fails, raise nginx client_max_body_size for /v1 (need ≥100m for 64 MiB parts) \
+         or tunnel to vault :8080."
+    )
 }
 
 fn truncate(s: &str, max: usize) -> String {
@@ -115,8 +150,10 @@ fn encode(s: &str) -> String {
 
 impl HttpSession {
     pub fn auth_check(&self, base_url: &str, key: &str, username: &str) -> Result<AuthInfo> {
+        // Validate the token first (no account=). A wrong User ID used to return
+        // HTTP 403 "username does not match vault key", which looked like a bad token.
         let base = base_url.trim_end_matches('/');
-        let url = format!("{base}/v1/auth/check?account={}", encode(username.trim()));
+        let url = format!("{base}/v1/auth/check");
         let response = self
             .client
             .get(&url)
@@ -129,15 +166,12 @@ impl HttpSession {
         if looks_like_html(&text) {
             bail!(
                 "auth/check returned HTML from {url} (HTTP {status}). \
-                 Vault URL must point at `message-vault-rs serve` (usually port 8080), \
-                 not the Next.js browse UI (port 3000)"
+                 Vault URL must point at the vault host (TLS site or port 8080), \
+                 not the Next.js browse UI alone (port 3000)"
             );
         }
         if status.as_u16() == 401 {
             bail!("invalid vault key");
-        }
-        if status.as_u16() == 403 {
-            bail!("username does not match vault key: {text}");
         }
         if !status.is_success() {
             bail!("auth/check failed (HTTP {status}): {text}");
@@ -151,13 +185,13 @@ impl HttpSession {
         if !parsed.ok {
             bail!("auth/check rejected: {}", parsed.error.unwrap_or(text));
         }
-        if parsed.account_ok == Some(false) {
-            bail!("account not found for username {username}");
-        }
         let account_id = parsed
             .account_id
             .filter(|s| !s.is_empty())
             .ok_or_else(|| anyhow::anyhow!("auth/check did not return account_id"))?;
+        // Token is authoritative. Ignore a wrong Username field — callers should
+        // prefer `AuthInfo.username` for later account= query params.
+        let _ = username;
         Ok(AuthInfo {
             account_id,
             username: parsed.username,
@@ -220,6 +254,13 @@ impl HttpSession {
     }
 
     pub fn put_asset(&self, request: AssetPutRequest<'_>) -> Result<AssetPutResponse> {
+        let file_len = std::fs::metadata(request.file)
+            .with_context(|| format!("stat {}", request.file.display()))?
+            .len();
+        if file_len > request.multipart_threshold as u64 {
+            return self.put_asset_multipart(request, file_len);
+        }
+
         let base = request.base_url.trim_end_matches('/');
         let url = format!(
             "{base}/v1/assets/{}?source={}&account={}",
@@ -243,12 +284,162 @@ impl HttpSession {
         let response = req.send().with_context(|| format!("PUT {url}"))?;
         let status = response.status();
         let text = response.text().context("read asset response")?;
+        if looks_like_payload_too_large(status, &text) {
+            bail!("{}", payload_too_large_message("asset upload", Some(file_len as usize)));
+        }
         let parsed: AssetPutResponse = serde_json::from_str(&text).unwrap_or(AssetPutResponse {
             ok: false,
             already_present: false,
             error: Some(text.clone()),
         });
         if !status.is_success() || !parsed.ok {
+            bail!(
+                "{}",
+                parsed
+                    .error
+                    .unwrap_or_else(|| format!("HTTP {status}: {text}"))
+            );
+        }
+        Ok(parsed)
+    }
+
+    fn put_asset_multipart(
+        &self,
+        request: AssetPutRequest<'_>,
+        file_len: u64,
+    ) -> Result<AssetPutResponse> {
+        let base = request.base_url.trim_end_matches('/');
+        let qs = format!(
+            "source={}&account={}",
+            encode(request.source),
+            encode(request.username)
+        );
+        let start_url = format!("{base}/v1/assets/{}/uploads?{qs}", encode(request.sha256));
+        let mut start_body = serde_json::json!({ "bytes": file_len });
+        if let Some(mime) = request.mime.filter(|m| !m.is_empty()) {
+            start_body["mime"] = serde_json::Value::String(mime.to_string());
+        }
+        let start_resp = self
+            .client
+            .post(&start_url)
+            .timeout(Duration::from_secs(30))
+            .header("Authorization", format!("Bearer {}", request.key.trim()))
+            .header("Content-Type", "application/json")
+            .json(&start_body)
+            .send()
+            .with_context(|| format!("POST {start_url}"))?;
+        let start_status = start_resp.status();
+        let start_text = start_resp.text().context("read upload start response")?;
+        if looks_like_payload_too_large(start_status, &start_text) {
+            bail!("{}", payload_too_large_message("asset upload start", None));
+        }
+        let started: UploadStartResponse =
+            serde_json::from_str(&start_text).with_context(|| {
+                format!(
+                    "parse upload start JSON (HTTP {start_status}): {}",
+                    truncate(&start_text, 200)
+                )
+            })?;
+        if !start_status.is_success() || !started.ok {
+            bail!(
+                "{}",
+                started
+                    .error
+                    .unwrap_or_else(|| format!("HTTP {start_status}: {start_text}"))
+            );
+        }
+        if started.already_present {
+            return Ok(AssetPutResponse {
+                ok: true,
+                already_present: true,
+                error: None,
+            });
+        }
+        let upload_id = started
+            .upload_id
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| anyhow::anyhow!("upload start missing upload_id"))?;
+        let part_size = started
+            .part_size
+            .filter(|&n| n > 0)
+            .ok_or_else(|| anyhow::anyhow!("upload start missing part_size"))?;
+
+        let abort = |session: &HttpSession, upload_id: &str| {
+            let abort_url = format!(
+                "{base}/v1/assets/{}/uploads/{}?{qs}",
+                encode(request.sha256),
+                encode(upload_id)
+            );
+            let _ = session
+                .client
+                .delete(&abort_url)
+                .timeout(Duration::from_secs(30))
+                .header("Authorization", format!("Bearer {}", request.key.trim()))
+                .send();
+        };
+
+        let mut file = std::fs::File::open(request.file)
+            .with_context(|| format!("open {}", request.file.display()))?;
+        let mut part: u32 = 1;
+        let mut remaining = file_len;
+        while remaining > 0 {
+            let this_len = remaining.min(part_size as u64) as usize;
+            let mut buf = vec![0u8; this_len];
+            use std::io::Read;
+            file.read_exact(&mut buf)
+                .with_context(|| format!("read part {part} from {}", request.file.display()))?;
+            let part_url = format!(
+                "{base}/v1/assets/{}/uploads/{}/parts/{part}?{qs}",
+                encode(request.sha256),
+                encode(&upload_id)
+            );
+            let response = self
+                .client
+                .put(&part_url)
+                .timeout(Duration::from_secs(600))
+                .header("Authorization", format!("Bearer {}", request.key.trim()))
+                .header("Content-Type", "application/octet-stream")
+                .body(buf)
+                .send()
+                .with_context(|| format!("PUT {part_url}"))?;
+            let status = response.status();
+            let text = response.text().unwrap_or_default();
+            if looks_like_payload_too_large(status, &text) {
+                abort(self, &upload_id);
+                bail!(
+                    "{}",
+                    payload_too_large_message("asset upload part", Some(this_len))
+                );
+            }
+            if !status.is_success() {
+                abort(self, &upload_id);
+                bail!("asset part {part} failed (HTTP {status}): {text}");
+            }
+            remaining -= this_len as u64;
+            part += 1;
+        }
+
+        let complete_url = format!(
+            "{base}/v1/assets/{}/uploads/{}/complete?{qs}",
+            encode(request.sha256),
+            encode(&upload_id)
+        );
+        let response = self
+            .client
+            .post(&complete_url)
+            .timeout(Duration::from_secs(600))
+            .header("Authorization", format!("Bearer {}", request.key.trim()))
+            .send()
+            .with_context(|| format!("POST {complete_url}"))?;
+        let status = response.status();
+        let text = response.text().context("read upload complete response")?;
+        let parsed: AssetPutResponse = serde_json::from_str(&text).unwrap_or(AssetPutResponse {
+            ok: false,
+            already_present: false,
+            error: Some(text.clone()),
+        });
+        if !status.is_success() || !parsed.ok {
+            abort(self, &upload_id);
             bail!(
                 "{}",
                 parsed
@@ -268,6 +459,13 @@ impl HttpSession {
         mode: &str,
         ndjson: Vec<u8>,
     ) -> Result<ImportResponse> {
+        let body_len = ndjson.len();
+        if body_len > crate::run::MAX_PROXY_BODY_BYTES {
+            bail!(
+                "{}",
+                payload_too_large_message("import", Some(body_len))
+            );
+        }
         let base = base_url.trim_end_matches('/');
         let url = format!(
             "{base}/v1/import?source={}&account={}&mode={}",
@@ -286,6 +484,9 @@ impl HttpSession {
             .with_context(|| format!("POST {url}"))?;
         let status = response.status();
         let text = response.text().context("read import response")?;
+        if looks_like_payload_too_large(status, &text) {
+            bail!("{}", payload_too_large_message("import", Some(body_len)));
+        }
         let parsed: ImportResponse = serde_json::from_str(&text).unwrap_or(ImportResponse {
             ok: false,
             error: Some(text.clone()),

@@ -236,7 +236,6 @@ pub fn push_vault(ui: &AppWindow, state: &mut AppState) {
     let vault = ui.global::<VaultAdapter>();
     let v = &state.export_ini.vault;
     vault.set_url(SharedString::from(v.url.as_str()));
-    vault.set_username(SharedString::from(v.username.as_str()));
     vault.set_key(SharedString::from(v.key.as_str()));
     vault.set_input(SharedString::from(v.input.as_str()));
     vault.set_continue_on_error(v.continue_on_error);
@@ -258,7 +257,6 @@ pub fn push_vault(ui: &AppWindow, state: &mut AppState) {
 pub fn pull_vault(ui: &AppWindow, state: &mut AppState) {
     let vault = ui.global::<VaultAdapter>();
     state.export_ini.vault.url = vault.get_url().to_string();
-    state.export_ini.vault.username = vault.get_username().to_string();
     state.export_ini.vault.key = vault.get_key().to_string();
     state.export_ini.vault.input = vault.get_input().to_string();
     state.export_ini.vault.continue_on_error = vault.get_continue_on_error();

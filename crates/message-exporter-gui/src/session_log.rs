@@ -1,8 +1,8 @@
-//! Timestamped session log file under the system temp directory.
+//! Timestamped session log file next to `export.ini`.
 
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use chrono::Local;
 
@@ -12,11 +12,12 @@ pub struct SessionLog {
 }
 
 impl SessionLog {
-    pub fn new() -> Self {
+    /// Create (or truncate) a log file in `dir` (normally the directory that holds `export.ini`).
+    pub fn new(dir: &Path) -> Self {
         let name = Local::now()
             .format("message-exporters-%Y-%m-%d_%H%M%S.log")
             .to_string();
-        let path = std::env::temp_dir().join(&name);
+        let path = dir.join(&name);
         let _ = OpenOptions::new()
             .create(true)
             .write(true)

@@ -100,6 +100,8 @@ fn text_only_config(dir: &Path, base_url: String) -> VaultPushConfig {
         max_retries: 0,
         batch_size: 50,
         asset_upload_workers: 1,
+        asset_multipart_threshold: vault_push::MAX_PROXY_BODY_BYTES,
+        asset_max_bytes: vault_push::DEFAULT_ASSET_MAX_BYTES,
         report_path: Some(dir.join("vault-push-report.json")),
         log_path: Some(dir.join("vault-push.log")),
         journal_path: Some(dir.join(".vault-import-state.jsonl")),
@@ -426,6 +428,8 @@ fn profiles_attachment_upload_phases() {
         max_retries: 0,
         batch_size: 50,
         asset_upload_workers: 2,
+        asset_multipart_threshold: vault_push::MAX_PROXY_BODY_BYTES,
+        asset_max_bytes: vault_push::DEFAULT_ASSET_MAX_BYTES,
         report_path: Some(report_path.clone()),
         log_path: Some(log_path.clone()),
         journal_path: Some(dir.path().join(".vault-import-state.jsonl")),
@@ -530,4 +534,177 @@ fn skips_put_when_head_reports_asset_present() {
     import.assert();
     assert_eq!(report.assets_uploaded, 0);
     assert_eq!(report.assets_skipped, 1);
+}
+
+#[test]
+fn multipart_upload_when_over_proxy_threshold() {
+    // File larger than the test threshold; mock vault returns a tiny part_size.
+    const ASSET_BYTES: &[u8] = b"0123456789abcdef0123456789abcdef01234567"; // 40 bytes
+
+    let server = MockServer::start();
+    let _auth = server.mock(|when, then| {
+        when.method(GET).path("/v1/auth/check");
+        then.status(200).json_body(json!({
+            "ok": true,
+            "account_id": "acct-1",
+            "username": "alice",
+            "account_ok": true,
+            "sources": ["sms-backup-restore"]
+        }));
+    });
+    let digest = hex::encode(Sha256::digest(ASSET_BYTES));
+    let head = server.mock(|when, then| {
+        when.method("HEAD").path(format!("/v1/assets/{digest}"));
+        then.status(404).json_body(json!({
+            "ok": false,
+            "error": "asset not found"
+        }));
+    });
+    let start = server.mock(|when, then| {
+        when.method(POST).path(format!("/v1/assets/{digest}/uploads"));
+        then.status(200).json_body(json!({
+            "ok": true,
+            "upload_id": "up-1",
+            "part_size": 16
+        }));
+    });
+    let part1 = server.mock(|when, then| {
+        when.method(PUT).path(format!("/v1/assets/{digest}/uploads/up-1/parts/1"));
+        then.status(200).json_body(json!({ "ok": true, "part": 1, "bytes": 16 }));
+    });
+    let part2 = server.mock(|when, then| {
+        when.method(PUT).path(format!("/v1/assets/{digest}/uploads/up-1/parts/2"));
+        then.status(200).json_body(json!({ "ok": true, "part": 2, "bytes": 16 }));
+    });
+    let part3 = server.mock(|when, then| {
+        when.method(PUT).path(format!("/v1/assets/{digest}/uploads/up-1/parts/3"));
+        then.status(200).json_body(json!({ "ok": true, "part": 3, "bytes": 8 }));
+    });
+    let complete = server.mock(|when, then| {
+        when.method(POST).path(format!("/v1/assets/{digest}/uploads/up-1/complete"));
+        then.status(200).json_body(json!({
+            "ok": true,
+            "sha256": digest,
+            "assets_path": format!("ab/{digest}"),
+            "already_present": false
+        }));
+    });
+    let single_put = server.mock(|when, then| {
+        when.method(PUT).path(format!("/v1/assets/{digest}"));
+        then.status(200).json_body(json!({
+            "ok": true,
+            "already_present": false
+        }));
+    });
+    let import = server.mock(|when, then| {
+        when.method(POST).path("/v1/import");
+        then.status(200).json_body(json!({
+            "ok": true,
+            "messages": 1,
+            "messages_appended": 1
+        }));
+    });
+
+    let dir = tempdir().unwrap();
+    let attachment_dir = dir.path().join("attachments");
+    fs::create_dir(&attachment_dir).unwrap();
+    fs::write(attachment_dir.join("large.bin"), ASSET_BYTES).unwrap();
+    let mut doc = sample_doc();
+    doc.messages[0].attachments.push(IrAttachment {
+        path: Some("attachments/large.bin".into()),
+        original_name: Some("large.bin".into()),
+        mime_type: Some("application/octet-stream".into()),
+        digest_sha256: Some(digest.clone()),
+        is_sticker: false,
+        transcription: None,
+        sticker_effect: None,
+        bytes: None,
+    });
+    write_jsonl(dir.path(), &doc);
+
+    let mut cfg = text_only_config(dir.path(), server.base_url());
+    cfg.force = true;
+    cfg.asset_multipart_threshold = 20; // force multipart for 40-byte file
+    let report = run(&cfg, None).unwrap();
+
+    head.assert();
+    start.assert();
+    part1.assert();
+    part2.assert();
+    part3.assert();
+    complete.assert();
+    assert_eq!(single_put.hits(), 0, "single PUT must not be used for multipart path");
+    import.assert();
+    assert_eq!(report.assets_uploaded, 1);
+}
+
+#[test]
+fn multipart_aborts_on_hash_mismatch_complete() {
+    const ASSET_BYTES: &[u8] = b"mismatch-fixture-bytes!!";
+
+    let server = MockServer::start();
+    let _auth = server.mock(|when, then| {
+        when.method(GET).path("/v1/auth/check");
+        then.status(200).json_body(json!({
+            "ok": true,
+            "account_id": "acct-1",
+            "username": "alice",
+            "account_ok": true,
+            "sources": ["sms-backup-restore"]
+        }));
+    });
+    let digest = hex::encode(Sha256::digest(ASSET_BYTES));
+    let _head = server.mock(|when, then| {
+        when.method("HEAD").path(format!("/v1/assets/{digest}"));
+        then.status(404);
+    });
+    let _start = server.mock(|when, then| {
+        when.method(POST).path(format!("/v1/assets/{digest}/uploads"));
+        then.status(200).json_body(json!({
+            "ok": true,
+            "upload_id": "up-bad",
+            "part_size": 64
+        }));
+    });
+    let _part = server.mock(|when, then| {
+        when.method(PUT)
+            .path_contains(format!("/v1/assets/{digest}/uploads/up-bad/parts/"));
+        then.status(200).json_body(json!({ "ok": true, "part": 1, "bytes": 24 }));
+    });
+    let _complete = server.mock(|when, then| {
+        when.method(POST).path(format!("/v1/assets/{digest}/uploads/up-bad/complete"));
+        then.status(400).json_body(json!({
+            "ok": false,
+            "error": "sha256 mismatch: claimed abc, got def"
+        }));
+    });
+    let abort = server.mock(|when, then| {
+        when.method(DELETE).path(format!("/v1/assets/{digest}/uploads/up-bad"));
+        then.status(200).json_body(json!({ "ok": true }));
+    });
+
+    let dir = tempdir().unwrap();
+    let attachment_dir = dir.path().join("attachments");
+    fs::create_dir(&attachment_dir).unwrap();
+    fs::write(attachment_dir.join("bad.bin"), ASSET_BYTES).unwrap();
+    let mut doc = sample_doc();
+    doc.messages[0].attachments.push(IrAttachment {
+        path: Some("attachments/bad.bin".into()),
+        original_name: Some("bad.bin".into()),
+        mime_type: Some("application/octet-stream".into()),
+        digest_sha256: Some(digest),
+        is_sticker: false,
+        transcription: None,
+        sticker_effect: None,
+        bytes: None,
+    });
+    write_jsonl(dir.path(), &doc);
+
+    let mut cfg = text_only_config(dir.path(), server.base_url());
+    cfg.force = true;
+    cfg.continue_on_error = true;
+    cfg.asset_multipart_threshold = 8;
+    let report = run(&cfg, None).unwrap();
+    assert!(!report.ok);
+    abort.assert();
 }

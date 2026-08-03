@@ -6,7 +6,6 @@ import {
 
 export global VaultAdapter {
     in-out property <string> url;
-    in-out property <string> username;
     in-out property <string> key;
     in-out property <string> input;
     in-out property <bool> continue-on-error: true;
@@ -29,14 +28,11 @@ export component VaultPage inherits AnchoredScrollPage {
     LabeledLineEdit {
         label: "Vault URL";
         required: true;
-        placeholder: "http://127.0.0.1:8080";
+        placeholder: "http://127.0.0.1:8080 or https://app.bitrealm.dev";
         value <=> VaultAdapter.url;
     }
-    LabeledLineEdit {
-        label: "Username";
-        required: true;
-        placeholder: "vault username";
-        value <=> VaultAdapter.username;
+    Hint {
+        message: "Include the port when needed (local serve is usually http://127.0.0.1:8080). Hosted TLS can omit it (https://app.bitrealm.dev).";
     }
     LabeledLineEdit {
         label: "Vault key";

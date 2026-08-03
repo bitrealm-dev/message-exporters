@@ -56,7 +56,7 @@ grows when the window is resized vertically.
   into `Form` before validate/save.
 - `src/browse.rs` — `rfd` file/folder dialogs on a background thread, results
   applied via `Weak::upgrade_in_event_loop` (WSL opens Windows-native dialogs).
-- `src/session_log.rs` — timestamped temp-file session log.
+- `src/session_log.rs` — timestamped session log next to `export.ini`.
 - `src/wsl.rs` — Windows interop when the Linux GUI runs under WSL (browser / help).
 
 Jobs run via `message_exporter_core::spawn_job` on a `std::thread` with a
@@ -103,8 +103,8 @@ cargo run -p message-exporter-gui
 3. **Format:** format a prior Message Exporters output (`message-reexporter`) —
    input dir, output dir, output format, attachments, obfuscate. Input format is
    auto-detected.
-4. **Vault:** import a JSONL export folder into Message Vault — URL, username,
-   vault key, input dir, continue-on-error / force.
+4. **Vault:** import a JSONL export folder into Message Vault — URL, vault key
+   (Import API token), input dir, continue-on-error / force.
 5. **Contacts:** contacts file, USA numbers checkbox, Check / Update / Cancel
 6. Shared run log (Log tab)
 
@@ -144,8 +144,7 @@ Top tab. Two-step workflow after Extract Messages: push message-ir v3 JSONL +
 
 | Control | Type | Required | Notes |
 |---------|------|:--------:|-------|
-| Vault URL | text | yes | e.g. `http://127.0.0.1:8080` |
-| Username | text | yes | Vault account username |
+| Vault URL | text | yes | Full origin including port when needed, e.g. `http://127.0.0.1:8080` or `https://app.bitrealm.dev`. |
 | Vault key | text | yes | Import API token from Vault Settings; saved to `export.ini` as `[vault] key` (plain text). On Linux/macOS the file is written mode `0600` (owner read/write only). |
 | Input directory | folder | yes | JSONL export folder (prefills from last Extract Messages output when empty) |
 | Continue on error | checkbox | no | Default on |

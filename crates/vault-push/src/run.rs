@@ -26,8 +26,14 @@ use crate::project;
 
 /// Default messages per HTTP import request.
 pub const DEFAULT_BATCH_SIZE: usize = 1_000;
-/// Target maximum encoded NDJSON body size for one import request.
-pub const MAX_IMPORT_BODY_BYTES: usize = 16 * 1024 * 1024;
+/// Soft target for one import NDJSON body. Kept well under Cloudflare's 100 MB
+/// proxy upload limit (Free/Pro) so large threads are split into many requests.
+pub const MAX_IMPORT_BODY_BYTES: usize = 8 * 1024 * 1024;
+/// Hard ceiling for any single non-chunked request body through a typical
+/// Cloudflare proxy. Assets larger than this use multipart upload.
+pub const MAX_PROXY_BODY_BYTES: usize = 90 * 1024 * 1024;
+/// Default max size of one attachment (must match vault `server.asset_max_bytes`).
+pub const DEFAULT_ASSET_MAX_BYTES: u64 = 512 * 1024 * 1024;
 /// Default number of simultaneous attachment uploads.
 pub const DEFAULT_ASSET_UPLOAD_WORKERS: usize = 4;
 
@@ -50,6 +56,11 @@ pub struct VaultPushConfig {
     pub batch_size: usize,
     /// Maximum simultaneous attachment uploads. Message import requests remain serialized.
     pub asset_upload_workers: usize,
+    /// Assets larger than this (bytes) use vault multipart upload instead of a single PUT.
+    /// Defaults to [`MAX_PROXY_BODY_BYTES`]; tests may lower it to force the multipart path.
+    pub asset_multipart_threshold: usize,
+    /// Refuse attachments larger than this even with multipart (match vault `asset_max_bytes`).
+    pub asset_max_bytes: u64,
     pub report_path: Option<PathBuf>,
     pub log_path: Option<PathBuf>,
     pub journal_path: Option<PathBuf>,
@@ -323,10 +334,15 @@ fn prepare_run_setup(
 
     check_cancel(cfg.cancel.as_ref()).map_err(|_| anyhow::anyhow!("cancelled"))?;
     let auth = http.auth_check(&url, &cfg.key, &username)?;
-    let account_label = auth
+    // Token binds the account; Username field is optional.
+    let username = auth
         .username
-        .clone()
-        .unwrap_or_else(|| auth.account_id.clone());
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(auth.account_id.as_str())
+        .to_string();
+    let account_label = username.clone();
     log.line(&format!(
         "authenticated username={username} account={}",
         auth.account_id
@@ -955,6 +971,14 @@ fn prepare_file(args: PrepareFileArgs<'_>) -> Result<PreparedFile> {
         {
             continue;
         }
+        if line.len() > MAX_IMPORT_BODY_BYTES {
+            bail!(
+                "{name}: message {guid} encodes to {} bytes alone, which exceeds the \
+                 {} MiB import chunk limit — cannot upload through Cloudflare safely",
+                line.len(),
+                MAX_IMPORT_BODY_BYTES / (1024 * 1024)
+            );
+        }
         if !chunk_messages.is_empty()
             && (chunk_messages.len() >= batch_size
                 || chunk_body.len() + line.len() > MAX_IMPORT_BODY_BYTES)
@@ -1044,11 +1068,20 @@ fn upload_assets(args: UploadAssets<'_>) -> Result<AssetUploadStats> {
         }
         let path = resolve_attachment(input, rel)
             .ok_or_else(|| anyhow::anyhow!("{name}: missing attachment {rel}"))?;
-        stats.bytes = stats.bytes.saturating_add(
-            fs::metadata(&path)
-                .with_context(|| format!("stat {}", path.display()))?
-                .len(),
-        );
+        let file_len = fs::metadata(&path)
+            .with_context(|| format!("stat {}", path.display()))?
+            .len();
+        if file_len > cfg.asset_max_bytes {
+            bail!(
+                "{name}: attachment {rel} is {} bytes ({} MiB), over the configured \
+                 asset max of {} MiB. Raise vault [server] asset_max_bytes (and \
+                 vault-push --asset-max-bytes) or omit the file.",
+                file_len,
+                file_len / (1024 * 1024),
+                cfg.asset_max_bytes / (1024 * 1024)
+            );
+        }
+        stats.bytes = stats.bytes.saturating_add(file_len);
         jobs.push(AssetUploadJob {
             digest: digest.clone(),
             path,
@@ -1096,6 +1129,7 @@ fn upload_assets(args: UploadAssets<'_>) -> Result<AssetUploadStats> {
                                     sha256: &job.digest,
                                     file: &job.path,
                                     mime: job.mime.as_deref(),
+                                    multipart_threshold: cfg.asset_multipart_threshold,
                                 })
                             })
                             .map(|response| AssetUploadResult {
