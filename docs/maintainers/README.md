@@ -10,6 +10,18 @@ This directory contains implementation and release documentation for contributor
 - [GUI design](gui.md) — Slint desktop app: tabs, controls, validation, saved settings, and exporter integration.
 - [Exporter capability matrix](exporter-matrix.md) — supported inputs, known source limitations, and links to crate-specific technical documents.
 
+## Libraries vs CLIs
+
+Exporter crates under `crates/exporters/` are **dual packages**: a library (`pub fn run`, …)
+plus an optional CLI binary gated by the `cli` feature (`default = ["cli"]`).
+
+- **In-process consumers** (the desktop GUI here, and the GUI-only
+  [message-vault-io](https://github.com/bitrealm-dev/message-vault-io) product) depend with
+  `default-features = false` so clap/binaries are not pulled in.
+- **Standalone CLIs** ship in **this** repo’s release archives under `cli/` (plus helpers in
+  `lib/` / `cli/wtsexporter`). message-vault-io releases ship only the GUI + media/WhatsApp
+  helpers — not Rust exporter CLIs.
+
 ## Architecture and output formats
 
 - [Shared message model](architecture/message-ir.md) — `ConversationDocument`, common fields, source-specific data, and output projectors.

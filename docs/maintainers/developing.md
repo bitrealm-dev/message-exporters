@@ -66,6 +66,11 @@ Layout (same on every platform):
 
 Contacts Check/Update and message obfuscation run as libraries inside the desktop app (not shipped as `cli/` binaries). The GUI finds `ffmpeg`/`ffprobe` under `lib/` and `wtsexporter` under `cli/`. CLIs under `cli/` look for media tools in `../lib/`. Keep the extracted archive together.
 
+Exporter crates expose a library API for in-process use (`default-features = false` skips the
+CLI/`clap`). This repo’s release still ships the CLI binaries under `cli/`. The sibling
+[message-vault-io](https://github.com/bitrealm-dev/message-vault-io) product is **GUI-only**
+and does not ship those Rust CLIs.
+
 ### Code signing
 
 Windows Authenticode and macOS codesign / notarization steps are already in the Release workflow but stay skipped until certificate secrets are set. See [Code signing for Windows and macOS releases](signing.md).
